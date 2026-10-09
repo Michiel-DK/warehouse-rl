@@ -1,0 +1,109 @@
+{
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "episodes": 10,
+  "seed0": 0,
+  "pick_rate_mean": 54.432,
+  "pick_rate_sd": 6.592621329941527,
+  "rows": [
+    {
+      "seed": 0,
+      "steps": 500,
+      "deliveries": 39,
+      "pick_rate": 56.16,
+      "clashes": 38,
+      "stuck": 3,
+      "global_return": 40.699999999999925,
+      "wall_s": 0.6764657497406006
+    },
+    {
+      "seed": 1,
+      "steps": 500,
+      "deliveries": 41,
+      "pick_rate": 59.04,
+      "clashes": 46,
+      "stuck": 1,
+      "global_return": 43.299999999999855,
+      "wall_s": 0.6919951438903809
+    },
+    {
+      "seed": 2,
+      "steps": 500,
+      "deliveries": 39,
+      "pick_rate": 56.16,
+      "clashes": 47,
+      "stuck": 2,
+      "global_return": 40.79999999999988,
+      "wall_s": 0.6583170890808105
+    },
+    {
+      "seed": 3,
+      "steps": 500,
+      "deliveries": 39,
+      "pick_rate": 56.16,
+      "clashes": 37,
+      "stuck": 0,
+      "global_return": 40.399999999999864,
+      "wall_s": 0.6590118408203125
+    },
+    {
+      "seed": 4,
+      "steps": 500,
+      "deliveries": 30,
+      "pick_rate": 43.2,
+      "clashes": 300,
+      "stuck": 34,
+      "global_return": 29.799999999999855,
+      "wall_s": 0.6873462200164795
+    },
+    {
+      "seed": 5,
+      "steps": 500,
+      "deliveries": 29,
+      "pick_rate": 41.76,
+      "clashes": 30,
+      "stuck": 3,
+      "global_return": 28.499999999999897,
+      "wall_s": 0.608863115310669
+    },
+    {
+      "seed": 6,
+      "steps": 500,
+      "deliveries": 40,
+      "pick_rate": 57.6,
+      "clashes": 31,
+      "stuck": 1,
+      "global_return": 41.899999999999885,
+      "wall_s": 0.6649689674377441
+    },
+    {
+      "seed": 7,
+      "steps": 500,
+      "deliveries": 41,
+      "pick_rate": 59.04,
+      "clashes": 46,
+      "stuck": 2,
+      "global_return": 42.79999999999989,
+      "wall_s": 0.6625490188598633
+    },
+    {
+      "seed": 8,
+      "steps": 500,
+      "deliveries": 36,
+      "pick_rate": 51.84,
+      "clashes": 18,
+      "stuck": 1,
+      "global_return": 37.19999999999988,
+      "wall_s": 0.6441702842712402
+    },
+    {
+      "seed": 9,
+      "steps": 500,
+      "deliveries": 44,
+      "pick_rate": 63.36,
+      "clashes": 44,
+      "stuck": 3,
+      "global_return": 46.499999999999865,
+      "wall_s": 0.68756103515625
+    }
+  ]
+}

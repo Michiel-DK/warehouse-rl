@@ -1,0 +1,8 @@
+.venv/
+vendor/
+__pycache__/
+*.pyc
+results/*.png
+runs/
+wandb/
+.DS_Store
