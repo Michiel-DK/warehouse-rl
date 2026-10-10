@@ -81,6 +81,58 @@ class TimeoutRecovery(TunedTimeoutRecovery):
         super().__init__(_STUCK_THRESHOLD, 15)
 
 
+class RuleRecovery(RecoveryPolicy):
+    """Stateless escalation ladder on obs["stuck_count"] c: wait -> back_off -> reroute -> [call_human] -> abandon.
+
+    Precedence (first match wins):
+      (i)   clash event (event_is_clash == 1) -> reroute, at any c (the vendor's clash behaviour, as TunedTimeout)
+      (ii)  c >= abandon_after -> abandon
+      (iii) call_human_after set and c >= call_human_after -> call_human (regardless of path_len)
+      (iv)  path_len == 0 -> wait (back_off and reroute would only fall back on an empty path)
+      (v)   c >= reroute_after -> reroute;  (vi) c >= back_off_after -> back_off;  (vii) else wait.
+    Needs 1 <= back_off_after < reroute_after < abandon_after and call_human_after None or in (reroute_after,
+    abandon_after): abandon resets the counter, so a rung at/after abandon could never fire.
+
+    Known dynamic: a back_off that executes sets a new path via a free neighbour, the agent moves on the next step and
+    the vendor StuckCounter resets to 0, so the ladder climbs to reroute/abandon only when back_off falls back (no free
+    neighbour with a path). The hook's "reroute" is a re-plan with find_path, not a guaranteed other lane; "abandon"
+    sets busy=False and, for a carrying AGV, StuckAwareCtaPolicy re-issues the same CTA mission (it does not return
+    the shelf). call_human relocates instantly; its cost only feeds the call_human_steps counter."""
+    name = "rule"
+
+    def __init__(self, back_off_after, reroute_after, abandon_after, call_human_after=None):
+        vals = dict(back_off_after=back_off_after, reroute_after=reroute_after, abandon_after=abandon_after)
+        if call_human_after is not None:
+            vals["call_human_after"] = call_human_after
+        for k, v in vals.items():
+            if not _is_int(v):
+                raise ValueError(f"rule recovery: {k} must be an int, got {v!r}")
+        if not 1 <= back_off_after < reroute_after < abandon_after:
+            raise ValueError(f"need ints 1 <= back_off_after < reroute_after < abandon_after, got "
+                             f"{back_off_after}, {reroute_after}, {abandon_after}")
+        if call_human_after is not None and not reroute_after < call_human_after < abandon_after:
+            raise ValueError(f"call_human_after must satisfy reroute_after < call_human_after < abandon_after, got "
+                             f"{call_human_after} for ({reroute_after}, {abandon_after})")
+        self.back_off_after, self.reroute_after = back_off_after, reroute_after
+        self.abandon_after, self.call_human_after = abandon_after, call_human_after
+
+    def decide(self, obs):
+        if obs["event_is_clash"] == 1:
+            return "reroute"
+        c = obs["stuck_count"]
+        if c >= self.abandon_after:
+            return "abandon"
+        if self.call_human_after is not None and c >= self.call_human_after:
+            return "call_human"
+        if obs["path_len"] == 0:
+            return "wait"
+        if c >= self.reroute_after:
+            return "reroute"
+        if c >= self.back_off_after:
+            return "back_off"
+        return "wait"
+
+
 # ------------------------------------------------------------------------------------------------ specs
 def normalise_recovery(config):
     """Fail closed. Returns the normalised config (all params present). Raises ValueError on anything else."""
@@ -91,8 +143,10 @@ def normalise_recovery(config):
         allowed = {"name", "call_human_cost"}
     elif name == "tuned_timeout":
         allowed = {"name", "replan", "abandon", "call_human_cost"}
+    elif name == "rule":
+        allowed = {"name", "back_off_after", "reroute_after", "abandon_after", "call_human_after", "call_human_cost"}
     else:
-        raise ValueError(f"unknown recovery name {name!r}; known: ['timeout', 'tuned_timeout']")
+        raise ValueError(f"unknown recovery name {name!r}; known: ['timeout', 'tuned_timeout', 'rule']")
     unknown = set(config) - allowed
     if unknown:
         raise ValueError(f"recovery {name}: unknown keys {sorted(map(str, unknown))}")
@@ -106,6 +160,14 @@ def normalise_recovery(config):
             raise ValueError(f"recovery tuned_timeout: missing keys {sorted(missing)}")
         TunedTimeoutRecovery(config["replan"], config["abandon"])  # validates
         out["replan"], out["abandon"] = config["replan"], config["abandon"]
+    if name == "rule":
+        missing = {"back_off_after", "reroute_after", "abandon_after"} - set(config)
+        if missing:
+            raise ValueError(f"recovery rule: missing keys {sorted(missing)}")
+        h = config.get("call_human_after")
+        RuleRecovery(config["back_off_after"], config["reroute_after"], config["abandon_after"], h)  # validates
+        out.update(back_off_after=config["back_off_after"], reroute_after=config["reroute_after"],
+                   abandon_after=config["abandon_after"], call_human_after=h)
     out["call_human_cost"] = cost
     return out
 
@@ -114,6 +176,8 @@ def make_recovery(config):
     cfg = normalise_recovery(config)
     if cfg["name"] == "timeout":
         return TimeoutRecovery()
+    if cfg["name"] == "rule":
+        return RuleRecovery(cfg["back_off_after"], cfg["reroute_after"], cfg["abandon_after"], cfg["call_human_after"])
     return TunedTimeoutRecovery(cfg["replan"], cfg["abandon"])
 
 
