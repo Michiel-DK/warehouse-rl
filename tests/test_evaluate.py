@@ -81,6 +81,18 @@ class TestParsers(unittest.TestCase):
         self.assertEqual((one["sd"], one["ci95_low"], one["ci95_high"]), (0.0, 7.0, 7.0))
 
 
+class TestRegistry(unittest.TestCase):
+    def test_known_and_unknown_policies(self):  # inject: fall back to RandomPolicy for unknown names
+        from warehouse_rl.policy import StuckAwareCtaPolicy
+        self.assertIsInstance(ev.make_policy("cta", 0), CtaPolicy)
+        self.assertIsInstance(ev.make_policy("stuck_aware_cta", 0), StuckAwareCtaPolicy)
+        self.assertIsInstance(ev.make_policy("random", 0), RandomPolicy)
+        with self.assertRaises(ValueError):
+            ev.make_policy("fifo", 0)
+        with self.assertRaises(ValueError):
+            ev.run_seed("nope", ENV_ID, 5, 0)
+
+
 class TestCli(unittest.TestCase):
     def _check(self, policy):
         with tempfile.TemporaryDirectory() as d:

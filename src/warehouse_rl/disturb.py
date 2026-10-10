@@ -159,8 +159,12 @@ _NO_CELLS = frozenset()
 
 
 class DisturbedWarehouse(Warehouse):
-    def __init__(self, *args, disturb, **kwargs):
+    def __init__(self, *args, disturb, assign_care_for_agents=False, **kwargs):
+        # assign_care_for_agents (router-side toggle, sweep d): True forces care_for_agents=True on the one find_path
+        # call the env makes when it accepts a macro action (W:366). False (default) is the vendor behaviour.
         self.disturb_config = validate_config(disturb)
+        self.assign_care_for_agents = bool(assign_care_for_agents)
+        self._in_macro_actions = False
         super().__init__(*args, **kwargs)
         if not isinstance(self.max_steps, int) or self.max_steps < 1:
             raise ValueError("DisturbedWarehouse needs an int max_steps >= 1 (the schedule is pre-generated)")
@@ -251,6 +255,10 @@ class DisturbedWarehouse(Warehouse):
             return z, z
         return self.frozen_schedule[:, t], self.delay_schedule[:, t]
 
+    def frozen_now(self):
+        """Bool array (per agent, index agent.id - 1): frozen for the step about to execute. No look-ahead."""
+        return self._masks_at(self._t)[0]
+
     def _obstacles_now(self):
         return self._obstacles_by_step[self._t] if self._t < self.max_steps else _NO_CELLS
 
@@ -259,7 +267,16 @@ class DisturbedWarehouse(Warehouse):
         return self._out_goals_by_step[self._t] if self._t < self.max_steps else ()
 
     # ---------------------------------------------------------------- hooks
+    def attribute_macro_actions(self, macro_actions):
+        self._in_macro_actions = True
+        try:
+            return super().attribute_macro_actions(macro_actions)
+        finally:
+            self._in_macro_actions = False
+
     def find_path(self, start, goal, agent, care_for_agents=True):
+        if self.assign_care_for_agents and self._in_macro_actions:
+            care_for_agents = True  # only the path the env computes on accepting a macro action
         obstacles = self._obstacles_now()
         if not obstacles:
             return super().find_path(start, goal, agent, care_for_agents)

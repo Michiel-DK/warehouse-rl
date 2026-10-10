@@ -25,15 +25,18 @@ class WarehouseEnv(gym.Env):
         agent_features=False,
         global_reward=False,
         disturb=None,
+        assign_care_for_agents=False,
     ):
         # disturb=None: the S1 path, untouched. disturb=dict: DisturbedWarehouse (see disturb.py); {} = no disturbance.
         # Preset names / JSON strings are resolved by the caller (disturb.resolve_disturb), not here.
+        if assign_care_for_agents and disturb is None:
+            raise ValueError("assign_care_for_agents=True needs a disturb dict (the layer owns the toggle)")
         if disturb is None:
             self.env = gym.make(env_id, max_steps=max_steps).unwrapped
         elif isinstance(disturb, dict):
             kwargs = dict(gym.spec(env_id).kwargs)
             kwargs["max_steps"] = max_steps
-            self.env = DisturbedWarehouse(disturb=disturb, **kwargs)
+            self.env = DisturbedWarehouse(disturb=disturb, assign_care_for_agents=assign_care_for_agents, **kwargs)
         else:
             raise ValueError(f"disturb must be None or a dict, got {type(disturb).__name__}")
         self.disturb = disturb
