@@ -1,0 +1,1 @@
+../../harness/claude/agents/verify-gate.md
