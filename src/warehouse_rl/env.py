@@ -8,6 +8,8 @@ from gymnasium import spaces
 
 import tarware  # noqa: F401  (registers the env ids)
 
+from warehouse_rl.disturb import DisturbedWarehouse
+
 FIXING_CLASH_TIME = 4  # vendor warehouse._FIXING_CLASH_TIME
 STUCK_CAP = 15
 N_AGENT_FEATURES = 3
@@ -22,8 +24,19 @@ class WarehouseEnv(gym.Env):
         normalise_coordinates=True,
         agent_features=False,
         global_reward=False,
+        disturb=None,
     ):
-        self.env = gym.make(env_id, max_steps=max_steps).unwrapped
+        # disturb=None: the S1 path, untouched. disturb=dict: DisturbedWarehouse (see disturb.py); {} = no disturbance.
+        # Preset names / JSON strings are resolved by the caller (disturb.resolve_disturb), not here.
+        if disturb is None:
+            self.env = gym.make(env_id, max_steps=max_steps).unwrapped
+        elif isinstance(disturb, dict):
+            kwargs = dict(gym.spec(env_id).kwargs)
+            kwargs["max_steps"] = max_steps
+            self.env = DisturbedWarehouse(disturb=disturb, **kwargs)
+        else:
+            raise ValueError(f"disturb must be None or a dict, got {type(disturb).__name__}")
+        self.disturb = disturb
         self.max_steps = max_steps
         self.normalise_coordinates = normalise_coordinates
         self.agent_features = agent_features
@@ -63,6 +76,8 @@ class WarehouseEnv(gym.Env):
         masks[:e.num_agvs, 1 + n_goals:] = agv_slots
         masks[e.num_agvs:, 1:1 + n_goals] = False
         masks[e.num_agvs:, 1 + n_goals:] = picker_slots[None, :]
+        for g in getattr(e, "outage_goal_indices", lambda: ())():  # goal out of service: no AGV may be sent there
+            masks[:e.num_agvs, 1 + g] = False
         return masks
 
     def _obs(self, raw_obs):
