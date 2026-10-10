@@ -102,6 +102,46 @@ class TestEmptyConfigParity(unittest.TestCase):
         plain.close()
 
 
+class TestFindPathPort(unittest.TestCase):
+    # (a) red if the ported find_path body diverges from vendor (e.g. the picker start_fix is dropped): with no
+    # obstacles it must return exactly what Warehouse.find_path returns, for every agent and every target.
+    def test_port_equals_vendor_without_obstacles(self):
+        from tarware.warehouse import Warehouse
+        n = 0
+        for seed in range(3):
+            env = WarehouseEnv(SMALL, max_steps=10, disturb={})
+            env.reset(seed=seed)
+            e = env.env
+            for a in e.agents:
+                for target in e.action_id_to_coords_map.values():  # (y, x)
+                    for care in (False, True):
+                        want = Warehouse.find_path(e, (a.y, a.x), target, a, care)
+                        got = e._find_path_with_obstacles((a.y, a.x), target, a, care, frozenset())
+                        self.assertEqual(got, want)
+                        n += 1
+            env.close()
+        self.assertGreater(n, 1000)
+
+    def test_port_equals_vendor_picker_start_fix_case(self):
+        # pickers starting on a rack cell next to the target (the start_fix branch, W:289-296)
+        from tarware.warehouse import Warehouse
+        env = WarehouseEnv(SMALL, max_steps=10, disturb={})
+        env.reset(seed=0)
+        e = env.env
+        picker = e.agents[-1]
+        cells = list(e.action_id_to_coords_map.values())  # (y, x)
+        racks = [c for c in cells if not e._is_highway(c[1], c[0]) and (c[1], c[0]) not in e.goals]
+        n = 0
+        for start in racks:
+            for target in cells:
+                if target[0] == start[0] and abs(target[1] - start[1]) <= 2:
+                    want = Warehouse.find_path(e, start, target, picker, False)
+                    self.assertEqual(e._find_path_with_obstacles(start, target, picker, False, frozenset()), want)
+                    n += 1
+        self.assertGreater(n, 50)
+        env.close()
+
+
 class TestNoSharedCell(unittest.TestCase):
     def check_map(self, env_id):
         fracs = []

@@ -254,8 +254,12 @@ class DisturbedWarehouse(Warehouse):
         obstacles = self._obstacles_now()
         if not obstacles:
             return super().find_path(start, goal, agent, care_for_agents)
+        return self._find_path_with_obstacles(start, goal, agent, care_for_agents, obstacles)
+
+    def _find_path_with_obstacles(self, start, goal, agent, care_for_agents, obstacles):
         # Port of Warehouse.find_path (W:256-312). Only change: active blocked cells / out goals become obstacles
         # AFTER the start-cell fix, then the (effective) start is freed again; a blocked target yields [].
+        # With obstacles == frozenset() it must equal the vendor method (tested in tests/test_disturb.py).
         grid = np.zeros(self.grid_size)
         if care_for_agents:
             grid += self.grid[CollisionLayers.AGVS]
