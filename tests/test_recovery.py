@@ -37,6 +37,7 @@ SCRIPT = str(ROOT / "scripts" / "evaluate.py")
 MEDIUM = "tarware-medium-8agvs-4pickers-globalobs-v1"
 BREAKDOWN = {"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}
 HEAVY = {"breakdown": {"rate_per_hour": 20, "duration": [10, 30]}, "delay": {"p_skip": 0.3}}
+BLOCKED = {"blocked_cell": {"rate_per_hour": 300, "duration": [20, 60]}, "outage": {"rate_per_hour": 100, "duration": [10, 30]}}
 STEPS = {SMALL: 500, MEDIUM: 300}
 SEEDS = range(10)
 CELLS = [(env_id, name, cfg) for env_id in (SMALL, MEDIUM) for name, cfg in (("none", {}), ("breakdown", BREAKDOWN))]
@@ -398,9 +399,10 @@ class ObservationContentTests(unittest.TestCase):
         # this step -> the back_off asserts go red.
         rows, backoffs = [], []
         nbr_seen = {k: set() for k in ("nbr_n", "nbr_e", "nbr_s", "nbr_w")}
-        for env_id in (SMALL, MEDIUM):
+        obstacle_rows = 0
+        for env_id, disturb in ((SMALL, HEAVY), (MEDIUM, HEAVY), (MEDIUM, BLOCKED)):
             for seed in range(3):
-                env = WarehouseEnv(env_id, max_steps=200, disturb=HEAVY, recovery=timeout_cfg())
+                env = WarehouseEnv(env_id, max_steps=200, disturb=disturb, recovery=timeout_cfg())
                 hook = env.env
                 hook._recovery = CyclingPolicy()
                 orig_observe, orig_back_off = hook._observe, hook._back_off
@@ -409,13 +411,24 @@ class ObservationContentTests(unittest.TestCase):
                     o = orig(agent, is_clash)
                     others = {(a.x, a.y) for a in hook.agents if a.id != agent.id}
                     nbrs = [(agent.x, agent.y - 1), (agent.x + 1, agent.y), (agent.x, agent.y + 1), (agent.x - 1, agent.y)]
+                    obstacles = hook._obstacles_now()
+                    picker = agent.type == AgentType.PICKER
+
+                    def blocked(c):  # brief spec: off-map, other agent, active obstacle, or non-highway for a picker
+                        if not (0 <= c[0] < hook.grid_size[1] and 0 <= c[1] < hook.grid_size[0]):
+                            return 1.0
+                        return float(c in others or c in obstacles or (picker and not hook.highways[c[1], c[0]]))
+
+                    tgt = agent.path[-1] if agent.path else None
                     rows.append((o, dict(
+                        manhattan_to_target=float(abs(tgt[0] - agent.x) + abs(tgt[1] - agent.y)) if tgt else 0.0,
+                        nbr_n=blocked(nbrs[0]), nbr_e=blocked(nbrs[1]), nbr_s=blocked(nbrs[2]), nbr_w=blocked(nbrs[3]),
                         event_is_clash=float(is_clash), stuck_count=float(hook.stuck_counters[agent.id - 1].count),
                         fixing_clash=float(agent.fixing_clash), carrying=float(agent.carrying_shelf is not None),
                         is_picker=float(agent.type == AgentType.PICKER), path_len=float(len(agent.path)),
                         queue_pressure=len(hook.request_queue) / hook.request_queue_size),
                         [c in others for c in nbrs], [not (0 <= c[0] < hook.grid_size[1] and 0 <= c[1] < hook.grid_size[0])
-                                                      for c in nbrs]))
+                                                      for c in nbrs], int(bool(obstacles))))
                     return o
 
                 def back_off(agent, hook=hook, orig=orig_back_off):
@@ -434,13 +447,14 @@ class ObservationContentTests(unittest.TestCase):
                 finally:
                     env.close()
         self.assertGreater(len(rows), 200)
-        for o, expect, occupied, offmap in rows:
-            for k, v in expect.items():
+        for o, expect, occupied, offmap, n_obst in rows:
+            for k, v in expect.items():  # every key, both directions for nbr_* (1 iff blocked per the brief)
                 self.assertEqual(o[k], v, k)
-            for k, occ, off in zip(("nbr_n", "nbr_e", "nbr_s", "nbr_w"), occupied, offmap):
-                if occ or off:
-                    self.assertEqual(o[k], 1.0, k)
+            for k in ("nbr_n", "nbr_e", "nbr_s", "nbr_w"):
                 nbr_seen[k].add(o[k])
+            obstacle_rows += n_obst
+        self.assertEqual(set(expect), set(rc.RecoveryHook.OBS_KEYS))
+        self.assertGreater(obstacle_rows, 0, "no decide call ever saw an active obstacle")
         for k in ("carrying", "is_picker", "event_is_clash"):
             self.assertEqual({o[k] for o, *_ in rows}, {0.0, 1.0}, k)
         self.assertTrue(all(o["queue_pressure"] > 0 for o, *_ in rows))  # constant without a burst; exact match above
