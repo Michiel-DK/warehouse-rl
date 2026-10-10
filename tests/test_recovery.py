@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import gymnasium as gym
 import numpy as np
 
+from tarware.definitions import Action, AgentType
 from tarware.warehouse import Warehouse
 from warehouse_rl import recovery as rc
 from warehouse_rl.disturb import DisturbedWarehouse
@@ -322,6 +323,13 @@ class CyclingPolicy(rc.RecoveryPolicy):
         return rc.ACTIONS[(int(obs["stuck_count"]) + self.n) % 5]
 
 
+def _purity_snapshot(hook):
+    return ([(a.x, a.y, a.dir, list(a.path), a.req_action, a.busy, a.fixing_clash, hook.stuck_counters[a.id - 1].count,
+              hook.stuck_counters[a.id - 1].position,
+              (a.carrying_shelf.x, a.carrying_shelf.y) if a.carrying_shelf else None) for a in hook.agents],
+            [sh.id for sh in hook.request_queue], dict(hook._counts), hook.grid.copy().tolist())
+
+
 class SafetyTests(unittest.TestCase):
     def test_cycling_policy_is_safe(self):
         # red (run 2026-10-10): drop the whole agent-occupancy `any(...)` check in _cell_free AND skip the agent's own
@@ -356,17 +364,21 @@ class SafetyTests(unittest.TestCase):
                 self.assertGreater(events[a], 0, (env_id, a))
 
     def test_observation_is_pure(self):
-        # red: call self.find_path inside _observe, or np.random in it -> this goes red.
+        # red: call self.find_path inside _observe, or np.random in it, or mutate agent.fixing_clash / dir / the carried
+        # shelf / the request queue in it -> this goes red.
         env = WarehouseEnv(SMALL, max_steps=120, disturb=BREAKDOWN, recovery=timeout_cfg())
         try:
             pol = StuckAwareCtaPolicy()
             obs, info = env.reset(seed=3)
             pol.reset(env)
-            for _ in range(80):
-                obs, _, _, _, info = env.step(pol.act(obs, info["action_mask"], info))
             hook = env.env
+            for _ in range(110):  # stop at a step where some agent is mid-clash, so fixing_clash mutations are visible
+                obs, _, _, _, info = env.step(pol.act(obs, info["action_mask"], info))
+                if any(a.fixing_clash > 0 for a in hook.agents) and any(a.carrying_shelf for a in hook.agents):
+                    break
+            self.assertTrue(any(a.fixing_clash > 0 for a in hook.agents))
             state = np.random.get_state()
-            snap = [(a.x, a.y, list(a.path), a.req_action, a.busy, hook.stuck_counters[a.id - 1].count) for a in hook.agents]
+            snap = _purity_snapshot(hook)
             with mock.patch.object(hook, "find_path", side_effect=AssertionError("find_path called")):
                 for a in hook.agents:
                     for clash in (False, True):
@@ -374,10 +386,73 @@ class SafetyTests(unittest.TestCase):
                         self.assertEqual(tuple(o), rc.RecoveryHook.OBS_KEYS)
             after = np.random.get_state()
             self.assertTrue(state[0] == after[0] and (state[1] == after[1]).all() and state[2:] == after[2:])
-            self.assertEqual(snap, [(a.x, a.y, list(a.path), a.req_action, a.busy, hook.stuck_counters[a.id - 1].count)
-                                    for a in hook.agents])
+            self.assertEqual(snap, _purity_snapshot(hook))
         finally:
             env.close()
+
+
+class ObservationContentTests(unittest.TestCase):
+    def test_values_match_env_state_and_back_off_executes(self):
+        # red: set any observation feature to a constant (e.g. carrying / is_picker / fixing_clash / queue_pressure /
+        # nbr_* = 0.0) -> the matching assert goes red; make _back_off a no-op (return False) or let it set FORWARD
+        # this step -> the back_off asserts go red.
+        rows, backoffs = [], []
+        nbr_seen = {k: set() for k in ("nbr_n", "nbr_e", "nbr_s", "nbr_w")}
+        for env_id in (SMALL, MEDIUM):
+            for seed in range(3):
+                env = WarehouseEnv(env_id, max_steps=200, disturb=HEAVY, recovery=timeout_cfg())
+                hook = env.env
+                hook._recovery = CyclingPolicy()
+                orig_observe, orig_back_off = hook._observe, hook._back_off
+
+                def observe(agent, is_clash, hook=hook, orig=orig_observe):
+                    o = orig(agent, is_clash)
+                    others = {(a.x, a.y) for a in hook.agents if a.id != agent.id}
+                    nbrs = [(agent.x, agent.y - 1), (agent.x + 1, agent.y), (agent.x, agent.y + 1), (agent.x - 1, agent.y)]
+                    rows.append((o, dict(
+                        event_is_clash=float(is_clash), stuck_count=float(hook.stuck_counters[agent.id - 1].count),
+                        fixing_clash=float(agent.fixing_clash), carrying=float(agent.carrying_shelf is not None),
+                        is_picker=float(agent.type == AgentType.PICKER), path_len=float(len(agent.path)),
+                        queue_pressure=len(hook.request_queue) / hook.request_queue_size),
+                        [c in others for c in nbrs], [not (0 <= c[0] < hook.grid_size[1] and 0 <= c[1] < hook.grid_size[0])
+                                                      for c in nbrs]))
+                    return o
+
+                def back_off(agent, hook=hook, orig=orig_back_off):
+                    before = (agent.x, agent.y)
+                    ok = orig(agent)
+                    backoffs.append((ok, before, list(agent.path[:1]), agent.req_action))
+                    return ok
+
+                hook._observe, hook._back_off = observe, back_off
+                pol = StuckAwareCtaPolicy()
+                try:
+                    obs, info = env.reset(seed=seed)
+                    pol.reset(env)
+                    for _ in range(200):
+                        obs, _, _, _, info = env.step(pol.act(obs, info["action_mask"], info))
+                finally:
+                    env.close()
+        self.assertGreater(len(rows), 200)
+        for o, expect, occupied, offmap in rows:
+            for k, v in expect.items():
+                self.assertEqual(o[k], v, k)
+            for k, occ, off in zip(("nbr_n", "nbr_e", "nbr_s", "nbr_w"), occupied, offmap):
+                if occ or off:
+                    self.assertEqual(o[k], 1.0, k)
+                nbr_seen[k].add(o[k])
+        for k in ("carrying", "is_picker", "event_is_clash"):
+            self.assertEqual({o[k] for o, *_ in rows}, {0.0, 1.0}, k)
+        self.assertTrue(all(o["queue_pressure"] > 0 for o, *_ in rows))  # constant without a burst; exact match above
+        self.assertTrue(any(o["fixing_clash"] > 0 for o, *_ in rows))
+        self.assertTrue(any(o["manhattan_to_target"] > 0 for o, *_ in rows))
+        for k, seen in nbr_seen.items():
+            self.assertEqual(seen, {0.0, 1.0}, k)
+        done = [b for b in backoffs if b[0]]
+        self.assertGreater(len(done), 0, "no back_off ever executed")
+        for _, (x, y), first, req in done:
+            self.assertIn(first[0], [(x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y)])
+            self.assertEqual(req, Action.NOOP)  # never FORWARD in the deciding step
 
 
 class InertTests(unittest.TestCase):
