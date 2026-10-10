@@ -55,6 +55,11 @@ def parse_steps(s):
     return _parse_ints(s, "steps", False, 1)
 
 
+def workers_arg(s):
+    """argparse type for --workers: an empty value (e.g. an empty $SCHED_WORKERS) means unset."""
+    return int(s) if s.strip() else None
+
+
 def resolve_workers(cli_value, env=os.environ, n_tasks=None):
     """--workers, else SCHED_WORKERS (empty/invalid = unset), else cpu_count - 2; capped at n_tasks (min 1)."""
     if cli_value is not None:
@@ -177,7 +182,7 @@ def main():
     p.add_argument("--env", required=True)
     p.add_argument("--seeds", required=True)
     p.add_argument("--steps", required=True)
-    p.add_argument("--workers", type=int, default=None)
+    p.add_argument("--workers", type=workers_arg, nargs="?", default=None)  # bare/empty = unset
     p.add_argument("--results-dir", default=str(REPO / "results"))
     a = p.parse_args()
     seeds, steps_list = parse_seeds(a.seeds), parse_steps(a.steps)

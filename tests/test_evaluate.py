@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import json
 import subprocess
 import sys
@@ -46,7 +47,7 @@ class TestParsers(unittest.TestCase):
         self.assertEqual(ev.parse_seeds("0-29"), list(range(30)))
         self.assertEqual(ev.parse_seeds("0-3,7"), [0, 1, 2, 3, 7])
         self.assertEqual(ev.parse_seeds("5"), [5])
-        for bad in ["", "5-2", "a", "-1"]:
+        for bad in ["", "5-2", "5-2,7", "a", "-1"]:
             with self.assertRaises(ValueError, msg=bad):
                 ev.parse_seeds(bad)
 
@@ -156,6 +157,12 @@ class TestThroughput(unittest.TestCase):
 
     def test_sched_workers_env(self):  # inject: ignore SCHED_WORKERS
         self.assertEqual(self._run([], {"SCHED_WORKERS": "2"})["workers"], 2)
+
+    def test_scheduler_command_with_empty_sched_workers(self):  # inject: --workers back to type=int (argparse exits 2)
+        # The scheduler runs `throughput.py --workers $SCHED_WORKERS`; an empty variable leaves a bare --workers.
+        fallback = max(1, os.cpu_count() - 2)
+        self.assertEqual(self._run(["--workers"], {"SCHED_WORKERS": ""})["workers"], fallback)
+        self.assertEqual(self._run(["--workers", ""], {"SCHED_WORKERS": ""})["workers"], fallback)
 
 
 if __name__ == "__main__":

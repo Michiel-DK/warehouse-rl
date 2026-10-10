@@ -32,6 +32,6 @@ SD is the sample SD (ddof=1) and the CI is a Student-t 95% interval over the 10 
 
 Raw per-episode numbers are in `results/fifo_*.json`; these files predate the rename (the CTA heuristic was called FIFO in this repo before 2026-10-10). The heuristic does not read observations, so partial and global give identical results.
 
-The medium map is the paper's "GTP Small" (Krnjaic et al. 2023), where the paper reports 52.7 lines/h for the same heuristic. At 500 steps one delivery is 1.44 lines/h and the 95% CI over 10 seeds is about +/- 2 lines/h, so these numbers cannot resolve a 5% effect; Sprint 1 fixes the evaluation length and seed count.
+The medium map is the paper's "GTP Small" (Krnjaic et al. 2023), where the paper reports 52.7 lines/h for the same heuristic. At 500 steps one delivery is 1.44 lines/h and the 95% CI over 10 seeds is about +/- 5 lines/h on this map (+/- 2 on small, see the table), so these numbers cannot resolve a 5% effect; Sprint 1 fixes the evaluation length and seed count.
 
 Evaluation resolution: pending (scheduler item wr-dev-s1-readme)

@@ -17,11 +17,15 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 
-def _resolve_workers(cli_value):
+def _evaluate_module():
     spec = importlib.util.spec_from_file_location("_evaluate_for_tp", REPO / "scripts" / "evaluate.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.resolve_workers(cli_value)
+    return mod
+
+
+def _resolve_workers(cli_value):
+    return _evaluate_module().resolve_workers(cli_value)
 
 
 def worker(env_id, steps, episodes, base_seed, barrier):
@@ -46,7 +50,7 @@ def worker(env_id, steps, episodes, base_seed, barrier):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--workers", type=int, default=None)
+    p.add_argument("--workers", type=_evaluate_module().workers_arg, nargs="?", default=None)  # bare/empty = unset (scheduler passes --workers $SCHED_WORKERS)
     p.add_argument("--steps", type=int, default=500)
     p.add_argument("--env", default="tarware-medium-8agvs-4pickers-globalobs-v1")
     p.add_argument("--episodes", type=int, default=10, help="episodes per worker")
