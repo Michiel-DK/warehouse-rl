@@ -262,6 +262,45 @@ class CallHumanTests(unittest.TestCase):
         self.assertEqual((d60, n60), (d7, n7))
         self.assertEqual(d60 * 3600 / (5 * 300), d7 * 3600 / (5 * 300))
 
+    def test_clash_path_failed_relocation_is_a_real_wait(self):
+        # red: `continue` for every clash-queued agent in the stuck loop (skip the update when _relocate fails) ->
+        # the counter does not advance and no stuck event is counted for that agent this step. Run 2026-10-10: red via the
+        # `checked > 0` guard (agents that keep clashing never leave count 0 when the update is skipped).
+        cfg = rc.normalise_recovery({"name": "timeout", "call_human_cost": 60})
+        env = WarehouseEnv(MEDIUM, max_steps=300, disturb=BREAKDOWN, recovery=cfg)
+        hook = env.env
+        hook._recovery = ClashHuman()
+        hook._relocate = lambda agent: False  # every relocation fails
+        queued = []
+        orig_queue = hook._queue_human
+
+        def spy(agent):
+            queued.append((agent.id, hook.stuck_counters[agent.id - 1].count, (agent.x, agent.y)))
+            orig_queue(agent)
+
+        hook._queue_human = spy
+        pol = StuckAwareCtaPolicy()
+        obs, info = env.reset(seed=1)
+        pol.reset(env)
+        checked = 0
+        for _ in range(300):
+            n0 = len(queued)
+            obs, _, _, _, info = env.step(pol.act(obs, info["action_mask"], info))
+            self.assertEqual(info["call_human_steps"], 0)
+            for agent_id, count_before, cell in queued[n0:]:
+                a = hook.agents[agent_id - 1]
+                # still busy, did not move, count_before > 0 (so the counter position is this cell; at 0 it can be stale
+                # and the vendor update legitimately yields 0): the update must have run
+                if a.busy and (a.x, a.y) == cell and count_before > 0:
+                    c = hook.stuck_counters[agent_id - 1]
+                    # updated: count_before + 1, or reset to 0 by a reroute at count > 5; skipped: unchanged
+                    self.assertNotEqual(c.count, count_before)
+                    checked += 1
+            self.assertGreaterEqual(info["recovery_stuck_events"] + info["recovery_clash_events"],
+                                    info["recovery_call_human"])
+        env.close()
+        self.assertGreater(checked, 0, "no failed clash-time relocation on a busy agent in this run")
+
     def test_clash_path(self):
         # call_human decided at a CLASH event: same post-step guarantees (moved, count == 0, exact charge)
         d60, n60 = self._run(60, ClashHuman, MEDIUM)

@@ -370,7 +370,14 @@ class _HookedVendor(Warehouse):
         ]
         for agent in moving_agents:
             if agent.id in self._human_queue:
-                continue  # queued at a clash event this step: relocated below, not a second (stuck) event
+                # call_human queued at a clash event this step: relocate here, before the counter update. On success
+                # the agent is unstuck (count 0) and raises no second event; on failure it falls back to a real wait:
+                # the vendor update and the normal stuck event below run as for any other agent.
+                del self._human_queue[agent.id]
+                if self._relocate(agent):
+                    self._counts["call_human_steps"] += self._call_human_cost
+                    continue
+                self._counts["recovery_fallbacks"] += 1
             agent_stuck_count = self.stuck_counters[agent.id - 1]
             agent_stuck_count.update((agent.x, agent.y))
             if agent_stuck_count.count <= 0:
