@@ -9,6 +9,7 @@ from gymnasium import spaces
 import tarware  # noqa: F401  (registers the env ids)
 
 from warehouse_rl.disturb import DisturbedWarehouse
+from warehouse_rl.recovery import RecoveryHook, make_recovery, normalise_recovery
 
 FIXING_CLASH_TIME = 4  # vendor warehouse._FIXING_CLASH_TIME
 STUCK_CAP = 15
@@ -26,17 +27,27 @@ class WarehouseEnv(gym.Env):
         global_reward=False,
         disturb=None,
         assign_care_for_agents=False,
+        recovery=None,
     ):
         # disturb=None: the S1 path, untouched. disturb=dict: DisturbedWarehouse (see disturb.py); {} = no disturbance.
         # Preset names / JSON strings are resolved by the caller (disturb.resolve_disturb), not here.
         if assign_care_for_agents and disturb is None:
             raise ValueError("assign_care_for_agents=True needs a disturb dict (the layer owns the toggle)")
+        # recovery=None: today's code path. recovery=dict (recovery.normalise_recovery): RecoveryHook; needs a disturb dict.
+        if recovery is not None and disturb is None:
+            raise ValueError("recovery needs a disturb dict (pass {} for no disturbance)")
         if disturb is None:
             self.env = gym.make(env_id, max_steps=max_steps).unwrapped
         elif isinstance(disturb, dict):
             kwargs = dict(gym.spec(env_id).kwargs)
             kwargs["max_steps"] = max_steps
-            self.env = DisturbedWarehouse(disturb=disturb, assign_care_for_agents=assign_care_for_agents, **kwargs)
+            if recovery is not None:
+                rcfg = normalise_recovery(recovery)
+                self.env = RecoveryHook(disturb=disturb, recovery=make_recovery(rcfg),
+                                        call_human_cost=rcfg["call_human_cost"],
+                                        assign_care_for_agents=assign_care_for_agents, **kwargs)
+            else:
+                self.env = DisturbedWarehouse(disturb=disturb, assign_care_for_agents=assign_care_for_agents, **kwargs)
         else:
             raise ValueError(f"disturb must be None or a dict, got {type(disturb).__name__}")
         self.disturb = disturb

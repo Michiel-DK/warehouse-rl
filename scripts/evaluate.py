@@ -1,10 +1,15 @@
 """Evaluate a policy over many seeds and step budgets; resumable, multiprocess, one env per process.
 
-Usage: python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-29 --steps 500,2000 [--workers N] [--results-dir DIR] [--disturb PRESET|JSON]
+Usage: python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-29 --steps 500,2000 [--workers N] [--results-dir DIR] [--disturb PRESET|JSON] [--recovery timeout|'{"name": "tuned_timeout", "replan": R, "abandon": A, "call_human_cost": C}']
 Writes <results-dir>/<policy>_<env>_<steps>.json after every finished seed (parent process only, atomic).
 --disturb (default none) runs under the disturbance layer (warehouse_rl.disturb) and writes
 <policy>_<env>_<steps>_<tag>.json instead, storing the config; the undisturbed filename is unchanged. An existing file
 with the same tag but a different stored config raises. The paired delta reads the CTA file with the same tag.
+--recovery (default unset; needs --policy stuck_aware_cta, else ValueError) builds the RecoveryHook (warehouse_rl.recovery;
+disturb {} for --disturb none) and writes <policy>_<env>_<steps>[_<disturbtag>]_<rectag>.json (rectag: 'timeout' for the
+preset, 'rec-<10 hex>' for a JSON spec; call_human_cost is optional, default 60). Doc and rows record the recovery
+config and the episode sums of the recovery info keys. Resuming into a file with a different stored recovery config
+raises. Without --recovery nothing above changes.
 Workers: --workers, else SCHED_WORKERS, else os.cpu_count() - 2; capped at the seeds still to run.
 pick-rate = deliveries * 3600 / (5 * steps), deliveries from info["shelf_deliveries"].
 Policies: cta, stuck_aware_cta, random (registry below; an unknown name raises ValueError).
@@ -127,16 +132,20 @@ def paired_delta(rows_a, rows_b, seeds=None):
     return summarise([a[s]["pick_rate"] - b[s]["pick_rate"] for s in common])
 
 
-def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=False):
+def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=False, recovery=None):
     """One episode; depends only on (policy, env_id, steps, seed, disturb, assign_care_for_agents). Builds its own env.
 
-    disturb=None is the S1 path (row fields unchanged); a dict adds the disturbance episode sums."""
+    disturb=None is the S1 path (row fields unchanged); a dict adds the disturbance episode sums.
+    recovery (a normalised config dict, needs disturb) adds the recovery config and RECOVERY_SUMS to the row."""
     from warehouse_rl.env import WarehouseEnv
 
     t0 = time.time()
     pol = make_policy(policy, seed)
-    env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents)
+    env_kwargs = {} if recovery is None else dict(recovery=recovery)
+    env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
+                       **env_kwargs)
     extra = {k: 0 for k in DISTURB_SUMS} if disturb is not None else None
+    rec_extra = {k: 0 for k in RECOVERY_SUMS} if recovery is not None else None
     try:
         obs, info = env.reset(seed=seed)
         pol.reset(env)
@@ -150,6 +159,9 @@ def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=F
             if extra is not None:
                 for out_key, info_key in DISTURB_SUMS.items():
                     extra[out_key] += int(info[info_key])
+            if rec_extra is not None:
+                for k in RECOVERY_SUMS:
+                    rec_extra[k] += int(info[k])
         n_agents = env.num_agents
         delivered_per_agent = list(info["delivered_per_agent"]) if extra is not None else None
     finally:
@@ -160,6 +172,9 @@ def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=F
         row.update(extra)
         row["frozen_fraction"] = extra["frozen_agent_steps"] / (steps * n_agents)
         row["delivered_per_agent"] = delivered_per_agent
+    if rec_extra is not None:
+        row["recovery"] = dict(recovery)
+        row.update(rec_extra)
     return row
 
 
@@ -169,18 +184,24 @@ DISTURB_SUMS = dict(stuck_agent_steps="stuck_agents", stuck_busy_agent_steps="st
                     clash_agent_steps="clash_agents", frozen_agent_steps="frozen_agents",
                     delayed_agent_steps="delayed_agents")
 
+# recovery rows only (kept apart from DISTURB_SUMS so non-recovery disturbed runs never need these info keys)
+RECOVERY_SUMS = ("recovery_wait", "recovery_back_off", "recovery_reroute", "recovery_abandon", "recovery_call_human",
+                 "recovery_stuck_events", "recovery_clash_events", "recovery_fallbacks", "call_human_steps")
+
 
 def _job(args):
     return run_seed(*args)
 
 
-def _write(path, policy, env_id, steps, rows, tag=None, config=None):
+def _write(path, policy, env_id, steps, rows, tag=None, config=None, rec_tag=None, rec_config=None):
     rows = sorted(rows, key=lambda r: r["seed"])
     s = summarise([r["pick_rate"] for r in rows])
     doc = dict(policy=policy, env=env_id, steps=steps, rows=rows, n=s["n"], pick_rate_mean=s["mean"],
                pick_rate_sd=s["sd"], ci95_low=s["ci95_low"], ci95_high=s["ci95_high"])
     if config is not None:
         doc.update(disturb_tag=tag, disturb=config)
+    if rec_config is not None:
+        doc.update(recovery_tag=rec_tag, recovery=rec_config)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(doc, indent=2))
     os.replace(tmp, path)
@@ -196,37 +217,72 @@ def _check_same_config(path, doc, tag, config):
                          f"requested {config!r} (tag {tag!r}); refusing to merge")
 
 
-def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="none"):
+def _check_same_recovery(path, doc, rec_tag, rec_config):
+    if doc.get("recovery") != rec_config or doc.get("recovery_tag") != rec_tag:
+        raise ValueError(f"{path} stores recovery config {doc.get('recovery')!r} (tag {doc.get('recovery_tag')!r}), "
+                         f"requested {rec_config!r} (tag {rec_tag!r}); refusing to merge")
+
+
+def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="none", recovery=None):
     from warehouse_rl.disturb import resolve_disturb
 
+    rec_tag = rec_config = None
+    if recovery is not None:
+        from warehouse_rl.recovery import resolve_recovery
+
+        if policy != "stuck_aware_cta":
+            raise ValueError(f"--recovery needs --policy stuck_aware_cta (re-dispatch on abandon), got {policy!r}")
+        rec_tag, rec_config = resolve_recovery(recovery)
     tag, config = resolve_disturb(disturb)
     disturbed = tag != "none"  # preset none = the S1 undisturbed path: same filename, no layer
     suffix = f"_{tag}" if disturbed else ""
+    layer = disturbed or rec_config is not None  # a recovery run always builds the layer ({} = no disturbance)
     results_dir = Path(results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
-    path = results_dir / f"{policy}_{env_id}_{steps}{suffix}.json"
+    rec_suffix = f"_{rec_tag}" if rec_config is not None else ""
+    path = results_dir / f"{policy}_{env_id}_{steps}{suffix}{rec_suffix}.json"
     rows = []
     if path.exists():
         doc = json.loads(path.read_text())
-        if disturbed:
+        if layer:
             _check_same_config(path, doc, tag, config)
+        if rec_config is not None:
+            _check_same_recovery(path, doc, rec_tag, rec_config)
         rows = doc["rows"]
     have = {r["seed"] for r in rows}
     todo = [s for s in seeds if s not in have]
     if todo:
         workers = resolve_workers(workers_cli, os.environ, len(todo))
         print(f"[{policy} {steps} steps] {len(todo)} seeds to run on {workers} workers ({len(have)} already on disk)")
-        jobs = [(policy, env_id, steps, s, config if disturbed else None) for s in todo]
+        if rec_config is not None:
+            jobs = [(policy, env_id, steps, s, config, False, rec_config) for s in todo]
+        else:
+            jobs = [(policy, env_id, steps, s, config if disturbed else None) for s in todo]
         with mp.Pool(workers) as pool:
             for row in pool.imap_unordered(_job, jobs):
                 rows.append(row)
-                _write(path, policy, env_id, steps, rows, tag if disturbed else None, config if disturbed else None)
+                _write(path, policy, env_id, steps, rows, tag if layer else None, config if layer else None,
+                       rec_tag, rec_config)
     else:
         print(f"[{policy} {steps} steps] all requested seeds already on disk")
     by_seed = {r["seed"]: r for r in rows}
     req = [by_seed[s] for s in seeds]
     print(f"{policy} {steps} steps pick_rate (lines/h): " + _fmt(summarise([r["pick_rate"] for r in req])))
-    if policy != "cta":
+    if rec_config is not None:
+        base_path = results_dir / f"{policy}_{env_id}_{steps}{suffix}.json"
+        if base_path.exists():
+            base_doc = json.loads(base_path.read_text())
+            if disturbed:
+                _check_same_config(base_path, base_doc, tag, config)
+            d = paired_delta(req, base_doc["rows"], seeds)
+            if d["n"]:
+                print(f"paired delta ({policy}+{rec_tag} - {policy}): n_paired={d['n']} mean_delta={d['mean']:.2f} "
+                      f"sd={d['sd']:.2f} 95% CI=[{d['ci95_low']:.2f}, {d['ci95_high']:.2f}]")
+            else:
+                print("paired delta: n_paired=0 (no common seeds with the no-recovery file)")
+        else:
+            print(f"paired delta: no no-recovery file at {base_path}")
+    elif policy != "cta":
         cta_path = results_dir / f"cta_{env_id}_{steps}{suffix}.json"
         if cta_path.exists():
             cta_doc = json.loads(cta_path.read_text())
@@ -252,10 +308,13 @@ def main():
     p.add_argument("--workers", type=workers_arg, nargs="?", default=None)  # bare/empty = unset
     p.add_argument("--results-dir", default=str(REPO / "results"))
     p.add_argument("--disturb", default="none", help="preset name or JSON object (see warehouse_rl.disturb)")
+    p.add_argument("--recovery", default=None,
+                   help="preset 'timeout' or JSON {\"name\": \"tuned_timeout\", \"replan\": R, \"abandon\": A, "
+                        "\"call_human_cost\"?: C} (needs --policy stuck_aware_cta)")
     a = p.parse_args()
     seeds, steps_list = parse_seeds(a.seeds), parse_steps(a.steps)
     for st in steps_list:
-        evaluate(a.policy, a.env, st, seeds, a.workers, a.results_dir, a.disturb)
+        evaluate(a.policy, a.env, st, seeds, a.workers, a.results_dir, a.disturb, a.recovery)
 
 
 if __name__ == "__main__":
