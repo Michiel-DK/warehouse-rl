@@ -187,6 +187,46 @@ class TestAbandonment(unittest.TestCase):
         finally:
             f.close()
 
+    # never busy (the find_path == [] shape at W:366): idle now but not busy at the previous call, mission kept
+    def test_never_busy_mission_is_not_an_abandonment(self):  # inject: drop the _prev_busy condition in _begin_act
+        f = Fixture(StuckAwareCtaPolicy)
+        try:
+            f.act()  # assigns; no env.step, so the AGV is still not busy at the next call
+            x = f.assignee()
+            self.assertFalse(x.busy)
+            actions = f.act()
+            self.assertIs(f.assignee(), x)
+            self.assertEqual(actions[x.id - 1], f.pol.assigned_agvs[x].location_id)
+        finally:
+            f.close()
+
+    # the drop comes from the vendor's own stuck timeout (resolve_stuck_agents, W:509-513), not a hand-set busy flag.
+    # Real PICKING-not-carrying drops are rare (none in seeds 0-19, small and medium, heavy breakdown and none), so
+    # the counter is primed; everything after that is the env's code path. inject: drop the pop in _begin_act
+    def test_real_stuck_timeout_drop_is_redispatched(self):
+        f = Fixture(StuckAwareCtaPolicy)
+        try:
+            f.obs, _, _, _, f.info = f.env.step(f.act())
+            x = f.assignee()
+            self.assertTrue(x.busy)
+            for _ in range(10):
+                c = f.e.stuck_counters[x.id - 1]
+                c.position, c.count = (x.x, x.y), 15  # next vendor update -> 16 > 15: task dropped
+                f.obs, _, _, _, f.info = f.env.step(f.act())  # act() records x busy before the drop
+                if not x.busy:
+                    break
+            self.assertFalse(x.busy)
+            self.assertGreaterEqual(f.info["abandoned_tasks"], 1)
+            self.assertFalse(x.carrying_shelf)
+            self.assertEqual(f.pol.assigned_agvs[x].mission_type, MissionType.PICKING)
+            f.act()
+            new_owner = f.assignee()
+            self.assertIsNotNone(new_owner)
+            self.assertIsNot(new_owner, x)
+            self.assertNotIn(x, f.pol.assigned_agvs)
+        finally:
+            f.close()
+
     # carrying a shelf: not an abandonment, the mission survives (CTA behaviour)
     def test_carrying_agv_is_not_an_abandonment(self):  # inject: drop the carrying_shelf check
         f = Fixture(StuckAwareCtaPolicy)
