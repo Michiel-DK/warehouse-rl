@@ -57,6 +57,10 @@ class CtaPolicy(Policy):
         self.assigned_pickers = OrderedDict()
         self.assigned_items = OrderedDict()
 
+    def _begin_act(self):
+        """Hook run at the start of act(); returns the AGVs that may not receive a NEW assignment this call."""
+        return ()
+
     def act(self, obs, masks, info):
         env = self.env
         agvs, pickers = self.agvs, self.pickers
@@ -64,12 +68,13 @@ class CtaPolicy(Policy):
         timestep = self.timestep
         location_map = self.location_map
         actions = {k: 0 for k in self.agents}
+        excluded = self._begin_act()
 
         for item in env.request_queue:
             if item.id in assigned_items.values():
                 continue
             available_agvs = [a for a in agvs if not a.busy and not a.carrying_shelf]
-            available_agvs = [a for a in available_agvs if a not in assigned_agvs]
+            available_agvs = [a for a in available_agvs if a not in assigned_agvs and a not in excluded]
             if not available_agvs:
                 continue
             paths = [env.find_path((a.y, a.x), (item.y, item.x), a, care_for_agents=False) for a in available_agvs]
@@ -136,3 +141,45 @@ class CtaPolicy(Policy):
 
         self.timestep += 1
         return list(actions.values())
+
+
+class StuckAwareCtaPolicy(CtaPolicy):
+    """CTA that does not hand NEW AGV assignments to a robot the disturbance layer has frozen, and re-dispatches the
+    item of a PICKING mission the env's stuck timeout dropped.
+
+    Frozen = the layer's breakdown mask for the step about to execute (DisturbedWarehouse.frozen_now): no look-ahead,
+    so it is not an oracle. On a plain Warehouse nothing is frozen. Delayed agents are not frozen. Idle AGVs are never
+    excluded by StuckCounter.count (the vendor does not reset it when an agent goes idle).
+
+    Abandonment: an AGV holding a PICKING mission, not carrying, not at the mission location, that was busy at the
+    previous act() and is not busy now. Its mission and item are popped at the start of the call, so the item goes
+    to the closest eligible AGV in that same call; the abandoner is excluded for this call only. If nobody is
+    eligible the item stays queued and unassigned. Carrying cases (DELIVERING, RETURNING, the W:379-381 restart) keep
+    the CTA behaviour, as does a mission whose find_path was [] at W:366 (never busy, so never abandoned).
+
+    Fence: pickers keep CTA's static zones, and an AGV that freezes mid-mission keeps its order, because act()
+    cannot cancel a busy path stored in the env (that is the S3 recovery layer's job).
+    """
+
+    def reset(self, env):
+        super().reset(env)
+        self._prev_busy = {}
+
+    def _frozen_agvs(self):
+        frozen_now = getattr(self.env, "frozen_now", None)
+        if frozen_now is None:
+            return set()
+        mask = frozen_now()
+        return {a for a in self.agvs if mask[a.id - 1]}
+
+    def _begin_act(self):
+        abandoners = set()
+        for agv in list(self.assigned_agvs):
+            m = self.assigned_agvs[agv]
+            if (m.mission_type == MissionType.PICKING and not agv.carrying_shelf and not agv.busy
+                    and self._prev_busy.get(agv, False) and (agv.x, agv.y) != (m.location_x, m.location_y)):
+                self.assigned_agvs.pop(agv)
+                self.assigned_items.pop(agv, None)
+                abandoners.add(agv)
+        self._prev_busy = {a: a.busy for a in self.agvs}
+        return self._frozen_agvs() | abandoners

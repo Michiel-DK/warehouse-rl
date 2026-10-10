@@ -7,6 +7,8 @@ Writes <results-dir>/<policy>_<env>_<steps>.json after every finished seed (pare
 with the same tag but a different stored config raises. The paired delta reads the CTA file with the same tag.
 Workers: --workers, else SCHED_WORKERS, else os.cpu_count() - 2; capped at the seeds still to run.
 pick-rate = deliveries * 3600 / (5 * steps), deliveries from info["shelf_deliveries"].
+Policies: cta, stuck_aware_cta, random (registry below; an unknown name raises ValueError).
+Warm-up W = 0: no steps are discarded (README "Evaluation resolution").
 """
 import argparse
 import json
@@ -99,18 +101,43 @@ def summarise(values):
     return dict(n=n, mean=mean, sd=sd, ci95_low=mean - half, ci95_high=mean + half)
 
 
-def run_seed(policy, env_id, steps, seed, disturb=None):
-    """One episode; depends only on (policy, env_id, steps, seed, disturb). Builds its own env.
+POLICIES = ("cta", "stuck_aware_cta", "random")
+
+
+def make_policy(name, seed):
+    """Policy registry; ValueError on an unknown name (never a silent fallback to another policy)."""
+    from warehouse_rl.policy import CtaPolicy, RandomPolicy, StuckAwareCtaPolicy
+
+    if name == "cta":
+        return CtaPolicy()
+    if name == "stuck_aware_cta":
+        return StuckAwareCtaPolicy()
+    if name == "random":
+        return RandomPolicy(seed=seed)
+    raise ValueError(f"unknown policy {name!r}; known: {list(POLICIES)}")
+
+
+def paired_delta(rows_a, rows_b, seeds=None):
+    """summarise() of (a - b) pick_rate over the seeds present in both row lists, paired BY SEED (never by index).
+
+    seeds restricts the pairing to those seeds; the differences are taken in ascending seed order."""
+    a = {r["seed"]: r for r in rows_a}
+    b = {r["seed"]: r for r in rows_b}
+    common = sorted(set(a) & set(b) & (set(seeds) if seeds is not None else set(a)))
+    return summarise([a[s]["pick_rate"] - b[s]["pick_rate"] for s in common])
+
+
+def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=False):
+    """One episode; depends only on (policy, env_id, steps, seed, disturb, assign_care_for_agents). Builds its own env.
 
     disturb=None is the S1 path (row fields unchanged); a dict adds the disturbance episode sums."""
     from warehouse_rl.env import WarehouseEnv
-    from warehouse_rl.policy import CtaPolicy, RandomPolicy
 
     t0 = time.time()
-    env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb)
+    pol = make_policy(policy, seed)
+    env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents)
     extra = {k: 0 for k in DISTURB_SUMS} if disturb is not None else None
     try:
-        pol = CtaPolicy() if policy == "cta" else RandomPolicy(seed=seed)
         obs, info = env.reset(seed=seed)
         pol.reset(env)
         deliveries = clashes = stucks = 0
@@ -205,11 +232,9 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
             cta_doc = json.loads(cta_path.read_text())
             if disturbed:
                 _check_same_config(cta_path, cta_doc, tag, config)
-            cta = {r["seed"]: r for r in cta_doc["rows"]}
-            common = [s for s in seeds if s in cta]
-            if common:
-                d = summarise([by_seed[s]["pick_rate"] - cta[s]["pick_rate"] for s in common])
-                print(f"paired delta ({policy} - cta): n_paired={len(common)} mean_delta={d['mean']:.2f} "
+            d = paired_delta(req, cta_doc["rows"], seeds)
+            if d["n"]:
+                print(f"paired delta ({policy} - cta): n_paired={d['n']} mean_delta={d['mean']:.2f} "
                       f"sd={d['sd']:.2f} 95% CI=[{d['ci95_low']:.2f}, {d['ci95_high']:.2f}]")
             else:
                 print("paired delta: n_paired=0 (no common seeds with the CTA file)")
@@ -220,7 +245,7 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=["cta", "random"], required=True)
+    p.add_argument("--policy", choices=list(POLICIES), required=True)
     p.add_argument("--env", required=True)
     p.add_argument("--seeds", required=True)
     p.add_argument("--steps", required=True)
