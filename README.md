@@ -56,7 +56,89 @@ Throughput (`results/throughput.json`, medium, 8 worker processes, 10 episodes x
 
 ## Sprint 2: disturbances, stuck-aware CTA, sweeps
 
-No measured results are stated here. The numbers come from the sweep JSON files after the scheduler has run them.
+### Sprint 2 results (2026-10-10)
+
+From `results/sweeps/density.json`, `breakdown.json`, `delay.json` and `router.json`: 30 seeds (0-29) per (point, policy), 500 steps, medium map. Mean, SD (ddof=1) and the Student-t 95% CI half-width are computed with `evaluate.summarise` over the 30 seeds; the paired delta is the same summary over the 30 per-seed differences (same seed, same disturbance schedule). Stuck-busy % = sum(`stuck_busy_agent_steps`) / (n_agents x steps) and frozen % = sum(`frozen_agent_steps`) / (n_agents x steps), pooled over the 30 seeds; n_agents counts AGVs and pickers. Abandoned / ep is the mean of `abandoned_tasks` (stuck-timeout drops) per episode. The 8-AGV, rate-0 cell (53.66) is the same number as the S1 500-step evaluation, as it should be.
+
+**a. Density** (CTA, pickers = AGVs / 2):
+
+| Point | Policy | Mean (lines/h) | SD | 95% CI | Stuck-busy % | Frozen % | Abandoned / ep |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | cta | 14.45 | 1.63 | +/- 0.61 | 7.9 | 0.0 | 0.00 |
+| 4 | cta | 27.50 | 3.47 | +/- 1.30 | 8.9 | 0.0 | 0.43 |
+| 6 | cta | 41.33 | 4.57 | +/- 1.71 | 10.0 | 0.0 | 1.27 |
+| 8 | cta | 53.66 | 6.51 | +/- 2.43 | 10.7 | 0.0 | 2.87 |
+| 10 | cta | 71.47 | 6.56 | +/- 2.45 | 12.6 | 0.0 | 2.97 |
+| 12 | cta | 81.36 | 5.24 | +/- 1.96 | 12.4 | 0.0 | 4.33 |
+| 14 | cta | 89.66 | 10.60 | +/- 3.96 | 13.1 | 0.0 | 5.90 |
+| 16 | cta | 101.18 | 14.39 | +/- 5.37 | 14.3 | 0.0 | 15.10 |
+
+Knee rule: the first AGV count whose mean pick-rate is not below the next grid point's with non-overlapping 95% CIs. There is no knee in 2-16: the mean rises at every step (the smallest step, 12 to 14 AGVs, is 81.36 to 89.66 with CIs that do not overlap), so it does not fall afterwards either. The return per AGV does shrink, from 7.2 lines/h per AGV at 2 AGVs to 6.3 at 16, and at 16 the SD and the abandonments jump (15.1 per episode against 5.9 at 14). That is the start of saturation, not a knee.
+
+**b. Breakdown rate** (8 AGV + 4 pickers, freezes of 20 to 60 steps):
+
+| Point | Policy | Mean (lines/h) | SD | 95% CI | Stuck-busy % | Frozen % | Abandoned / ep | Paired delta vs cta (95% CI) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | cta | 53.66 | 6.51 | +/- 2.43 | 10.7 | 0.0 | 2.87 | |
+| 0 | stuck_aware_cta | 53.66 | 6.51 | +/- 2.43 | 10.7 | 0.0 | 2.87 | +0.00 (+0.00 to +0.00) |
+| 1 | cta | 51.60 | 5.07 | +/- 1.89 | 11.2 | 3.4 | 4.30 | |
+| 1 | stuck_aware_cta | 51.17 | 5.25 | +/- 1.96 | 11.1 | 3.4 | 4.10 | -0.43 (-0.78 to -0.08) |
+| 2 | cta | 47.71 | 5.62 | +/- 2.10 | 10.5 | 6.2 | 3.37 | |
+| 2 | stuck_aware_cta | 47.47 | 5.83 | +/- 2.18 | 10.6 | 6.2 | 3.37 | -0.24 (-0.49 to +0.01) |
+| 4 | cta | 42.10 | 6.64 | +/- 2.48 | 10.6 | 12.8 | 5.93 | |
+| 4 | stuck_aware_cta | 42.48 | 6.70 | +/- 2.50 | 10.7 | 12.8 | 5.83 | +0.38 (-0.20 to +0.97) |
+| 8 | cta | 33.41 | 4.77 | +/- 1.78 | 10.3 | 22.1 | 6.80 | |
+| 8 | stuck_aware_cta | 33.17 | 4.47 | +/- 1.67 | 10.2 | 22.1 | 6.70 | -0.24 (-0.71 to +0.23) |
+| 16 | cta | 22.56 | 4.46 | +/- 1.67 | 10.6 | 37.7 | 9.90 | |
+| 16 | stuck_aware_cta | 21.89 | 4.17 | +/- 1.56 | 10.5 | 37.7 | 9.90 | -0.67 (-1.55 to +0.21) |
+
+**c. Delay** (8 AGV + 4 pickers; the delayed fraction of robot-time is 5.1%, 10.1%, 20.0% and 29.8% at p_skip 0.05, 0.1, 0.2 and 0.3):
+
+| Point | Policy | Mean (lines/h) | SD | 95% CI | Stuck-busy % | Frozen % | Abandoned / ep | Paired delta vs cta (95% CI) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | cta | 53.66 | 6.51 | +/- 2.43 | 10.7 | 0.0 | 2.87 | |
+| 0 | stuck_aware_cta | 53.66 | 6.51 | +/- 2.43 | 10.7 | 0.0 | 2.87 | +0.00 (+0.00 to +0.00) |
+| 0.05 | cta | 52.51 | 5.14 | +/- 1.92 | 10.6 | 0.0 | 1.30 | |
+| 0.05 | stuck_aware_cta | 52.51 | 5.14 | +/- 1.92 | 10.6 | 0.0 | 1.30 | +0.00 (+0.00 to +0.00) |
+| 0.1 | cta | 48.19 | 5.72 | +/- 2.14 | 10.4 | 0.0 | 2.53 | |
+| 0.1 | stuck_aware_cta | 48.62 | 5.24 | +/- 1.95 | 10.1 | 0.0 | 1.43 | +0.43 (-0.45 to +1.32) |
+| 0.2 | cta | 44.06 | 4.52 | +/- 1.69 | 10.6 | 0.0 | 1.30 | |
+| 0.2 | stuck_aware_cta | 44.06 | 4.52 | +/- 1.69 | 10.6 | 0.0 | 1.30 | +0.00 (+0.00 to +0.00) |
+| 0.3 | cta | 38.88 | 3.86 | +/- 1.44 | 10.4 | 0.0 | 1.93 | |
+| 0.3 | stuck_aware_cta | 38.88 | 3.86 | +/- 1.44 | 10.4 | 0.0 | 1.67 | +0.00 (+0.00 to +0.00) |
+
+**d. Router ablation** (`cta_care` = CTA with `assign_care_for_agents` on):
+
+| Point | Policy | Mean (lines/h) | SD | 95% CI | Stuck-busy % | Frozen % | Abandoned / ep | Paired delta vs cta (95% CI) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | cta | 14.45 | 1.63 | +/- 0.61 | 7.9 | 0.0 | 0.00 | |
+| 2 | cta_care | 14.40 | 1.77 | +/- 0.66 | 7.9 | 0.0 | 0.03 | -0.05 (-0.22 to +0.12) |
+| 4 | cta | 27.50 | 3.47 | +/- 1.30 | 8.9 | 0.0 | 0.43 | |
+| 4 | cta_care | 27.74 | 3.09 | +/- 1.16 | 8.1 | 0.0 | 0.33 | +0.24 (-0.48 to +0.96) |
+| 6 | cta | 41.33 | 4.57 | +/- 1.71 | 10.0 | 0.0 | 1.27 | |
+| 6 | cta_care | 40.46 | 5.42 | +/- 2.02 | 9.1 | 0.0 | 0.93 | -0.86 (-2.42 to +0.69) |
+| 8 | cta | 53.66 | 6.51 | +/- 2.43 | 10.7 | 0.0 | 2.87 | |
+| 8 | cta_care | 53.52 | 6.82 | +/- 2.55 | 10.1 | 0.0 | 4.17 | -0.14 (-2.24 to +1.95) |
+| 10 | cta | 71.47 | 6.56 | +/- 2.45 | 12.6 | 0.0 | 2.97 | |
+| 10 | cta_care | 71.23 | 4.52 | +/- 1.69 | 11.5 | 0.0 | 2.73 | -0.24 (-2.22 to +1.74) |
+| 12 | cta | 81.36 | 5.24 | +/- 1.96 | 12.4 | 0.0 | 4.33 | |
+| 12 | cta_care | 79.87 | 6.45 | +/- 2.41 | 11.5 | 0.0 | 5.57 | -1.49 (-4.50 to +1.53) |
+| 14 | cta | 89.66 | 10.60 | +/- 3.96 | 13.1 | 0.0 | 5.90 | |
+| 14 | cta_care | 89.52 | 11.85 | +/- 4.42 | 11.9 | 0.0 | 7.63 | -0.14 (-4.13 to +3.84) |
+| 16 | cta | 101.18 | 14.39 | +/- 5.37 | 14.3 | 0.0 | 15.10 | |
+| 16 | cta_care | 99.65 | 14.22 | +/- 5.31 | 12.0 | 0.0 | 8.87 | -1.54 (-5.78 to +2.71) |
+
+`cta_care` does not differ from CTA at any density: every paired CI contains 0. It lowers the stuck-busy fraction a little at every density from 4 AGVs up (14.3% to 12.0% at 16) without moving the pick-rate.
+
+**Stuck-busy crossing 10% and what stuck-aware CTA recovers.**
+- Stuck-busy is at or above 10% at every breakdown rate and every delay probability, **including rate 0**: 10.7% undisturbed, and 10.2% to 11.2% across both grids. The per-seed 95% CI contains 10% at every point except breakdown rate 1 (10.5% to 12.0%), so the threshold is reached by baseline congestion, not by the disturbances. It does not rise with the rate: a frozen robot's stuck counter is suppressed, so a breakdown shows up as frozen time (3.4% to 37.7%), not stuck time. What does rise with the breakdown rate is the stuck-timeout abandonments, 2.87 per episode at rate 0 to 9.90 at rate 16. Lowest rate above 10%: rate 0 for breakdown and for delay.
+- Share of the CTA pick-rate loss against rate 0 that stuck-aware CTA recovers (paired delta / loss). Breakdown: -21% at rate 1 (loss 2.06, delta -0.43, CI -0.78 to -0.08: significantly worse, one of five tests), -4% at 2, +3% at 4, -1% at 8 and -2% at 16; the other four CIs contain 0. Delay: not applicable by construction. The frozen filter only acts on frozen robots and delay never freezes one, so the pick-rate is identical to CTA on every seed at p_skip 0.05, 0.2 and 0.3; at 0.1 it differs only through the abandonment path (+0.43, CI -0.45 to +1.32).
+
+**Decision.**
+- (a) The 10% stuck regime exists at every plausible rate (breakdown rates 1 to 2 per robot-hour, which freeze 3.4% to 6.2% of robot-time; rates 8 and 16 freeze 22% and 38% of the fleet, which is not a fleet that is operating). The Exit rule's "recovery is moot" branch does not trigger and Sprint 3 recovery stands. The stuck time comes from congestion that is present without any disturbance, so the premise that *disturbances* produce the stuck regime is not supported; that fork is flagged to the operator.
+- (b) The frozen filter alone recovers none of the disturbance loss: between -21% and +3% of the breakdown loss, with every paired CI containing 0 except a small loss at rate 1.
+
+**What "robots get stuck" means in this sim.** A robot is counted stuck-busy on a step when it has a mission, is trying to move (not turning, not loading), and did not move: the vendor's `StuckCounter` is above 0. On the medium map with 8 AGVs and 4 pickers that is 10.7% of robot-time with no disturbance at all, and it grows with fleet size, from 7.9% at 2 AGVs to 14.3% at 16. The cause is congestion in the aisles and at the stations. It is mostly short waits: the env replans after 5 stuck steps and drops the mission at the timeout, and that happens only 2.87 times per 500-step episode at 8 AGVs. Injected breakdowns do not add stuck time; they take capacity away. A broken-down robot is frozen, not stuck, and the pick-rate falls almost linearly with the frozen fraction (53.66 to 22.56 lines/h as frozen time goes from 0% to 37.7%). Delays also cost capacity rather than stuck time: stuck-busy stays at 10.4% to 10.6% while the pick-rate falls to 38.88 at p_skip 0.3. Routing around other robots (`cta_care`) and never dispatching to a frozen robot (stuck-aware CTA) both leave the pick-rate where it was. Recovery therefore has to act on the busy robot that is waiting or blocked, which means replanning, backing off, or returning the shelf, rather than on the dispatch.
 
 ### Disturbance taxonomy (`src/warehouse_rl/disturb.py`)
 

@@ -243,7 +243,7 @@ the core is parameterised on that.
 | Multiple envs can run in parallel | Known 2026-10-10: only via multiprocessing (class-level counters). Steps/s UNMEASURED | Train single-env, longer wall clock |
 | EPyMARL can wrap TA-RWARE with action masking | Known 2026-10-10: learner supports masks, Gymnasium adapter does not query the env. Custom adapter required | Option B (own masked IPPO) is now the default |
 | RL beats CTA on the medium map within ~5M env steps | Paper: IAC +24% after 10k episodes (~5M steps if 500 each). Plausible but UNVERIFIED for IPPO | Stop at end of S4, write up as negative result |
-| Disturbances produce a regime where stuck time matters | UNVERIFIED. Decided by the S2 failure-rate sweep | Recovery is moot; S3 becomes the dispatcher under disturbance |
+| Disturbances produce a regime where stuck time matters | Measured 2026-10-10: half true. Stuck-busy time is >= 10% of robot-time at every rate including 0 (10.7% undisturbed, medium 8 AGV), but disturbances do not raise it; breakdowns add frozen time and stuck-timeout abandonments (2.87 to 9.90 per episode). Congestion, not failure, makes the stuck regime (README "Sprint 2 results") | Recovery is moot; S3 becomes the dispatcher under disturbance |
 | Learned recovery beats the hand-written rule | UNVERIFIED | The client takes the rule; write that up |
 | Realistic demand dataset is usable | Footwear dataset is CC BY 4.0 but randomised; KIT instances better | Use a Zipf prior and say so |
 
@@ -303,11 +303,20 @@ Goal: a config-driven disturbance layer and the curves nobody has published for 
       (c) delay-probability sweep; (d) dispatcher-vs-router ablation: CTA with `care_for_agents` False vs True on
       assignment, across density. Plots to `results/` following `dataviz` conventions, CI bands
 - [ ] Record one disturbed episode with `record_episode.py` for the replay viewer
-- [ ] README: collapse curves, ablation, one paragraph on what "robots get stuck" means in this sim
+- [x] README: collapse curves, ablation, one paragraph on what "robots get stuck" means in this sim (2026-10-10: as
+      tables from `results/sweeps/*.json`; the PNGs are not committed)
 
 Exit: curves in README, including CTA vs stuck-aware CTA. Decision point: at what failure rate does stuck-time
 exceed, say, 10% of robot-time? If no plausible rate gets there, recovery is moot and Sprint 3 becomes "dispatcher
 under disturbance" instead. Also record how much of the disturbance loss the stuck-aware CTA alone recovers.
+
+- [x] Exit decision (2026-10-10, README "Sprint 2 results", from `results/sweeps/*.json`, measure
+      `stuck_busy_agent_steps`): stuck-busy time is 10.7% of robot-time at breakdown rate 0 and 10.2% to 11.2% at
+      every breakdown and delay point, so the 10% line is met at every plausible rate (1 to 2 per robot-hour) and
+      recovery stands for Sprint 3. It is congestion, not disturbance: the fraction is flat in the rate (breakdowns
+      show up as frozen time, 3.4% to 37.7%) and grows with density (7.9% at 2 AGVs, 14.3% at 16). Stuck-aware CTA
+      recovers none of the breakdown loss (-21% to +3% of it; the only paired CI that excludes 0 is a loss at rate
+      1). Open for the operator: whether recovery under congestion alone is still the Sprint 3 question.
 
 ### Sprint 3: recovery policy (coding 2 days, training 2 days). Preferred.
 
