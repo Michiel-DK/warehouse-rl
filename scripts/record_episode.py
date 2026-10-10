@@ -1,8 +1,9 @@
-"""Record one FIFO-heuristic episode as JSON for the replay viewer.
+"""Record one CTA-heuristic episode as JSON for the replay viewer.
 
 Usage: python scripts/record_episode.py --env tarware-small-4agvs-2pickers-globalobs-v1 --seed 0 --out results/replay_small.json
 """
 import argparse, json
+from pathlib import Path
 import numpy as np
 import gymnasium as gym
 import tarware  # noqa: F401
@@ -26,8 +27,9 @@ def snapshot():
             "x": ag.x, "y": ag.y, "t": "agv" if ag.type == AgentType.AGV else "picker",
             "c": ag.carrying_shelf is not None,
             "cr": (ag.carrying_shelf in env.request_queue) if ag.carrying_shelf is not None else False,
-            "tx": id2xy[ag.target][0] if ag.target in id2xy else None,
-            "ty": id2xy[ag.target][1] if ag.target in id2xy else None,
+            # id2xy values are (row, col) = (y, x); agents' x, y are (col, row)
+            "tx": id2xy[ag.target][1] if ag.target in id2xy else None,
+            "ty": id2xy[ag.target][0] if ag.target in id2xy else None,
         } for ag in env.agents],
         "req": [[s.x, s.y] for s in env.request_queue],
         "shelves": [[s.x, s.y] for s in env.shelfs],
@@ -53,6 +55,7 @@ def _default(o):
     if isinstance(o, np.integer): return int(o)
     if isinstance(o, np.bool_): return bool(o)
     raise TypeError(type(o))
+Path(a.out).parent.mkdir(parents=True, exist_ok=True)
 with open(a.out, "w") as f:
     json.dump(doc, f, separators=(",", ":"), default=_default)
 print(f"{len(frames)} frames, grid {H}x{W}, deliveries {cum['deliveries']}, -> {a.out}")
