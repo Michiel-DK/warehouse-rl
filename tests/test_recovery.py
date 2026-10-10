@@ -206,13 +206,28 @@ class StuckHuman(rc.RecoveryPolicy):
         return self.base.decide(obs)
 
 
+class ClashHuman(rc.RecoveryPolicy):
+    """call_human at every clash event with path_len > 0; otherwise the vendor timeout rule."""
+    name = "clash_human"
+
+    def __init__(self):
+        self.base = rc.TimeoutRecovery()
+
+    def decide(self, obs):
+        if obs["event_is_clash"] and obs["path_len"] > 0:
+            return "call_human"
+        return self.base.decide(obs)
+
+
 class CallHumanTests(unittest.TestCase):
-    def _run(self, cost):
+    def _run(self, cost, policy_cls=StuckHuman, env_id=SMALL):
         # red: drop `self._counts["call_human_steps"] += ...` or the counter reset in _relocate -> asserts go red.
+        # red (clash path): apply the queue at the end of resolve_move_conflict as well -> the stuck loop updates the
+        # relocated agent's counter to 1 in the same step and the count == 0 assert goes red in test_clash_path.
         cfg = rc.normalise_recovery({"name": "timeout", "call_human_cost": cost})
-        env = WarehouseEnv(SMALL, max_steps=300, disturb=BREAKDOWN, recovery=cfg)
+        env = WarehouseEnv(env_id, max_steps=300, disturb=BREAKDOWN, recovery=cfg)
         hook = env.env
-        hook._recovery = StuckHuman()
+        hook._recovery = policy_cls()
         spy = SpyCallHuman(hook)
         pol = StuckAwareCtaPolicy()
         obs, info = env.reset(seed=1)
@@ -247,6 +262,12 @@ class CallHumanTests(unittest.TestCase):
         self.assertEqual((d60, n60), (d7, n7))
         self.assertEqual(d60 * 3600 / (5 * 300), d7 * 3600 / (5 * 300))
 
+    def test_clash_path(self):
+        # call_human decided at a CLASH event: same post-step guarantees (moved, count == 0, exact charge)
+        d60, n60 = self._run(60, ClashHuman, MEDIUM)
+        d7, n7 = self._run(7, ClashHuman, MEDIUM)
+        self.assertEqual((d60, n60), (d7, n7))
+
 
 class CyclingPolicy(rc.RecoveryPolicy):
     name = "cycle"
@@ -264,8 +285,10 @@ class CyclingPolicy(rc.RecoveryPolicy):
 
 class SafetyTests(unittest.TestCase):
     def test_cycling_policy_is_safe(self):
-        # red: let _cell_free ignore agent positions (drop the `a.x, a.y == cell` test) -> back_off/call_human put two
-        # same-type agents on one cell and the overlap assert goes red.
+        # red (run 2026-10-10): drop the whole agent-occupancy `any(...)` check in _cell_free AND skip the agent's own
+        # cell in _relocate -> call_human relocates onto occupied cells and the overlap assert goes red (medium, seed 7).
+        # Dropping only the check is NOT red: the nearest "free" cell is then the agent's own cell (distance 0), so no
+        # overlap; CallHumanTests' moved-cell assert catches that variant instead.
         for env_id in (SMALL, MEDIUM):
             events = {a: 0 for a in rc.ACTIONS}
             for seed in range(10):

@@ -330,7 +330,8 @@ class _HookedVendor(Warehouse):
         failed_agents = set(agent_list) - commited_agents
         for agent in failed_agents:
             agent.req_action = Action.NOOP
-        self._apply_humans()
+        # clash-decided call_human relocations stay queued until the end of resolve_stuck_agents, so the stuck loop
+        # cannot update the relocated agent's counter in the same step (count == 0 after the step it was decided)
         return clashes
 
     def _on_clash(self, agent):
@@ -368,6 +369,8 @@ class _HookedVendor(Warehouse):
             and (agent.req_action != Action.TOGGLE_LOAD or (agent.x, agent.y) in self.goals)
         ]
         for agent in moving_agents:
+            if agent.id in self._human_queue:
+                continue  # queued at a clash event this step: relocated below, not a second (stuck) event
             agent_stuck_count = self.stuck_counters[agent.id - 1]
             agent_stuck_count.update((agent.x, agent.y))
             if agent_stuck_count.count <= 0:
