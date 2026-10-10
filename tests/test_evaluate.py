@@ -109,12 +109,53 @@ class TestCli(unittest.TestCase):
         self.assertEqual(len(rows), 4)
         self.assertEqual(rows[:2], first)  # wall_s identical: not recomputed
 
-    def test_paired_delta(self):  # inject: never read the CTA file
+    def test_paired_delta(self):  # inject: never read the CTA file / cta - policy sign / pair by row index
+        cta_rate = {0: 36.0, 1: 72.0, 2: 7.2, 3: 50.4, 9: 999.0}  # distinct per seed; seed 9 not requested
         with tempfile.TemporaryDirectory() as d:
-            fake = {"rows": [{"seed": s, "steps": 100, "deliveries": 5, "pick_rate": 36.0} for s in range(4)]}
+            fake = {"rows": [{"seed": s, "steps": 100, "pick_rate": r} for s, r in sorted(cta_rate.items(), reverse=True)]}
             (Path(d) / f"cta_{ENV_ID}_100.json").write_text(json.dumps(fake))
             out = run_cli("random", "0-3", 100, d).stdout
-        self.assertIn("n_paired=4", out)
+            rows = json.loads((Path(d) / f"random_{ENV_ID}_100.json").read_text())["rows"]
+        diffs = [r["pick_rate"] - cta_rate[r["seed"]] for r in rows]
+        exp = ev.summarise(diffs)
+        line = next(l for l in out.splitlines() if l.startswith("paired delta"))
+        self.assertIn("n_paired=4", line)
+        self.assertIn(f"mean_delta={exp['mean']:.2f}", line)
+        self.assertIn(f"95% CI=[{exp['ci95_low']:.2f}, {exp['ci95_high']:.2f}]", line)
+
+    def test_multi_steps_known_numbers(self):  # inject: pass steps_list[0] to every run / reuse one file
+        # Seed 0 CTA on small: 24 deliveries at 500 steps (= heuristic_episode, see test_regression_cta), 86 at 2000
+        # (probed 2026-10-10 through WarehouseEnv + CtaPolicy).
+        with tempfile.TemporaryDirectory() as d:
+            run_cli("cta", "0", "500,2000", d, workers=1)
+            r500 = json.loads((Path(d) / f"cta_{ENV_ID}_500.json").read_text())["rows"]
+            r2000 = json.loads((Path(d) / f"cta_{ENV_ID}_2000.json").read_text())["rows"]
+        self.assertEqual([(r["seed"], r["steps"], r["deliveries"]) for r in r500], [(0, 500, 24)])
+        self.assertEqual([(r["seed"], r["steps"], r["deliveries"]) for r in r2000], [(0, 2000, 86)])
+
+
+class TestThroughput(unittest.TestCase):
+    def _run(self, args, env):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "throughput.py"), "--env", ENV_ID, "--steps", "20",
+                            "--episodes", "1", "--results-dir", d] + args,
+                           env={**os.environ, **env}, capture_output=True, text=True, check=True, timeout=120)
+            return json.loads((Path(d) / "throughput.json").read_text())
+
+    def test_schema_and_cli_workers(self):  # inject: SCHED_WORKERS='' crashes int() / per-worker list dropped
+        doc = self._run(["--workers", "2"], {"SCHED_WORKERS": ""})
+        for k in ["env", "workers", "steps", "episodes", "per_worker_steps_per_s", "mean_per_worker_steps_per_s",
+                  "total_steps_per_s", "wall_s", "cpu_count"]:
+            self.assertIn(k, doc)
+        self.assertEqual(doc["workers"], 2)
+        self.assertEqual(len(doc["per_worker_steps_per_s"]), 2)
+        self.assertTrue(all(v > 0 for v in doc["per_worker_steps_per_s"]))
+        self.assertGreater(doc["total_steps_per_s"], 0)
+        self.assertGreater(doc["wall_s"], 0)
+
+    def test_sched_workers_env(self):  # inject: ignore SCHED_WORKERS
+        self.assertEqual(self._run([], {"SCHED_WORKERS": "2"})["workers"], 2)
 
 
 if __name__ == "__main__":

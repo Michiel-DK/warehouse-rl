@@ -11,6 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from queue import Empty
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
@@ -59,7 +60,16 @@ def main():
     procs = [ctx.Process(target=_run, args=(queue, i, a.env, a.steps, a.episodes, barrier)) for i in range(n)]
     for pr in procs:
         pr.start()
-    res = [queue.get() for _ in procs]
+    res = []
+    while len(res) < n:  # fail instead of hanging forever when a worker dies (unattended scheduler runs)
+        try:
+            res.append(queue.get(timeout=5))
+        except Empty:
+            dead = [pr.exitcode for pr in procs if pr.exitcode not in (None, 0)]
+            if dead:
+                for pr in procs:
+                    pr.terminate()
+                sys.exit(f"throughput: worker exited with code {dead[0]}")
     for pr in procs:
         pr.join()
     res = [r[1:] for r in sorted(res)]
