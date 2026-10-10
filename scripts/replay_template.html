@@ -1,0 +1,123 @@
+<title>TA-RWARE Replay</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* layout: map on the left at fixed cell size, readout + controls in a narrow column on the right; stacks on phones */
+:root{
+  --bg:#f3f4f2; --fg:#1d2320; --muted:#6b736e; --line:#d6dad7; --panel:#ffffff;
+  --highway:#e9ebe8; --shelf:#9aa39d; --shelf-req:#e0892b; --goal:#3d7f5e;
+  --agv:#2457a8; --agv-loaded:#163a73; --picker:#b03a6e; --target:#2457a8;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a18; --fg:#e6e9e6; --muted:#9aa39d; --line:#2e3431; --panel:#1f2321;
+  --highway:#242927; --shelf:#5a635d; --shelf-req:#f0a04b; --goal:#5cb88a;
+  --agv:#6f9ce8; --agv-loaded:#a9c4f5; --picker:#e07aa8; --target:#6f9ce8; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#171a18; --fg:#e6e9e6; --muted:#9aa39d; --line:#2e3431; --panel:#1f2321;
+  --highway:#242927; --shelf:#5a635d; --shelf-req:#f0a04b; --goal:#5cb88a;
+  --agv:#6f9ce8; --agv-loaded:#a9c4f5; --picker:#e07aa8; --target:#6f9ce8; color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-block:20px;padding-inline:16px;margin:0}
+.wrap{max-width:900px;margin:0 auto;display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:640px){.wrap{grid-template-columns:1fr}}
+h1{font-size:18px;font-weight:600;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:0 0 16px;max-width:60ch}
+svg{display:block;max-width:100%;height:auto;background:var(--panel);border:1px solid var(--line)}
+.readout{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;margin-bottom:16px}
+.readout b{display:block;font-weight:500;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase;font-family:var(--sans)}
+.readout span{font-size:18px}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+button{font:inherit;font-size:13px;padding:6px 14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:4px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--agv);outline-offset:2px}
+input[type=range]{flex:1;min-width:120px}
+select{font:inherit;font-size:13px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:4px}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:13px;align-items:center;margin-bottom:16px}
+.legend svg{border:0;background:none}
+.note{font-size:13px;color:var(--muted);max-width:60ch;line-height:1.45}
+.note p{margin:0 0 8px}
+</style>
+<div class="wrap">
+  <div>
+    <h1>TA-RWARE small map, FIFO heuristic, seed 0</h1>
+    <p class="sub">4 AGVs carry shelves to the workstations at the bottom. 2 pickers walk to the shelf to load it. One step is 5 seconds of warehouse time.</p>
+    <svg id="map" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div>
+    <div class="readout">
+      <div><b>Step</b><span id="rStep">0</span></div>
+      <div><b>Sim time</b><span id="rTime">0:00</span></div>
+      <div><b>Deliveries</b><span id="rDel">0</span></div>
+      <div><b>Pick-rate so far</b><span id="rPr">0</span></div>
+    </div>
+    <div class="ctl">
+      <button id="play">Play</button>
+      <select id="speed"><option value="250">slow</option><option value="120" selected>normal</option><option value="40">fast</option></select>
+      <input type="range" id="scrub" min="0" max="499" value="0" aria-label="step">
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="note">
+      <p><b>What you are watching.</b> The request queue holds 20 shelves at a time (orange). FIFO sends the closest idle AGV to the first requested shelf and a picker to meet it there. The AGV then drives the shelf to a workstation, returns it to any empty slot, and becomes idle again.</p>
+      <p>Faint lines are each agent's current target. Agents stepping into each other recompute their path, which is where the clash count comes from.</p>
+      <p>This is the baseline the RL policy has to beat. The RL agent replaces the "which shelf, which workstation, which slot" decisions. The driving stays A*.</p>
+    </div>
+  </div>
+</div>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const C = 20, PAD = 4;
+const svg = document.getElementById('map');
+svg.setAttribute('viewBox', `0 0 ${D.W*C+PAD*2} ${D.H*C+PAD*2}`);
+svg.setAttribute('width', D.W*C+PAD*2); svg.setAttribute('height', D.H*C+PAD*2);
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+const px=x=>PAD+x*C, py=y=>PAD+y*C;
+// static ground
+const g0=el('g',{}); svg.appendChild(g0);
+const goalSet=new Set(D.goals.map(([x,y])=>x+','+y));
+for(let y=0;y<D.H;y++)for(let x=0;x<D.W;x++){
+  const isG=goalSet.has(x+','+y);
+  g0.appendChild(el('rect',{x:px(x),y:py(y),width:C,height:C,fill:isG?'var(--goal)':(D.highways[y][x]?'var(--highway)':'var(--panel)'),stroke:'var(--line)','stroke-width':.5}));
+}
+const gShelf=el('g',{}), gTgt=el('g',{}), gAg=el('g',{}); svg.append(gShelf,gTgt,gAg);
+const shelfR=D.frames[0].shelves.map(()=>{const r=el('rect',{width:C-4,height:C-4,rx:2,fill:'var(--shelf)'});gShelf.appendChild(r);return r});
+const tgtL=D.frames[0].agents.map(()=>{const l=el('line',{stroke:'var(--target)','stroke-width':1,'stroke-dasharray':'3 3',opacity:.5});gTgt.appendChild(l);return l});
+const agR=D.frames[0].agents.map(a=>{
+  const s=a.t==='agv'?el('circle',{r:C*.38,stroke:'var(--panel)','stroke-width':1.5}):el('polygon',{stroke:'var(--panel)','stroke-width':1.5});
+  gAg.appendChild(s);return s});
+function draw(i){
+  const f=D.frames[i];
+  const req=new Set(f.req.map(([x,y])=>x+','+y));
+  f.shelves.forEach(([x,y],k)=>{shelfR[k].setAttribute('x',px(x)+2);shelfR[k].setAttribute('y',py(y)+2);shelfR[k].setAttribute('fill',req.has(x+','+y)?'var(--shelf-req)':'var(--shelf)')});
+  f.agents.forEach((a,k)=>{
+    const cx=px(a.x)+C/2, cy=py(a.y)+C/2;
+    if(a.t==='agv'){agR[k].setAttribute('cx',cx);agR[k].setAttribute('cy',cy);agR[k].setAttribute('fill',a.c?'var(--agv-loaded)':'var(--agv)')}
+    else{const r=C*.4;agR[k].setAttribute('points',`${cx},${cy-r} ${cx+r},${cy} ${cx},${cy+r} ${cx-r},${cy}`);agR[k].setAttribute('fill','var(--picker)')}
+    const has=a.tx!=null;
+    tgtL[k].setAttribute('opacity',has?.5:0);
+    if(has){tgtL[k].setAttribute('x1',cx);tgtL[k].setAttribute('y1',cy);tgtL[k].setAttribute('x2',px(a.tx)+C/2);tgtL[k].setAttribute('y2',py(a.ty)+C/2)}
+  });
+  const t=i*5; rStep.textContent=i; rTime.textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+  rDel.textContent=f.deliv; rPr.textContent=i?(f.deliv*3600/(5*(i+1))).toFixed(1)+' /h':'0';
+  scrub.value=i;
+}
+let i=0, timer=null;
+const play=document.getElementById('play');
+function tick(){i=(i+1)%D.frames.length;draw(i);if(i===D.frames.length-1)stop()}
+function start(){play.textContent='Pause';timer=setInterval(tick,+speed.value)}
+function stop(){play.textContent='Play';clearInterval(timer);timer=null}
+play.onclick=()=>timer?stop():start();
+speed.onchange=()=>{if(timer){stop();start()}};
+scrub.oninput=e=>{i=+e.target.value;draw(i)};
+// legend
+const L=document.getElementById('legend');
+const item=(svgInner,label)=>{const s=el('svg',{width:22,height:22,viewBox:'0 0 22 22'});s.innerHTML=svgInner;L.appendChild(s);const d=document.createElement('div');d.textContent=label;L.appendChild(d)};
+item('<circle cx="11" cy="11" r="8" fill="var(--agv)"/>','AGV, idle or driving empty');
+item('<circle cx="11" cy="11" r="8" fill="var(--agv-loaded)"/>','AGV carrying a shelf');
+item('<polygon points="11,2 20,11 11,20 2,11" fill="var(--picker)"/>','Picker');
+item('<rect x="3" y="3" width="16" height="16" rx="2" fill="var(--shelf)"/>','Shelf in its slot');
+item('<rect x="3" y="3" width="16" height="16" rx="2" fill="var(--shelf-req)"/>','Requested shelf (in the order queue)');
+item('<rect x="3" y="3" width="16" height="16" fill="var(--goal)"/>','Workstation (delivery goal)');
+item('<rect x="3" y="3" width="16" height="16" fill="var(--highway)"/>','Highway lane');
+draw(0);
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches) start();
+</script>

@@ -5,7 +5,9 @@ Does a learned task-allocation policy beat a FIFO dispatcher on pick-rate in a s
 Environment: [TA-RWARE](https://github.com/uoe-agents/task-assignment-robotic-warehouse) (Edinburgh, MIT).
 Metric: pick-rate in order-lines per hour, same map, same seeds, against the FIFO heuristic that ships with the env.
 
-Plan and sprint log: [docs/SCOPE.md](docs/SCOPE.md).
+Plan, decision log and sprint plan: [docs/SCOPE.md](docs/SCOPE.md). Current direction (2026-10-10): build the harness and a disturbance wrapper first, run density and failure sweeps with FIFO, then learn a stuck-recovery policy before touching the dispatcher.
+
+Replay of one FIFO episode: open `results/replay_small.html` in a browser (made by `scripts/record_episode.py` + `scripts/replay_template.html`).
 
 ## Setup (macOS)
 
