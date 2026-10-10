@@ -677,5 +677,55 @@ class TestEvaluateDisturb(unittest.TestCase):
             self.assertNotEqual(r.returncode, 0)
 
 
+class TestRouterToggle(unittest.TestCase):
+    CFG = {"breakdown": {"rate_per_hour": 8, "duration": [20, 60], "agent_types": ["agv"]}}
+
+    def trace(self, **kw):
+        env = WarehouseEnv(SMALL, max_steps=200, disturb=self.CFG, **kw)
+        try:
+            pol = CtaPolicy()
+            obs, info = env.reset(seed=2)
+            pol.reset(env)
+            deliveries, pos = 0, []
+            for _ in range(200):
+                obs, _, _, _, info = env.step(pol.act(obs, info["action_mask"], info))
+                deliveries += int(info["shelf_deliveries"])
+                pos.append(positions(env.env))
+            return deliveries, pos
+        finally:
+            env.close()
+
+    # inject: make the default of assign_care_for_agents True / let the flag leak into other find_path calls
+    def test_default_false_is_bit_identical(self):
+        self.assertEqual(self.trace(), self.trace(assign_care_for_agents=False))
+
+    # inject: drop the flag check (force care everywhere) or the in-macro gate (never force)
+    def test_true_forces_care_only_inside_attribute_macro_actions(self):
+        from tarware.warehouse import Warehouse
+
+        orig = Warehouse.find_path
+        for flag in (False, True):
+            calls = []
+
+            def spy(self, start, goal, agent, care_for_agents=True):
+                calls.append((self._in_macro_actions, care_for_agents))
+                return orig(self, start, goal, agent, care_for_agents)
+
+            Warehouse.find_path = spy
+            try:
+                self.trace(assign_care_for_agents=flag)
+            finally:
+                Warehouse.find_path = orig
+            inside = [c for m, c in calls if m]
+            outside = [c for m, c in calls if not m]
+            self.assertTrue(inside and outside)
+            self.assertEqual(set(inside), {flag})
+            self.assertIn(False, outside)  # the policy's own estimate is never forced
+
+    def test_true_without_layer_raises(self):
+        with self.assertRaises(ValueError):
+            WarehouseEnv(SMALL, assign_care_for_agents=True)
+
+
 if __name__ == "__main__":
     unittest.main()
