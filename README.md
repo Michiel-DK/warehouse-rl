@@ -1,13 +1,13 @@
 # warehouse-rl
 
-Does a learned task-allocation policy beat a FIFO dispatcher on pick-rate in a simulated robot warehouse?
+Can a learned policy make a simulated robot warehouse recover from stuck robots better than a timeout or a hand-written rule? And, as the original question, does a learned task-allocation policy beat the Closest-Task-Assignment (CTA) heuristic on pick-rate?
 
 Environment: [TA-RWARE](https://github.com/uoe-agents/task-assignment-robotic-warehouse) (Edinburgh, MIT).
-Metric: pick-rate in order-lines per hour, same map, same seeds, against the FIFO heuristic that ships with the env.
+Metric: pick-rate in order-lines per hour, same map, same seeds, against the CTA heuristic that ships with the env (nearest free AGV per request; it was called "FIFO" in this repo before 2026-10-10).
 
-Plan, decision log and sprint plan: [docs/SCOPE.md](docs/SCOPE.md). Current direction (2026-10-10): build the harness and a disturbance wrapper first, run density and failure sweeps with FIFO, then learn a stuck-recovery policy before touching the dispatcher.
+Plan, decision log, review findings and sprint plan: [docs/SCOPE.md](docs/SCOPE.md). Current direction (2026-10-10): Sprint 1 evaluation harness, Sprint 2 disturbance layer and density/failure sweeps with CTA only, Sprint 3 learned stuck-recovery vs timeout vs hand-written rule. Dispatcher learning is optional Sprint 4. Short summary page: https://claude.ai/artifact/33YWuNCVFjQxH3LdYXRbS3
 
-Replay of one FIFO episode: open `results/replay_small.html` in a browser (made by `scripts/record_episode.py` + `scripts/replay_template.html`).
+Replay of one CTA episode: open `results/replay_small.html` in a browser (made by `scripts/record_episode.py` + `scripts/replay_template.html`).
 
 ## Setup (macOS)
 
@@ -18,7 +18,7 @@ Replay of one FIFO episode: open `results/replay_small.html` in a browser (made 
 
 Hardware this was built on: M1 Pro, 10 cores, 16 GB, CPU only. The env steps at roughly 1,700 steps/s on the small map (500-step episode in 0.3 s), so all training here is local.
 
-## Baselines (FIFO heuristic, 10 seeds, 2026-10-09)
+## Baselines (CTA heuristic, 10 seeds, 2026-10-09)
 
 | Map | Agents | Pick-rate mean (lines/h) | SD |
 | --- | --- | --- | --- |
@@ -26,4 +26,6 @@ Hardware this was built on: M1 Pro, 10 cores, 16 GB, CPU only. The env steps at 
 | small, partial obs | 4 AGV + 2 pickers | 30.5 | 2.8 |
 | medium, global obs | 8 AGV + 4 pickers | 54.4 | 6.6 |
 
-Raw per-episode numbers are in `results/fifo_*.json`. The heuristic does not read observations, so partial and global give identical results.
+Raw per-episode numbers are in `results/fifo_*.json` (file names predate the rename). The heuristic does not read observations, so partial and global give identical results.
+
+The medium map is the paper's "GTP Small" (Krnjaic et al. 2023), where the paper reports 52.7 lines/h for the same heuristic. At 500 steps one delivery is 1.44 lines/h and the 95% CI over 10 seeds is about +/- 2 lines/h, so these numbers cannot resolve a 5% effect; Sprint 1 fixes the evaluation length and seed count.
