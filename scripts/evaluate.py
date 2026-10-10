@@ -137,7 +137,8 @@ def run_seed(policy, env_id, steps, seed, disturb=None):
 
 
 # row field -> per-step info key, summed over the episode
-DISTURB_SUMS = dict(stuck_agent_steps="stuck_agents", abandoned_tasks="abandoned_tasks",
+DISTURB_SUMS = dict(stuck_agent_steps="stuck_agents", stuck_busy_agent_steps="stuck_busy_agents",
+                    abandoned_tasks="abandoned_tasks",
                     clash_agent_steps="clash_agents", frozen_agent_steps="frozen_agents",
                     delayed_agent_steps="delayed_agents")
 

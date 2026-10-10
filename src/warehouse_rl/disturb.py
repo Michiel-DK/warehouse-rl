@@ -11,8 +11,16 @@ per-step onset probability is rate_per_hour * 5 / 3600. Durations are uniform in
 
 Common random numbers: the whole schedule is generated in `reset` from an own np.random.Generator seeded by
 SeedSequence([seed, sha256(config) as int, fixed tag]); nothing is drawn lazily or conditionally on env state, and the
-layer never touches the global `np.random` / `random` (the vendor env seeds and draws from those). The schedule is a
-pure function of (seed, config, num_agents, max_steps, layout), so it is identical across policies.
+layer never touches the global `np.random` / `random` (the vendor env seeds and draws from those). The freeze, delay,
+blocked-cell and outage schedules are a pure function of (seed, config, num_agents, max_steps, layout), so they are
+identical across policies.
+
+Burst is only APPROXIMATELY paired across policies. Its timing and size (start, end, extra) are pure functions of the
+config, and the shelf identities follow a fixed priority order (a permutation of all shelves drawn at reset from the
+(seed, config) rng). But at burst start the first `extra` shelves in that order that are not queued or carried are taken,
+and that filter reads live state (policy dependent). The post-end shrink removes the replacement requests the vendor
+draws from the global np.random stream after each delivery, which also depends on what the policy delivered. So two
+policies share the burst order, not necessarily the burst shelves, and not the shrink.
 
 Step clock: `self._t` is the index of the step being (or about to be) executed. It advances once per step, at the end,
 in `_build_info`. Every hook of step s (attribute_macro_actions, find_path, resolve_move_conflict, ...) therefore sees
@@ -31,7 +39,6 @@ import pyastar2d
 
 STEP_SECONDS = 5  # same constant as pick-rate = deliveries * 3600 / (5 * steps)
 _SEED_TAG = 0x44495354  # fixed tag mixed into the layer SeedSequence ("DIST")
-_RUN_TAG = _SEED_TAG + 1  # runtime-only stream (burst shelf choice); never part of the schedule
 
 # Types the layer implements. A key outside this set raises ValueError (never a silent no-op).
 LANDED_TYPES = ("breakdown", "delay", "blocked_cell", "burst", "outage")
@@ -178,6 +185,7 @@ class DisturbedWarehouse(Warehouse):
         self._suppressed = np.zeros(A, dtype=bool)
         self._abandoned = 0
         self.delivered_per_agent = [0] * A
+        self.burst_order = []  # shelf ids in burst priority order (pre-generated at reset when burst is configured)
 
     def _generate_schedule(self, seed):
         """Whole schedule for max_steps x num_agents, drawn in a fixed order. No lazy or state-dependent draws."""
@@ -187,7 +195,6 @@ class DisturbedWarehouse(Warehouse):
         s = int(seed) if seed is not None else int(np.random.SeedSequence().entropy)
         h = config_hash_int(cfg)
         rng = np.random.default_rng(np.random.SeedSequence([s, h, _SEED_TAG]))
-        self._run_rng = np.random.default_rng(np.random.SeedSequence([s, h, _RUN_TAG]))
         p_step = lambda rate: min(1.0, rate * STEP_SECONDS / 3600)  # noqa: E731
 
         if "breakdown" in cfg:
@@ -222,6 +229,8 @@ class DisturbedWarehouse(Warehouse):
             for t in np.flatnonzero(onsets):
                 for u in range(t, min(T, t + int(durs[t]))):
                     out[u].add(int(goal_idx[t]))
+        if "burst" in cfg:  # drawn last, so adding a burst never moves the other types' draws
+            self.burst_order = [self.shelfs[int(i)].id for i in rng.permutation(len(self.shelfs))]
         for t in range(T):
             if blocked[t]:
                 self._blocked_by_step[t] = frozenset(blocked[t])
@@ -315,6 +324,10 @@ class DisturbedWarehouse(Warehouse):
     def resolve_stuck_agents(self):
         # Agents the layer NOOPed this step must not advance their StuckCounter, be replanned or lose their task.
         # Hide them from the vendor's `agent.busy` filter for the duration of the call, then restore.
+        # Why hide-and-restore is safe (vendor W:481-514): the only read of `busy` is the `moving_agents` filter, and
+        # the only writes to `busy` are `busy = False` on agents that are inside `moving_agents`. A hidden agent is
+        # outside it, so none of its state (busy, path, req_action, StuckCounter) is touched by the vendor call; the
+        # restore then sets busy=True only for exactly the agents that were busy before the call.
         hidden = [a for a in self.agents if a.busy and self._suppressed[a.id - 1]]
         before = [a.busy for a in self.agents]
         for a in hidden:
@@ -351,12 +364,14 @@ class DisturbedWarehouse(Warehouse):
         return rewards, deliveries
 
     def _start_burst(self, extra):
+        # First `extra` shelves of the pre-generated order that are not queued or carried. The order is a function of
+        # (seed, config); the filter is live state, hence only approximate pairing (see module docstring).
         carried = {a.carrying_shelf.id for a in self.agents if a.carrying_shelf}
         queued = {s.id for s in self.request_queue}
-        cands = [s for s in self.shelfs if s.id not in queued and s.id not in carried]
-        k = min(extra, len(cands))
-        for i in self._run_rng.choice(len(cands), size=k, replace=False):
-            self.request_queue.append(cands[int(i)])
+        free = [sid for sid in self.burst_order if sid not in queued and sid not in carried]
+        by_id = {s.id: s for s in self.shelfs}
+        for sid in free[:extra]:
+            self.request_queue.append(by_id[sid])
 
     def _build_info(self, agvs_distance_travelled, pickers_distance_travelled, clashes_count, stucks_count,
                     shelf_deliveries):
@@ -364,7 +379,10 @@ class DisturbedWarehouse(Warehouse):
                                    shelf_deliveries)
         t = self._t
         frozen, delayed = self.applied_frozen[-1], self.applied_delayed[-1]
+        # stuck_agents is the literal count > 0. The vendor never resets a StuckCounter when an agent goes idle (only
+        # on a new assignment), so it also counts idle agents with stale counts; stuck_busy_agents is the busy subset.
         info["stuck_agents"] = sum(int(c.count > 0) for c in self.stuck_counters)
+        info["stuck_busy_agents"] = sum(int(a.busy and c.count > 0) for a, c in zip(self.agents, self.stuck_counters))
         info["abandoned_tasks"] = self._abandoned
         info["clash_agents"] = sum(int(a.fixing_clash > 0) for a in self.agents)
         info["frozen_agents"] = int(frozen.sum())

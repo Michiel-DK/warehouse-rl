@@ -20,7 +20,7 @@ import importlib.util
 
 from warehouse_rl import disturb as dz
 from warehouse_rl.env import WarehouseEnv
-from warehouse_rl.policy import CtaPolicy, RandomPolicy
+from warehouse_rl.policy import CtaPolicy, Policy, RandomPolicy
 
 _spec = importlib.util.spec_from_file_location("evaluate_script", ROOT / "scripts" / "evaluate.py")
 ev = importlib.util.module_from_spec(_spec)
@@ -38,11 +38,18 @@ HEAVY = {"breakdown": {"rate_per_hour": 20, "duration": [10, 30]}, "delay": {"p_
 LANDED = {"breakdown", "delay", "blocked_cell", "burst", "outage"}
 
 
+class NoopPolicy(Policy):
+    """All actions 0: no agent is ever assigned a task, so no agent is ever busy."""
+
+    def act(self, obs, masks, info):
+        return [0] * len(masks)
+
+
 def rollout(env_id, disturb, seed, steps, policy="cta", setup=None):
     """Generator yielding (env, info) after every step. `setup(env)` runs right after reset (schedule overrides)."""
     env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb)
     try:
-        pol = CtaPolicy() if policy == "cta" else RandomPolicy(seed=seed)
+        pol = {"cta": CtaPolicy, "noop": NoopPolicy}.get(policy, lambda: RandomPolicy(seed=seed))()
         obs, info = env.reset(seed=seed)
         pol.reset(env)
         if setup:
@@ -154,7 +161,13 @@ class TestNoSharedCell(unittest.TestCase):
             fracs.append(f / 100)
         self.assertGreaterEqual(float(np.mean(fracs)), 0.25)
 
-    # (b) red if the NOOP moves to AFTER super().resolve_move_conflict (injection result in the PR body)
+    # (b) is a SAFETY-INVARIANT test. The criterion's named injection (move the freeze NOOP to AFTER
+    # super().resolve_move_conflict) is structurally unreachable (operator ruling R1): the vendor NOOPs, unconditionally,
+    # any mover whose next cell equals another agent's CURRENT cell (vendor warehouse.py ~W:445-449, the
+    # `(agent_new_x, agent_new_y) == (other.x, other.y)` branch), so no ordering of the freeze NOOP can put two
+    # same-type agents on one cell; that mutation stays green by construction. The accepted red injection is: hide the
+    # suppressed agents from the agent_list passed to super().resolve_move_conflict, which turns this test red
+    # (counts in the PR body). The NOOP-before-super order is kept anyway: it lets super see a frozen agent as stationary.
     def test_small(self):
         self.check_map(SMALL)
 
@@ -192,6 +205,24 @@ class TestCommonRandomNumbers(unittest.TestCase):
             self.assertTrue(expect_f.any() and expect_d.any())
         np.testing.assert_array_equal(applied["cta"][0], applied["random"][0])
         np.testing.assert_array_equal(applied["cta"][1], applied["random"][1])
+
+    # (c2) red if a mask depends on agent state (e.g. only freeze agents that are busy): under an all-NOOP policy no
+    # agent is ever busy, so such a mask would differ from the CTA run (and from the pre-generated schedule).
+    def test_masks_identical_for_all_noop_policy(self):
+        for seed in (0, 1, 3):
+            applied = {}
+            for name in ("cta", "noop"):
+                busy_seen = False
+                for env, _ in rollout(SMALL, HEAVY, seed, 100, policy=name):
+                    busy_seen |= any(a.busy for a in env.env.agents)
+                e = env.env
+                self.assertEqual(busy_seen, name == "cta")  # non-vacuous: noop never busy, cta is
+                applied[name] = (np.array(e.applied_frozen).T, np.array(e.applied_delayed).T)
+                np.testing.assert_array_equal(applied[name][0], e.frozen_schedule)
+                np.testing.assert_array_equal(applied[name][1], e.delay_schedule & ~e.frozen_schedule)
+                self.assertTrue(e.frozen_schedule.any() and e.delay_schedule.any())
+            np.testing.assert_array_equal(applied["cta"][0], applied["noop"][0])
+            np.testing.assert_array_equal(applied["cta"][1], applied["noop"][1])
 
     def test_schedule_differs_for_other_seed_and_config(self):
         base = schedule_digest(SMALL, self.CFG, 0)
@@ -307,6 +338,30 @@ class TestMetrics(unittest.TestCase):
         self.assertGreater(seen["clash"], 0)
         self.assertGreater(seen["abandoned"], 0)
 
+    # (e) red if suppression/bookkeeping makes abandoned_tasks (busy True->False in resolve_stuck_agents) diverge from
+    # the vendor's own stuck count on any step; seeds 0-4 under heavy disturbance, not only the pinned seed
+    def test_abandoned_equals_stucks_heavy_seeds(self):
+        total = 0
+        for seed in range(5):
+            for _, info in rollout(SMALL, HEAVY, seed, 100):
+                self.assertEqual(info["abandoned_tasks"], info["stucks"], msg=f"seed {seed}")
+                total += info["stucks"]
+        self.assertGreater(total, 0)  # non-vacuous
+
+    # (e) red if stuck_busy_agents is not "busy and count > 0"; stuck_agents (count > 0) keeps counting idle agents
+    # with stale counts (vendor resets a StuckCounter only on a new assignment), so busy <= all, and strictly less
+    # on at least one step of this run.
+    def test_stuck_busy_agents(self):
+        strictly_less = 0
+        for env, info in rollout(SMALL, HEAVY, self.PIN_SEED, 100):
+            e = env.env
+            want = sum(a.busy and c.count > 0 for a, c in zip(e.agents, e.stuck_counters))
+            self.assertEqual(info["stuck_busy_agents"], want)
+            self.assertEqual(info["stuck_agents"], sum(c.count > 0 for c in e.stuck_counters))
+            self.assertLessEqual(info["stuck_busy_agents"], info["stuck_agents"])
+            strictly_less += info["stuck_busy_agents"] < info["stuck_agents"]
+        self.assertGreater(strictly_less, 0)
+
     # (e) red if deliveries are credited to the wrong agent or not at all (non-vacuous: >= 3 deliveries)
     def test_delivered_per_agent_sums_to_deliveries(self):
         cum = 0
@@ -361,12 +416,15 @@ class TestConfigValidation(unittest.TestCase):
                     {"delay": {"p_skip": 0}}, {"delay": {"p_skip": 1, "duration": [1, 3]}}]:
             WarehouseEnv(SMALL, max_steps=10, disturb=cfg).close()
 
-    # (f) the landed set is hard-coded here and must equal the set reported in the PR body
+    # (f) the landed set is hard-coded here and must equal the set reported in the PR body. All five types landed, so
+    # the loop over optional types NOT in LANDED is vacuous today (it only bites if one is later removed from
+    # LANDED_TYPES); the unknown-type check below is what exercises the "not implemented -> ValueError" path.
     def test_landed_set_and_unimplemented_types_raise(self):
         self.assertEqual(set(dz.LANDED_TYPES), LANDED)
         for name in ("blocked_cell", "burst", "outage"):
             if name not in LANDED:
                 self.bad({name: {}})
+        self.bad({"earthquake": {"rate_per_hour": 1.0, "duration": [1, 2]}})
         for name in sorted(LANDED):  # empty sub-config is invalid for every landed type (missing keys)
             self.bad({name: {}})
 
@@ -446,6 +504,42 @@ class TestBurst(unittest.TestCase):
         self.assertEqual(len({s.id for s in env.env.request_queue}), self.BASE)
 
 
+class TestBurstOrder(unittest.TestCase):
+    CFG = {"burst": {"start": 2, "end": 5, "extra": 3}}
+
+    # (g3) red if burst shelves are drawn at run time from a state-dependent rng/choice instead of the order
+    # pre-generated at reset: the order is identical for CTA, Random and all-NOOP, differs by seed, and the added
+    # shelves are the first `extra` in that order that were not queued/carried. Identities are state-filtered, so burst
+    # is only approximately paired across policies (see disturb.py docstring).
+    def test_order_pregenerated_and_followed(self):
+        orders = {}
+        for name in ("cta", "random", "noop"):
+            before = None
+            for env, info in rollout(SMALL, self.CFG, 0, 6, policy=name):
+                e = env.env
+                if env.step_count == 2:  # burst starts at step index 2, which has not run yet
+                    before = {s.id for s in e.request_queue}
+                if env.step_count == 3:
+                    carried = {a.carrying_shelf.id for a in e.agents if a.carrying_shelf}
+                    added = [s.id for s in e.request_queue if s.id not in before]
+                    free = [sid for sid in e.burst_order if sid not in before and sid not in carried]
+                    self.assertEqual(added, free[:3])
+                    self.assertEqual(len(added), 3)
+            orders[name] = list(e.burst_order)
+            self.assertEqual(sorted(orders[name]), sorted(s.id for s in e.shelfs))
+        self.assertEqual(orders["cta"], orders["random"])
+        self.assertEqual(orders["cta"], orders["noop"])
+        env = WarehouseEnv(SMALL, max_steps=6, disturb=self.CFG)
+        env.reset(seed=1)
+        self.assertNotEqual(orders["cta"], env.env.burst_order)
+        env.close()
+        self.assertIn("approximately paired", dz.__doc__.lower())
+
+    def test_no_burst_no_order(self):
+        for env, _ in rollout(SMALL, {}, 0, 1):
+            self.assertEqual(env.env.burst_order, [])
+
+
 class TestOutage(unittest.TestCase):
     # In the clean run an AGV reaches goal index 2 (cell (6, 24)) at step 19 and delivers there at step 20.
     GOAL = 2
@@ -480,6 +574,38 @@ class TestOutage(unittest.TestCase):
                 self.assertFalse(info["action_mask"][:e.num_agvs, 1 + self.GOAL].any())
             self.assertFalse(any((a.x, a.y) == cell for a in e.agents[:e.num_agvs]), msg=f"step {env.step_count}")
             self.assertEqual(info["outage_goals"], 1)
+
+    # (g2) red if the outage loop in WarehouseEnv.compute_action_masks is removed. The mask hides the out goal's action
+    # id (1 + goal index) for AGVs exactly on the steps it is out, and equals the carrying flag (vendor rule) otherwise.
+    # The mask returned with the info after step n describes the next step to run, index e._t.
+    def test_mask_hides_out_goal_exactly_while_out(self):
+        window = range(10, 30)
+
+        def setup(e):
+            cell = tuple(e.goals[self.GOAL])
+            for t in window:
+                e._out_goals_by_step[t] = (self.GOAL,)
+                e._obstacles_by_step[t] = frozenset({cell})
+
+        in_window_carrying = out_window_carrying = 0
+        n_out = n_in = 0
+        for env, info in rollout(SMALL, {}, 0, 39, setup=setup):
+            e = env.env
+            t = e._t
+            carrying = np.array(e.get_carrying_shelf_information(), dtype=bool)
+            col = info["action_mask"][:e.num_agvs, 1 + self.GOAL]
+            if t in window:
+                n_in += 1
+                self.assertFalse(col.any(), msg=f"t={t}")
+                in_window_carrying += int(carrying.any())
+            else:
+                n_out += 1
+                np.testing.assert_array_equal(col, carrying, err_msg=f"t={t}")
+                out_window_carrying += int(carrying.any())
+        self.assertGreater(n_in, 10)
+        self.assertGreater(n_out, 10)
+        self.assertGreater(in_window_carrying, 0)  # non-vacuous: hiding changed something
+        self.assertGreater(out_window_carrying, 0)
 
     def test_config_driven_outage(self):
         cfg = {"outage": {"rate_per_hour": 720, "duration": [5, 10]}}
@@ -517,7 +643,7 @@ class TestEvaluateDisturb(unittest.TestCase):
             self.assertEqual(doc["disturb_tag"], "breakdown-heavy")
             self.assertEqual(doc["disturb"], dz.PRESETS["breakdown-heavy"])
             row = doc["rows"][0]
-            for k in ("stuck_agent_steps", "abandoned_tasks", "clash_agent_steps", "frozen_agent_steps",
+            for k in ("stuck_agent_steps", "stuck_busy_agent_steps", "abandoned_tasks", "clash_agent_steps", "frozen_agent_steps",
                       "delayed_agent_steps", "frozen_fraction", "delivered_per_agent"):
                 self.assertIn(k, row)
             self.assertAlmostEqual(row["frozen_fraction"], row["frozen_agent_steps"] / (50 * 6))
