@@ -163,7 +163,7 @@ def find_pinned_abandon():
     """Step the real env + StuckAwareCtaPolicy until the hook's abandon leaves a non-carrying AGV with a PICKING
     mission. Returns (env, obs, info, policy, abandoner, item, step, releasee) just BEFORE the next act().
 
-    On the loaded medium map no AGV is idle at that moment (every one holds an order), so the re-dispatch could not
+    On the loaded map (PIN: small) no AGV is idle at that moment (every one holds an order), so the re-dispatch could not
     show a new owner. One OTHER non-carrying AGV (the releasee, waiting at its own pick location) is therefore released
     by hand: busy=False, path cleared, its order dropped from the policy's books, and the other unassigned requests are
     removed from the queue so the abandoned item is the first one dispatched. The abandoner itself is untouched: its
@@ -247,6 +247,11 @@ class TestTunedEqualsTimeout(unittest.TestCase):
                          {k: v for k, v in row_u.items() if k not in drop})
         self.assertNotEqual(row_t["recovery"]["name"], row_u["recovery"]["name"])
         self.assertEqual(set(row_t), set(row_u))
+        # discriminator: _job must run the config it is given; another tuned point gives a different row
+        o_cfg = rc.normalise_recovery({"name": "tuned_timeout", "replan": 3, "abandon": 10})
+        _, row_o = rs._job(("tuned_timeout", rate, "tuned replan 3 abandon 10", o_cfg, seed))
+        self.assertNotEqual({k: v for k, v in row_t.items() if k not in drop},
+                            {k: v for k, v in row_o.items() if k not in drop})
 
 
 if __name__ == "__main__":

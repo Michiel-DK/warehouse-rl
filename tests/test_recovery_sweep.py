@@ -134,12 +134,13 @@ class TestFailures(unittest.TestCase):
             with tempfile.TemporaryDirectory() as d:
                 self.assertNotEqual(run(["--smoke", "--only", bad, "--workers", "1"], d).returncode, 0, bad)
 
-    # inject: --workers back to type=int
+    # inject: --workers back to type=int (the empty-value case exits 2; a bare --workers never calls the type)
     def test_bare_workers_with_empty_sched_workers(self):
-        with tempfile.TemporaryDirectory() as d:
-            r = run(["--smoke", "--only", "a", "--workers"], d, sched_workers="")
-            self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertTrue((Path(d) / "recovery" / "timeout_smoke.json").exists())
+        for workers in (["--workers"], ["--workers", ""]):
+            with tempfile.TemporaryDirectory() as d:
+                r = run(["--smoke", "--only", "a", *workers], d, sched_workers="")
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertTrue((Path(d) / "recovery" / "timeout_smoke.json").exists())
 
 
 class TestFullDefinitions(unittest.TestCase):
@@ -191,7 +192,7 @@ class TestFullDefinitions(unittest.TestCase):
 
 
 class TestCallHumanIsAccountingOnly(unittest.TestCase):
-    # inject: charge the cost into the reward / the step budget, or count call_human_steps at decide time
+    # inject: charge the cost as robot time (the step budget), or count call_human_steps at decide time
     def test_cost_changes_only_call_human_steps(self):
         """executed calls = successful _relocate calls (the only site that adds cost x 1 to call_human_steps)."""
         rate, seed = 8, 1
