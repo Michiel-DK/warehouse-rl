@@ -35,5 +35,6 @@ summary = dict(env=args.env, episodes=args.episodes, seed0=args.seed,
                pick_rate_mean=statistics.mean(pr), pick_rate_sd=statistics.pstdev(pr) if len(pr) > 1 else 0.0,
                rows=rows)
 out = Path("results") / f"fifo_{args.env}.json"
+out.parent.mkdir(exist_ok=True)
 out.write_text(json.dumps(summary, indent=2))
 print(f"mean pick_rate={summary['pick_rate_mean']:.1f}/h sd={summary['pick_rate_sd']:.1f} -> {out}")
