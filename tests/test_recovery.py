@@ -7,6 +7,7 @@ vendor blocked-agent branch entered when other.fixing_clash == 0 (W:461). Neithe
 import importlib.util
 import json
 import math
+import subprocess
 import sys
 import tempfile
 import time
@@ -28,10 +29,10 @@ from warehouse_rl.policy import StuckAwareCtaPolicy
 
 _spec = importlib.util.spec_from_file_location("evaluate_script", ROOT / "scripts" / "evaluate.py")
 ev = importlib.util.module_from_spec(_spec)
-sys.modules["evaluate_script"] = ev  # multiprocessing pickles evaluate._job by module name
 _spec.loader.exec_module(ev)
 
 SMALL = "tarware-small-4agvs-2pickers-globalobs-v1"
+SCRIPT = str(ROOT / "scripts" / "evaluate.py")
 MEDIUM = "tarware-medium-8agvs-4pickers-globalobs-v1"
 BREAKDOWN = {"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}
 HEAVY = {"breakdown": {"rate_per_hour": 20, "duration": [10, 30]}, "delay": {"p_skip": 0.3}}
@@ -375,24 +376,40 @@ class SpecTests(unittest.TestCase):
             rc.resolve_recovery(5)
 
 
+def cli(policy, seeds, steps, results_dir, disturb=None, recovery=None, check=True):
+    cmd = [sys.executable, SCRIPT, "--policy", policy, "--env", SMALL, "--seeds", seeds, "--steps", str(steps),
+           "--workers", "1", "--results-dir", str(results_dir)]
+    if disturb:
+        cmd += ["--disturb", disturb]
+    if recovery:
+        cmd += ["--recovery", recovery]
+    return subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=300)
+
+
 class EvaluateTests(unittest.TestCase):
-    # red: drop `_check_same_recovery` -> the resume test goes red; drop the policy check -> test_needs_stuck_aware goes red.
+    # evaluate.py runs through its CLI (multiprocessing spawns workers that must import the script by name) with a temp
+    # --results-dir, so results/ is never written.
+    # red: drop `_check_same_recovery` -> the resume test goes red; drop the policy check -> test_needs_stuck_aware
+    # goes red; drop the `recovery=` plumbing in run_seed -> the row/doc asserts go red.
     def test_needs_stuck_aware(self):
         with tempfile.TemporaryDirectory() as d:
-            with self.assertRaises(ValueError):
-                ev.evaluate("cta", SMALL, 50, [0], 1, d, "none", "timeout")
-            with self.assertRaises(ValueError):
-                ev.evaluate("random", SMALL, 50, [0], 1, d, "none", "timeout")
+            for policy in ("cta", "random"):
+                with self.assertRaises(ValueError):
+                    ev.evaluate(policy, SMALL, 50, [0], 1, d, "none", "timeout")
+                r = cli(policy, "0", 50, d, recovery="timeout", check=False)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("ValueError", r.stderr)
             self.assertEqual(list(Path(d).iterdir()), [])
 
     def test_recovery_run_files_and_rows(self):
         with tempfile.TemporaryDirectory() as d:
-            ev.evaluate("stuck_aware_cta", SMALL, 50, [0, 1], 1, d, "none", "timeout")
+            cli("stuck_aware_cta", "0-1", 50, d, recovery="timeout")
             path = Path(d) / f"stuck_aware_cta_{SMALL}_50_timeout.json"
             doc = json.loads(path.read_text())
             self.assertEqual(doc["recovery"], {"name": "timeout", "call_human_cost": 60})
             self.assertEqual(doc["recovery_tag"], "timeout")
             self.assertEqual(doc["disturb"], {})
+            self.assertEqual(len(doc["rows"]), 2)
             for r in doc["rows"]:
                 self.assertEqual(r["recovery"], doc["recovery"])
                 for k in ev.RECOVERY_SUMS:
@@ -400,25 +417,26 @@ class EvaluateTests(unittest.TestCase):
                 self.assertEqual(r["recovery_wait"] + r["recovery_back_off"] + r["recovery_reroute"] + r["recovery_abandon"]
                                  + r["recovery_call_human"], r["recovery_stuck_events"] + r["recovery_clash_events"])
                 self.assertEqual(r["pick_rate"], r["deliveries"] * 3600 / (5 * 50))
-            # disturbed + JSON spec: tag in filename, disturb tag before the recovery tag
+            # disturbed + JSON spec: disturb tag, then the recovery tag in the filename
             spec = '{"name": "tuned_timeout", "replan": 4, "abandon": 15, "call_human_cost": 9}'
             rtag, rcfg = rc.resolve_recovery(spec)
-            from warehouse_rl.disturb import resolve_disturb
-            dt, _ = resolve_disturb("breakdown-heavy")
-            ev.evaluate("stuck_aware_cta", SMALL, 50, [0], 1, d, "breakdown-heavy", spec)
-            path2 = Path(d) / f"stuck_aware_cta_{SMALL}_50_{dt}_{rtag}.json"
+            cli("stuck_aware_cta", "0", 50, d, disturb="breakdown-heavy", recovery=spec)
+            path2 = Path(d) / f"stuck_aware_cta_{SMALL}_50_breakdown-heavy_{rtag}.json"
             doc2 = json.loads(path2.read_text())
             self.assertEqual(doc2["recovery"], rcfg)
             self.assertEqual(doc2["rows"][0]["recovery"], rcfg)
-            # resume with a different stored recovery config at the same filename refuses
+            # resume with a different stored recovery config at the same filename refuses (before running anything)
             doc2["recovery"] = dict(rcfg, call_human_cost=10)
             path2.write_text(json.dumps(doc2))
             with self.assertRaises(ValueError):
                 ev.evaluate("stuck_aware_cta", SMALL, 50, [0, 1], 1, d, "breakdown-heavy", spec)
+            r = cli("stuck_aware_cta", "0-1", 50, d, disturb="breakdown-heavy", recovery=spec, check=False)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("refusing to merge", r.stderr)
             # resume with the same config adds only the missing seed
             doc2["recovery"] = rcfg
             path2.write_text(json.dumps(doc2))
-            ev.evaluate("stuck_aware_cta", SMALL, 50, [0, 1], 1, d, "breakdown-heavy", spec)
+            cli("stuck_aware_cta", "0-1", 50, d, disturb="breakdown-heavy", recovery=spec)
             self.assertEqual([r["seed"] for r in json.loads(path2.read_text())["rows"]], [0, 1])
 
     def test_malformed_spec_raises(self):
@@ -426,19 +444,21 @@ class EvaluateTests(unittest.TestCase):
             for spec in ("bogus", '{"name": "tuned_timeout", "replan": 5, "abandon": 5}'):
                 with self.assertRaises(ValueError):
                     ev.evaluate("stuck_aware_cta", SMALL, 50, [0], 1, d, "none", spec)
+            self.assertEqual(list(Path(d).iterdir()), [])
 
     def test_without_recovery_unchanged(self):
         with tempfile.TemporaryDirectory() as d:
-            ev.evaluate("stuck_aware_cta", SMALL, 50, [0], 1, d, "none")
-            ev.evaluate("stuck_aware_cta", SMALL, 50, [0], 1, d, "breakdown-heavy")
+            cli("stuck_aware_cta", "0", 50, d)
+            cli("stuck_aware_cta", "0", 50, d, disturb="breakdown-heavy")
             names = sorted(p.name for p in Path(d).iterdir())
             self.assertEqual(names, [f"stuck_aware_cta_{SMALL}_50.json", f"stuck_aware_cta_{SMALL}_50_breakdown-heavy.json"])
             plain = json.loads((Path(d) / names[0]).read_text())
             dist = json.loads((Path(d) / names[1]).read_text())
-            self.assertNotIn("recovery", plain)
-            self.assertNotIn("recovery", dist)
+            for doc in (plain, dist):
+                self.assertNotIn("recovery", doc)
+                self.assertNotIn("recovery_tag", doc)
+                self.assertNotIn("recovery", doc["rows"][0])
             self.assertNotIn("recovery_wait", dist["rows"][0])
-            self.assertNotIn("recovery", plain["rows"][0])
             self.assertEqual(set(plain["rows"][0]), {"seed", "steps", "deliveries", "pick_rate", "clashes", "stucks", "wall_s"})
 
 
