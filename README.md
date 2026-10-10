@@ -273,7 +273,7 @@ Data: `results/recovery/timeout.json`, `tuned_timeout.json`, `rule.json` and `ca
   - Rates 1, 2 and 8: 5/10/25, at -0.77 (-2.20 to +0.66), -0.82 (-2.18 to +0.54) and -0.38 (-1.59 to +0.82).
   - Rate 4: 3/6/15, at -2.88 (-4.55 to -1.21).
   - No rule beats `timeout` at any rate. The faster rules (2/5/10, 3/6/15) are significantly worse at rates 1, 2 and 4.
-  - The rules execute 26 to 67 back-off fallbacks per episode (`recovery_fallbacks`) and abandon more often than the default, except 5/10/25.
+  - The rules log 26 to 67 recovery fallbacks per episode (`recovery_fallbacks`) and abandon more often than the default, except 5/10/25. Call-human % is 0 by construction in tables a to c (no human rung); it is reported in (d).
 
 **d. Call-human curve** (rule 3/6/15 with call-human after 14 stuck steps; 3/6/15 was the default `--best-rule` and is not the best rule found in (c)):
 
