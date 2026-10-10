@@ -1,6 +1,6 @@
 """Evaluate a policy over many seeds and step budgets; resumable, multiprocess, one env per process.
 
-Usage: python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-29 --steps 500,2000 [--workers N] [--results-dir DIR] [--disturb PRESET|JSON] [--recovery timeout|'{"name": "tuned_timeout", "replan": R, "abandon": A, "call_human_cost": C}']
+Usage: python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-29 --steps 500,2000 [--workers N] [--results-dir DIR] [--disturb PRESET|JSON] [--recovery timeout|'{"name": "tuned_timeout", "replan": R, "abandon": A, "call_human_cost": C}' | '{"name": "rule", "back_off_after": B, "reroute_after": R, "abandon_after": A, "call_human_after": H|null, "call_human_cost": C}']
 Writes <results-dir>/<policy>_<env>_<steps>.json after every finished seed (parent process only, atomic).
 --disturb (default none) runs under the disturbance layer (warehouse_rl.disturb) and writes
 <policy>_<env>_<steps>_<tag>.json instead, storing the config; the undisturbed filename is unchanged. An existing file
@@ -310,6 +310,8 @@ def main():
     p.add_argument("--disturb", default="none", help="preset name or JSON object (see warehouse_rl.disturb)")
     p.add_argument("--recovery", default=None,
                    help="preset 'timeout' or JSON {\"name\": \"tuned_timeout\", \"replan\": R, \"abandon\": A, "
+                        "\"call_human_cost\"?: C} or {\"name\": \"rule\", \"back_off_after\": B, "
+                        "\"reroute_after\": R, \"abandon_after\": A, \"call_human_after\"?: H|null, "
                         "\"call_human_cost\"?: C} (needs --policy stuck_aware_cta)")
     a = p.parse_args()
     seeds, steps_list = parse_seeds(a.seeds), parse_steps(a.steps)
