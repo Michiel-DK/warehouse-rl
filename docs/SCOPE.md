@@ -328,15 +328,42 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
       neighbour occupancy, own target distance, carrying flag, queue pressure) and ask `RecoveryPolicy.decide` for
       one of {wait, back off one cell, reroute via other lane, abandon and return shelf, call human}. "Call human"
       = instant unstick with a fixed time cost (parameter)
-- [ ] `TimeoutRecovery`: reproduces the env default (5-step replan, 15-step abandon) through the hook. Regression test
+- [x] `TimeoutRecovery`: reproduces the env default (5-step replan, 15-step abandon) through the hook. Regression test
       against the unhooked env on seeds 0-9
-- [ ] `TunedTimeoutRecovery`: sweep the replan and abandon thresholds (5/15 today); best point is a baseline
-- [ ] `RuleRecovery`: hand-written back-off-then-reroute-then-abandon with tuned thresholds. Mandatory
+      (2026-10-10, README "Sprint 3 results", `results/recovery/timeout.json`: reproduces the S2 `stuck_aware_cta`
+      breakdown rows on all 120 episodes; 51.17 / 47.47 / 42.48 / 33.17 lines/h at rates 1 / 2 / 4 / 8.)
+- [x] `TunedTimeoutRecovery`: sweep the replan and abandon thresholds (5/15 today); best point is a baseline
+      (2026-10-10, `tuned_timeout.json`: no point beats 5/15 at rates 1 to 2. The best are 3/15 at rate 1, +0.24
+      (-1.37 to +1.85), and 8/10 at rate 2, +0.82 (-0.15 to +1.78). 5/15 itself is best at rate 4. Only 3/15 at
+      rate 8 excludes 0, +0.86 (+0.19 to +1.54), 1 of 32 comparisons. No single point wins across rates, so the
+      baseline stays the default 5/15.)
+- [x] `RuleRecovery`: hand-written back-off-then-reroute-then-abandon with tuned thresholds. Mandatory
+      (2026-10-10, `rule.json`: no rule beats `timeout` at any rate. The best is 5/10/25 at rates 1, 2 and 8, at
+      -0.77 / -0.82 / -0.38, every CI containing 0, and 3/6/15 at rate 4, -2.88 (-4.55 to -1.21). The faster rules
+      are significantly worse at rates 1, 2 and 4. The best rule loses an extra 2% to 31% of the breakdown loss and
+      recovers none of it.)
 - [ ] Learned: DQN or PPO over the local observation, trained under the disturbance layer at 3 failure rates,
       3 seeds each. Reward: delivered lines minus stuck-time penalty minus call-human cost
+      **Headroom (2026-10-10, README "Sprint 3 results", for the operator's training decision).**
+      - The frozen floor is a model: rate-0 pick-rate x AGV frozen share. Above that floor, the env default
+        `timeout` leaves -0.25 (-2.28 to +1.78) lines/h at rate 1 and +1.19 (-0.85 to +3.22) at rate 2. Neither
+        can be told apart from zero.
+      - The rate-8 residual is +2.66 (+0.75 to +4.56), but rate 8 freezes 33% of AGV-time, so it is not a
+        plausible operating point.
+      - The best rule sits 0.51 / 2.00 lines/h above the floor at rates 1 / 2. That gap is mostly the rule's own
+        deficit against `timeout`.
+      - **Operator flag:** `RuleRecovery` is below the env default. The kill criterion "beat `RuleRecovery`
+        outside the CI" can be passed by a policy that only learns to wait like `timeout`. The bar that
+        separates a real gain is `timeout`, and its headroom at plausible rates is within noise. The kill
+        criterion is unchanged; it is the operator's call.
 - [ ] Re-dispatch on abandon is REQUIRED (use `StuckAwareCtaPolicy` as the dispatcher for all recovery runs);
       otherwise CTA re-attempts the abandoned task with the same robot
-- [ ] Sweep the "call human" cost; report the curve, not one point
+- [x] Sweep the "call human" cost; report the curve, not one point
+      (2026-10-10, `call_human.json`, rule 3/6/15 with H = 14, cost 0/5/15/30/60. The cost is accounting only, so
+      pick-rate is identical at every cost. Calling a human never beats `timeout`, even at cost 0: it is
+      significantly below it at rates 1, 2 and 4. Against the same rule without a human, it helps only at rate
+      1, +1.78 (+0.04 to +3.51). Valuing a human-step as an AGV-step, it stops paying above about 66 steps per
+      call. 3/6/15 was the default `--best-rule`, not the best rule found.)
 - [ ] Held-out evaluation: train at 3 failure rates, evaluate at rates between and beyond
 - [ ] Report: stuck-time and pick-rate vs failure rate and vs density, three recovery policies, CI over seeds
 
