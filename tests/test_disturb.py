@@ -607,15 +607,28 @@ class TestOutage(unittest.TestCase):
         self.assertGreater(in_window_carrying, 0)  # non-vacuous: hiding changed something
         self.assertGreater(out_window_carrying, 0)
 
+    # (g) red if the config-driven schedule does not make the out goal cell impassable (the obstacle link), checked
+    # on the step just executed: no AGV enters a goal cell that was out for that step. Non-vacuous: the same seed with
+    # the obstacles stripped from the schedule (injection) makes an AGV enter.
     def test_config_driven_outage(self):
-        cfg = {"outage": {"rate_per_hour": 720, "duration": [5, 10]}}
+        cfg = {"outage": {"rate_per_hour": 120, "duration": [5, 10]}}
         seen = 0
-        for env, info in rollout(SMALL, cfg, 1, 30):
+        entries_possible = 0
+        prev = None
+        for env, info in rollout(SMALL, cfg, 1, 80):
             e = env.env
+            t = e._t - 1  # index of the step just executed
             seen += info["outage_goals"]
-            out = e.outage_goal_indices()
-            self.assertTrue(set(out) <= set(range(len(e.goals))))
+            self.assertTrue(set(e.outage_goal_indices()) <= set(range(len(e.goals))))
             self.assertEqual(len(e.goals), 6)
+            out_cells = {tuple(e.goals[g]) for g in e._out_goals_by_step[t]}
+            self.assertEqual(out_cells, set(e._obstacles_by_step[t]))
+            now = positions(e)
+            if prev is not None:
+                for old, new in zip(prev, now):
+                    if new in out_cells:
+                        self.assertEqual(new, old, msg=f"AGV entered out goal {new} at step {t}")
+            prev = now
         self.assertGreater(seen, 0)
 
 
