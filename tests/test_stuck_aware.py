@@ -227,6 +227,17 @@ class TestAbandonment(unittest.TestCase):
         finally:
             f.close()
 
+    # idle at its own mission location (e.g. a stuck timeout while waiting for a picker): not an abandonment
+    def test_at_location_is_not_an_abandonment(self):  # inject: drop the not-at-location check in _begin_act
+        f, x = self._abandon(StuckAwareCtaPolicy)
+        try:
+            m = f.pol.assigned_agvs[x]
+            x.x, x.y = m.location_x, m.location_y
+            f.act()
+            self.assertIn(x, f.pol.assigned_agvs)
+        finally:
+            f.close()
+
     # carrying a shelf: not an abandonment, the mission survives (CTA behaviour)
     def test_carrying_agv_is_not_an_abandonment(self):  # inject: drop the carrying_shelf check
         f = Fixture(StuckAwareCtaPolicy)
