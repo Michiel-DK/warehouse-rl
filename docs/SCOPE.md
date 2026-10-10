@@ -397,7 +397,9 @@ incrementally.
 
 - [ ] Portfolio piece or client-facing? Decides whether S2's demand axis uses the public dataset or a WMS export.
 - [ ] Add to the GitHub showcase set once S2 has curves, regardless of direction?
-- [ ] Eval episode length (decided in S1).
+- [x] Eval episode length (decided in S1, 2026-10-10): no length detects a 5% effect at 30 seeds; 5000 steps
+      needs 572 seeds per policy, 500 steps needs 93. Warm-up: none (W = 0). Table and reasoning in README
+      "Evaluation resolution".
 
 ## Tooling notes
 

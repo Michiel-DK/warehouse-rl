@@ -1,0 +1,282 @@
+{
+  "policy": "cta",
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "steps": 2000,
+  "rows": [
+    {
+      "seed": 0,
+      "steps": 2000,
+      "deliveries": 155,
+      "pick_rate": 55.8,
+      "clashes": 151,
+      "stucks": 5,
+      "wall_s": 7.27684211730957
+    },
+    {
+      "seed": 1,
+      "steps": 2000,
+      "deliveries": 152,
+      "pick_rate": 54.72,
+      "clashes": 154,
+      "stucks": 9,
+      "wall_s": 7.2475409507751465
+    },
+    {
+      "seed": 2,
+      "steps": 2000,
+      "deliveries": 148,
+      "pick_rate": 53.28,
+      "clashes": 139,
+      "stucks": 5,
+      "wall_s": 7.193954229354858
+    },
+    {
+      "seed": 3,
+      "steps": 2000,
+      "deliveries": 137,
+      "pick_rate": 49.32,
+      "clashes": 111,
+      "stucks": 5,
+      "wall_s": 7.156766176223755
+    },
+    {
+      "seed": 4,
+      "steps": 2000,
+      "deliveries": 33,
+      "pick_rate": 11.88,
+      "clashes": 1800,
+      "stucks": 222,
+      "wall_s": 7.055895090103149
+    },
+    {
+      "seed": 5,
+      "steps": 2000,
+      "deliveries": 137,
+      "pick_rate": 49.32,
+      "clashes": 136,
+      "stucks": 11,
+      "wall_s": 7.09919285774231
+    },
+    {
+      "seed": 6,
+      "steps": 2000,
+      "deliveries": 145,
+      "pick_rate": 52.2,
+      "clashes": 103,
+      "stucks": 3,
+      "wall_s": 7.168092966079712
+    },
+    {
+      "seed": 7,
+      "steps": 2000,
+      "deliveries": 150,
+      "pick_rate": 54.0,
+      "clashes": 151,
+      "stucks": 10,
+      "wall_s": 7.166172981262207
+    },
+    {
+      "seed": 8,
+      "steps": 2000,
+      "deliveries": 131,
+      "pick_rate": 47.16,
+      "clashes": 92,
+      "stucks": 8,
+      "wall_s": 7.060628414154053
+    },
+    {
+      "seed": 9,
+      "steps": 2000,
+      "deliveries": 154,
+      "pick_rate": 55.44,
+      "clashes": 148,
+      "stucks": 7,
+      "wall_s": 7.194833040237427
+    },
+    {
+      "seed": 10,
+      "steps": 2000,
+      "deliveries": 148,
+      "pick_rate": 53.28,
+      "clashes": 132,
+      "stucks": 10,
+      "wall_s": 7.18611478805542
+    },
+    {
+      "seed": 11,
+      "steps": 2000,
+      "deliveries": 145,
+      "pick_rate": 52.2,
+      "clashes": 136,
+      "stucks": 5,
+      "wall_s": 7.191033840179443
+    },
+    {
+      "seed": 12,
+      "steps": 2000,
+      "deliveries": 140,
+      "pick_rate": 50.4,
+      "clashes": 152,
+      "stucks": 6,
+      "wall_s": 7.129508972167969
+    },
+    {
+      "seed": 13,
+      "steps": 2000,
+      "deliveries": 131,
+      "pick_rate": 47.16,
+      "clashes": 114,
+      "stucks": 3,
+      "wall_s": 7.058808088302612
+    },
+    {
+      "seed": 14,
+      "steps": 2000,
+      "deliveries": 154,
+      "pick_rate": 55.44,
+      "clashes": 160,
+      "stucks": 11,
+      "wall_s": 7.2011559009552
+    },
+    {
+      "seed": 15,
+      "steps": 2000,
+      "deliveries": 146,
+      "pick_rate": 52.56,
+      "clashes": 144,
+      "stucks": 8,
+      "wall_s": 7.212289094924927
+    },
+    {
+      "seed": 16,
+      "steps": 2000,
+      "deliveries": 129,
+      "pick_rate": 46.44,
+      "clashes": 714,
+      "stucks": 82,
+      "wall_s": 7.214277982711792
+    },
+    {
+      "seed": 17,
+      "steps": 2000,
+      "deliveries": 35,
+      "pick_rate": 12.6,
+      "clashes": 25,
+      "stucks": 1,
+      "wall_s": 6.851485729217529
+    },
+    {
+      "seed": 18,
+      "steps": 2000,
+      "deliveries": 159,
+      "pick_rate": 57.24,
+      "clashes": 136,
+      "stucks": 7,
+      "wall_s": 7.206085920333862
+    },
+    {
+      "seed": 19,
+      "steps": 2000,
+      "deliveries": 152,
+      "pick_rate": 54.72,
+      "clashes": 136,
+      "stucks": 5,
+      "wall_s": 7.213869094848633
+    },
+    {
+      "seed": 20,
+      "steps": 2000,
+      "deliveries": 167,
+      "pick_rate": 60.12,
+      "clashes": 115,
+      "stucks": 4,
+      "wall_s": 7.214757919311523
+    },
+    {
+      "seed": 21,
+      "steps": 2000,
+      "deliveries": 140,
+      "pick_rate": 50.4,
+      "clashes": 142,
+      "stucks": 7,
+      "wall_s": 7.132466077804565
+    },
+    {
+      "seed": 22,
+      "steps": 2000,
+      "deliveries": 129,
+      "pick_rate": 46.44,
+      "clashes": 121,
+      "stucks": 7,
+      "wall_s": 7.073496103286743
+    },
+    {
+      "seed": 23,
+      "steps": 2000,
+      "deliveries": 143,
+      "pick_rate": 51.48,
+      "clashes": 122,
+      "stucks": 4,
+      "wall_s": 7.1805219650268555
+    },
+    {
+      "seed": 24,
+      "steps": 2000,
+      "deliveries": 141,
+      "pick_rate": 50.76,
+      "clashes": 138,
+      "stucks": 10,
+      "wall_s": 7.158107042312622
+    },
+    {
+      "seed": 25,
+      "steps": 2000,
+      "deliveries": 142,
+      "pick_rate": 51.12,
+      "clashes": 132,
+      "stucks": 6,
+      "wall_s": 7.135638952255249
+    },
+    {
+      "seed": 26,
+      "steps": 2000,
+      "deliveries": 152,
+      "pick_rate": 54.72,
+      "clashes": 141,
+      "stucks": 9,
+      "wall_s": 7.235677003860474
+    },
+    {
+      "seed": 27,
+      "steps": 2000,
+      "deliveries": 145,
+      "pick_rate": 52.2,
+      "clashes": 124,
+      "stucks": 9,
+      "wall_s": 7.236624240875244
+    },
+    {
+      "seed": 28,
+      "steps": 2000,
+      "deliveries": 138,
+      "pick_rate": 49.68,
+      "clashes": 111,
+      "stucks": 3,
+      "wall_s": 6.920876979827881
+    },
+    {
+      "seed": 29,
+      "steps": 2000,
+      "deliveries": 138,
+      "pick_rate": 49.68,
+      "clashes": 115,
+      "stucks": 9,
+      "wall_s": 6.952286005020142
+    }
+  ],
+  "n": 30,
+  "pick_rate_mean": 49.39200000000001,
+  "pick_rate_sd": 10.603902469666856,
+  "ci95_low": 45.43288233114917,
+  "ci95_high": 53.35111766885085
+}
