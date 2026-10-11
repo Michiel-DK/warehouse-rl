@@ -242,7 +242,7 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
 
         if policy != "stuck_aware_cta":
             raise ValueError(f"--recovery needs --policy stuck_aware_cta (re-dispatch on abandon), got {policy!r}")
-        if recovery.startswith("learned:"):
+        if isinstance(recovery, str) and recovery.startswith("learned:"):
             from warehouse_rl.learned_recovery import resolve_learned
 
             rec_tag, rec_config = resolve_learned(recovery[len("learned:"):])
