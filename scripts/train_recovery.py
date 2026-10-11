@@ -5,8 +5,9 @@ Usage: python scripts/train_recovery.py [--rates 1,2,4] [--seeds 0,1,2] [--worke
 --results-dir is the TRAINING ROOT (default results/recovery_train, also recovery_heldout.py's --train-dir default);
 run (r, s) lives in <results-dir>/rate<r>_seed<s>/ with checkpoint.pt (portable policy, see learned_recovery.py),
 log.json ({config, intervals, finished, reward_used}) and train_state.pt (resume state), each written atomically after
-every evaluation interval, in that order (checkpoint, log, state): a kill between two writes can leave the resume state
-behind the log (resume drops the log's later interval and redoes it), never ahead of it.
+every evaluation interval, in that order (checkpoint, log, state). A fresh run writes an initial train_state.pt (episode
+0) before its first rollout, so a log never exists without a state file: a kill between two writes can leave the resume
+state behind the log (resume drops the log's later intervals and redoes them), never ahead of it and never missing.
 
 Setting: medium map (8 AGVs + 4 pickers), disturbance = sweep.point_spec("breakdown", rate), dispatcher
 StuckAwareCtaPolicy, call_human_cost 60. The agent is a semi-MDP DQN over the RecoveryHook decision events; the reward
@@ -328,6 +329,14 @@ def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resu
             st["wall_s"]
         intervals = [iv for iv in log["intervals"] if iv["episode"] <= done_eps]
         print(f"resume rate {rate} seed {run_seed} from episode {done_eps} (replay buffer starts empty)")
+    def save_state(wall):
+        _atomic_torch(state_path, dict(
+            online=online.state_dict(), target=target.state_dict(), optimizer=opt.state_dict(),
+            torch_rng=torch.get_rng_state(), episodes_done=done_eps, gradient_steps=grad_steps,
+            env_steps=env_steps, wall_s=wall))
+
+    if log is None:
+        save_state(0.0)  # episode-0 state before any log exists (see the module docstring)
     consts = lr.reward_constants(cfg["call_human_cost"])
     replay = Replay(cfg["capacity"])
     t0 = time.time()
@@ -403,10 +412,7 @@ def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resu
                 lr.save_checkpoint(ckpt_path, online.state_dict(), consts, cfg)
                 _atomic_text(log_path, json.dumps(dict(config=cfg, intervals=intervals, finished=finished,
                                                         reward_used=reward_used), indent=2))
-                _atomic_torch(state_path, dict(
-                    online=online.state_dict(), target=target.state_dict(), optimizer=opt.state_dict(),
-                    torch_rng=torch.get_rng_state(), episodes_done=done_eps, gradient_steps=grad_steps,
-                    env_steps=env_steps, wall_s=wall_prior + time.time() - t0))
+                save_state(wall_prior + time.time() - t0)
                 iv = intervals[-1]
                 print(f"[rate {rate} seed {run_seed}] ep {done_eps}/{total} train_reward {iv['train_reward_mean']:.3f} "
                       f"eval_pick_rate {iv['eval_pick_rate_mean']:.2f} eps {iv['epsilon']:.2f} "

@@ -352,6 +352,15 @@ class TestSmokeTrainAndResume(unittest.TestCase):
         pol = lr.LearnedRecovery.load(self.run_dir / "checkpoint.pt")
         self.assertEqual(pol.epsilon, 0.0)
 
+    # inject: pass 0 instead of the running gradient-step counter into learn() (the target-sync clock restarts every
+    # iteration and the logged gradient_steps is per-iteration)
+    def test_gradient_step_counter_is_cumulative(self):
+        st = torch.load(self.run_dir / "train_state.pt", weights_only=True)
+        log = json.loads((self.run_dir / "log.json").read_text())
+        adam_steps = int(st["optimizer"]["state"][0]["step"])  # Adam counts every opt.step() of the run
+        self.assertEqual(st["gradient_steps"], adam_steps)
+        self.assertEqual(log["intervals"][-1]["gradient_steps"], adam_steps)
+
     # inject: --resume re-runs or rewrites a finished run (any byte or mtime change), prints no skip line
     def test_resume_skips_finished_run_untouched(self):
         before = snapshot(self.run_dir)
@@ -394,6 +403,75 @@ class TestSmokeTrainAndResume(unittest.TestCase):
             self.assertEqual([iv["episode"] for iv in log2["intervals"]], [2, 4])
             self.assertEqual(log2["intervals"][0], log1["intervals"][0])
             self.assertGreater(log2["intervals"][1]["gradient_steps"], log1["intervals"][0]["gradient_steps"])
+
+    # inject: on resume keep every log interval (drop the `<= episodes_done` filter), or skip the episode-0 state write
+    # so a kill between the first log write and the first state write leaves an unresumable run
+    def test_kill_between_log_and_state_writes_stays_resumable(self):
+        with tempfile.TemporaryDirectory() as d:
+            rd = Path(d) / "rate1_seed0"
+            part = run(self.args + ["--max-intervals", "1"], d)
+            self.assertEqual(part.returncode, 0, part.stderr)
+            state1 = (rd / "train_state.pt").read_bytes()
+            done = run(self.args + ["--resume"], d)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            # simulate a kill after the interval-2 log write but before its state write: log says 4 episodes (and,
+            # for a non-final interval, finished false), the state is still the interval-1 one
+            log = json.loads((rd / "log.json").read_text())
+            log["finished"] = False
+            (rd / "log.json").write_text(json.dumps(log))
+            (rd / "train_state.pt").write_bytes(state1)
+            again = run(self.args + ["--resume"], d)
+            self.assertEqual(again.returncode, 0, again.stderr)
+            log2 = json.loads((rd / "log.json").read_text())
+            self.assertTrue(log2["finished"])
+            self.assertEqual([iv["episode"] for iv in log2["intervals"]], [2, 4])  # interval 2 redone, not doubled
+        with tempfile.TemporaryDirectory() as d:
+            # a kill after the first log write but before its state write leaves the episode-0 state under it
+            r = run(self.args + ["--max-intervals", "1"], d)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            rd = Path(d) / "rate1_seed0"
+            st = torch.load(rd / "train_state.pt", weights_only=True)
+            self.assertEqual(st["episodes_done"], 2)
+            # rebuild the episode-0 state the trainer writes first and put it back under the interval-1 log
+            torch.manual_seed(0)
+            online = lr.QNet()
+            target = lr.QNet()
+            target.load_state_dict(online.state_dict())
+            opt = torch.optim.Adam(online.parameters(), lr=st["optimizer"]["param_groups"][0]["lr"])
+            torch.save(dict(online=online.state_dict(), target=target.state_dict(), optimizer=opt.state_dict(),
+                            torch_rng=torch.get_rng_state(), episodes_done=0, gradient_steps=0, env_steps=0,
+                            wall_s=0.0), rd / "train_state.pt")
+            again = run(self.args + ["--resume"], d)
+            self.assertEqual(again.returncode, 0, again.stderr)
+            log2 = json.loads((rd / "log.json").read_text())
+            self.assertTrue(log2["finished"])
+            self.assertEqual([iv["episode"] for iv in log2["intervals"]], [2, 4])
+
+    # inject: skip the episode-0 state write
+    def test_fresh_run_writes_state_before_first_rollout(self):
+        calls = []
+        orig = tr._atomic_torch
+
+        def spy(path, obj):
+            calls.append((Path(path).name, obj.get("episodes_done") if isinstance(obj, dict) else None))
+            return orig(path, obj)
+
+        class Boom(Exception):
+            pass
+
+        def fail_map(*a, **kw):
+            raise Boom()
+
+        fake_ctx = mock.Mock()
+        fake_ctx.Pool = _RecordingPool
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr, "_atomic_torch", spy), \
+                mock.patch.object(tr.mp, "get_context", return_value=fake_ctx), \
+                mock.patch.object(_RecordingPool, "map", fail_map):
+            with self.assertRaises(Boom):
+                tr.train_run(1, 0, 100, None, True, 1, d, False)
+            self.assertEqual(calls, [("train_state.pt", 0)])
+            self.assertTrue((Path(d) / "rate1_seed0" / "train_state.pt").exists())
+            self.assertFalse((Path(d) / "rate1_seed0" / "log.json").exists())
 
 
 if __name__ == "__main__":
