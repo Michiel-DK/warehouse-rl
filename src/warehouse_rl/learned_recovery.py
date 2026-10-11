@@ -15,6 +15,8 @@ of one agent in the same step give Delta = 0 (no reward, discount 1). Per step k
     r_k = LINE_REWARD * shelf_deliveries_k / n_agents        fleet deliveries, equal share (AGVs and pickers decide)
           - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (info["stuck_busy_agents"] definition)
           - STUCK_PENALTY * call_human_cost * [executed call-human relocation of the agent in step k]
+          - STUCK_PENALTY * abandon_cost * [this decision is abandon]    (charged once, at the window's first step k = t,
+                                                                          undiscounted: GAMMA ** 0 = 1)
     R = sum_k GAMMA ** (k - t) * r_k,   target = R + GAMMA ** Delta * max_a Q_target(s', a)   (0 bootstrap at the end)
 
 Episode end is a time-limit truncation treated as terminal: the value of the last windows is biased low.
@@ -30,7 +32,9 @@ from torch import nn
 from warehouse_rl.env import WarehouseEnv
 from warehouse_rl.recovery import ACTIONS, DEFAULT_CALL_HUMAN_COST, RecoveryHook, RecoveryPolicy
 
-FORMAT_VERSION = 1
+# 2: abandon costs ABANDON_COST stuck-steps and checkpoints carry a top-level "version". v1 checkpoints were trained with
+# a zero-cost abandon (the first real run learned to abandon every stuck task) and are refused by load_checkpoint.
+FORMAT_VERSION = 2
 OBS_KEYS = RecoveryHook.OBS_KEYS
 # Fixed per-key divisors (not running statistics) so a checkpoint is portable; the loaded copy is the one used.
 OBS_SCALE = {"event_is_clash": 1.0, "stuck_count": 20.0, "fixing_clash": 4.0, "carrying": 1.0, "is_picker": 1.0,
@@ -43,11 +47,12 @@ LINE_REWARD = 1.0
 STUCK_PENALTY = 0.01  # per agent-step
 GAMMA = 0.99
 CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = STUCK_PENALTY * 60 = 0.6
+ABANDON_COST = 15  # stuck-steps charged per abandon decision = the timeout rule's own abandon threshold (recovery.py)
 
 
-def reward_constants(call_human_cost=CALL_HUMAN_COST):
+def reward_constants(call_human_cost=CALL_HUMAN_COST, abandon_cost=ABANDON_COST):
     return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "gamma": GAMMA,
-            "call_human_cost": call_human_cost}
+            "call_human_cost": call_human_cost, "abandon_cost": abandon_cost}
 
 
 def obs_to_tensor(obs, obs_scale=OBS_SCALE):
@@ -77,11 +82,16 @@ def greedy_index(q):
 
 
 class LearnedRecovery(RecoveryPolicy):
-    """decide(obs) -> argmax Q (ties to the lowest index) when epsilon == 0 (the default); with epsilon > 0 a uniform
-    random action with probability epsilon from its own random.Random(seed) (training only)."""
+    """decide(obs) -> argmax Q (ties to the lowest index) when epsilon == 0 (the default). With epsilon > 0 (training
+    only) ONE draw u from its own random.Random(seed) per decision: u < epsilon * share -> uniform random action;
+    elif u < epsilon -> the `prior` policy's action on the raw obs dict; else greedy. share = 1.0 when prior is None
+    (the original epsilon-greedy, same RNG stream), else random_share in [0, 1]."""
     name = "learned"
 
-    def __init__(self, net, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, checkpoint=None):
+    def __init__(self, net, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, checkpoint=None, prior=None, random_share=1.0):
+        if not 0.0 <= random_share <= 1.0:
+            raise ValueError(f"random_share must be in [0, 1], got {random_share!r}")
+        self.prior, self.random_share = prior, random_share
         self.net = net.eval()
         self.obs_scale = dict(obs_scale)
         self.epsilon = epsilon
@@ -93,9 +103,15 @@ class LearnedRecovery(RecoveryPolicy):
 
     def decide(self, obs):
         x = obs_to_tensor(obs, self.obs_scale)
-        if self.epsilon > 0.0 and self.rng.random() < self.epsilon:
-            idx = self.rng.randrange(len(ACTIONS))
-        else:
+        idx = None
+        if self.epsilon > 0.0:
+            u = self.rng.random()
+            share = 1.0 if self.prior is None else self.random_share
+            if u < self.epsilon * share:
+                idx = self.rng.randrange(len(ACTIONS))
+            elif u < self.epsilon:
+                idx = ACTIONS.index(self.prior.decide(obs))
+        if idx is None:
             with torch.no_grad():
                 idx = greedy_index(self.net(x))
         self.calls += 1
@@ -103,10 +119,10 @@ class LearnedRecovery(RecoveryPolicy):
         return ACTIONS[idx]
 
     @classmethod
-    def from_state_dict(cls, state_dict, obs_scale=OBS_SCALE, epsilon=0.0, seed=0):
+    def from_state_dict(cls, state_dict, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, prior=None, random_share=1.0):
         net = QNet()
         net.load_state_dict(state_dict)
-        return cls(net, obs_scale, epsilon, seed)
+        return cls(net, obs_scale, epsilon, seed, prior=prior, random_share=random_share)
 
     @classmethod
     def load(cls, path):
@@ -118,7 +134,7 @@ class LearnedRecovery(RecoveryPolicy):
 
 def save_checkpoint(path, state_dict, reward, train_config, obs_scale=OBS_SCALE):
     """Atomic torch.save of tensors and Python primitives only (loadable with weights_only=True)."""
-    ck = {"state_dict": {k: v.detach().cpu().clone() for k, v in state_dict.items()}, "obs_keys": list(OBS_KEYS),
+    ck = {"version": FORMAT_VERSION, "state_dict": {k: v.detach().cpu().clone() for k, v in state_dict.items()}, "obs_keys": list(OBS_KEYS),
           "actions": list(ACTIONS), "obs_scale": dict(obs_scale), "reward": dict(reward),
           "train_config": train_config}
     path = Path(path)
@@ -129,6 +145,9 @@ def save_checkpoint(path, state_dict, reward, train_config, obs_scale=OBS_SCALE)
 
 def load_checkpoint(path):
     ck = torch.load(path, map_location="cpu", weights_only=True)
+    if ck.get("version") != FORMAT_VERSION:
+        raise ValueError(f"{path}: checkpoint version {ck.get('version')!r} != {FORMAT_VERSION}; v1 checkpoints were "
+                         f"trained with the zero-cost abandon reward and must be retrained")
     for key in ("state_dict", "obs_keys", "actions", "obs_scale", "reward", "train_config"):
         if key not in ck:
             raise ValueError(f"{path}: checkpoint has no {key!r}")
