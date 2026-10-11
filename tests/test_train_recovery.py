@@ -404,8 +404,8 @@ class TestSmokeTrainAndResume(unittest.TestCase):
             self.assertEqual(log2["intervals"][0], log1["intervals"][0])
             self.assertGreater(log2["intervals"][1]["gradient_steps"], log1["intervals"][0]["gradient_steps"])
 
-    # inject: on resume keep every log interval (drop the `<= episodes_done` filter), or skip the episode-0 state write
-    # so a kill between the first log write and the first state write leaves an unresumable run
+    # inject: on resume keep every log interval (drop the `<= episodes_done` filter). The episode-0 state write itself is
+    # guarded by test_fresh_run_writes_state_before_first_rollout (this test rebuilds that state by hand)
     def test_kill_between_log_and_state_writes_stays_resumable(self):
         with tempfile.TemporaryDirectory() as d:
             rd = Path(d) / "rate1_seed0"
