@@ -66,8 +66,11 @@ BATCH, WARMUP, CAPACITY = 256, 2000, 200_000
 LR, TARGET_SYNC, CLIP_NORM = 1e-3, 1000, 10.0   # TARGET_SYNC in gradient steps (hard sync)
 GRAD_PER_NEW = 4         # gradient steps per iteration = max(1, new_transitions // GRAD_PER_NEW)
 EPS_START, EPS_END, EPS_FRAC = 1.0, 0.05, 0.5   # linear over the first EPS_FRAC of the episodes
-# Budget, measured on 8 workers (see the PR body for the arithmetic): DEFAULT_EPISODES = 1200
-DEFAULT_EPISODES = 1200
+# Budget for 9 runs (3 rates x 3 seeds) in about 10 h on 8 workers. Measured 11 Oct (non-smoke, --episodes 80 --steps 500
+# --workers 8, rate 2, machine load average ~7 from another job): rollout 1365 env steps/s over 8 workers, and the
+# second 40-episode interval (rollouts + learner + one 5-seed eval) took 20.6 s = 0.52 s per episode. Planning with 0.6 s
+# per episode: 6400 episodes = 3840 s = 1.07 h per run, 9 runs = 9.6 h (8.3 h at the measured 0.52 s).
+DEFAULT_EPISODES = 6400
 SMOKE = dict(episodes=4, iter_episodes=2, eval_every=2, batch=32, warmup=32, target_sync=10)
 
 
