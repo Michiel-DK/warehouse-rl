@@ -5,6 +5,10 @@ Writes <results-dir>/<policy>_<env>_<steps>.json after every finished seed (pare
 --disturb (default none) runs under the disturbance layer (warehouse_rl.disturb) and writes
 <policy>_<env>_<steps>_<tag>.json instead, storing the config; the undisturbed filename is unchanged. An existing file
 with the same tag but a different stored config raises. The paired delta reads the CTA file with the same tag.
+--recovery learned:<checkpoint.pt> (needs --policy stuck_aware_cta, else ValueError) runs a trained LearnedRecovery
+(warehouse_rl.learned_recovery, torch imported only then); the recovery config is {name: 'learned', checkpoint (path as
+given), sha256, call_human_cost (from the checkpoint)} and the tag 'learned-<10 hex of the sha256>', so another
+checkpoint can never merge into the same file.
 --recovery (default unset; needs --policy stuck_aware_cta, else ValueError) builds the RecoveryHook (warehouse_rl.recovery;
 disturb {} for --disturb none) and writes <policy>_<env>_<steps>[_<disturbtag>]_<rectag>.json (rectag: 'timeout' for the
 preset, 'rec-<10 hex>' for a JSON spec; call_human_cost is optional, default 60). Doc and rows record the recovery
@@ -141,9 +145,15 @@ def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=F
 
     t0 = time.time()
     pol = make_policy(policy, seed)
-    env_kwargs = {} if recovery is None else dict(recovery=recovery)
-    env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
-                       **env_kwargs)
+    if recovery is not None and recovery.get("name") == "learned":  # lazy: torch only for a learned policy
+        from warehouse_rl.learned_recovery import make_learned_env, policy_from_config
+
+        env = make_learned_env(env_id, steps, disturb, policy_from_config(recovery), recovery["call_human_cost"],
+                               assign_care_for_agents)
+    else:
+        env_kwargs = {} if recovery is None else dict(recovery=recovery)
+        env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
+                           **env_kwargs)
     extra = {k: 0 for k in DISTURB_SUMS} if disturb is not None else None
     rec_extra = {k: 0 for k in RECOVERY_SUMS} if recovery is not None else None
     try:
@@ -232,7 +242,12 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
 
         if policy != "stuck_aware_cta":
             raise ValueError(f"--recovery needs --policy stuck_aware_cta (re-dispatch on abandon), got {policy!r}")
-        rec_tag, rec_config = resolve_recovery(recovery)
+        if recovery.startswith("learned:"):
+            from warehouse_rl.learned_recovery import resolve_learned
+
+            rec_tag, rec_config = resolve_learned(recovery[len("learned:"):])
+        else:
+            rec_tag, rec_config = resolve_recovery(recovery)
     tag, config = resolve_disturb(disturb)
     disturbed = tag != "none"  # preset none = the S1 undisturbed path: same filename, no layer
     suffix = f"_{tag}" if disturbed else ""
@@ -312,7 +327,8 @@ def main():
                    help="preset 'timeout' or JSON {\"name\": \"tuned_timeout\", \"replan\": R, \"abandon\": A, "
                         "\"call_human_cost\"?: C} or {\"name\": \"rule\", \"back_off_after\": B, "
                         "\"reroute_after\": R, \"abandon_after\": A, \"call_human_after\"?: H|null, "
-                        "\"call_human_cost\"?: C} (needs --policy stuck_aware_cta)")
+                        "\"call_human_cost\"?: C} or learned:<checkpoint path> "
+                        "(needs --policy stuck_aware_cta)")
     a = p.parse_args()
     seeds, steps_list = parse_seeds(a.seeds), parse_steps(a.steps)
     for st in steps_list:
