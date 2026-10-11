@@ -5,7 +5,8 @@ Usage: python scripts/train_recovery.py [--rates 1,2,4] [--seeds 0,1,2] [--worke
 --results-dir is the TRAINING ROOT (default results/recovery_train, also recovery_heldout.py's --train-dir default);
 run (r, s) lives in <results-dir>/rate<r>_seed<s>/ with checkpoint.pt (portable policy, see learned_recovery.py),
 log.json ({config, intervals, finished, reward_used}) and train_state.pt (resume state), each written atomically after
-every evaluation interval.
+every evaluation interval, in that order (checkpoint, log, state): a kill between two writes can leave the resume state
+behind the log (resume drops the log's later interval and redoes it), never ahead of it.
 
 Setting: medium map (8 AGVs + 4 pickers), disturbance = sweep.point_spec("breakdown", rate), dispatcher
 StuckAwareCtaPolicy, call_human_cost 60. The agent is a semi-MDP DQN over the RecoveryHook decision events; the reward
@@ -168,7 +169,7 @@ def run_episode(task):
         obs, info = env.reset(seed=seed)
         disp = StuckAwareCtaPolicy()
         disp.reset(env)
-        deliveries = events = 0
+        deliveries = events = call_human_steps = 0
         busy_stuck_mismatch = 0
         for t in range(steps):
             if ctx is not None:
@@ -178,6 +179,7 @@ def run_episode(task):
             d = int(info["shelf_deliveries"])
             deliveries += d
             events += int(info["recovery_stuck_events"]) + int(info["recovery_clash_events"])
+            call_human_steps += int(info["call_human_steps"])  # the hook's own counter: executed calls x cost
             if rec is not None:
                 stuck = {a.id for a in hook.agents if a.busy and hook.stuck_counters[a.id - 1].count > 0}
                 busy_stuck_mismatch += int(len(stuck) != int(info["stuck_busy_agents"]))
@@ -187,7 +189,8 @@ def run_episode(task):
             rec.finish(steps)
         res = dict(seed=seed, steps=steps, deliveries=deliveries, pick_rate=deliveries * 3600 / (5 * steps),
                    decisions=events, policy_calls=pol.calls, hook_decide_calls=hook.decide_calls,
-                   reward_used=task["consts"], busy_stuck_mismatch=busy_stuck_mismatch)
+                   reward_used=task["consts"], busy_stuck_mismatch=busy_stuck_mismatch,
+                   call_human_steps=call_human_steps)
         if rec is not None:
             res.update(_arrays(rec.out))
             res["ep_return"] = float(sum(o[9] for o in rec.out))
@@ -229,6 +232,24 @@ def dqn_loss(online, target, batch):
         a2 = online(x2).argmax(1, keepdim=True)
         y = r + disc * (1.0 - done) * target(x2).gather(1, a2).squeeze(1)
     return F.smooth_l1_loss(q, y)
+
+
+def learn(online, target, opt, replay, cfg, n_steps, grad_steps):
+    """n_steps double-DQN gradient steps; hard target sync whenever the cumulative grad_steps hits a multiple of
+    cfg["target_sync"]. Returns (grad_steps, loss_sum, loss_n)."""
+    loss_sum, loss_n = 0.0, 0
+    for _ in range(n_steps):
+        loss = dqn_loss(online, target, replay.sample(cfg["batch"]))
+        opt.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(online.parameters(), cfg["clip_norm"])
+        opt.step()
+        grad_steps += 1
+        loss_sum += float(loss.detach())
+        loss_n += 1
+        if grad_steps % cfg["target_sync"] == 0:
+            target.load_state_dict(online.state_dict())
+    return grad_steps, loss_sum, loss_n
 
 
 def epsilon_at(episode_index, episodes):
@@ -350,6 +371,9 @@ def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resu
                 if r["policy_calls"] != r["hook_decide_calls"] or r["policy_calls"] != r["decisions"]:
                     raise RuntimeError(f"decision accounting broke: {r['policy_calls']} {r['hook_decide_calls']} "
                                        f"{r['decisions']}")
+                if r["busy_stuck_mismatch"]:
+                    raise RuntimeError(f"reward stuck flag disagrees with info['stuck_busy_agents'] on "
+                                       f"{r['busy_stuck_mismatch']} steps (seed {r['seed']})")
                 replay.add(r)
                 new += len(r["A"])
                 ep_returns.append(r["ep_return"])
@@ -357,17 +381,10 @@ def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resu
             done_eps += n
             env_steps += n * cfg["steps"]
             if replay.size >= cfg["warmup"] and replay.size >= cfg["batch"]:
-                for _ in range(max(1, new // cfg["grad_per_new"])):
-                    loss = dqn_loss(online, target, replay.sample(cfg["batch"]))
-                    opt.zero_grad()
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(online.parameters(), cfg["clip_norm"])
-                    opt.step()
-                    grad_steps += 1
-                    loss_sum += float(loss.detach())
-                    loss_n += 1
-                    if grad_steps % cfg["target_sync"] == 0:
-                        target.load_state_dict(online.state_dict())
+                grad_steps, ls, ln = learn(online, target, opt, replay, cfg, max(1, new // cfg["grad_per_new"]),
+                                           grad_steps)
+                loss_sum += ls
+                loss_n += ln
             if done_eps % cfg["eval_every"] == 0 or done_eps == total:
                 sd = {k: v.detach().clone() for k, v in online.state_dict().items()}
                 evals = pool.map(run_episode, [task(s, 0.0, 0, False, sd) for s in cfg["eval_seeds"]], chunksize=1)
@@ -382,13 +399,14 @@ def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resu
                     gradient_steps=grad_steps,
                     rollout_steps_per_s=(interval_roll[0] / interval_roll[1]) if interval_roll[1] else None))
                 loss_sum, loss_n, ep_returns, interval_decisions, interval_roll = 0.0, 0, [], 0, [0.0, 0.0]
+                # order matters: checkpoint, log, then resume state (see the module docstring)
                 lr.save_checkpoint(ckpt_path, online.state_dict(), consts, cfg)
+                _atomic_text(log_path, json.dumps(dict(config=cfg, intervals=intervals, finished=finished,
+                                                        reward_used=reward_used), indent=2))
                 _atomic_torch(state_path, dict(
                     online=online.state_dict(), target=target.state_dict(), optimizer=opt.state_dict(),
                     torch_rng=torch.get_rng_state(), episodes_done=done_eps, gradient_steps=grad_steps,
                     env_steps=env_steps, wall_s=wall_prior + time.time() - t0))
-                _atomic_text(log_path, json.dumps(dict(config=cfg, intervals=intervals, finished=finished,
-                                                        reward_used=reward_used), indent=2))
                 iv = intervals[-1]
                 print(f"[rate {rate} seed {run_seed}] ep {done_eps}/{total} train_reward {iv['train_reward_mean']:.3f} "
                       f"eval_pick_rate {iv['eval_pick_rate_mean']:.2f} eps {iv['epsilon']:.2f} "

@@ -77,6 +77,8 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(d["vs_timeout"]["learned rate1 seed0"], [dict(point=1, **want)])
         self.assertAlmostEqual(want["mean"], (1.0 + 5.0) / 2)  # seed 0: 10-9, seed 1: 20-15
         self.assertAlmostEqual(d["vs_rule"]["learned rate1 seed0"][0]["mean"], (2.0 + 6.0) / 2)
+        # the mean cannot tell pairings apart; the sd can: by seed (2, 6) -> sqrt(8), by index (-4, 12) -> sqrt(128)
+        self.assertAlmostEqual(d["vs_rule"]["learned rate1 seed0"][0]["sd"], 8 ** 0.5)
         self.assertAlmostEqual(d["vs_timeout"]["rule 5/10/25"][0]["mean"], (-1.0 - 1.0) / 2)
 
     def test_grid_and_baselines(self):

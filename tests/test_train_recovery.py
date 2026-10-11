@@ -104,6 +104,24 @@ class TestRolloutReward(unittest.TestCase):
         hi = self.episode(dict(lr.reward_constants(), stuck_penalty=0.5))["R"].sum()
         self.assertLess(hi, lo)
 
+    # inject: charge call-human on the decision instead of the executed relocation, or attribute it to another agent
+    # (e.g. relocs.add(agent.id % 12 + 1)); the check is against the hook's own call_human_steps counter, not the trace
+    def test_call_human_charged_on_execution_to_the_deciding_agent(self):
+        for consts in (lr.reward_constants(), dict(line_reward=2.0, stuck_penalty=0.5, gamma=0.9, call_human_cost=7)):
+            res = self.episode(consts)
+            executed = sum(len(t["relocated"]) for t in res["trace"])
+            decided = sum(a == 4 for t in res["trace"] for _, _, a in t["decisions"])
+            self.assertGreater(executed, 0)
+            self.assertGreater(decided, executed)  # some calls fall back, so decision != execution is observable
+            self.assertEqual(executed * consts["call_human_cost"], res["call_human_steps"])
+            for t in res["trace"]:
+                last = {}
+                for aid, k, a in t["decisions"]:
+                    self.assertEqual(k, t["k"])
+                    last[aid] = a
+                for aid in t["relocated"]:
+                    self.assertEqual(last.get(aid), 4, f"step {t['k']}: agent {aid} relocated without calling")
+
     # inject: count one decision per call twice, or lose a transition at the episode end
     def test_decision_accounting_and_windows_tile(self):
         res = self.episode(lr.reward_constants())
@@ -162,6 +180,33 @@ class TestUnits(unittest.TestCase):
         done = batch[:5] + (torch.tensor([1.0]),)
         self.assertAlmostEqual(float(tr.dqn_loss(online, target, done).detach()), 0.5, places=6)  # y = 1.0 -> 0.5 * 1
 
+    # inject: never sync the target (drop the load_state_dict), or sync every step
+    def test_target_hard_sync_every_target_sync_steps(self):
+        torch.manual_seed(0)
+        online, target = lr.QNet(), lr.QNet()
+        target.load_state_dict(online.state_dict())
+        opt = torch.optim.Adam(online.parameters(), lr=1e-2)
+        replay = tr.Replay(64)
+        rng = np.random.default_rng(0)
+        n = 64
+        replay.add(dict(X=rng.normal(size=(n, 12)).astype(np.float32), X2=rng.normal(size=(n, 12)).astype(np.float32),
+                        A=rng.integers(0, 5, n), R=rng.normal(size=n), DISC=np.full(n, 0.9), DONE=np.zeros(n, bool)))
+        cfg = dict(batch=16, clip_norm=10.0, target_sync=3)
+
+        def same():
+            return all(torch.equal(a, b) for a, b in zip(online.state_dict().values(), target.state_dict().values()))
+
+        g, _, ln = tr.learn(online, target, opt, replay, cfg, 2, 0)
+        self.assertEqual((g, ln), (2, 2))
+        self.assertFalse(same())            # 2 steps: online moved, target not yet synced
+        g, _, _ = tr.learn(online, target, opt, replay, cfg, 1, g)
+        self.assertTrue(same())             # step 3: hard sync
+        g, _, _ = tr.learn(online, target, opt, replay, cfg, 1, g)
+        self.assertFalse(same())            # step 4: online moves again, target holds the step-3 weights
+        g, _, _ = tr.learn(online, target, opt, replay, cfg, 2, g)
+        self.assertEqual(g, 6)
+        self.assertTrue(same())             # step 6: synced again
+
     # inject: read SCHED_WORKERS before --workers, or skip the cap
     def test_worker_resolution(self):
         seen = []
@@ -202,6 +247,56 @@ class TestUnits(unittest.TestCase):
         self.assertEqual(out.returncode, 0)
         self.assertEqual((tr.DEFAULT_RATES, tr.DEFAULT_SEEDS), ("1,2,4", "0,1,2"))
         self.assertEqual(tr.parse_rates(tr.DEFAULT_RATES), [1, 2, 4])
+
+
+class _RecordingPool:
+    """In-process stand-in for the spawn pool: runs run_episode here, records every task list it was mapped."""
+    calls = []
+
+    def __init__(self, *a, **kw):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def map(self, fn, tasks, chunksize=1):
+        tasks = list(tasks)
+        _RecordingPool.calls.append(tasks)
+        return [fn(t) for t in tasks]
+
+
+class TestShippedWeights(unittest.TestCase):
+    # inject: roll out every iteration with the initial weights (ship sd once, outside the loop), or evaluate with the
+    # initial / pre-update weights instead of the current online net
+    def test_workers_get_current_online_weights(self):
+        _RecordingPool.calls = []
+        fake_ctx = mock.Mock()
+        fake_ctx.Pool = _RecordingPool
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=fake_ctx):
+            out = tr.train_run(1, 0, 100, None, True, 1, d, False)
+            self.assertEqual(out["status"], "finished")
+            ck = lr.load_checkpoint(Path(d) / "rate1_seed0" / "checkpoint.pt")
+        calls = _RecordingPool.calls
+        kinds = ["train" if c[0]["collect"] else "eval" for c in calls]
+        self.assertEqual(kinds, ["train", "eval", "train", "eval"])  # smoke: iteration = interval = 2 episodes
+
+        def eq(a, b):
+            return all(torch.equal(a[k], b[k]) for k in a)
+
+        for c in calls:  # one weight set per map call
+            self.assertTrue(all(eq(t["state_dict"], c[0]["state_dict"]) for t in c))
+        torch.manual_seed(0)
+        init = lr.QNet().state_dict()
+        sd = [c[0]["state_dict"] for c in calls]
+        self.assertTrue(eq(sd[0], init))
+        self.assertFalse(eq(sd[2], init))      # iteration 2 rolls out with the weights updated after iteration 1
+        self.assertTrue(eq(sd[2], sd[1]))      # ... the same ones the first eval used
+        self.assertFalse(eq(sd[3], sd[2]))     # the last eval uses the post-iteration-2 weights
+        self.assertTrue(eq(sd[3], ck["state_dict"]))  # ... which are the saved checkpoint
+        self.assertTrue(all(t["epsilon"] == 0.0 for t in calls[1] + calls[3]))
 
 
 class TestSmokeTrainAndResume(unittest.TestCase):
