@@ -1,0 +1,184 @@
+"""Learned recovery policy: a small Q-network over the RecoveryHook observation, choosing one of recovery.ACTIONS.
+
+PyTorch is imported here only; nothing else in the package imports this module (evaluate.py imports it lazily for
+`--recovery learned:<checkpoint>`), so torch is never loaded unless a learned policy is used.
+
+Seam (recovery.py and env.py are untouched): `make_learned_env` builds the env with the registered timeout policy and
+then, before reset, replaces the hook instance's `_recovery` with the learned policy. The hook reads `self._recovery`
+at every decision. This is the ONLY way a learned policy enters an env (trainer, held-out evaluator, evaluate.py).
+
+Reward (training only; the env reward is never read). Semi-MDP per agent: a transition starts at the agent's decision at
+step t and ends at its next decision at step t' (Delta = t' - t) or at episode end. The window is the half-open step
+range k in [t, t'): the step in which the decision is taken counts, the step of the next decision does not. Two decisions
+of one agent in the same step give Delta = 0 (no reward, discount 1). Per step k in the window:
+
+    r_k = LINE_REWARD * shelf_deliveries_k / n_agents        fleet deliveries, equal share (AGVs and pickers decide)
+          - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (info["stuck_busy_agents"] definition)
+          - STUCK_PENALTY * call_human_cost * [executed call-human relocation of the agent in step k]
+    R = sum_k GAMMA ** (k - t) * r_k,   target = R + GAMMA ** Delta * max_a Q_target(s', a)   (0 bootstrap at the end)
+
+Episode end is a time-limit truncation treated as terminal: the value of the last windows is biased low.
+"""
+import hashlib
+import os
+import random
+from pathlib import Path
+
+import torch
+from torch import nn
+
+from warehouse_rl.env import WarehouseEnv
+from warehouse_rl.recovery import ACTIONS, DEFAULT_CALL_HUMAN_COST, RecoveryHook, RecoveryPolicy
+
+FORMAT_VERSION = 1
+OBS_KEYS = RecoveryHook.OBS_KEYS
+# Fixed per-key divisors (not running statistics) so a checkpoint is portable; the loaded copy is the one used.
+OBS_SCALE = {"event_is_clash": 1.0, "stuck_count": 20.0, "fixing_clash": 4.0, "carrying": 1.0, "is_picker": 1.0,
+             "path_len": 50.0, "manhattan_to_target": 50.0, "nbr_n": 1.0, "nbr_e": 1.0, "nbr_s": 1.0, "nbr_w": 1.0,
+             "queue_pressure": 1.0}
+HIDDEN = 64
+
+# reward constants (stored in every checkpoint under "reward")
+LINE_REWARD = 1.0
+STUCK_PENALTY = 0.01  # per agent-step
+GAMMA = 0.99
+CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = STUCK_PENALTY * 60 = 0.6
+
+
+def reward_constants(call_human_cost=CALL_HUMAN_COST):
+    return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "gamma": GAMMA,
+            "call_human_cost": call_human_cost}
+
+
+def obs_to_tensor(obs, obs_scale=OBS_SCALE):
+    """obs dict -> float32 tensor (12,) in OBS_KEYS order, each value divided by obs_scale[key]. ValueError on missing
+    or extra keys."""
+    missing, extra = [k for k in OBS_KEYS if k not in obs], sorted(str(k) for k in obs if k not in OBS_KEYS)
+    if missing or extra:
+        raise ValueError(f"observation keys mismatch: missing {missing}, extra {extra}")
+    return torch.tensor([float(obs[k]) / float(obs_scale[k]) for k in OBS_KEYS], dtype=torch.float32)
+
+
+class QNet(nn.Module):
+    """12 -> 64 -> 64 -> 5, ReLU. Output index order == recovery.ACTIONS."""
+
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(nn.Linear(len(OBS_KEYS), HIDDEN), nn.ReLU(), nn.Linear(HIDDEN, HIDDEN), nn.ReLU(),
+                                 nn.Linear(HIDDEN, len(ACTIONS)))
+
+    def forward(self, x):
+        return self.net(x)
+
+
+def greedy_index(q):
+    """argmax of a 1-D tensor, ties to the lowest index (explicit, not torch.argmax's unspecified tie rule)."""
+    return int((q == q.max()).nonzero()[0])
+
+
+class LearnedRecovery(RecoveryPolicy):
+    """decide(obs) -> argmax Q (ties to the lowest index) when epsilon == 0 (the default); with epsilon > 0 a uniform
+    random action with probability epsilon from its own random.Random(seed) (training only)."""
+    name = "learned"
+
+    def __init__(self, net, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, checkpoint=None):
+        self.net = net.eval()
+        self.obs_scale = dict(obs_scale)
+        self.epsilon = epsilon
+        self.rng = random.Random(seed)
+        self.checkpoint = checkpoint  # the loaded checkpoint dict, if any (reward, train_config, ...)
+        self.calls = 0
+        self.last_x = None  # features and action index of the latest decision (read by the trainer's recorder)
+        self.last_idx = None
+
+    def decide(self, obs):
+        x = obs_to_tensor(obs, self.obs_scale)
+        if self.epsilon > 0.0 and self.rng.random() < self.epsilon:
+            idx = self.rng.randrange(len(ACTIONS))
+        else:
+            with torch.no_grad():
+                idx = greedy_index(self.net(x))
+        self.calls += 1
+        self.last_x, self.last_idx = x, idx
+        return ACTIONS[idx]
+
+    @classmethod
+    def from_state_dict(cls, state_dict, obs_scale=OBS_SCALE, epsilon=0.0, seed=0):
+        net = QNet()
+        net.load_state_dict(state_dict)
+        return cls(net, obs_scale, epsilon, seed)
+
+    @classmethod
+    def load(cls, path):
+        ck = load_checkpoint(path)
+        pol = cls.from_state_dict(ck["state_dict"], ck["obs_scale"])
+        pol.checkpoint = ck
+        return pol
+
+
+def save_checkpoint(path, state_dict, reward, train_config, obs_scale=OBS_SCALE):
+    """Atomic torch.save of tensors and Python primitives only (loadable with weights_only=True)."""
+    ck = {"state_dict": {k: v.detach().cpu().clone() for k, v in state_dict.items()}, "obs_keys": list(OBS_KEYS),
+          "actions": list(ACTIONS), "obs_scale": dict(obs_scale), "reward": dict(reward),
+          "train_config": train_config}
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(ck, tmp)
+    os.replace(tmp, path)
+
+
+def load_checkpoint(path):
+    ck = torch.load(path, map_location="cpu", weights_only=True)
+    for key in ("state_dict", "obs_keys", "actions", "obs_scale", "reward", "train_config"):
+        if key not in ck:
+            raise ValueError(f"{path}: checkpoint has no {key!r}")
+    if list(ck["obs_keys"]) != list(OBS_KEYS):
+        raise ValueError(f"{path}: obs_keys {ck['obs_keys']} != RecoveryHook.OBS_KEYS {list(OBS_KEYS)}")
+    if list(ck["actions"]) != list(ACTIONS):
+        raise ValueError(f"{path}: actions {ck['actions']} != recovery.ACTIONS {list(ACTIONS)}")
+    if set(ck["obs_scale"]) != set(OBS_KEYS):
+        raise ValueError(f"{path}: obs_scale keys {sorted(ck['obs_scale'])} != OBS_KEYS")
+    return ck
+
+
+def file_sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def learned_config(path):
+    """The recovery config of a checkpoint: {name, checkpoint (path as given), sha256, call_human_cost}."""
+    ck = load_checkpoint(path)
+    return {"name": "learned", "checkpoint": str(path), "sha256": file_sha256(path),
+            "call_human_cost": int(ck["reward"]["call_human_cost"])}
+
+
+def resolve_learned(path):
+    """(tag, config) for `--recovery learned:<path>`. Tag = 'learned-' + first 10 hex of the checkpoint sha256."""
+    cfg = learned_config(path)
+    return "learned-" + cfg["sha256"][:10], cfg
+
+
+def policy_from_config(cfg):
+    """Load the policy named by a learned recovery config; the file's sha256 must match the config's."""
+    if cfg.get("name") != "learned":
+        raise ValueError(f"not a learned recovery config: {cfg!r}")
+    sha = file_sha256(cfg["checkpoint"])
+    if sha != cfg["sha256"]:
+        raise ValueError(f"{cfg['checkpoint']}: sha256 {sha} != configured {cfg['sha256']}")
+    return LearnedRecovery.load(cfg["checkpoint"])
+
+
+def make_learned_env(env_id, steps, disturb, policy, call_human_cost, assign_care_for_agents=False):
+    """WarehouseEnv on the RecoveryHook whose decisions all go to `policy`. The single entry point of a learned policy
+    into an env: builds the hook with the registered timeout policy, then swaps the instance's `_recovery`, before
+    reset."""
+    torch.set_num_threads(1)  # one thread per worker process: N workers x N threads would oversubscribe the cores
+    env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
+                       recovery={"name": "timeout", "call_human_cost": call_human_cost})
+    hook = env.env
+    if not isinstance(hook, RecoveryHook):
+        raise AssertionError(f"expected a RecoveryHook, got {type(hook).__name__}")
+    hook._recovery = policy
+    if hook._recovery is not policy:
+        raise AssertionError("the learned policy swap did not take")
+    return env

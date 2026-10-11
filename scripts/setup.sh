@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 python3 -m venv .venv
 .venv/bin/pip install -q --upgrade pip setuptools wheel
 .venv/bin/pip install -q matplotlib "numpy<2" "gymnasium==0.29.1" "six==1.16.0" "pyglet==1.5.11" "networkx==3.2.1"
+.venv/bin/pip install -q "torch==2.14.1" --index-url https://download.pytorch.org/whl/cpu
 mkdir -p vendor
 [ -d vendor/tarware ]   || git clone -q https://github.com/uoe-agents/task-assignment-robotic-warehouse.git vendor/tarware
 [ -d vendor/pyastar2d ] || git clone -q https://github.com/raulsteleac/pyastar2d_TARWARE vendor/pyastar2d
