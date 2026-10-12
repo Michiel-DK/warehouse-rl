@@ -56,6 +56,16 @@ class TestDiscovery(unittest.TestCase):
             self.assertEqual(labels, ["learned rate1 seed0", "learned rate1 seed1", "learned rate2 seed0",
                                       "learned rate10 seed0", "rule 5/10/25", "timeout"])
 
+    # inject: drop the `finished is True` test, or key on the aborted file instead of it
+    def test_aborted_run_dir_is_excluded(self):
+        with tempfile.TemporaryDirectory() as t:
+            make_run(t, "rate1_seed0")
+            d = make_run(t, "rate1_seed1", finished=False, seed=1)
+            (d / "log.json").write_text(json.dumps({"finished": False, "aborted": {
+                "episode": 40, "eval_pick_rate_mean": 0.0, "reference": 50.0, "abort_below": 0.5}}))
+            self.assertTrue((d / "checkpoint.pt").exists())
+            self.assertEqual([(r, s) for r, s, _ in rh.finished_checkpoints(t)], [("1", 0)])
+
     # inject: require at least one checkpoint, or import torch with none
     def test_zero_checkpoints_only_rule_and_timeout(self):
         with tempfile.TemporaryDirectory() as t:
