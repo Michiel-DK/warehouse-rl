@@ -330,3 +330,25 @@ How to read the curve:
   - The rule's own deficit against `timeout`.
   - `timeout`'s residual above the floor: -0.25 (-2.28 to +1.78) at rate 1 and +1.19 (-0.85 to +3.22) at rate 2.
   - Above the env default, the headroom at plausible rates cannot be told apart from zero. A learned policy that beats `RuleRecovery` (the kill criterion) could do so just by waiting the way the default does.
+
+### Learned recovery trainer (`scripts/train_recovery.py`, format version 2, 2026-10-12)
+
+The learned policy (`src/warehouse_rl/learned_recovery.py`) is a semi-MDP double DQN over the `RecoveryHook` decision events on the medium map at breakdown rates 1, 2 and 4, with `StuckAwareCtaPolicy` as the dispatcher. The env reward is never read. The reward of a decision window is built from four terms:
+- the fleet's deliveries, shared equally over the agents;
+- minus `STUCK_PENALTY` (0.01) per busy, stuck agent-step;
+- minus `STUCK_PENALTY x CALL_HUMAN_COST` (60) per executed call-human;
+- minus `STUCK_PENALTY x ABANDON_COST` (15) per abandon decision, charged once at the decision. 15 is the timeout rule's own abandon threshold: abandoning costs what waiting out the timeout would have cost.
+
+The first real run (11 Oct, format version 1) had no abandon term, and its policy was degenerate. Greedy eval pick-rate never rose above 11.2 lines/h on run seed 0 (6400 episodes) or 4.0 on seed 1 (4880 episodes, killed), against 51.17 for `timeout` at rate 1. A 2-seed check with `scripts/evaluate.py --recovery learned:` (11 Oct, not kept on disk) found 0 deliveries and an abandon at almost every stuck event: abandoning cleared the stuck penalty and cost nothing. Those runs are kept, untracked, in `results/recovery_train_v1_degenerate/`.
+
+Version 2 changes four things:
+- **Abandon costs something**, as above. The value is in the config, in `log.json["reward_used"]` and in the checkpoint's reward dict.
+- **Exploration starts from the timeout rule.** With probability epsilon a training decision is the timeout rule's action (share `1 - random_share`, default `random_share` 0.1, `--random-share`) or a uniform random one. Otherwise it is greedy. Evaluation is greedy with no prior, so checkpoints evaluate exactly as before. Uniform random recovery gridlocks the medium map, so v1 almost never saw a delivery while it explored.
+- **A reference and an abort.** Each run first evaluates `TimeoutRecovery` on the 5 eval seeds through the same rollout path (`log.json["reference_pick_rate"]`). If an interval's greedy eval falls below `--abort-below` (default 0.5) x that reference, the run stops with `finished: false` and an `aborted` record, and the script exits 1. Aborted runs cannot be resumed, and `recovery_heldout.py` ignores them. `--abort-below 0` disables the check.
+- **Format version 2.** `load_checkpoint` refuses version-1 checkpoints, and `--resume` refuses a run directory with another version. `DEFAULT_EPISODES` is 3200, down from 6400. The v1 seed-0 run took 7145 s for 6400 episodes (1.12 s per episode, everything included), so 3200 episodes is about 1.0 h per run and about 9 h for the 9 runs. Rollouts alone ran at 539 env steps/s, which is 2970 s per run.
+
+**Warm start measured, 12 Oct (rate 1, run seed 0, temporary results dirs, not kept).** The timeout reference on the 5 eval seeds is 50.11 lines/h (48.96, 46.08, 46.08, 56.16, 53.28).
+- `--smoke`, 2 episodes: greedy eval 9.50, mean training return +4.31. The run aborts there.
+- A one-interval probe at the default settings with `--abort-below 0 --max-intervals 1 --workers 2`, 40 episodes in 56 s: greedy eval 3.17, mean training return +21.2. v1's first interval scored eval 10.66 and return -84.9.
+
+The training rollouts now collect positive return, so the behaviour policy delivers. The greedy net after 40 episodes does not yet: 3.17 is below 0.5 x 50.11. At the default `--abort-below 0.5`, the retrain will abort every run at its first interval. Choosing a different abort threshold or a grace period is the operator's call.

@@ -356,6 +356,20 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         outside the CI" can be passed by a policy that only learns to wait like `timeout`. The bar that
         separates a real gain is `timeout`, and its headroom at plausible rates is within noise. The kill
         criterion is unchanged; it is the operator's call.
+      **First run degenerate, trainer fixed (2026-10-11/12, S3D-WARM-START-RECOVERY).**
+      - 11 Oct, format v1, rate 1 (`results/recovery_train_v1_degenerate/rate1_seed{0,1}/log.json`, untracked):
+        greedy eval pick-rate never above 11.2 lines/h (seed 0, 6400 episodes, finished) and 4.0 (seed 1, 4880
+        episodes, killed after a ~7 h laptop stall), against 51.17 for `timeout` at rate 1. Training return rose
+        from -85 to -6 with no deliveries: abandon cleared the stuck penalty for free, so the net learned to abandon
+        every stuck task. Uniform random exploration gridlocked the map, so deliveries were almost never observed.
+        Seed 0 took 7145 s (1.12 s per episode), so 6400 x 9 runs was ~18 h, not the planned 9.6 h.
+      - 12 Oct fix (trainer and learned policy only; metric, `evaluate.py`, hook and env unchanged):
+        `ABANDON_COST` 15 stuck-steps per abandon decision; exploration follows `TimeoutRecovery` with
+        `random_share` 0.1 uniform random; a timeout reference per run and an abort below 0.5 x reference;
+        `FORMAT_VERSION` 2 (v1 checkpoints and run dirs refused); `DEFAULT_EPISODES` 3200 (~9 h for 9 runs).
+        Measured (README trainer section): reference 50.11; the greedy eval at episode 40 was 3.17 with training
+        return +21.2 (v1: 10.66 / -84.9). The default abort therefore fires at interval 1; the threshold is open
+        for the operator.
 - [ ] Re-dispatch on abandon is REQUIRED (use `StuckAwareCtaPolicy` as the dispatcher for all recovery runs);
       otherwise CTA re-attempts the abandoned task with the same robot
 - [x] Sweep the "call human" cost; report the curve, not one point
