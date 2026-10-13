@@ -356,7 +356,7 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         outside the CI" can be passed by a policy that only learns to wait like `timeout`. The bar that
         separates a real gain is `timeout`, and its headroom at plausible rates is within noise. The kill
         criterion is unchanged; it is the operator's call.
-      **First run degenerate, trainer fixed (2026-10-11/12, S3D-WARM-START-RECOVERY).**
+      **First run degenerate, trainer fixed (2026-10-11/13, S3D-WARM-START-RECOVERY).**
       - 11 Oct, format v1, rate 1 (`results/recovery_train_v1_degenerate/rate1_seed{0,1}/log.json`, untracked):
         greedy eval pick-rate never above 11.2 lines/h (seed 0, 6400 episodes, finished) and 4.0 (seed 1, 4880
         episodes, killed after a ~7 h laptop stall), against 51.17 for `timeout` at rate 1. Training return rose
@@ -367,9 +367,20 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         `ABANDON_COST` 15 stuck-steps per abandon decision; exploration follows `TimeoutRecovery` with
         `random_share` 0.1 uniform random; a timeout reference per run and an abort below 0.5 x reference;
         `FORMAT_VERSION` 2 (v1 checkpoints and run dirs refused); `DEFAULT_EPISODES` 3200 (~9 h for 9 runs).
-        Measured (README trainer section): reference 50.11; the greedy eval at episode 40 was 3.17 with training
-        return +21.2 (v1: 10.66 / -84.9). The default abort therefore fires at interval 1; the threshold is open
-        for the operator.
+        Review (laptop-scheduler `reports/wr-lane-s3d.md`, PR #8 refuted 2/3): greedy eval 3.17 at episode 40 vs
+        reference 50.11, and the net rerouted at ~95% of stuck events: `_reroute_stuck` resets the StuckCounter and
+        the stuck term only counted `count > 0`, so rerouting dodged the stuck penalty for free.
+      - 13 Oct operator decision: training reward = deliveries + the real action costs. `STUCK_PENALTY` 0.0;
+        `COST_UNIT` 0.01 keeps abandon at 0.15 and an executed call-human at 0.60; abort only from episode
+        `abort_after_frac` x episodes (default `EPS_FRAC`). Why: a delivery cannot be faked, every stuck measure the
+        recovery action can reset (reroute, back_off, abandon) is gameable, and `timeout` itself reroutes 70-90 times
+        per episode, so pricing reroute would punish the reference behaviour. Rejected:
+        - per-reroute cost: punishes the timeout rule's own behaviour;
+        - "busy and did not move" stuck term: back_off ping-pong dodges it, and it needs `recovery.py`;
+        - behaviour cloning on `timeout`: more code, and it does not remove the incentive.
+        Probe (README trainer section, `results/recovery_train_smoke/`): greedy eval 1.15 at episode 40 vs reference
+        50.11; the greedy net still reroutes at 1442 of 1461 and 1996 of 2016 stuck events (seeds 1000, 1001). The
+        retrain decides whether that changes once exploration has decayed.
 - [ ] Re-dispatch on abandon is REQUIRED (use `StuckAwareCtaPolicy` as the dispatcher for all recovery runs);
       otherwise CTA re-attempts the abandoned task with the same robot
 - [x] Sweep the "call human" cost; report the curve, not one point
