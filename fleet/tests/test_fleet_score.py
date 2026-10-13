@@ -279,6 +279,137 @@ class TestOutput(unittest.TestCase):
             self.assertEqual(bad.returncode, 2)
 
 
+# ------------------------------------------------------------------------------------------------ kafka source
+class _Msg:
+    def __init__(self, value, err=None):
+        self._v, self._e = value, err
+
+    def value(self):
+        return self._v
+
+    def error(self):
+        return self._e
+
+
+class _Consumer:
+    """consume() hands out the prepared batches, then empty lists. No commit(): calling it would raise AttributeError."""
+
+    def __init__(self, batches):
+        self.batches, self.closed = list(batches), False
+
+    def consume(self, num_messages=1, timeout=1.0):
+        return self.batches.pop(0) if self.batches else []
+
+    def close(self):
+        self.closed = True
+
+
+def _load_score_cli():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("fleet_score_cli", SCORE_CLI)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestKafkaSource(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+        z0 = robot(R, 30, stuck_run(3, 8, clash=True)) + robot("Z0-01", 30, stuck_run(10, 7), x=1)
+        z1 = robot("Z1-00", 30, stuck_run(4, 9, action="abandon"))
+        self.zones = {"0": z0, "1": z1}
+        self.eps = [ep(R, 3, 11, cause="traffic"), ep("Z1-00", 4, 13, cause="unknown", zone="1")]
+        data = self.dir / "run"
+        data.mkdir()
+        for z, lines in self.zones.items():
+            write_gz(data / f"zone{z}-000.jsonl.gz", lines)
+        self.data = data
+
+    def store_dir(self, name):
+        from fleet_analyser.store import JsonlStore
+
+        st = JsonlStore(self.dir / name)
+        st.insert("stuck_episodes", self.eps)
+        st.close()
+        return f"jsonl:{self.dir / name}"
+
+    def interleaved(self):
+        """All lines of both zones, the zones and robots interleaved line by line (as partitions would deliver them)."""
+        cols = [[ln for ln in lines] for lines in self.zones.values()]
+        out = []
+        for i in range(max(map(len, cols))):
+            out += [c[i] for c in cols if i < len(c)]
+        return out
+
+    def test_kafka_source_writes_the_same_score_json_as_the_file_source(self):
+        # inject: group the kafka lines by partition instead of by zone, or drop the last batch / the idle wait
+        cli = _load_score_cli()
+        lines = self.interleaved()
+        batches = [[_Msg(ln) for ln in lines[i:i + 7]] for i in range(0, len(lines), 7)]
+        batches[2] = [_Msg(None, err="boom"), _Msg(b"")] + batches[2]  # an error record and an empty value are skipped
+        consumer = _Consumer(batches)
+        seen = {}
+
+        def make(bootstrap, topic, group):
+            seen.update(bootstrap=bootstrap, topic=topic, group=group)
+            return consumer
+
+        file_out, kafka_out = self.dir / "file.json", self.dir / "kafka.json"
+        self.assertEqual(cli.main(["--run", "r", "--glob", str(self.data / "*.jsonl.gz"),
+                                   "--store", self.store_dir("a"), "--out", str(file_out)]), 0)
+        from unittest import mock
+
+        with mock.patch.object(cli.kafka_source, "make_consumer", make):
+            self.assertEqual(cli.main(["--run", "r", "--source", "kafka", "--bootstrap", "b:1", "--until-idle", "0",
+                                       "--store", self.store_dir("b"), "--out", str(kafka_out)]), 0)
+        self.assertEqual(seen, dict(bootstrap="b:1", topic="fleet.state", group="fleet-scorer"))
+        self.assertTrue(consumer.closed)
+        self.assertFalse(consumer.batches)
+        res = json.loads(file_out.read_bytes())
+        self.assertGreater(res["truth_episodes"], 1)
+        self.assertGreater(res["matched"], 0)
+        self.assertEqual(kafka_out.read_bytes(), file_out.read_bytes())
+
+    def test_kafka_lines_waits_for_until_idle_and_groups_by_zone(self):
+        # inject: return on the first empty poll, or key the zones by the partition
+        t = [0.0]
+
+        class Slow(_Consumer):
+            def consume(self, num_messages=1, timeout=1.0):
+                t[0] += 1
+                return super().consume(num_messages, timeout)
+
+        c = Slow([[_Msg(self.zones["0"][0])], [], [_Msg(self.zones["1"][0])]])
+        out = score.kafka_lines(c, 3, clock=lambda: t[0])
+        self.assertEqual({z: len(v) for z, v in out.items()}, {"0": 1, "1": 1})
+        self.assertGreaterEqual(t[0], 6)  # 3 polls with data/empty gaps, then 3 idle seconds after the last message
+
+    def test_kafka_source_needs_a_bootstrap_and_reports_a_missing_library_in_one_line(self):
+        # inject: let the kafka source fall through to the file branch, or print a traceback for a missing library
+        cli = _load_score_cli()
+        from unittest import mock
+        from fleet_analyser import kafka_source
+
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch("sys.stderr"):
+                cli.main(["--run", "r", "--source", "kafka"])
+        self.assertEqual(cm.exception.code, 2)
+
+        def boom(*a):
+            raise kafka_source.SourceError("needs the 'confluent-kafka' package")
+
+        import io
+        err = io.StringIO()
+        with mock.patch.object(cli.kafka_source, "make_consumer", boom), mock.patch("sys.stderr", err):
+            code = cli.main(["--run", "r", "--source", "kafka", "--bootstrap", "b:1", "--store", self.store_dir("c"),
+                             "--out", str(self.dir / "x.json")])
+        self.assertEqual(code, 2)
+        self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
+
+
 # ------------------------------------------------------------------------------------------------ isolation
 CUSTOM_WORDS = ("custom", "stuck_event", "clash_event", "recovery_action", "stuck_count")
 SOURCES = ["grade", "report", "alert", "ledger", "ingest", "detector", "decisions", "parse", "store", "kafka_source",

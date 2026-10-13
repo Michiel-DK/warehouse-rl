@@ -478,6 +478,19 @@ class TestSchema(unittest.TestCase):
         for table in set(self.schema) - set(chs.UPSERT_KEYS):
             self.assertNotIn("_first", self.schema[table]["cols"], table)
 
+    def test_results_table_layout(self):
+        # inject: drop the `text` column, make value Nullable, give results a _first column, or drop schema_version
+        r = self.schema["results"]
+        self.assertEqual(list(r["cols"]), ["kind", "run", "key", "value", "text", "loaded_at", "schema_version", "_ver"])
+        self.assertEqual((r["cols"]["value"], r["cols"]["text"]), ("Float64", "Nullable(String)"))
+        self.assertIn("DEFAULT", r["cols"]["schema_version"])
+        self.assertEqual((r["engine"], r["order"]), ("MergeTree", ["kind", "run", "key"]))
+        self.assertNotIn("results", chs.UPSERT_KEYS)
+        fake, st = fake_store(self)
+        st.insert("results", [dict(kind="score", run="r", key="a.b", value=1.5, text=None, loaded_at=1.0)])
+        self.assertEqual(st.select("results", {"run": "r"}),
+                         [dict(kind="score", run="r", key="a.b", value=1.5, text=None, loaded_at=1.0)])
+
     def test_state_sample_has_a_seven_day_ttl_and_only_it(self):
         # inject: change INTERVAL 7 DAY, or add a TTL to another table
         self.assertEqual(self.schema["state_sample"]["ttl"], "toDateTime(ts) + INTERVAL 7 DAY")
