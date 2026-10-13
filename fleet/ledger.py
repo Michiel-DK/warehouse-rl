@@ -1,9 +1,10 @@
 """Ingest ledger reports.
 
-Usage: python fleet/ledger.py status --run NAME [--store jsonl:DIR]
-       python fleet/ledger.py plot --run NAME [--store jsonl:DIR] [--out PATH]
+Usage: python fleet/ledger.py status --run NAME [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB]
+       python fleet/ledger.py plot --run NAME [--store ...] [--out PATH]   (--out is required for a clickhouse store)
 status prints bytes, messages, rates, backlog, rejects, duplicates, gaps, kept/dropped, coverage, files per status and
-decisions per kind and status. plot writes <store dir parent>/ledger.png (bytes per minute, backlog over time).
+decisions per kind and status, plus the kafka consumer lag for a kafka-source run. plot writes
+<store dir parent>/ledger.png (bytes per minute, backlog over time).
 """
 import argparse
 import sys
@@ -20,7 +21,8 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("command", choices=["status", "plot"])
     p.add_argument("--run", required=True)
-    p.add_argument("--store", default=None, help="jsonl:<dir> (default fleet/data/<run>/store)")
+    p.add_argument("--store", default=None,
+                   help="jsonl:<dir> (default fleet/data/<run>/store) or clickhouse://host[:port]/db")
     p.add_argument("--out", default=None, help="plot: output png (default <store dir parent>/ledger.png)")
     a = p.parse_args(argv)
     try:
@@ -30,6 +32,8 @@ def main(argv=None):
     if a.command == "status":
         print("\n".join(ledger.status_lines(st, a.run)))
     else:
+        if a.out is None and not hasattr(st, "dir"):
+            p.error("--out is required for plot with a non-file store")
         out = a.out or str(st.dir.parent / "ledger.png")
         print(ledger.plot(st, a.run, out))
     return 0

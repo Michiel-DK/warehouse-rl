@@ -42,12 +42,21 @@ def gz_lines(path):
 class FakeProducer:
     def __init__(self):
         self.events = []
+        self._callbacks = []
 
-    def produce(self, topic, key=None, value=None):
+    def produce(self, topic, key=None, value=None, on_delivery=None):
         self.events.append(("produce", topic, key, value))
+        self._callbacks.append(on_delivery)
+
+    def poll(self, timeout=0):
+        return 0
 
     def flush(self):
         self.events.append(("flush",))
+        for cb in self._callbacks:  # a broker that acknowledges everything at flush
+            cb(None, None)
+        self._callbacks = []
+        return 0
 
 
 class TestRotation(unittest.TestCase):

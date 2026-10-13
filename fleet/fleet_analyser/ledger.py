@@ -147,7 +147,8 @@ class IngestLedger:
             row = dict(run=self.run, source=self.source, minute=m, **{k: c[k] for k in _SUMS},
                        lag_p50_s=_pct(lags, 0.5), lag_p99_s=_pct(lags, 0.99), behind_emitter_s=c["behind"],
                        msgs_per_s=c["messages_parsed"] / active, mb_per_s=c["bytes_read_uncompressed"] / 1e6 / active,
-                       backlog_bytes=c["backlog"], written_at=now)
+                       backlog_bytes=None if self.source == "kafka" else c["backlog"], written_at=now)  # kafka: no bytes
+            # backlog; its consumer lag (messages) is in ingest_consumer_lag and printed by status_lines
             out.append({k: row[k] for k in COLUMNS})
         return out
 
@@ -199,6 +200,9 @@ def status_lines(store, run):
     if rows:
         latest = max(rows, key=lambda r: r["minute"])
         out.append(f"backlog_bytes (latest row): {latest['backlog_bytes']}")
+    for lag in store.select("ingest_consumer_lag", {"run": run}):
+        out.append(f"kafka consumer lag [{lag['topic']}]: {lag['lag_messages']} messages over {lag['partitions']} "
+                   f"partitions (at the last ledger write)")
     meta = store.select("ingest_runs", {"run": run})
     expected = meta[0].get("expected_messages") if meta else None
     cov = coverage(_sum(rows, "messages_accepted"), expected)

@@ -3,20 +3,22 @@
 One document per run, rewritten atomically (tmp file in the same directory + os.replace). Each zone reports a snapshot
 (see ZONE_FIELDS); totals are computed here as exact sums of the zones, never stored separately.
 Zone states: pending, running, complete, failed, not_started. Run status: running | complete | failed.
-A zone is `complete` only when messages == expected (robots * steps) and it did not fail; the run is `complete` only
-when every configured zone is.
+A zone is `complete` only when messages == expected (robots * steps), it did not fail and (kafka) no record failed
+delivery; the run is `complete` only when every configured zone is. Kafka zones also carry integer `delivered` and
+`delivery_failed` (delivered + delivery_failed == messages once the sink is closed); file zones carry null for both.
 """
 import json
 import os
 from pathlib import Path
 
 ZONE_FIELDS = ("messages", "bytes_uncompressed", "bytes_compressed", "files", "first_timestamp", "last_timestamp",
-               "steps_done", "robots", "agvs", "pickers")
+               "steps_done", "robots", "agvs", "pickers", "delivered", "delivery_failed")
 
 
 def _blank_zone():
     return dict(state="pending", messages=0, bytes_uncompressed=0, bytes_compressed=0, files=[], first_timestamp=None,
-                last_timestamp=None, steps_done=0, robots=None, agvs=None, pickers=None)
+                last_timestamp=None, steps_done=0, robots=None, agvs=None, pickers=None, delivered=None,
+                delivery_failed=None)
 
 
 class EmitLedger:
@@ -44,10 +46,12 @@ class EmitLedger:
 
     def _zone_doc(self, zone, z):
         expected = z["robots"] * self.steps if z["robots"] is not None else None
-        complete = expected is not None and z["messages"] == expected and z["state"] != "failed"
+        complete = expected is not None and z["messages"] == expected and z["state"] != "failed" \
+            and not (z["delivery_failed"] or 0) > 0  # kafka: a record that was not delivered is not emitted
         return dict(zone=zone, status=z["state"], seed=self.config["seed_base"] + zone, messages=z["messages"],
                     expected_messages=expected, complete=complete, bytes_uncompressed=z["bytes_uncompressed"],
-                    bytes_compressed=z["bytes_compressed"], robots=z["robots"], agvs=z["agvs"], pickers=z["pickers"],
+                    bytes_compressed=z["bytes_compressed"], delivered=z["delivered"],
+                    delivery_failed=z["delivery_failed"], robots=z["robots"], agvs=z["agvs"], pickers=z["pickers"],
                     steps=self.steps, steps_done=z["steps_done"], first_timestamp=z["first_timestamp"],
                     last_timestamp=z["last_timestamp"], files=z["files"])
 
@@ -64,7 +68,8 @@ class EmitLedger:
                      complete=total_expected is not None and messages == total_expected
                      and all(d["complete"] for d in zdocs),
                      bytes_uncompressed=sum(d["bytes_uncompressed"] for d in zdocs),
-                     bytes_compressed=total_of("bytes_compressed"), robots=total_of("robots"),
+                     bytes_compressed=total_of("bytes_compressed"), delivered=total_of("delivered"),
+                     delivery_failed=total_of("delivery_failed"), robots=total_of("robots"),
                      agvs=total_of("agvs"), pickers=total_of("pickers"),
                      steps_done=sum(d["steps_done"] for d in zdocs))
         doc = dict(status=status, config=self.config, zones=zdocs, total=total)
