@@ -114,8 +114,8 @@ class TestObservationKeys(unittest.TestCase):
         finally:
             env.close()
 
-    # inject: read the frozen mask one step late (`self._masks_at(max(self._t - 1, 0))[0]` in _blocker), or one step
-    # early, so the flag misses (or anticipates) the first step of a breakdown that starts after t = 0
+    # inject: read the frozen mask one step late (`self._masks_at(max(self._t - 1, 0))[0]` in _blocker), so the flag
+    # misses the first step of a breakdown that starts after t = 0 (one step early is caught by the countdown test)
     def test_flag_turns_on_at_the_first_frozen_step(self):
         env, h, rec = scenario(frozen=(2,), t0=3, steps=6)
         try:
