@@ -169,6 +169,26 @@ class TestObservationKeys(unittest.TestCase):
         finally:
             env.close()
 
+    # inject: take the first frozen occupant's run instead of the max (`left = left or run`), or stop at the first
+    # occupant found on the cell
+    def test_max_over_two_frozen_occupants_on_one_cell(self):
+        # an AGV and a picker share a cell (the loading handoff), so two occupants is a real case. The first in agent
+        # order (AGV 2) has the SHORTER run, so first-occupant logic returns 10, max returns 25.
+        env, h, rec = scenario(frozen=(), run=False)
+        try:
+            A = h.agents[0]
+            place(h, h.agents[5], B_CELL)  # picker 6 joins AGV 2 on A's next cell
+            place(h, h.agents[3], (3, 12))
+            h._recalc_grid()
+            h.frozen_schedule[1, 0:10] = True   # AGV 2: 10 steps
+            h.frozen_schedule[5, 0:25] = True   # picker 6: 25 steps
+            self.assertEqual([a.id for a in h.agents if (a.x, a.y) == B_CELL], [2, 6])
+            self.assertEqual(h._blocker(A), (1.0, 25.0))
+            h.frozen_schedule[1, 0:40] = True   # now the AGV has the longer run
+            self.assertEqual(h._blocker(A), (1.0, 40.0))
+        finally:
+            env.close()
+
     # inject: write env state (advance a stuck counter / the RNG) inside _blocker or _observe
     def test_observation_has_no_side_effects_and_draws_no_randomness(self):
         env, h, rec = scenario(run=False)
@@ -254,6 +274,31 @@ class TestInformedPolicy(unittest.TestCase):
             for o in table:
                 self.assertEqual(p.decide(o), tuned.decide(o), (mode, o))
         self.assertEqual({tuned.decide(o) for o in table}, {"wait", "reroute", "abandon"})
+
+    # inject: left mode fires on blocker_frozen alone (ignores blocker_frozen_left <= replan), flag mode falls back to
+    # the timeout when the flag is set, or either mode lets the flag override a clash
+    def test_random_table_with_blocker_frozen(self):
+        tuned = rc.TunedTimeoutRecovery(5, 15)
+        flag, left = rc.InformedTimeoutRecovery(5, 15, "flag"), rc.InformedTimeoutRecovery(5, 15, "left")
+        rng = random.Random(11)
+        table = random_table()
+        n_short = n_long = 0
+        for o in table:
+            o = dict(o, blocker_frozen=1.0, blocker_frozen_left=float(rng.randint(1, 40)))
+            fire = "reroute" if o["path_len"] > 0 else "abandon"
+            if o["event_is_clash"]:
+                self.assertEqual(flag.decide(o), "reroute", o)
+                self.assertEqual(left.decide(o), "reroute", o)
+                continue
+            self.assertEqual(flag.decide(o), fire, o)
+            if o["blocker_frozen_left"] > 5:
+                n_long += 1
+                self.assertEqual(left.decide(o), fire, o)
+            else:
+                n_short += 1
+                self.assertEqual(left.decide(o), tuned.decide(o), o)
+        self.assertGreater(n_short, 50)
+        self.assertGreater(n_long, 50)
 
     # inject: compare >= replan, compare against replan - stuck_count, or ignore blocker_frozen_left
     def test_left_mode_boundary(self):
@@ -401,6 +446,59 @@ class TestSweepE(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("[informed] 0 jobs to run (8 rows already on disk)", r.stdout)
             self.assertEqual(path.read_bytes(), before)
+
+    # inject: the informed plot recomputes timeout rows (or skips the timeout band), pairs the delta against anything
+    # but the stored timeout rows, or drops a config from either panel
+    def test_plot_reads_stored_timeout_rows(self):
+        import matplotlib
+        matplotlib.use("Agg")
+        from matplotlib.figure import Figure
+
+        spec = importlib.util.spec_from_file_location("recovery_sweep_plot", SWEEP)
+        rs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rs)
+        defn = rs.definition("informed", True)
+        sentinel = {(g, s): 700.0 + 10 * g + s for g in (1, 8) for s in (0, 1)}  # impossible pick-rates
+        base = [dict(point=g, config="timeout", seed=s, pick_rate=v) for (g, s), v in sentinel.items()]
+        rows = [dict(point=g, config=c, seed=s, pick_rate=50.0 + s, stuck_busy_agent_steps=1, abandoned_tasks=0)
+                for g in (1, 8) for c in ("informed flag", "informed left") for s in (0, 1)]
+        seen_sum, seen_delta, captured = [], [], {}
+        real_sum, real_delta, real_save = rs.ev.summarise, rs.ev.paired_delta, Figure.savefig
+
+        def spy_sum(xs):
+            seen_sum.append(list(xs))
+            return real_sum(xs)
+
+        def spy_delta(a, b):
+            seen_delta.append((list(a), list(b)))
+            return real_delta(a, b)
+
+        def spy_save(fig, *a, **k):
+            captured["labels"] = [ax.get_legend_handles_labels()[1] for ax in fig.axes]
+            return real_save(fig, *a, **k)
+
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "recovery").mkdir()
+            (d / "recovery" / "timeout_smoke.json").write_text(json.dumps(dict(definition={}, rows=base)))
+            rs.ev.summarise, rs.ev.paired_delta, Figure.savefig = spy_sum, spy_delta, spy_save
+            try:
+                rs.plot("informed", defn, rows, d / "out.png", d, True)
+            finally:
+                rs.ev.summarise, rs.ev.paired_delta, Figure.savefig = real_sum, real_delta, real_save
+            self.assertTrue((d / "out.png").exists())
+        for g in (1, 8):  # timeout band = the stored sentinel pick-rates, per rate
+            self.assertIn([sentinel[(g, 0)], sentinel[(g, 1)]], seen_sum)
+        for g in (1, 8):  # each config's delta is paired against the stored timeout rows of the same rate
+            stored = [r for r in base if r["point"] == g]
+            for c in ("informed flag", "informed left"):
+                mine = [r for r in rows if r["point"] == g and r["config"] == c]
+                self.assertIn((mine, stored), seen_delta)
+        self.assertEqual(len(seen_delta), 4)
+        self.assertIn("timeout", captured["labels"][0])
+        for c in ("informed flag", "informed left"):
+            self.assertIn(c, captured["labels"][0])
+            self.assertIn(c, captured["labels"][1])
 
     # inject: add e to the default --only
     def test_default_only_stays_a_to_d(self):
