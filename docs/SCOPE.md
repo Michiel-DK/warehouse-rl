@@ -242,9 +242,9 @@ the core is parameterised on that.
 | TA-RWARE installs and steps fast enough for CPU training | Verified 2026-10-09: ~1,700 steps/s small map, M1 Pro (heuristic incl. A*) | n/a |
 | Multiple envs can run in parallel | Known 2026-10-10: only via multiprocessing (class-level counters). Steps/s UNMEASURED | Train single-env, longer wall clock |
 | EPyMARL can wrap TA-RWARE with action masking | Known 2026-10-10: learner supports masks, Gymnasium adapter does not query the env. Custom adapter required | Option B (own masked IPPO) is now the default |
-| RL beats CTA on the medium map within ~5M env steps | Paper: IAC +24% after 10k episodes (~5M steps if 500 each). Plausible but UNVERIFIED for IPPO | Stop at end of S4, write up as negative result |
+| RL beats CTA on the medium map within ~5M env steps | Paper: IAC +24% after 10k episodes (~5M steps if 500 each). Plausible but UNVERIFIED for IPPO. Not tested: S4 deprioritised 2026-10-13 | Stop at end of S4, write up as negative result |
 | Disturbances produce a regime where stuck time matters | Measured 2026-10-10: half true. Stuck-busy time is >= 10% of robot-time at every rate including 0 (10.7% undisturbed, medium 8 AGV), but disturbances do not raise it; breakdowns add frozen time and stuck-timeout abandonments (2.87 to 9.90 per episode). Not failure: a 7.9% floor already at 3 robots (source UNVERIFIED, likely includes handoff waits) plus 6.4 points from density at 16 AGVs (README "Sprint 2 results") | Recovery is moot; S3 becomes the dispatcher under disturbance |
-| Learned recovery beats the hand-written rule | UNVERIFIED | The client takes the rule; write that up |
+| Learned recovery beats the hand-written rule | FALSE, kill criterion applied 2026-10-13: three attempts, none near `RuleRecovery` or `timeout` (best greedy eval of the own-credit pilot 35.14 once, 0.0 at its abort at episode 1600, vs timeout reference 50.11; README "Sprint 3 close-out") | Applied: the client takes the rule (`timeout`, the env default, since no rule beats it); written up in README "Sprint 3 close-out" |
 | Realistic demand dataset is usable | Footwear dataset is CC BY 4.0 but randomised; KIT instances better | Use a Zipf prior and say so |
 
 Known env facts (from source, `vendor/tarware/tarware/`): map sizes tiny (1x3), small (2x3), medium (2x5), large
@@ -321,13 +321,14 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
       recovers none of the breakdown loss (-21% to +3% of it; the only paired CI that excludes 0 is a loss at rate
       1). Open for the operator: whether recovery under congestion alone is still the Sprint 3 question.
 
-### Sprint 3: recovery policy (coding 2 days, training 2 days). Preferred.
+### Sprint 3: recovery policy (coding 2 days, training 2 days). Preferred. CLOSED 2026-10-13 (kill criterion applied)
 
-- [ ] `RecoveryHook`: subclass override of `resolve_stuck_agents` and the blocked-agent branch of
+- [x] `RecoveryHook`: subclass override of `resolve_stuck_agents` and the blocked-agent branch of
       `resolve_move_conflict`. On a stuck/clash event, build a local observation (stuck counter, fixing_clash,
       neighbour occupancy, own target distance, carrying flag, queue pressure) and ask `RecoveryPolicy.decide` for
       one of {wait, back off one cell, reroute via other lane, abandon and return shelf, call human}. "Call human"
       = instant unstick with a fixed time cost (parameter)
+      (2026-10-10, PR #5; `TimeoutRecovery` through it is bit-identical to the unhooked env.)
 - [x] `TimeoutRecovery`: reproduces the env default (5-step replan, 15-step abandon) through the hook. Regression test
       against the unhooked env on seeds 0-9
       (2026-10-10, README "Sprint 3 results", `results/recovery/timeout.json`: reproduces the S2 `stuck_aware_cta`
@@ -342,7 +343,7 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
       -0.77 / -0.82 / -0.38, every CI containing 0, and 3/6/15 at rate 4, -2.88 (-4.55 to -1.21). The faster rules
       are significantly worse at rates 1, 2 and 4. The best rule loses an extra 2% to 31% of the breakdown loss and
       recovers none of it.)
-- [ ] Learned: DQN or PPO over the local observation, trained under the disturbance layer at 3 failure rates,
+- [~] KILLED 2026-10-13. Learned: DQN or PPO over the local observation, trained under the disturbance layer at 3 failure rates,
       3 seeds each. Reward: delivered lines minus stuck-time penalty minus call-human cost
       **Headroom (2026-10-10, README "Sprint 3 results", for the operator's training decision).**
       - The frozen floor is a model: rate-0 pick-rate x AGV frozen share. Above that floor, the env default
@@ -394,23 +395,39 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         reference 50.11; reroute at 1401 of 1427 and 1956 of 1967 stuck events (seeds 1000, 1001). Reported, not
         judged: the one-run pilot (`wr-s3-recovery-pilot`, 3200 episodes with the abort grace) is read before the
         9-run retrain.
-- [ ] Re-dispatch on abandon is REQUIRED (use `StuckAwareCtaPolicy` as the dispatcher for all recovery runs);
+      **Killed (2026-10-13).** The own-credit pilot (`results/recovery_train_v2_pilot_aborted/rate1_seed0/log.json`)
+      aborted at episode 1600: greedy eval 0.0 vs reference 50.11. Its best interval was 35.14 at episode 240,
+      and no later interval was above 8.35. Training return 34.9 -> 4.28 as epsilon fell to 0.05, so the return was
+      the timeout prior's, not the net's. Decisions per episode rose from 564 to 1738. Kill criterion applied; the
+      9-run retrain is dropped. Curves: `results/recovery_train_curves.png` (`scripts/plot_recovery_train.py`).
+- [x] Re-dispatch on abandon is REQUIRED (use `StuckAwareCtaPolicy` as the dispatcher for all recovery runs);
       otherwise CTA re-attempts the abandoned task with the same robot
+      (held for every sweep a-e and every training run: `dispatcher: stuck_aware_cta` in every definition and config.)
 - [x] Sweep the "call human" cost; report the curve, not one point
       (2026-10-10, `call_human.json`, rule 3/6/15 with H = 14, cost 0/5/15/30/60. The cost is accounting only, so
       pick-rate is identical at every cost. Calling a human never beats `timeout`, even at cost 0: it is
       significantly below it at rates 1, 2 and 4. Against the same rule without a human, it helps only at rate
       1, +1.78 (+0.04 to +3.51). Valuing a human-step as an AGV-step, it stops paying above about 66 steps per
       call. 3/6/15 was the default `--best-rule`, not the best rule found.)
-- [ ] Held-out evaluation: train at 3 failure rates, evaluate at rates between and beyond
-- [ ] Report: stuck-time and pick-rate vs failure rate and vs density, three recovery policies, CI over seeds
+- [~] DROPPED 2026-10-13 with the learned policy. Held-out evaluation: train at 3 failure rates, evaluate at
+      rates between and beyond (`scripts/recovery_heldout.py` exists, never run on a real checkpoint)
+- [x] S3E informed recovery (added 2026-10-13, Direction change): `blocker_frozen` / `blocker_frozen_left`,
+      `InformedTimeoutRecovery`, sweep e (`results/recovery/informed.json`, 30 seeds per (rate, policy), README
+      "Sprint 3 close-out"). No paired CI excludes 0 at any rate for either mode. Best at rate 8: informed left,
+      +0.43 (-0.20 to +1.07), 2% of the 20.50 lines/h loss. Both modes reroute on nearly every frozen-blocker
+      decision, and abandons are unchanged, so this measured reroute-at-once, not abandon-at-once. The learned path does not reopen.
+- [~] PARTIAL. Report: stuck-time and pick-rate vs failure rate and vs density, three recovery policies, CI over
+      seeds. Done vs failure rate (README Sprint 3 tables a-e, close-out). Not done: recovery vs density; density is
+      measured only for the dispatcher (Sprint 2).
 
 Exit: curves. Kill: learned recovery does not beat `RuleRecovery` outside the CI; the client takes the rule, write
-that up.
+that up. **Applied 2026-10-13:** README "Sprint 3 close-out" is the write-up. The rule the client takes is the env
+default `timeout` (5/15), because no tuned, rule, call-human or informed variant beats it outside the CI.
 
-### Sprint 4: dispatcher reproduction (optional, coding 2 days, training 2 days)
+### Sprint 4: dispatcher reproduction (optional, coding 2 days, training 2 days). DEPRIORITISED 2026-10-13
 
-Only if S3 produced a result and there is time, or if the S2 decision point kills recovery.
+Deprioritised behind Sprint 5 (stuck analyser) by the Direction change (2026-10-13). Not scheduled. The original
+gate: only if S3 produced a result and there is time, or if the S2 decision point kills recovery.
 
 - [ ] Compact masked IPPO in PyTorch, shared actor-critic with agent-type embedding, multiprocessing envs. EPyMARL
       only if the custom adapter is under a day
@@ -420,10 +437,17 @@ Only if S3 produced a result and there is time, or if the S2 decision point kill
 Exit: table RL vs CTA vs random, medium map, CI. Either direction is a valid exit. Kill: after 5M steps and one
 shaping pass, RL is within the CI of CTA.
 
-### Sprint 5: write-up (2 days)
+### Sprint 5: stuck analyser (new direction, 2026-10-13)
 
-One page: the collapse curves, the ablation, the recovery comparison, honest caveats. Negative or positive. Candidate
-for the portfolio showcase set. Caveats to state: relative results only; grid moves, no kinematics, no batteries,
+A diagnostic tool for a real AGV fleet, per "Direction change (2026-10-13)": where and why robots get stuck, what
+precedes a manual reset, and which resets were avoidable. Built against synthetic VDA 5050-shaped logs from this
+simulator; the real value needs a client log sample (open operator item). Brief and sprint map S5-S9:
+laptop-scheduler `jobs/wr-s5-stuck-analyser.md`. Code under `fleet/`.
+
+### Write-up (formerly Sprint 5)
+
+Folded into the README: the Sprint 2 collapse curves and the Sprint 3 recovery comparison and close-out. A one-page
+version is still a candidate for the portfolio showcase set. Caveats to state: relative results only; grid moves, no kinematics, no batteries,
 unlimited shelf capacity; "stuck" is a freeze (symptom, not cause); failure rates are swept, not measured.
 
 ### Dropped or conditional
