@@ -119,7 +119,7 @@ class Runner:
         finally:
             st.close()
         bench.cleanup_run_dir(d)
-        return bench.batch_metrics(zones, steps, emit_doc, rows, expected, emit_wall, ingest_wall, grades, score)
+        return bench.batch_metrics(emit_doc, rows, expected, emit_wall, ingest_wall, grades, score)
 
     def ensure_topic(self, topic, partitions=4):
         from confluent_kafka.admin import AdminClient, NewTopic

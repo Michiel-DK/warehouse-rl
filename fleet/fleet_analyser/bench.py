@@ -251,12 +251,15 @@ def grade_counts(decisions):
     return out
 
 
-def batch_metrics(zones, steps, emit_doc, ingest_rows, expected_messages, emit_wall_s, ingest_wall_s, grades, score):
+def batch_metrics(emit_doc, ingest_rows, expected_messages, emit_wall_s, ingest_wall_s, grades, score):
     """The `batch` object. Throughput columns are the ingest's: bytes read and messages parsed (ingest ledger rows) over
-    the ingest wall time. messages_expected and robots come from the emit ledger, coverage = accepted / expected."""
+    the ingest wall time. zones, steps, robots and messages_expected come from the emit ledger, coverage = accepted /
+    expected."""
     total, wall = emit_doc["total"], max(ingest_wall_s, 1e-9)
+    steps = emit_doc["zones"][0]["steps"]
     return dict(
-        zones=zones, steps=steps, robots=emit_doc["zones"][0]["robots"], simulated_hours=steps * STEP_S / 3600,
+        zones=len(emit_doc["zones"]), steps=steps, robots=emit_doc["zones"][0]["robots"],
+        simulated_hours=steps * STEP_S / 3600,
         messages_expected=total["expected_messages"], emit_wall_s=emit_wall_s, ingest_wall_s=ingest_wall_s,
         gb_per_min_uncompressed=_sum(ingest_rows, "bytes_read_uncompressed") / 1e9 / (wall / 60),
         gb_per_min_compressed=_sum(ingest_rows, "bytes_read_compressed") / 1e9 / (wall / 60),

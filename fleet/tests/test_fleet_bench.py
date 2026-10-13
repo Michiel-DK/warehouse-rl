@@ -234,12 +234,14 @@ class TestDefinitions(unittest.TestCase):
         # inject: drop the results/ check
         target = ROOT / "results" / "fleet" / "smoke-test-never-written.json"
         r = FakeRunner()
-        code, err = run_main(["--smoke", "--workers", "8", "--out", str(target)], runner=r)
+        writes = []
+        with mock.patch.object(bench, "atomic_write_json", lambda path, doc: writes.append(path)):  # a regression must not write
+            code, err = run_main(["--smoke", "--workers", "8", "--out", str(target)], runner=r)
         self.assertEqual(code, 2)
         self.assertIn("results/", err)
         self.assertEqual(len(err.strip().splitlines()), 1)
         self.assertFalse(target.exists())
-        self.assertEqual(r.calls, [])
+        self.assertEqual((writes, r.calls), ([], []))
 
     def test_smoke_defaults_to_a_tmp_path(self):
         # inject: default the smoke output to results/fleet/benchmark.json
@@ -263,13 +265,13 @@ class TestOutput(unittest.TestCase):
         self.assertEqual(set(doc["live"]), set(bench.LIVE_KEYS))
 
     def test_batch_metrics_come_from_the_ledgers(self):
-        # inject: use the emit ledger's bytes for GB/min, or divide by the emit wall instead of the ingest wall
-        emit = {"total": {"expected_messages": 7200}, "zones": [{"robots": 12}]}
+        # inject: use the compressed bytes for the uncompressed GB/min, or read zones / steps from a constant, not the emit ledger
+        emit = {"total": {"expected_messages": 7200}, "zones": [{"robots": 12, "steps": 300}] * 2}
         rows = [dict(bytes_read_uncompressed=3 * 10 ** 9, bytes_read_compressed=3 * 10 ** 8, messages_parsed=7000,
                      messages_accepted=6000),
                 dict(bytes_read_uncompressed=3 * 10 ** 9, bytes_read_compressed=3 * 10 ** 8, messages_parsed=200,
                      messages_accepted=200)]
-        m = bench.batch_metrics(2, 300, emit, rows, 7200, 5.0, 120.0, {"stuck_cause": {"open": 1}}, {"precision": 0.5})
+        m = bench.batch_metrics(emit, rows, 7200, 5.0, 120.0, {"stuck_cause": {"open": 1}}, {"precision": 0.5})
         self.assertEqual(set(m), set(bench.BATCH_KEYS))
         self.assertAlmostEqual(m["gb_per_min_uncompressed"], 3.0)  # 6 GB in 2 minutes
         self.assertAlmostEqual(m["gb_per_min_compressed"], 0.3)
