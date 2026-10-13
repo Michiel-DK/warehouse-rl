@@ -46,14 +46,17 @@ from torch import nn
 from warehouse_rl.env import WarehouseEnv
 from warehouse_rl.recovery import ACTIONS, DEFAULT_CALL_HUMAN_COST, RecoveryHook, RecoveryPolicy
 
+# 3: the observation has 14 keys (blocker_frozen, blocker_frozen_left appended); v2 checkpoints were trained on the
+# 12-key observation and are refused.
 # 2: abandon costs ABANDON_COST stuck-steps and checkpoints carry a top-level "version". v1 checkpoints were trained with
 # a zero-cost abandon (the first real run learned to abandon every stuck task) and are refused by load_checkpoint.
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 OBS_KEYS = RecoveryHook.OBS_KEYS
 # Fixed per-key divisors (not running statistics) so a checkpoint is portable; the loaded copy is the one used.
 OBS_SCALE = {"event_is_clash": 1.0, "stuck_count": 20.0, "fixing_clash": 4.0, "carrying": 1.0, "is_picker": 1.0,
              "path_len": 50.0, "manhattan_to_target": 50.0, "nbr_n": 1.0, "nbr_e": 1.0, "nbr_s": 1.0, "nbr_w": 1.0,
-             "queue_pressure": 1.0}
+             "queue_pressure": 1.0,
+             "blocker_frozen": 1.0, "blocker_frozen_left": 50.0}  # _left: a breakdown lasts at most ~60 steps
 HIDDEN = 64
 
 # reward constants (stored in every checkpoint under "reward")
@@ -74,7 +77,7 @@ def reward_constants(call_human_cost=CALL_HUMAN_COST, abandon_cost=ABANDON_COST)
 
 
 def obs_to_tensor(obs, obs_scale=OBS_SCALE):
-    """obs dict -> float32 tensor (12,) in OBS_KEYS order, each value divided by obs_scale[key]. ValueError on missing
+    """obs dict -> float32 tensor (len(OBS_KEYS),) in OBS_KEYS order, each value divided by obs_scale[key]. ValueError on missing
     or extra keys."""
     missing, extra = [k for k in OBS_KEYS if k not in obs], sorted(str(k) for k in obs if k not in OBS_KEYS)
     if missing or extra:
@@ -83,7 +86,7 @@ def obs_to_tensor(obs, obs_scale=OBS_SCALE):
 
 
 class QNet(nn.Module):
-    """12 -> 64 -> 64 -> 5, ReLU. Output index order == recovery.ACTIONS."""
+    """len(OBS_KEYS) (14) -> 64 -> 64 -> 5, ReLU. Output index order == recovery.ACTIONS."""
 
     def __init__(self):
         super().__init__()
@@ -164,8 +167,9 @@ def save_checkpoint(path, state_dict, reward, train_config, obs_scale=OBS_SCALE)
 def load_checkpoint(path):
     ck = torch.load(path, map_location="cpu", weights_only=True)
     if ck.get("version") != FORMAT_VERSION:
-        raise ValueError(f"{path}: checkpoint version {ck.get('version')!r} != {FORMAT_VERSION}; v1 checkpoints were "
-                         f"trained with the zero-cost abandon reward and must be retrained")
+        raise ValueError(f"{path}: checkpoint version {ck.get('version')!r} != required version {FORMAT_VERSION}; v1 "
+                         f"checkpoints used the zero-cost abandon reward and v2 checkpoints were trained on the 12-key "
+                         f"observation (v3 has 14 keys); retrain needed")
     for key in ("state_dict", "obs_keys", "actions", "obs_scale", "reward", "train_config"):
         if key not in ck:
             raise ValueError(f"{path}: checkpoint has no {key!r}")

@@ -36,16 +36,16 @@ def make_ckpt(path, seed=0, call_human_cost=60, **overrides):
 def random_obs(rng):
     vals = [rng.choice([0.0, 1.0]), rng.randint(0, 30), rng.randint(0, 4), rng.choice([0.0, 1.0]),
             rng.choice([0.0, 1.0]), rng.randint(0, 60), rng.randint(0, 60), *[rng.choice([0.0, 1.0]) for _ in range(4)],
-            rng.random()]
+            rng.random(), rng.choice([0.0, 1.0]), rng.randint(0, 40)]
     return dict(zip(RecoveryHook.OBS_KEYS, (float(v) for v in vals)))
 
 
 class TestObsToTensor(unittest.TestCase):
-    # inject: return a list/float64 tensor, a (1, 12) shape, or reorder OBS_KEYS
+    # inject: return a list/float64 tensor, a (1, 14) shape, or reorder OBS_KEYS
     def test_shape_dtype_order(self):
         obs = {k: float(i + 1) for i, k in enumerate(RecoveryHook.OBS_KEYS)}
         x = lr.obs_to_tensor(obs)
-        self.assertEqual(tuple(x.shape), (12,))
+        self.assertEqual(tuple(x.shape), (len(RecoveryHook.OBS_KEYS),))
         self.assertEqual(x.dtype, torch.float32)
         for i, k in enumerate(RecoveryHook.OBS_KEYS):
             self.assertAlmostEqual(float(x[i]), (i + 1) / lr.OBS_SCALE[k], places=6, msg=k)
@@ -246,11 +246,11 @@ class TestCheckpoint(unittest.TestCase):
 
     # inject: accept a checkpoint with no / another version, or save without the version
     def test_v1_checkpoint_refused(self):
-        good = make_ckpt(self.dir / "v2.pt")
+        good = make_ckpt(self.dir / "v3.pt")
         ck = torch.load(good, weights_only=True)
-        self.assertEqual(ck["version"], lr.FORMAT_VERSION == 2 and 2)
+        self.assertEqual(ck["version"], lr.FORMAT_VERSION)
         v1 = {k: v for k, v in ck.items() if k != "version"}  # the v1 shape: no version key
-        for name, bad in (("nov.pt", v1), ("v1.pt", dict(v1, version=1)), ("v3.pt", dict(v1, version=3))):
+        for name, bad in (("nov.pt", v1), ("v1.pt", dict(v1, version=1)), ("v2.pt", dict(v1, version=2))):
             torch.save(bad, self.dir / name)
             for fn in (lr.load_checkpoint, lr.LearnedRecovery.load, lr.learned_config):
                 with self.assertRaises(ValueError) as cm:

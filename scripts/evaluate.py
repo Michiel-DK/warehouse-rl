@@ -1,6 +1,6 @@
 """Evaluate a policy over many seeds and step budgets; resumable, multiprocess, one env per process.
 
-Usage: python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-29 --steps 500,2000 [--workers N] [--results-dir DIR] [--disturb PRESET|JSON] [--recovery timeout|'{"name": "tuned_timeout", "replan": R, "abandon": A, "call_human_cost": C}' | '{"name": "rule", "back_off_after": B, "reroute_after": R, "abandon_after": A, "call_human_after": H|null, "call_human_cost": C}']
+Usage: python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-29 --steps 500,2000 [--workers N] [--results-dir DIR] [--disturb PRESET|JSON] [--recovery timeout|'{"name": "tuned_timeout", "replan": R, "abandon": A, "call_human_cost": C}' | '{"name": "informed_timeout"|"informed_timeout_left", "replan": 5, "abandon": 15}' | '{"name": "rule", "back_off_after": B, "reroute_after": R, "abandon_after": A, "call_human_after": H|null, "call_human_cost": C}']
 Writes <results-dir>/<policy>_<env>_<steps>.json after every finished seed (parent process only, atomic).
 --disturb (default none) runs under the disturbance layer (warehouse_rl.disturb) and writes
 <policy>_<env>_<steps>_<tag>.json instead, storing the config; the undisturbed filename is unchanged. An existing file
@@ -196,7 +196,8 @@ DISTURB_SUMS = dict(stuck_agent_steps="stuck_agents", stuck_busy_agent_steps="st
 
 # recovery rows only (kept apart from DISTURB_SUMS so non-recovery disturbed runs never need these info keys)
 RECOVERY_SUMS = ("recovery_wait", "recovery_back_off", "recovery_reroute", "recovery_abandon", "recovery_call_human",
-                 "recovery_stuck_events", "recovery_clash_events", "recovery_fallbacks", "call_human_steps")
+                 "recovery_stuck_events", "recovery_clash_events", "recovery_fallbacks", "call_human_steps",
+                 "decisions_while_blocker_frozen", "reroutes_while_blocker_frozen")
 
 
 def _job(args):
