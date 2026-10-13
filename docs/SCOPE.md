@@ -435,6 +435,29 @@ unlimited shelf capacity; "stuck" is a freeze (symptom, not cause); failure rate
 - Agent-exam packaging: after S5, if the harness is clean.
 - Hybrid RL-steers-planner: narrowed to a learned yield/replan trigger inside `resolve_move_conflict`, after S3.
 
+## Direction change (2026-10-13)
+
+Learned recovery hit its kill criterion three times (lane D reports; own-credit pilot aborted at episode 1600 with
+eval 0.0 against a timeout reference of 50.1). Two of the failures were reward loopholes (abandon, then reroute reset
+the StuckCounter the penalty was keyed on); the third was an honest reward with no usable signal: a stuck robot that
+sees only its four neighbour cells cannot tell a two-step hiccup from a 50-step breakdown, so wait and reroute look
+alike. The headroom table from `results/recovery/*.json` says the prize at rates 1-2 is below the 30-seed noise and
+the prize at rate 8 (about a quarter of the lost output on a back-of-envelope) is untouched by every rule family.
+
+Decisions:
+- **S3E, informed recovery (lane E):** give the stuck robot the one fact every real fleet manager has, "the thing in
+  front of me is a faulted robot" (`blocker_frozen`), plus an optimistic look-ahead variant (`blocker_frozen_left`),
+  and measure a hand-written informed timeout rule against `timeout` at rates 1/2/4/8, 30 seeds, paired. This is the
+  measured version of the claim "the fix is fault information at fleet level". The learned path reopens only if
+  this shows a prize above the CI.
+- **Learned recovery training, held-out eval and its README item: dropped.** The negative result is written up in
+  the Sprint 3 close-out with the curves (`results/recovery_train_v1_degenerate`, `results/recovery_train_smoke`,
+  `results/recovery_train_v2_pilot_aborted`).
+- **Sprint 4 (learned task assignment) deprioritised** behind a new direction, **Sprint 5: stuck analyser**, a
+  diagnostic tool for a real AGV fleet (where and why robots get stuck, what precedes a manual reset, avoidable
+  resets). Buildable against synthetic VDA 5050-shaped logs emitted by this simulator; the real value needs a client
+  log sample, which is the open operator item. Placeholder brief: laptop-scheduler `jobs/wr-s5-stuck-analyser-scoping.md`.
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are
