@@ -36,7 +36,10 @@ ACTIONS = ("wait", "back_off", "reroute", "abandon", "call_human")
 DEFAULT_CALL_HUMAN_COST = 60
 RECOVERY_INFO_KEYS = ("recovery_wait", "recovery_back_off", "recovery_reroute", "recovery_abandon",
                       "recovery_call_human", "recovery_stuck_events", "recovery_clash_events", "recovery_fallbacks",
-                      "call_human_steps")
+                      "call_human_steps", "decisions_while_blocker_frozen", "reroutes_while_blocker_frozen")
+
+
+INFORMED_NAMES = {"informed_timeout": "flag", "informed_timeout_left": "left"}
 
 
 def _is_int(v):
@@ -71,6 +74,33 @@ class TunedTimeoutRecovery(RecoveryPolicy):
         if c > self.abandon:
             return "abandon"
         return "wait"
+
+
+class InformedTimeoutRecovery(TunedTimeoutRecovery):
+    """TunedTimeout plus the fleet-manager fact "the robot on my next cell is frozen" (obs blocker_frozen).
+
+    Clash -> reroute (both modes). mode "flag": blocker_frozen == 1 -> reroute if path_len > 0 else abandon, at any
+    stuck_count (a frozen blocker will not move by itself, so waiting out the timeout is pointless). mode "left": the
+    same, but only when blocker_frozen == 1 and blocker_frozen_left > replan (literal comparison): a blocker that clears
+    before the timeout would have fired is just waited out. In every other case the decision is exactly
+    TunedTimeoutRecovery.decide. blocker_frozen_left reads the remaining length of the blocker's frozen run from the
+    disturbance schedule: optimistic look-ahead ("the fleet manager knows the repair time"); "flag" uses only the
+    current step. Stateless and pure; reads the obs only."""
+    MODES = ("flag", "left")
+
+    def __init__(self, replan=5, abandon=15, mode="flag"):
+        super().__init__(replan, abandon)
+        if mode not in self.MODES:
+            raise ValueError(f"informed recovery: mode must be one of {list(self.MODES)}, got {mode!r}")
+        self.mode = mode
+        self.name = "informed_timeout" if mode == "flag" else "informed_timeout_left"
+
+    def decide(self, obs):
+        if obs["event_is_clash"]:
+            return "reroute"
+        if obs["blocker_frozen"] == 1 and (self.mode == "flag" or obs["blocker_frozen_left"] > self.replan):
+            return "reroute" if obs["path_len"] > 0 else "abandon"
+        return super().decide(obs)
 
 
 class TimeoutRecovery(TunedTimeoutRecovery):
@@ -141,12 +171,12 @@ def normalise_recovery(config):
     name = config.get("name")
     if name == "timeout":
         allowed = {"name", "call_human_cost"}
-    elif name == "tuned_timeout":
+    elif name == "tuned_timeout" or name in INFORMED_NAMES:
         allowed = {"name", "replan", "abandon", "call_human_cost"}
     elif name == "rule":
         allowed = {"name", "back_off_after", "reroute_after", "abandon_after", "call_human_after", "call_human_cost"}
     else:
-        raise ValueError(f"unknown recovery name {name!r}; known: ['timeout', 'tuned_timeout', 'rule']")
+        raise ValueError(f"unknown recovery name {name!r}; known: ['timeout', 'tuned_timeout', 'rule', 'informed_timeout', 'informed_timeout_left']")
     unknown = set(config) - allowed
     if unknown:
         raise ValueError(f"recovery {name}: unknown keys {sorted(map(str, unknown))}")
@@ -160,6 +190,10 @@ def normalise_recovery(config):
             raise ValueError(f"recovery tuned_timeout: missing keys {sorted(missing)}")
         TunedTimeoutRecovery(config["replan"], config["abandon"])  # validates
         out["replan"], out["abandon"] = config["replan"], config["abandon"]
+    if name in INFORMED_NAMES:
+        replan, abandon = config.get("replan", 5), config.get("abandon", 15)
+        InformedTimeoutRecovery(replan, abandon, INFORMED_NAMES[name])  # validates
+        out["replan"], out["abandon"] = replan, abandon
     if name == "rule":
         missing = {"back_off_after", "reroute_after", "abandon_after"} - set(config)
         if missing:
@@ -178,6 +212,8 @@ def make_recovery(config):
         return TimeoutRecovery()
     if cfg["name"] == "rule":
         return RuleRecovery(cfg["back_off_after"], cfg["reroute_after"], cfg["abandon_after"], cfg["call_human_after"])
+    if cfg["name"] in INFORMED_NAMES:
+        return InformedTimeoutRecovery(cfg["replan"], cfg["abandon"], INFORMED_NAMES[cfg["name"]])
     return TunedTimeoutRecovery(cfg["replan"], cfg["abandon"])
 
 
@@ -228,6 +264,34 @@ class _HookedVendor(Warehouse):
             return False
         return cell not in self._obstacles_now()
 
+    def _blocker(self, agent):
+        """(blocker_frozen, blocker_frozen_left) for the step about to execute. Read-only, no randomness.
+
+        Next cell: agent.path[0] (vendor warehouse.py:370/380 steer toward path[0]; _execute_forward, W:516-519, moves
+        and does path = path[1:], so path[0] is the NEXT cell and path[-1] the target). find_path can keep the start
+        cell (W:307, picker start_fix), so if path[0] is the agent's own cell, path[1] is used. No next cell -> (0, 0).
+        Occupant: any OTHER agent (AGV or picker, busy or not: resolve_stuck_agents hides frozen agents' busy flag)
+        on that cell. frozen: frozen_now() (self._t is the executing step during resolve_*). left: consecutive True
+        entries of frozen_schedule[id - 1, _t:] from _t, max over frozen occupants. LOOK-AHEAD (optimistic)."""
+        path = agent.path
+        if path and tuple(path[0]) == (agent.x, agent.y):
+            path = path[1:]
+        if not path:
+            return 0.0, 0.0
+        cell = tuple(path[0])
+        frozen_now = self.frozen_now()
+        left = 0
+        for a in self.agents:
+            if a.id == agent.id or (a.x, a.y) != cell or not frozen_now[a.id - 1]:
+                continue
+            run = 0
+            for v in self.frozen_schedule[a.id - 1, self._t:]:
+                if not v:
+                    break
+                run += 1
+            left = max(left, run)
+        return (1.0, float(left)) if left else (0.0, 0.0)
+
     def _observe(self, agent, is_clash):
         obstacles = self._obstacles_now()
         others = {(a.x, a.y) for a in self.agents if a.id != agent.id}
@@ -244,8 +308,8 @@ class _HookedVendor(Warehouse):
             manhattan = 0
         vals = [float(is_clash), float(self.stuck_counters[agent.id - 1].count), float(agent.fixing_clash),
                 float(agent.carrying_shelf is not None), float(picker), float(len(agent.path)), float(manhattan),
-                *nbr, len(self.request_queue) / self.request_queue_size]
-        return dict(zip(RecoveryHook.OBS_KEYS, (float(v) for v in vals)))
+                *nbr, len(self.request_queue) / self.request_queue_size, *self._blocker(agent)]
+        return dict(zip(RecoveryHook.OBS_KEYS, (float(v) for v in vals), strict=True))
 
     def _decide(self, agent, is_clash):
         obs = self._observe(agent, is_clash)
@@ -256,6 +320,9 @@ class _HookedVendor(Warehouse):
         if action not in ACTIONS:
             raise ValueError(f"recovery policy returned {action!r}; must be one of {list(ACTIONS)}")
         self.decide_calls += 1
+        if obs["blocker_frozen"] == 1:
+            self._counts["decisions_while_blocker_frozen"] += 1
+            self._counts["reroutes_while_blocker_frozen"] += action == "reroute"
         self._counts["recovery_clash_events" if is_clash else "recovery_stuck_events"] += 1
         self._counts["recovery_" + action] += 1
         return action
@@ -466,7 +533,8 @@ class _HookedVendor(Warehouse):
 
 class RecoveryHook(DisturbedWarehouse, _HookedVendor):
     OBS_KEYS = ("event_is_clash", "stuck_count", "fixing_clash", "carrying", "is_picker", "path_len",
-                "manhattan_to_target", "nbr_n", "nbr_e", "nbr_s", "nbr_w", "queue_pressure")
+                "manhattan_to_target", "nbr_n", "nbr_e", "nbr_s", "nbr_w", "queue_pressure", "blocker_frozen",
+                "blocker_frozen_left")
 
     def __init__(self, *args, disturb, recovery, call_human_cost=DEFAULT_CALL_HUMAN_COST,
                  assign_care_for_agents=False, **kwargs):

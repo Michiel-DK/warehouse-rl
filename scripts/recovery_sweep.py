@@ -1,6 +1,6 @@
 """Sprint 3 recovery sweeps: timeout baseline, tuned timeout grid, rule ladders, call-human cost. Resumable, multiprocess.
 
-Usage: python scripts/recovery_sweep.py --workers N [--smoke] [--only a,b,c,d] [--results-dir DIR] [--best-rule B,R,A]
+Usage: python scripts/recovery_sweep.py --workers N [--smoke] [--only a,b,c,d,e] [--results-dir DIR] [--best-rule B,R,A]
   a  timeout        {"name": "timeout"} (replan 5, abandon 15, cost 60)                                   1 config
   b  tuned_timeout  replan {3, 5, 8} x abandon {10, 15, 25}                                               9 configs
   c  rule           RuleRecovery (back_off, reroute, abandon) = (2, 5, 10) fast, (3, 6, 15) vendor-paced, (5, 10, 25)
@@ -8,10 +8,17 @@ Usage: python scripts/recovery_sweep.py --workers N [--smoke] [--only a,b,c,d] [
   d  call_human     the "best rule" triple (a PLACEHOLDER default (3, 6, 15), not computed from sweep c; override with
                     --best-rule B,R,A, stored in the sweep definition) with call_human_after = A - 1 at costs
                     {0, 5, 15, 30, 60}, plus the same triple with no call-human rung as the reference         6 configs
+  e  informed       InformedTimeoutRecovery (replan 5, abandon 15): "informed flag" (informed_timeout: reroute/abandon at
+                    once when the robot on the next cell is frozen) and "informed left" (informed_timeout_left: only
+                    when its remaining frozen run exceeds replan; optimistic look-ahead)                    2 configs
+                    Its own queue item: the default --only stays a,b,c,d. Rows also carry
+                    decisions_while_blocker_frozen / reroutes_while_blocker_frozen. Plot recovery_informed.png: pick-rate
+                    with the timeout band read from recovery/timeout[_smoke].json (not recomputed), informed flag, informed
+                    left, and the seed-paired delta vs timeout per rate.
 Grid for every sweep: medium map, 8 AGVs + 4 pickers, AGV breakdown rate {1, 2, 4, 8} per robot-hour (sweep.py's
 point_spec schedule, so it is identical to Sprint 2 and a function of (seed, config) only), seeds 0-29, 500 steps,
-dispatcher StuckAwareCtaPolicy always. Full: a 120 + b 1080 + c 360 + d 720 = 2280 episodes. --smoke: seeds 0-1 and the
-rates {1, 8}, files named <sweep>_smoke.json (a 4, b 36, c 12, d 24 = 76 episodes).
+dispatcher StuckAwareCtaPolicy always. Full: a 120 + b 1080 + c 360 + d 720 = 2280 episodes (a-d), e 2 x 4 x 30 = 240 more. --smoke: seeds 0-1 and the
+rates {1, 8}, files named <sweep>_smoke.json (a 4, b 36, c 12, d 24 = 76 episodes; e 2 x 2 x 2 = 8).
 Each row is evaluate.run_seed(...) with the recovery config: pick_rate, deliveries, stuck/frozen/abandoned sums, every
 per-action decision count (recovery_wait/back_off/reroute/abandon/call_human), event counts, fallbacks, call_human_steps
 and the recovery config, plus point (rate), config (label) and n_agents.
@@ -53,7 +60,8 @@ RULE_TRIPLES = [(2, 5, 10), (3, 6, 15), (5, 10, 25)]
 DEFAULT_BEST_RULE = (3, 6, 15)  # placeholder, not computed from sweep c
 HUMAN_COSTS = [0, 5, 15, 30, 60]
 NO_HUMAN = "no human"
-LETTERS = {"a": "timeout", "b": "tuned_timeout", "c": "rule", "d": "call_human"}
+LETTERS = {"a": "timeout", "b": "tuned_timeout", "c": "rule", "d": "call_human", "e": "informed"}
+DEFAULT_ONLY = "a,b,c,d"
 AXIS = "AGV breakdown rate (onsets per robot-hour)"
 
 
@@ -95,6 +103,9 @@ def configs(sweep, best_rule=DEFAULT_BEST_RULE):
         t = tuple(best_rule)
         return ([(f"{_label_rule(t)} human cost {c}", _rule_cfg(t, t[2] - 1, c)) for c in HUMAN_COSTS]
                 + [(f"{_label_rule(t)} {NO_HUMAN}", _rule_cfg(t))])
+    if sweep == "informed":
+        return [("informed flag", normalise_recovery({"name": "informed_timeout", "replan": 5, "abandon": 15})),
+                ("informed left", normalise_recovery({"name": "informed_timeout_left", "replan": 5, "abandon": 15}))]
     raise ValueError(f"unknown sweep {sweep!r}")
 
 
@@ -171,12 +182,15 @@ def plot(sweep, defn, rows, out, results_dir, smoke):
     def at(lbl, g):
         return [r for r in rows if r["config"] == lbl and r["point"] == g]
 
+    base = _timeout_rows(results_dir, smoke)
     for lbl in labels:
         band(axes[0], grid, [ev.summarise([r["pick_rate"] for r in at(lbl, g)]) for g in grid], lbl, colors[lbl])
+    if sweep == "informed" and base is not None:  # the stored timeout rows, not recomputed
+        band(axes[0], grid, [ev.summarise([r["pick_rate"] for r in base if r["point"] == g]) for g in grid],
+             "timeout", "black", ls="--")
     axes[0].set_title("mean pick-rate, 95% CI band")
     axes[0].set_ylabel("pick-rate (lines/h)")
 
-    base = _timeout_rows(results_dir, smoke)
     axes[1].axhline(0, color="grey", linewidth=0.8)
     axes[1].set_title("seed-paired delta vs timeout, 95% CI band")
     axes[1].set_ylabel("paired difference (lines/h)")
@@ -234,7 +248,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--workers", type=ev.workers_arg, nargs="?", default=None)  # bare/empty = unset
     p.add_argument("--smoke", action="store_true")
-    p.add_argument("--only", default="a,b,c,d")
+    p.add_argument("--only", default=DEFAULT_ONLY)
     p.add_argument("--results-dir", default=str(REPO / "results"))
     p.add_argument("--best-rule", default=None, help="B,R,A for sweep d (default 3,6,15)")
     a = p.parse_args()

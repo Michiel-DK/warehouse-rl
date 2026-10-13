@@ -453,7 +453,7 @@ class ObservationContentTests(unittest.TestCase):
             for k in ("nbr_n", "nbr_e", "nbr_s", "nbr_w"):
                 nbr_seen[k].add(o[k])
             obstacle_rows += n_obst
-        self.assertEqual(set(expect), set(rc.RecoveryHook.OBS_KEYS))
+        self.assertEqual(set(expect), set(rc.RecoveryHook.OBS_KEYS) - {"blocker_frozen", "blocker_frozen_left"})  # the blocker keys have their own tests (test_recovery_informed.py)
         self.assertGreater(obstacle_rows, 0, "no decide call ever saw an active obstacle")
         for k in ("carrying", "is_picker", "event_is_clash"):
             self.assertEqual({o[k] for o, *_ in rows}, {0.0, 1.0}, k)

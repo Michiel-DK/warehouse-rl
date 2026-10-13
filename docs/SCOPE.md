@@ -450,6 +450,14 @@ Decisions:
   and measure a hand-written informed timeout rule against `timeout` at rates 1/2/4/8, 30 seeds, paired. This is the
   measured version of the claim "the fix is fault information at fleet level". The learned path reopens only if
   this shows a prize above the CI.
+  Definition of the two keys (`RecoveryHook._blocker`, recovery.py): the next cell is `agent.path[0]` (vendor
+  `get_next_micro_action` steers toward `path[0]` and `_execute_forward` does `path = path[1:]`; `path[-1]` is the
+  target; if `path[0]` is the robot's own cell, `path[1]`). The occupant is any other agent on that cell, AGV or
+  picker, busy or not. `blocker_frozen` is 1.0 iff an occupant is frozen for the executing step per `frozen_now()`.
+  `blocker_frozen_left` is the number of consecutive True entries of `frozen_schedule[occupant, t:]` from the current
+  step t (max over frozen occupants; at least 1 when the flag is set; 0.0 when the flag is 0 or there is no next
+  cell). Caveat: `_left` is LOOK-AHEAD, the optimistic "the fleet manager knows the repair time" variant; the flag uses
+  only the current step. Both only read `frozen_schedule`; the schedule stays a function of (seed, config).
 - **Learned recovery training, held-out eval and its README item: dropped.** The negative result is written up in
   the Sprint 3 close-out with the curves (`results/recovery_train_v1_degenerate`, `results/recovery_train_smoke`,
   `results/recovery_train_v2_pilot_aborted`).

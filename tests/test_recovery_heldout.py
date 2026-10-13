@@ -145,7 +145,10 @@ class TestSmokeAndResume(unittest.TestCase):
         mine = next(r for r in doc["rows"] if r["config"] == "timeout" and r["point"] == 1 and r["seed"] == 0)
         committed = json.loads((ROOT / "results" / "recovery" / "timeout.json").read_text())["rows"]
         theirs = next(r for r in committed if r["point"] == 1 and r["seed"] == 0)
-        self.assertEqual(mine, theirs)
+        # rows written since lane E also carry the two blocker_frozen counters; the committed rows predate them
+        new = {"decisions_while_blocker_frozen", "reroutes_while_blocker_frozen"}
+        self.assertEqual(set(mine) - set(theirs), new)
+        self.assertEqual({k: v for k, v in mine.items() if k not in new}, theirs)
 
     # inject: rewrite or re-run rows already on disk
     def test_rerun_skips_rows_on_disk(self):

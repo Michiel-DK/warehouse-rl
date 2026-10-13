@@ -43,7 +43,7 @@ class TestWindowRecorder(unittest.TestCase):
     def test_hand_computed_windows(self):
         c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
         rec = tr.WindowRecorder(c, n_agents=8)
-        x0, x1, x2 = (np.full(12, v, np.float32) for v in (0.0, 1.0, 2.0))
+        x0, x1, x2 = (np.full(len(lr.OBS_KEYS), v, np.float32) for v in (0.0, 1.0, 2.0))
 
         def own(v7):  # agent 7's own reward v7 (index 6), every other agent 5.0 (must never reach agent 7's windows)
             return [5.0] * 6 + [v7, 5.0]
@@ -70,7 +70,7 @@ class TestWindowRecorder(unittest.TestCase):
     # inject: no charge, charge on every decision, charge in step_end, or charge the call-human action
     def test_abandon_charged_once_per_abandon_decision_only(self):
         c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
-        x = np.zeros(12, np.float32)
+        x = np.zeros(len(lr.OBS_KEYS), np.float32)
         for a, name in enumerate(ACTIONS):
             rec = tr.WindowRecorder(c, n_agents=2)
             rec.decision(1, 0, x, a)
@@ -99,7 +99,7 @@ class TestWindowRecorder(unittest.TestCase):
         c = lr.reward_constants()
         self.assertEqual(c, dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99, call_human_cost=60,
                                  abandon_cost=15, credit="own", vendor_step_penalty="excluded"))
-        x = np.zeros(12, np.float32)
+        x = np.zeros(len(lr.OBS_KEYS), np.float32)
         out = {}
         for name, stuck, relocated in (("abandon", set(), set()), ("wait", {1}, set()), ("call_human", set(), {1})):
             rec = tr.WindowRecorder(c, n_agents=12)
@@ -116,7 +116,7 @@ class TestWindowRecorder(unittest.TestCase):
     # instead of aid - 1 (agent 1 gets 0.1)
     def test_each_agent_credited_with_its_own_reward_only(self):
         c = dict(lr.reward_constants(), gamma=0.9)
-        x = np.zeros(12, np.float32)
+        x = np.zeros(len(lr.OBS_KEYS), np.float32)
         rec = tr.WindowRecorder(c, n_agents=12)
         for aid in (1, 2, 3, 12):
             rec.decision(aid, 0, x, ACTIONS.index("wait"))
@@ -338,7 +338,7 @@ class TestUnits(unittest.TestCase):
                 return self.q.expand(x.shape[0], -1) + self.w
 
         online, target = Fixed([0.0, 5.0, 0.0, 0.0, 0.0]), Fixed([9.0, 1.0, 0.0, 0.0, 0.0])
-        x = torch.zeros(1, 12)
+        x = torch.zeros(1, len(lr.OBS_KEYS))
         batch = (x, torch.tensor([0]), torch.tensor([1.0]), torch.tensor([0.5]), x, torch.tensor([0.0]))
         # target value = target(s')[argmax online] = 1.0 -> y = 1 + 0.5 * 1 = 1.5; q(s, a=0) = 0
         loss = tr.dqn_loss(online, target, batch)
@@ -355,7 +355,7 @@ class TestUnits(unittest.TestCase):
         replay = tr.Replay(64)
         rng = np.random.default_rng(0)
         n = 64
-        replay.add(dict(X=rng.normal(size=(n, 12)).astype(np.float32), X2=rng.normal(size=(n, 12)).astype(np.float32),
+        replay.add(dict(X=rng.normal(size=(n, len(lr.OBS_KEYS))).astype(np.float32), X2=rng.normal(size=(n, len(lr.OBS_KEYS))).astype(np.float32),
                         A=rng.integers(0, 5, n), R=rng.normal(size=n), DISC=np.full(n, 0.9), DONE=np.zeros(n, bool)))
         cfg = dict(batch=16, clip_norm=10.0, target_sync=3)
 
@@ -414,14 +414,14 @@ class TestUnits(unittest.TestCase):
         self.assertEqual((tr.DEFAULT_RATES, tr.DEFAULT_SEEDS), ("1,2,4", "0,1,2"))
         self.assertEqual(tr.parse_rates(tr.DEFAULT_RATES), [1, 2, 4])
         self.assertEqual((tr.DEFAULT_EPISODES, lr.FORMAT_VERSION, lr.ABANDON_COST, tr.RANDOM_SHARE, tr.ABORT_BELOW),
-                         (3200, 2, 15, 0.1, 0.5))
+                         (3200, 3, 15, 0.1, 0.5))
         self.assertEqual(tr.DEFAULT_EPISODES % tr.EVAL_EVERY, 0)
         self.assertEqual(tr.DEFAULT_EPISODES % tr.ITER_EPISODES, 0)
         cfg = tr.build_config(1, 0, 500, 3200, False)
         self.assertEqual(cfg["reward"]["abandon_cost"], 15)
         self.assertEqual(cfg["abandon_cost"], 15)
         self.assertEqual(cfg["explore"], {"prior": "timeout", "random_share": 0.1})
-        self.assertEqual((cfg["abort_below"], cfg["version"]), (0.5, 2))
+        self.assertEqual((cfg["abort_below"], cfg["version"]), (0.5, 3))
         self.assertEqual((tr.ABORT_AFTER_FRAC, cfg["abort_after_frac"]), (tr.EPS_FRAC, 0.5))
         self.assertEqual(cfg["reward"], dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99,
                                              call_human_cost=60, abandon_cost=15, credit="own",
@@ -567,7 +567,7 @@ class TestSmokeTrainAndResume(unittest.TestCase):
                                             credit="own", vendor_step_penalty="excluded"))
         self.assertEqual(log["reward_used"]["abandon_cost"], 15)
         self.assertEqual(log["config"]["reward"], ck["reward"])
-        self.assertEqual(ck["version"], 2)
+        self.assertEqual(ck["version"], 3)
         self.assertEqual(ck["train_config"], log["config"])
         pol = lr.LearnedRecovery.load(self.run_dir / "checkpoint.pt")
         self.assertEqual(pol.epsilon, 0.0)

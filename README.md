@@ -331,6 +331,10 @@ How to read the curve:
   - `timeout`'s residual above the floor: -0.25 (-2.28 to +1.78) at rate 1 and +1.19 (-0.85 to +3.22) at rate 2.
   - Above the env default, the headroom at plausible rates cannot be told apart from zero. A learned policy that beats `RuleRecovery` (the kill criterion) could do so just by waiting the way the default does.
 
+#### Informed recovery (lane E)
+
+A stuck robot sees only its four neighbour cells. Lane E gives the recovery hook two more observation keys, `blocker_frozen` (the robot on my next cell is frozen right now) and `blocker_frozen_left` (how many more steps its frozen run lasts, optimistic look-ahead), and adds `InformedTimeoutRecovery` (`informed_timeout`: reroute or abandon at once when the blocker is frozen; `informed_timeout_left`: only when the remaining frozen run exceeds `replan`). The observation grew from 12 to 14 keys, so learned-recovery checkpoints are format version 3 and v2 checkpoints are refused. The sweep is `scripts/recovery_sweep.py --only e`, comparing both rules with `timeout` on the same seeds and schedules at rates 1/2/4/8. The numbers will be taken from `results/recovery/informed.json` and land with the queue item `wr-s3e-informed-sweep`; none are reported here yet.
+
 ### Learned recovery trainer (`scripts/train_recovery.py`, format version 2, 2026-10-13)
 
 The learned policy (`src/warehouse_rl/learned_recovery.py`) is a semi-MDP double DQN over the `RecoveryHook` decision events on the medium map at breakdown rates 1, 2 and 4, with `StuckAwareCtaPolicy` as the dispatcher. The reward of a decision window is the agent's own reward minus the real action costs:
