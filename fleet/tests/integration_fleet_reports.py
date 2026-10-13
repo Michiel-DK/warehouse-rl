@@ -106,6 +106,11 @@ class TestReportSqlEqualsReport(unittest.TestCase):
             dict(base, episode_id="x-censored", left_censored=True),
             dict(base, episode_id="x-open", resolution="open", end=None, duration_s=None),
             dict(base, episode_id="x-interrupted", resolution="interrupted")])
+        # one countable episode written twice (its cause refined): only FINAL counts it once, whatever merged yet
+        cls.store.upsert("stuck_episodes", ("run", "episode_id"), [dict(base, episode_id="x-twice", robot="Z0-98",
+                                                                        cause="blocked_by_stuck")])
+        cls.store.upsert("stuck_episodes", ("run", "episode_id"), [dict(base, episode_id="x-twice", robot="Z0-98",
+                                                                        cause="unknown")])
         cls.graded = grade.grade_run(cls.store, RUN, grade.batch_now(cls.store, RUN))
         cls.secs = sections(report.report_run(cls.store, RUN))
 
@@ -150,7 +155,7 @@ class TestReportSqlEqualsReport(unittest.TestCase):
     def test_the_sql_applies_the_countable_filter_where_it_counts_episodes(self):
         eps = self.store.select("stuck_episodes", {"run": RUN})
         countable = report.countable(eps)
-        self.assertEqual(len(eps) - len(countable), 3)
+        self.assertEqual(len(eps) - len(countable), 3)  # x-twice is one countable episode
         for stem in ("resolution_mix", "cause_mix", "hotspots", "episodes_per_hour"):
             rows = self.run_sql(SQL_DIR / f"{stem}.sql")
             if stem != "hotspots":  # hotspots is cut at the top 20
