@@ -7,17 +7,25 @@ Seam (recovery.py and env.py are untouched): `make_learned_env` builds the env w
 then, before reset, replaces the hook instance's `_recovery` with the learned policy. The hook reads `self._recovery`
 at every decision. This is the ONLY way a learned policy enters an env (trainer, held-out evaluator, evaluate.py).
 
-Reward (training only; the env reward is never read). Semi-MDP per agent: a transition starts at the agent's decision at
-step t and ends at its next decision at step t' (Delta = t' - t) or at episode end. The window is the half-open step
-range k in [t, t'): the step in which the decision is taken counts, the step of the next decision does not. Two decisions
-of one agent in the same step give Delta = 0 (no reward, discount 1). Per step k in the window:
+Reward (training only). Semi-MDP per agent: a transition starts at the agent's decision at step t and ends at its next
+decision at step t' (Delta = t' - t) or at episode end. The window is the half-open step range k in [t, t'): the step in
+which the decision is taken counts, the step of the next decision does not. Two decisions of one agent in the same step
+give Delta = 0 (no reward, discount 1). Per step k in agent i's window:
 
-    r_k = LINE_REWARD * shelf_deliveries_k / n_agents        fleet deliveries, equal share (AGVs and pickers decide)
+    r_k = LINE_REWARD * own_i,k                               the agent's OWN vendored reward (credit "own", 13 Oct)
           - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (0.0 since 13 Oct: off, see below)
           - COST_UNIT * call_human_cost * [executed call-human relocation of the agent in step k]
           - COST_UNIT * abandon_cost * [this decision is abandon]        (charged once, at the window's first step k = t,
                                                                           undiscounted: GAMMA ** 0 = 1)
     R = sum_k GAMMA ** (k - t) * r_k,   target = R + GAMMA ** Delta * max_a Q_target(s', a)   (0 bootstrap at the end)
+
+own_i,k is entry i (agent id - 1) of the per-agent reward vector WarehouseEnv.step returns, built by the vendor with
+RewardType.INDIVIDUAL (vendor tarware/warehouse.py:536-606: +0.1 to the AGV and to the picker for a load or an unload,
++1 to the AGV that delivers) and with global_reward=False (make_learned_env asserts both), minus the vendor's constant
+-VENDOR_STEP_PENALTY per agent-step (warehouse.py:674), which is added back: at a fixed 500 steps it is the same for
+every policy, so it is left out. Nothing is shared between agents: an agent is credited for its own loads, unloads and
+deliveries only (a single fleet-shared reward is the "lazy agent" case). The evaluation metric is untouched: pick-rate
+is still deliveries * 3600 / (5 * steps) from info["shelf_deliveries"].
 
 Deliveries plus the real action costs only (13 Oct 2026): every stuck measure the recovery action itself can reset
 (reroute, back_off and abandon reset the StuckCounter) is a free dodge, so the per-step stuck term is 0 and stuck time
@@ -32,6 +40,7 @@ import random
 from pathlib import Path
 
 import torch
+from tarware.warehouse import RewardType
 from torch import nn
 
 from warehouse_rl.env import WarehouseEnv
@@ -54,11 +63,14 @@ COST_UNIT = 0.01  # reward units per stuck-step of an action cost
 GAMMA = 0.99
 CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = COST_UNIT * 60 = 0.6
 ABANDON_COST = 15  # stuck-steps charged per abandon decision = the timeout rule's own abandon threshold (recovery.py)
+CREDIT = "own"  # each agent's own vendored reward (RewardType.INDIVIDUAL), nothing shared
+VENDOR_STEP_PENALTY = 0.001  # the vendor's constant per agent-step term (tarware/warehouse.py:674), added back
 
 
 def reward_constants(call_human_cost=CALL_HUMAN_COST, abandon_cost=ABANDON_COST):
     return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "cost_unit": COST_UNIT, "gamma": GAMMA,
-            "call_human_cost": call_human_cost, "abandon_cost": abandon_cost}
+            "call_human_cost": call_human_cost, "abandon_cost": abandon_cost, "credit": CREDIT,
+            "vendor_step_penalty": "excluded"}
 
 
 def obs_to_tensor(obs, obs_scale=OBS_SCALE):
@@ -199,10 +211,14 @@ def make_learned_env(env_id, steps, disturb, policy, call_human_cost, assign_car
     reset."""
     torch.set_num_threads(1)  # one thread per worker process: N workers x N threads would oversubscribe the cores
     env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
-                       recovery={"name": "timeout", "call_human_cost": call_human_cost})
+                       recovery={"name": "timeout", "call_human_cost": call_human_cost}, global_reward=False)
     hook = env.env
     if not isinstance(hook, RecoveryHook):
         raise AssertionError(f"expected a RecoveryHook, got {type(hook).__name__}")
+    # own credit needs both: the wrapper must not broadcast the fleet total, the vendor must credit per agent
+    if env.global_reward is not False or hook.reward_type != RewardType.INDIVIDUAL:
+        raise AssertionError(f"own credit needs global_reward=False and RewardType.INDIVIDUAL, got "
+                             f"{env.global_reward!r} and {hook.reward_type!r}")
     hook._recovery = policy
     if hook._recovery is not policy:
         raise AssertionError("the learned policy swap did not take")

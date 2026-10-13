@@ -41,15 +41,19 @@ class TestWindowRecorder(unittest.TestCase):
     # call-human penalty without the cost factor, or price an action cost with stuck_penalty instead of cost_unit
     def test_hand_computed_windows(self):
         c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
-        rec = tr.WindowRecorder(c, n_agents=2)
+        rec = tr.WindowRecorder(c, n_agents=8)
         x0, x1, x2 = (np.full(12, v, np.float32) for v in (0.0, 1.0, 2.0))
+
+        def own(v7):  # agent 7's own reward v7 (index 6), every other agent 5.0 (must never reach agent 7's windows)
+            return [5.0] * 6 + [v7, 5.0]
+
         rec.decision(7, 1, x0, 3)                                   # agent 7 abandons at step 1: -0.2 * 15 = -3.0
-        rec.step_end(1, 2, {7}, set())                              # r = 2/2 - 0.1            = 0.9
-        rec.step_end(2, 0, {7}, {7})                                # r = -0.1 - 0.2 * 10      = -2.1
+        rec.step_end(1, own(1.0), {7}, set())                       # r = 1.0 - 0.1            = 0.9
+        rec.step_end(2, own(0.0), {7}, {7})                         # r = -0.1 - 0.2 * 10      = -2.1
         rec.decision(7, 3, x1, 4)                                   # next decision at step 3: Delta 2
         rec.decision(7, 3, x2, 0)                                   # second decision, same step: Delta 0
-        rec.step_end(3, 0, set(), set())                            # r = 0
-        rec.step_end(4, 1, set(), set())                            # r = 1/2 = 0.5, weight 0.5**(4-3)
+        rec.step_end(3, own(0.0), set(), set())                     # r = 0
+        rec.step_end(4, own(0.5), set(), set())                     # r = 0.5, weight 0.5**(4-3)
         rec.finish(5)
         (a, b, d) = rec.out
         self.assertEqual((a[1], a[6], a[7], a[8], a[5]), (3, 7, 1, 2, False))
@@ -69,21 +73,21 @@ class TestWindowRecorder(unittest.TestCase):
         for a, name in enumerate(ACTIONS):
             rec = tr.WindowRecorder(c, n_agents=2)
             rec.decision(1, 0, x, a)
-            rec.step_end(0, 0, set(), set())       # no delivery, not stuck: the step reward is 0
-            rec.step_end(1, 0, set(), set())
+            rec.step_end(0, [0.0, 0.0], set(), set())       # no own reward, not stuck: the step reward is 0
+            rec.step_end(1, [0.0, 0.0], set(), set())
             rec.finish(2)
             (o,) = rec.out
             want = -0.2 * 15 if name == "abandon" else 0.0   # -3.0 (cost_unit, not stuck_penalty), undiscounted, once
             self.assertAlmostEqual(o[2], want, msg=name)     # R
             self.assertAlmostEqual(o[9], want, msg=name)     # U
         # two abandons by one agent are charged twice (once per window); the charge is not discounted by the window's
-        # later steps: window 1 = steps 0-1 (r_k = 0.5 at k = 1 from one delivery / 2 agents), window 2 = step 2
+        # later steps: window 1 = steps 0-1 (r_k = 0.5 own reward at k = 1), window 2 = step 2
         rec = tr.WindowRecorder(c, n_agents=2)
         rec.decision(1, 0, x, 3)
-        rec.step_end(0, 0, set(), set())
-        rec.step_end(1, 1, set(), set())
+        rec.step_end(0, [0.0, 0.0], set(), set())
+        rec.step_end(1, [0.5, 0.0], set(), set())
         rec.decision(1, 2, x, 3)
-        rec.step_end(2, 0, set(), set())
+        rec.step_end(2, [0.0, 0.0], set(), set())
         rec.finish(3)
         w1, w2 = rec.out
         self.assertAlmostEqual(w1[2], -3.0 + 0.5 * 0.5)
@@ -93,18 +97,99 @@ class TestWindowRecorder(unittest.TestCase):
     def test_shipped_reward_is_deliveries_minus_action_costs(self):
         c = lr.reward_constants()
         self.assertEqual(c, dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99, call_human_cost=60,
-                                 abandon_cost=15))
+                                 abandon_cost=15, credit="own", vendor_step_penalty="excluded"))
         x = np.zeros(12, np.float32)
         out = {}
         for name, stuck, relocated in (("abandon", set(), set()), ("wait", {1}, set()), ("call_human", set(), {1})):
             rec = tr.WindowRecorder(c, n_agents=12)
             rec.decision(1, 0, x, ACTIONS.index(name))
-            rec.step_end(0, 0, stuck, relocated)
+            rec.step_end(0, [0.0] * 12, stuck, relocated)
             rec.finish(1)
             out[name] = rec.out[0][9]
         self.assertAlmostEqual(out["abandon"], -0.15, places=12)     # 0.01 x 15, once
         self.assertEqual(out["wait"], 0.0)                           # a stuck busy step costs nothing
         self.assertAlmostEqual(out["call_human"], -0.60, places=12)  # 0.01 x 60 per executed relocation
+
+
+    # inject: sum the own vector (agent 3 gets 1.1), divide it by n_agents (agent 1 gets 1/12), or index it by aid
+    # instead of aid - 1 (agent 1 gets 0.1)
+    def test_each_agent_credited_with_its_own_reward_only(self):
+        c = dict(lr.reward_constants(), gamma=0.9)
+        x = np.zeros(12, np.float32)
+        rec = tr.WindowRecorder(c, n_agents=12)
+        for aid in (1, 2, 3, 12):
+            rec.decision(aid, 0, x, ACTIONS.index("wait"))
+        own = [0.0] * 12
+        own[0], own[1] = 1.0, 0.1  # agent 1 (index 0) delivers, agent 2 (index 1) loads
+        rec.step_end(0, [0.0] * 12, set(), set())
+        rec.step_end(1, [0.0] * 12, set(), set())
+        rec.step_end(2, own, set(), set())  # offset 2 in every window
+        rec.finish(3)
+        got = {o[6]: o[2] for o in rec.out}
+        self.assertEqual(set(got), {1, 2, 3, 12})
+        self.assertAlmostEqual(got[1], 1.0 * 0.9 ** 2, places=12)
+        self.assertAlmostEqual(got[2], 0.1 * 0.9 ** 2, places=12)
+        self.assertEqual(got[3], 0.0)
+        self.assertEqual(got[12], 0.0)
+        with self.assertRaises(ValueError):
+            rec.step_end(3, [0.0] * 11, set(), set())
+
+
+class TestOwnCreditFromEnv(unittest.TestCase):
+    # inject: drop the VENDOR_STEP_PENALTY add-back in run_episode (a quiet step is then -0.001, not 0)
+    def test_vendor_constant_step_term_is_pinned_and_removed(self):
+        cfg = tr.point_spec("breakdown", 1)[1]
+        env = lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
+        try:
+            env.reset(seed=0)
+            _, rewards, _, _, info = env.step([0] * env.num_agents)  # all NOOP: no load, unload or delivery
+        finally:
+            env.close()
+        self.assertEqual(int(info["shelf_deliveries"]), 0)
+        self.assertEqual([float(r) for r in rewards], [-lr.VENDOR_STEP_PENALTY] * 12)  # vendor warehouse.py:674
+        torch.manual_seed(0)
+        res = tr.run_episode(dict(state_dict=lr.QNet().state_dict(), epsilon=0.0, explore_seed=0, env_id=MEDIUM,
+                                  disturb=cfg, steps=40, seed=0, call_human_cost=60, consts=lr.reward_constants(),
+                                  collect=True, trace=True))
+        self.assertEqual(res["trace"][0]["own"], [0.0] * 12)  # the first step has no event: exactly 0, not -0.001
+        self.assertTrue(all(v >= 0.0 for t in res["trace"] for v in t["own"]))  # no -0.001 left anywhere
+
+    # inject: credit the delivery to another agent (own[aid % 12]), broadcast the total (global_reward=True), or
+    # share deliveries equally; checked against DisturbedWarehouse.delivered_per_agent, the repo's own counter
+    def test_own_reward_matches_per_agent_deliveries(self):
+        cfg = tr.point_spec("breakdown", 1)[1]
+        torch.manual_seed(0)
+        res = tr.run_episode(dict(state_dict=lr.QNet().state_dict(), epsilon=1.0, explore_seed=0, env_id=MEDIUM,
+                                  disturb=cfg, steps=300, seed=1, call_human_cost=60, consts=lr.reward_constants(),
+                                  collect=True, trace=True, prior="timeout", random_share=0.0))
+        self.assertGreater(res["deliveries"], 0)
+        per_agent = [0] * 12
+        loads = 0
+        for t in res["trace"]:
+            whole = [int(math.floor(v + 1e-9)) for v in t["own"]]
+            self.assertEqual(sum(whole), t["deliveries"], f"step {t['k']}")
+            for i, w in enumerate(whole):
+                per_agent[i] += w
+                frac = t["own"][i] - w
+                self.assertAlmostEqual(frac * 10, round(frac * 10), places=6)  # +0.1 per load/unload
+                loads += round(frac * 10)
+        self.assertEqual(per_agent, res["delivered_per_agent"])
+        self.assertEqual(per_agent[8:], [0, 0, 0, 0])  # pickers (ids 9-12) never deliver
+        self.assertGreater(loads, 0)
+        self.assertTrue(any(t["own"][i] > 0 for t in res["trace"] for i in range(8, 12)))  # pickers earn the +0.1
+
+    # inject: build the env with global_reward=True, or drop the assertion in make_learned_env
+    def test_make_learned_env_refuses_a_shared_reward(self):
+        real = lr.WarehouseEnv
+
+        def shared(*a, **kw):
+            kw["global_reward"] = True
+            return real(*a, **kw)
+
+        cfg = tr.point_spec("breakdown", 1)[1]
+        with mock.patch.object(lr, "WarehouseEnv", shared):
+            with self.assertRaisesRegex(AssertionError, "own credit"):
+                lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
 
 
 class TestRolloutReward(unittest.TestCase):
@@ -117,7 +202,7 @@ class TestRolloutReward(unittest.TestCase):
         task.update(kw)
         return tr.run_episode(task)
 
-    def reference(self, res, consts, n_agents=12):
+    def reference(self, res, consts):
         """Independent recomputation of every transition's reward from the recorded per-step trace."""
         trace = {t["k"]: t for t in res["trace"]}
         out = []
@@ -125,7 +210,7 @@ class TestRolloutReward(unittest.TestCase):
             total = -consts["cost_unit"] * consts["abandon_cost"] * (ACTIONS[int(act)] == "abandon")
             for k in range(int(t0), int(t0) + int(delta)):
                 st = trace[k]
-                r = consts["line_reward"] * st["deliveries"] / n_agents
+                r = consts["line_reward"] * st["own"][int(aid) - 1]
                 r -= consts["stuck_penalty"] * (int(aid) in st["stuck"])
                 r -= consts["cost_unit"] * consts["call_human_cost"] * (int(aid) in st["relocated"])
                 total += consts["gamma"] ** (k - int(t0)) * r
@@ -329,7 +414,8 @@ class TestUnits(unittest.TestCase):
         self.assertEqual((cfg["abort_below"], cfg["version"]), (0.5, 2))
         self.assertEqual((tr.ABORT_AFTER_FRAC, cfg["abort_after_frac"]), (tr.EPS_FRAC, 0.5))
         self.assertEqual(cfg["reward"], dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99,
-                                             call_human_cost=60, abandon_cost=15))
+                                             call_human_cost=60, abandon_cost=15, credit="own",
+                                             vendor_step_penalty="excluded"))
 
 
 class _RecordingPool:
@@ -467,7 +553,8 @@ class TestSmokeTrainAndResume(unittest.TestCase):
         # (a) the constants the workers echoed back after using them == the checkpoint's == the module's
         self.assertEqual(ck["reward"], log["reward_used"])
         self.assertEqual(ck["reward"], dict(line_reward=lr.LINE_REWARD, stuck_penalty=0.0, cost_unit=0.01,
-                                            gamma=lr.GAMMA, call_human_cost=lr.CALL_HUMAN_COST, abandon_cost=15))
+                                            gamma=lr.GAMMA, call_human_cost=lr.CALL_HUMAN_COST, abandon_cost=15,
+                                            credit="own", vendor_step_penalty="excluded"))
         self.assertEqual(log["reward_used"]["abandon_cost"], 15)
         self.assertEqual(log["config"]["reward"], ck["reward"])
         self.assertEqual(ck["version"], 2)

@@ -12,8 +12,8 @@ state behind the log (resume drops the log's later intervals and redoes them), n
 
 Setting: medium map (8 AGVs + 4 pickers), disturbance = sweep.point_spec("breakdown", rate), dispatcher
 StuckAwareCtaPolicy, call_human_cost 60. The agent is a semi-MDP DQN over the RecoveryHook decision events; the reward
-is defined in learned_recovery.py (fleet deliveries share minus the call-human and abandon costs; the stuck-busy term
-is there with coefficient 0; the env reward is never read).
+is defined in learned_recovery.py (each agent's own vendored per-agent reward without the vendor's constant step term,
+minus the call-human and abandon costs; the stuck-busy term is there with coefficient 0; nothing is shared).
 
 Exploration: with probability epsilon (linear schedule) a training decision is uniform random with probability
 random_share (RANDOM_SHARE, --random-share) and otherwise the timeout rule's action (prior "timeout"), so the fleet keeps
@@ -103,9 +103,11 @@ class WindowRecorder:
 
     decision(aid, t, x, a): the agent decides at step t; an open window of the same agent ends here (Delta = t - t0,
         zero when it is the same step: no step reward, discount 1); an abandon decision opens its window with
-        -cost_unit * abandon_cost in R and U (also when that window is superseded in the same step). step_end(k, deliveries, stuck, relocated): step k has
-        executed; every open window with t0 <= k accrues GAMMA ** (k - t0) * r_k. finish(t_end): close the windows
-        still open at the episode end (done=True)."""
+        -cost_unit * abandon_cost in R and U (also when that window is superseded in the same step).
+    step_end(k, own, stuck, relocated): step k has executed; own[aid - 1] is agent aid's own reward in it (the vendored
+        per-agent vector with the constant step term added back); every open window with t0 <= k accrues
+        GAMMA ** (k - t0) * r_k with r_k = line_reward * own[aid - 1] - the stuck and call-human terms of that agent.
+    finish(t_end): close the windows still open at the episode end (done=True)."""
 
     def __init__(self, consts, n_agents, keep_trace=False):
         self.c, self.n_agents = consts, n_agents
@@ -127,17 +129,18 @@ class WindowRecorder:
             self.open[aid]["U"] -= pen
         self._decisions.append((aid, t, int(a)))
 
-    def step_end(self, k, deliveries, stuck, relocated):
+    def step_end(self, k, own, stuck, relocated):
         c = self.c
-        share = c["line_reward"] * deliveries / self.n_agents
+        if len(own) != self.n_agents:
+            raise ValueError(f"own reward vector has {len(own)} entries, expected {self.n_agents}")
         for aid, o in self.open.items():
-            r = (share - c["stuck_penalty"] * (aid in stuck)
+            r = (c["line_reward"] * float(own[aid - 1]) - c["stuck_penalty"] * (aid in stuck)
                  - c["cost_unit"] * c["call_human_cost"] * (aid in relocated))
             o["R"] += c["gamma"] ** (k - o["t"]) * r
             o["U"] += r
         if self.trace is not None:
-            self.trace.append(dict(k=k, deliveries=int(deliveries), stuck=sorted(stuck), relocated=sorted(relocated),
-                                   decisions=self._decisions))
+            self.trace.append(dict(k=k, own=[float(v) for v in own], stuck=sorted(stuck),
+                                   relocated=sorted(relocated), decisions=self._decisions))
         self._decisions = []
 
     def finish(self, t_end):
@@ -210,6 +213,8 @@ def run_episode(task):
 
             hook._decide, hook._relocate = _decide, _relocate
         obs, info = env.reset(seed=seed)
+        if [a.id for a in hook.agents] != list(range(1, env.num_agents + 1)):  # own[aid - 1] is agent aid's reward
+            raise AssertionError(f"agent ids {[a.id for a in hook.agents]} are not 1..{env.num_agents}")
         disp = StuckAwareCtaPolicy()
         disp.reset(env)
         deliveries = events = call_human_steps = 0
@@ -218,7 +223,7 @@ def run_episode(task):
             if ctx is not None:
                 ctx["t"] = t
             actions = disp.act(obs, info["action_mask"], info)
-            obs, _, _, _, info = env.step(actions)
+            obs, env_rewards, _, _, info = env.step(actions)
             d = int(info["shelf_deliveries"])
             deliveries += d
             events += int(info["recovery_stuck_events"]) + int(info["recovery_clash_events"])
@@ -226,7 +231,11 @@ def run_episode(task):
             if rec is not None:
                 stuck = {a.id for a in hook.agents if a.busy and hook.stuck_counters[a.id - 1].count > 0}
                 busy_stuck_mismatch += int(len(stuck) != int(info["stuck_busy_agents"]))
-                rec.step_end(t, d, stuck, relocs)
+                # the vendor's constant step term left out; rounded so a step without an event is exactly 0.0
+                own = np.round(np.asarray(env_rewards, dtype=float) + lr.VENDOR_STEP_PENALTY, 9)
+                rec.step_end(t, own, stuck, relocs)
+                if rec.trace is not None:
+                    rec.trace[-1]["deliveries"] = d  # info["shelf_deliveries"], for the tests' credit cross-check
                 relocs.clear()
         if rec is not None:
             rec.finish(steps)
@@ -234,7 +243,7 @@ def run_episode(task):
                    decisions=events,
                    policy_calls=pol.calls if hasattr(pol, "calls") else hook.decide_calls, hook_decide_calls=hook.decide_calls,
                    reward_used=task["consts"], busy_stuck_mismatch=busy_stuck_mismatch,
-                   call_human_steps=call_human_steps)
+                   call_human_steps=call_human_steps, delivered_per_agent=[int(v) for v in hook.delivered_per_agent])
         if rec is not None:
             res.update(_arrays(rec.out))
             res["ep_return"] = float(sum(o[9] for o in rec.out))
