@@ -318,5 +318,25 @@ class TestPacing(unittest.TestCase):
         self.assertEqual(self.run_paced(rate="realtime", speed=0)[0], [])
 
 
+class TestT0Mode(unittest.TestCase):
+    """The emit ledger records whether t0 was the wall clock, so the ingest ledger can gate lag on it."""
+
+    def ledger_config(self, *extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = cli("--zones", 1, "--steps", 2, "--speed", 0, "--dir", tmp, *extra)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return json.loads((Path(tmp) / "emit_ledger.json").read_text())["config"]
+
+    def test_t0_mode_fixed_by_default_and_now_for_t0_now(self):
+        # inject: always write "fixed" (or "now"), or derive the mode from the resolved t0 string
+        fixed = self.ledger_config()
+        self.assertEqual(fixed["t0_mode"], "fixed")
+        self.assertEqual(fixed["t0"], em.DEFAULT_T0)
+        self.assertEqual(self.ledger_config("--t0", "2027-03-04T05:06:07Z")["t0_mode"], "fixed")
+        now = self.ledger_config("--t0", "now")
+        self.assertEqual(now["t0_mode"], "now")
+        self.assertRegex(now["t0"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
 if __name__ == "__main__":
     unittest.main()

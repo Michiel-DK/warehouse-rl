@@ -83,8 +83,8 @@ def main(argv=None):
         sink_spec = dict(kind="kafka", topic=a.topic, bootstrap=a.bootstrap)
         ledger_dir = Path(a.ledger_dir) if a.ledger_dir else FLEET / "data" / run_name
     run = dict(env_id=a.env, steps=a.steps, seed_base=a.seed_base, zones=a.zones, disturb_tag=disturb_tag,
-               disturb=disturb, recovery=recovery, policy=a.policy, t0=t0, rate=a.rate, speed=a.speed,
-               report_interval=a.ledger_interval)
+               disturb=disturb, recovery=recovery, policy=a.policy, t0=t0, t0_mode="now" if a.t0 == "now" else "fixed",
+               rate=a.rate, speed=a.speed, report_interval=a.ledger_interval)
     code, summary = emitter.run_fleet(run, sink_spec, ledger_dir / "emit_ledger.json", min(workers, a.zones),
                                       a.ledger_interval)
     doc, wall = summary["ledger"], summary["wall_s"]
