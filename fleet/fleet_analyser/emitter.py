@@ -124,13 +124,14 @@ def zone_config(run, zone):
     return dict(run, zone=zone, seed=run["seed_base"] + zone)
 
 
-def run_zone(cfg, sink, report=None, on_step=None, clock=time.monotonic, sleep=time.sleep):
+def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.monotonic, sleep=time.sleep):
     """Run one zone to completion and emit its messages into `sink`. Returns a result dict (also the dynamics proof):
     deliveries and pick_rate (deliveries * 3600 / (5 * steps), deliveries from info["shelf_deliveries"]) equal
     evaluate.run_seed for the same (policy, env, steps, seed, disturb, recovery).
 
     report(snapshot) is called after the env is built, then at most every cfg["report_interval"] seconds at step
-    boundaries, and a last time with the closed sink. on_step(step, env, info) is an optional observer (tests)."""
+    boundaries, and a last time with the closed sink. on_ready(env) (after reset) and on_step(step, env, info) (after
+    each step's messages) are optional observers for tests; they must not touch the dynamics."""
     import evaluate as ev
     from warehouse_rl.disturb import STEP_SECONDS
     from warehouse_rl.env import WarehouseEnv
@@ -163,6 +164,8 @@ def run_zone(cfg, sink, report=None, on_step=None, clock=time.monotonic, sleep=t
         agents = hook.agents  # rebuilt by reset
         if len(agents) != n:
             raise RuntimeError(f"expected {n} agents after reset, found {len(agents)}")
+        if on_ready:
+            on_ready(env)
         if report:
             report(snapshot())
         orders = OrderTracker(zone, n)
