@@ -146,7 +146,9 @@ class TestSmokeAndResume(unittest.TestCase):
         committed = json.loads((ROOT / "results" / "recovery" / "timeout.json").read_text())["rows"]
         theirs = next(r for r in committed if r["point"] == 1 and r["seed"] == 0)
         # rows written since lane E also carry the two blocker_frozen counters; the committed rows predate them
-        new = {"decisions_while_blocker_frozen", "reroutes_while_blocker_frozen"}
+        # and the S8A floor_skip_steps sum, which is 0 in a run without a floor config
+        new = {"decisions_while_blocker_frozen", "reroutes_while_blocker_frozen", "floor_skip_steps"}
+        self.assertEqual(mine["floor_skip_steps"], 0)
         self.assertEqual(set(mine) - set(theirs), new)
         self.assertEqual({k: v for k, v in mine.items() if k not in new}, theirs)
 
