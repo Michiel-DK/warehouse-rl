@@ -48,7 +48,9 @@
       "cost_unit": 0.01,
       "gamma": 0.99,
       "call_human_cost": 60,
-      "abandon_cost": 15
+      "abandon_cost": 15,
+      "credit": "own",
+      "vendor_step_penalty": "excluded"
     },
     "explore": {
       "prior": "timeout",
@@ -66,21 +68,21 @@
     {
       "episode": 40,
       "env_steps": 20000,
-      "wall_s": 67.46200895309448,
-      "train_reward_mean": 27.317499999999985,
-      "eval_pick_rate_mean": 1.152,
+      "wall_s": 56.25708723068237,
+      "train_reward_mean": 34.91000000000004,
+      "eval_pick_rate_mean": 1.44,
       "eval_pick_rates": [
-        1.44,
+        2.88,
         0.0,
         4.32,
         0.0,
         0.0
       ],
       "epsilon": 0.97684375,
-      "loss_mean": 0.00488577039570804,
-      "decisions": 22969,
-      "gradient_steps": 5740,
-      "rollout_steps_per_s": 413.89459088895455
+      "loss_mean": 0.011686509558666788,
+      "decisions": 22569,
+      "gradient_steps": 5640,
+      "rollout_steps_per_s": 504.3035760831284
     }
   ],
   "finished": false,
@@ -90,7 +92,9 @@
     "cost_unit": 0.01,
     "gamma": 0.99,
     "call_human_cost": 60,
-    "abandon_cost": 15
+    "abandon_cost": 15,
+    "credit": "own",
+    "vendor_step_penalty": "excluded"
   },
   "reference_pick_rate": {
     "mean": 50.112,

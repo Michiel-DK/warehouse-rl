@@ -333,12 +333,12 @@ How to read the curve:
 
 ### Learned recovery trainer (`scripts/train_recovery.py`, format version 2, 2026-10-13)
 
-The learned policy (`src/warehouse_rl/learned_recovery.py`) is a semi-MDP double DQN over the `RecoveryHook` decision events on the medium map at breakdown rates 1, 2 and 4, with `StuckAwareCtaPolicy` as the dispatcher. The env reward is never read. The reward of a decision window is deliveries minus the real action costs:
-- the fleet's deliveries, shared equally over the agents;
+The learned policy (`src/warehouse_rl/learned_recovery.py`) is a semi-MDP double DQN over the `RecoveryHook` decision events on the medium map at breakdown rates 1, 2 and 4, with `StuckAwareCtaPolicy` as the dispatcher. The reward of a decision window is the agent's own reward minus the real action costs:
+- the agent's own entry of the simulator's per-agent reward (`RewardType.INDIVIDUAL`, `global_reward=False`, both asserted): +1 to the AGV that delivers, +0.1 to the AGV and to the picker for each load or unload, nothing shared between agents (`credit: "own"` since 13 Oct; before, the fleet's deliveries were shared equally). The vendor's constant -0.001 per agent-step is added back (`vendor_step_penalty: "excluded"`): at a fixed 500 steps it is the same for every policy. The evaluation metric does not change: pick-rate still comes from `info["shelf_deliveries"]`;
 - minus `COST_UNIT x CALL_HUMAN_COST` (0.01 x 60 = 0.60) per executed call-human;
 - minus `COST_UNIT x ABANDON_COST` (0.01 x 15 = 0.15) per abandon decision, charged once at the decision. 15 is the timeout rule's own abandon threshold: abandoning costs what waiting out the timeout would have cost.
 
-There is no per-step stuck penalty (`STUCK_PENALTY` = 0.0). Reroute, back-off and abandon all reset the stuck counter, so any stuck term the action itself can reset is a free dodge. Stuck time stays an evaluation metric (`stuck_busy_agents`). `log.json["reward_used"]` records `stuck_penalty: 0.0` and `cost_unit: 0.01`.
+There is no per-step stuck penalty (`STUCK_PENALTY` = 0.0). Reroute, back-off and abandon all reset the stuck counter, so any stuck term the action itself can reset is a free dodge. Stuck time stays an evaluation metric (`stuck_busy_agents`). `log.json["reward_used"]` records `stuck_penalty: 0.0`, `cost_unit: 0.01`, `credit: "own"` and `vendor_step_penalty: "excluded"`.
 
 The first real run (11 Oct, format version 1) had no abandon term, and its policy was degenerate. Greedy eval pick-rate never rose above 11.2 lines/h on run seed 0 (6400 episodes) or 4.0 on seed 1 (4880 episodes, killed), against 51.17 for `timeout` at rate 1. A 2-seed check with `scripts/evaluate.py --recovery learned:` (11 Oct, untracked: `rate1_seed0/v1_eval/` inside the v1 run directory) found 0 deliveries and an abandon at almost every stuck event: abandoning cleared the stuck penalty and cost nothing. Those runs are kept, untracked, in `results/recovery_train/` until this lane merges, then in `results/recovery_train_v1_degenerate/`.
 
@@ -348,15 +348,16 @@ Version 2 changes four things:
 - **A reference and an abort.** Each run first evaluates `TimeoutRecovery` on the 5 eval seeds through the same rollout path (`log.json["reference_pick_rate"]`). From episode `--abort-after-frac` x episodes on (default 0.5 = `EPS_FRAC`, where epsilon reaches its floor and the net acts on its own), if an interval's greedy eval falls below `--abort-below` (default 0.5) x that reference, the run stops with `finished: false` and an `aborted` record, and the script exits 1. Earlier intervals never abort. Aborted runs cannot be resumed, and `recovery_heldout.py` ignores them. `--abort-below 0` disables the check; `--abort-after-frac 0` checks from the first interval.
 - **Format version 2.** `load_checkpoint` refuses version-1 checkpoints, and `--resume` refuses a run directory with another version. `DEFAULT_EPISODES` is 3200, down from 6400. The v1 seed-0 run took 7145 s for 6400 episodes (1.12 s per episode, everything included), so 3200 episodes is about 1.0 h per run and about 9 h for the 9 runs. Rollouts alone ran at 539 env steps/s, which is 2970 s per run.
 
-**Warm start probe, 13 Oct (rate 1, run seed 0, the reward above).** `train_recovery.py --rates 1 --seeds 0 --abort-below 0 --max-intervals 1 --workers 2 --results-dir results/recovery_train_smoke`, one interval of 40 episodes at epsilon 0.98, from `results/recovery_train_smoke/rate1_seed0/log.json`:
-- timeout reference on the 5 eval seeds: 50.11 lines/h (48.96, 46.08, 46.08, 56.16, 53.28);
-- greedy eval at episode 40: 1.15 lines/h, mean training return +27.3. The behaviour policy delivers; the greedy net does not yet.
+**Warm start probes, 13 Oct (rate 1, run seed 0).** `train_recovery.py --rates 1 --seeds 0 --abort-below 0 --max-intervals 1 --workers 2 --results-dir results/recovery_train_smoke`, one interval of 40 episodes at epsilon 0.98. Own credit (the reward above): `results/recovery_train_smoke/rate1_seed0/log.json`. Fleet-shared deliveries (the reward before own credit, same day): `results/recovery_train_smoke/pass2_rate1_seed0/log.json`.
+- timeout reference on the 5 eval seeds, identical in both: 50.11 lines/h (48.96, 46.08, 46.08, 56.16, 53.28);
+- greedy eval at episode 40: 1.44 lines/h with own credit (mean training return +34.9), 1.15 with the shared reward (+27.3). The behaviour policy delivers; the greedy net does not yet.
 
-Action mix of that checkpoint with `scripts/evaluate.py --recovery learned:` on seeds 1000-1001, rate 1 (`results/recovery_train_smoke/eval/`):
+Action mix of those checkpoints with `scripts/evaluate.py --recovery learned:` on seeds 1000-1001, rate 1 (`results/recovery_train_smoke/eval/`):
 
 | recovery | pick-rate | abandon | reroute | wait | back-off | stuck events |
 |---|---|---|---|---|---|---|
-| learned, episode 40 | 1.44 / 0.00 | 0 / 0 | 1442 / 1996 | 15 / 20 | 5 / 0 | 1461 / 2016 |
+| learned, own credit, episode 40 (`learned-b70a8a6f70`) | 2.88 / 0.00 | 0 / 0 | 1401 / 1956 | 33 / 11 | 1 / 0 | 1427 / 1967 |
+| learned, shared reward, episode 40 (`learned-6d94d6ea36`) | 1.44 / 0.00 | 0 / 0 | 1442 / 1996 | 15 / 20 | 5 / 0 | 1461 / 2016 |
 | timeout | 48.96 / 46.08 | 0 / 2 | 90 / 68 | 407 / 341 | 0 / 0 | 456 / 388 |
 
-After 40 episodes the greedy net still reroutes at almost every stuck event. With the default grace no abort is checked before episode 1600 of 3200, so the retrain reaches the end of exploration before it can be stopped.
+After 40 episodes the greedy net still reroutes at almost every stuck event under both rewards. 40 episodes at epsilon 0.98 is too early to judge; the one-run pilot (3200 episodes, with the abort grace) decides. With the default grace no abort is checked before episode 1600 of 3200, so the retrain reaches the end of exploration before it can be stopped.

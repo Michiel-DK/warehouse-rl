@@ -1,0 +1,105 @@
+{
+  "config": {
+    "version": 2,
+    "algo": "double_dqn",
+    "rate": 1,
+    "seed": 0,
+    "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+    "dispatcher": "stuck_aware_cta",
+    "steps": 500,
+    "episodes": 3200,
+    "smoke": false,
+    "disturb": {
+      "breakdown": {
+        "rate_per_hour": 1,
+        "duration": [
+          20,
+          60
+        ],
+        "agent_types": [
+          "agv"
+        ]
+      }
+    },
+    "eval_seeds": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004
+    ],
+    "train_seed_base": 10000,
+    "train_seed_stride": 100000,
+    "capacity": 200000,
+    "lr": 0.001,
+    "clip_norm": 10.0,
+    "grad_per_new": 4,
+    "epsilon": {
+      "start": 1.0,
+      "end": 0.05,
+      "frac": 0.5
+    },
+    "hidden": 64,
+    "call_human_cost": 60,
+    "abandon_cost": 15,
+    "reward": {
+      "line_reward": 1.0,
+      "stuck_penalty": 0.0,
+      "cost_unit": 0.01,
+      "gamma": 0.99,
+      "call_human_cost": 60,
+      "abandon_cost": 15
+    },
+    "explore": {
+      "prior": "timeout",
+      "random_share": 0.1
+    },
+    "abort_below": 0.0,
+    "abort_after_frac": 0.5,
+    "iter_episodes": 8,
+    "eval_every": 40,
+    "batch": 256,
+    "warmup": 2000,
+    "target_sync": 1000
+  },
+  "intervals": [
+    {
+      "episode": 40,
+      "env_steps": 20000,
+      "wall_s": 67.46200895309448,
+      "train_reward_mean": 27.317499999999985,
+      "eval_pick_rate_mean": 1.152,
+      "eval_pick_rates": [
+        1.44,
+        0.0,
+        4.32,
+        0.0,
+        0.0
+      ],
+      "epsilon": 0.97684375,
+      "loss_mean": 0.00488577039570804,
+      "decisions": 22969,
+      "gradient_steps": 5740,
+      "rollout_steps_per_s": 413.89459088895455
+    }
+  ],
+  "finished": false,
+  "reward_used": {
+    "line_reward": 1.0,
+    "stuck_penalty": 0.0,
+    "cost_unit": 0.01,
+    "gamma": 0.99,
+    "call_human_cost": 60,
+    "abandon_cost": 15
+  },
+  "reference_pick_rate": {
+    "mean": 50.112,
+    "values": [
+      48.96,
+      46.08,
+      46.08,
+      56.16,
+      53.28
+    ]
+  }
+}

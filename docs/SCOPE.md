@@ -378,9 +378,21 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         - per-reroute cost: punishes the timeout rule's own behaviour;
         - "busy and did not move" stuck term: back_off ping-pong dodges it, and it needs `recovery.py`;
         - behaviour cloning on `timeout`: more code, and it does not remove the incentive.
-        Probe (README trainer section, `results/recovery_train_smoke/`): greedy eval 1.15 at episode 40 vs reference
-        50.11; the greedy net still reroutes at 1442 of 1461 and 1996 of 2016 stuck events (seeds 1000, 1001). The
-        retrain decides whether that changes once exploration has decayed.
+        Probe (README trainer section, `results/recovery_train_smoke/pass2_rate1_seed0/`): greedy eval 1.15 at
+        episode 40 vs reference 50.11; the greedy net still reroutes at 1442 of 1461 and 1996 of 2016 stuck events
+        (seeds 1000, 1001). The retrain decides whether that changes once exploration has decayed.
+      - 13 Oct pm operator decision: per-agent own credit. Each agent's window gets its own entry of the vendored
+        per-agent reward (`RewardType.INDIVIDUAL`: +1 own delivery, +0.1 own load/unload, `global_reward=False`, both
+        asserted in `make_learned_env`) instead of an equal share of the fleet's deliveries; the two action costs
+        are unchanged; `reward_constants()` records `credit: "own"`. Why: the TA-RWARE authors train on individual
+        rewards (Krnjaic et al., arXiv 2212.11498, Sec. C4), and one shared team reward is the documented "lazy
+        agent" case (Sunehag et al., VDN). The metric is untouched (pick-rate from `info["shelf_deliveries"]`).
+        Not adopted: the vendor's constant -0.001 per agent-step is added back, so it is left out of the training reward
+        (`vendor_step_penalty: "excluded"`): at a fixed 500 steps it is episode-constant and cannot change the
+        ranking of policies. Probe (`results/recovery_train_smoke/rate1_seed0/`): greedy eval 1.44 at episode 40 vs
+        reference 50.11; reroute at 1401 of 1427 and 1956 of 1967 stuck events (seeds 1000, 1001). Reported, not
+        judged: the one-run pilot (`wr-s3-recovery-pilot`, 3200 episodes with the abort grace) is read before the
+        9-run retrain.
 - [ ] Re-dispatch on abandon is REQUIRED (use `StuckAwareCtaPolicy` as the dispatcher for all recovery runs);
       otherwise CTA re-attempts the abandoned task with the same robot
 - [x] Sweep the "call human" cost; report the curve, not one point
