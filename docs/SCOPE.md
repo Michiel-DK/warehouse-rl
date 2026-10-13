@@ -422,7 +422,9 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
 
 Exit: curves. Kill: learned recovery does not beat `RuleRecovery` outside the CI; the client takes the rule, write
 that up. **Applied 2026-10-13:** README "Sprint 3 close-out" is the write-up. The rule the client takes is the env
-default `timeout` (5/15), because no tuned, rule, call-human or informed variant beats it outside the CI.
+default `timeout` (5/15). No tuned, rule, call-human or informed variant beats it at the plausible rates 1-2. The
+only CI-excluding gain anywhere is tuned 3/15 at rate 8, +0.86 (+0.19 to +1.54), 1 of 32 comparisons, about what
+chance gives.
 
 ### Sprint 4: dispatcher reproduction (optional, coding 2 days, training 2 days). DEPRIORITISED 2026-10-13
 

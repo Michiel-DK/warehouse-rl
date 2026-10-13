@@ -397,7 +397,7 @@ The timeout rows are the stored `timeout.json` rows. The `decisions_while_blocke
 **Verdict: fault information does not move the number; the jam loss is in the layout.**
 - No paired CI excludes 0 at any rate, for either mode. That includes the look-ahead mode, which knows the repair time.
 - At rate 8 the best is informed left, +0.43 (-0.20 to +1.07). That is 2% of the 20.50 lines/h breakdown loss, and within noise.
-- "In the layout" is an inference from the frozen-floor table above, not a measurement. Of the 20.50 lines/h lost at rate 8, the frozen floor (the broken robots' own lost time) is 17.84. `timeout`'s residual of +2.66 above that floor is untouched by every rule family: tuned timeout, rules, call-human and now informed.
+- "In the layout" is an inference from the frozen-floor table above, not a measurement. Of the 20.50 lines/h lost at rate 8, the frozen floor (the broken robots' own lost time) is 17.84. `timeout`'s residual of +2.66 above that floor is not recovered by any rule family: tuned timeout, rules, call-human and now informed. The only CI-excluding gain anywhere is tuned replan 3 abandon 15 at rate 8, +0.86 (+0.19 to +1.54), which is 1 of 32 tuned comparisons (about what chance gives) and 4% of the 20.50 loss.
 
 **What was measured.** This sweep tests reroute-at-once use of the fact, not abandon-at-once:
 - When the blocker is frozen, both modes reroute on nearly every decision (flag: 288.2 of 288.2 per episode at rate 8).
