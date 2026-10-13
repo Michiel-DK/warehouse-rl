@@ -340,7 +340,7 @@ The learned policy (`src/warehouse_rl/learned_recovery.py`) is a semi-MDP double
 
 There is no per-step stuck penalty (`STUCK_PENALTY` = 0.0). Reroute, back-off and abandon all reset the stuck counter, so any stuck term the action itself can reset is a free dodge. Stuck time stays an evaluation metric (`stuck_busy_agents`). `log.json["reward_used"]` records `stuck_penalty: 0.0` and `cost_unit: 0.01`.
 
-The first real run (11 Oct, format version 1) had no abandon term, and its policy was degenerate. Greedy eval pick-rate never rose above 11.2 lines/h on run seed 0 (6400 episodes) or 4.0 on seed 1 (4880 episodes, killed), against 51.17 for `timeout` at rate 1. A 2-seed check with `scripts/evaluate.py --recovery learned:` (11 Oct, not kept on disk) found 0 deliveries and an abandon at almost every stuck event: abandoning cleared the stuck penalty and cost nothing. Those runs are kept, untracked, in `results/recovery_train_v1_degenerate/`.
+The first real run (11 Oct, format version 1) had no abandon term, and its policy was degenerate. Greedy eval pick-rate never rose above 11.2 lines/h on run seed 0 (6400 episodes) or 4.0 on seed 1 (4880 episodes, killed), against 51.17 for `timeout` at rate 1. A 2-seed check with `scripts/evaluate.py --recovery learned:` (11 Oct, untracked: `rate1_seed0/v1_eval/` inside the v1 run directory) found 0 deliveries and an abandon at almost every stuck event: abandoning cleared the stuck penalty and cost nothing. Those runs are kept, untracked, in `results/recovery_train/` until this lane merges, then in `results/recovery_train_v1_degenerate/`.
 
 Version 2 changes four things:
 - **Abandon costs something**, as above. The value is in the config, in `log.json["reward_used"]` and in the checkpoint's reward dict.

@@ -385,6 +385,22 @@ class TestShippedWeights(unittest.TestCase):
         self.assertTrue(all(t["epsilon"] == 0.0 for t in calls[1] + calls[3]))
 
 
+class TestRandomSharePlumbing(unittest.TestCase):
+    # inject: main drops --random-share, or task() uses the RANDOM_SHARE constant instead of the run's config
+    def test_cli_random_share_reaches_every_training_rollout(self):
+        _RecordingPool.calls = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx(
+                _RecordingPool)), mock.patch.object(sys, "argv", ["t", "--smoke", "--random-share", "0.3",
+                                                                   "--abort-below", "0", "--steps", "60",
+                                                                   "--results-dir", d]), mock.patch("builtins.print"):
+            tr.main()
+            cfg = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())["config"]
+        train = [t for c in _RecordingPool.calls for t in c if t.get("collect")]
+        self.assertEqual(len(train), 4)
+        self.assertTrue(all(t["random_share"] == 0.3 and t["prior"] == "timeout" for t in train))
+        self.assertEqual(cfg["explore"], {"prior": "timeout", "random_share": 0.3})
+
+
 class TestSmokeTrainAndResume(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

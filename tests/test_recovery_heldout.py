@@ -56,7 +56,8 @@ class TestDiscovery(unittest.TestCase):
             self.assertEqual(labels, ["learned rate1 seed0", "learned rate1 seed1", "learned rate2 seed0",
                                       "learned rate10 seed0", "rule 5/10/25", "timeout"])
 
-    # inject: drop the `finished is True` test, or key on the aborted file instead of it
+    # inject: drop the `finished is True` test (keying on `aborted is None` instead is caught by
+    # test_only_finished_rate_seed_dirs, not here)
     def test_aborted_run_dir_is_excluded(self):
         with tempfile.TemporaryDirectory() as t:
             make_run(t, "rate1_seed0")
