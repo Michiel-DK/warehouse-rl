@@ -8,7 +8,8 @@
 --   _ver           : writer-side strictly increasing UInt64 (ns clock, bumped on ties). It is the ReplacingMergeTree
 --                    version of the upsert tables, so the later upsert always wins, and the read order of the others.
 --   Upsert tables  : ReplacingMergeTree(_ver) ORDER BY exactly the key columns S5B1 passes to store.upsert; always read
---                    with FINAL.
+--                    with FINAL. `_first` is the `_ver` of the key's first write, carried by every later version of the
+--                    key, so reads (ORDER BY _first) return rows in first-write order, like MemoryStore.
 --   decisions      : insert-only (first write wins, enforced by record_decision's dedup_key check). A grading stamp goes
 --                    to decision_grades, once per decision id; ClickHouseStore.select('decisions') merges the two.
 --   JSON cells     : lists / dicts / grade values are stored as JSON text (String) and parsed back on read.
@@ -106,7 +107,8 @@ CREATE TABLE IF NOT EXISTS decision_grades
     verdict Nullable(String),
     graded_at Nullable(Float64),
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY id;
@@ -132,7 +134,8 @@ CREATE TABLE IF NOT EXISTS stuck_episodes
     avoidable_s Nullable(Float64),
     left_censored Bool,
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, episode_id);
@@ -147,7 +150,8 @@ CREATE TABLE IF NOT EXISTS ingest_checkpoints
     cp_seq Int64,
     updated_at Float64,
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, path);
@@ -166,7 +170,8 @@ CREATE TABLE IF NOT EXISTS ingest_files
     in_emit_ledger Bool,
     updated_at Float64,
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, path);
@@ -194,7 +199,8 @@ CREATE TABLE IF NOT EXISTS ingest_ledger
     backlog_bytes Nullable(Int64),
     written_at Float64,
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, source, minute);
@@ -209,7 +215,8 @@ CREATE TABLE IF NOT EXISTS ingest_runs
     expected_messages Nullable(Int64),
     updated_at Float64,
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY run;
@@ -223,7 +230,8 @@ CREATE TABLE IF NOT EXISTS ingest_consumer_lag
     partitions Int64,
     updated_at Float64,
     schema_version UInt8 DEFAULT 1,
-    _ver UInt64
+    _ver UInt64,
+    _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, topic);

@@ -25,7 +25,7 @@ from fleet_analyser import decisions  # noqa: E402
 from fleet_analyser.store import JsonlStore, MemoryStore, open_store  # noqa: E402
 
 SCHEMA = ROOT / "fleet" / "sql" / "schema.sql"
-HIDDEN = ("schema_version", "_ver")
+HIDDEN = ("schema_version", "_ver", "_first")
 
 
 # ------------------------------------------------------------------------------------------------ fake server
@@ -132,15 +132,22 @@ class FakeClickHouse:
                     raise _Http(400, f"Code: 117. Unknown field found while parsing JSONEachRow: {sorted(unknown)}")
                 if "_ver" not in row or "schema_version" in row:
                     raise _Http(400, "Code: 117. _ver is required and schema_version is a DDL default")
+                if ("_first" in t["cols"]) != ("_first" in row):
+                    raise _Http(400, "Code: 117. _first is required exactly on the upsert tables")
                 t["rows"].append(row)
             return ""
-        m = re.match(r"SELECT \* EXCEPT \(schema_version, _ver\) FROM `(\w+)`( FINAL)?(?: WHERE (.+?))? "
-                     r"ORDER BY _ver(?: LIMIT (\d+))? FORMAT JSONEachRow$", body, re.S)
+        m = re.match(r"SELECT (\* EXCEPT \(([\w, ]+)\)|[`\w, ]+) FROM `(\w+)`( FINAL)?(?: WHERE (.+?))?"
+                     r"(?: ORDER BY (_ver|_first))?(?: LIMIT (\d+))? FORMAT JSONEachRow$", body, re.S)
         if not m:
             raise _Http(400, f"Code: 62. Syntax error (fake): {body[:200]}")
         if params.get("output_format_json_quote_64bit_integers") != "0":
             raise _Http(400, "the store must ask for unquoted 64-bit integers")
-        name, final, where, limit = m.groups()
+        proj, excepted, name, final, where, order, limit = m.groups()
+        excepted = [c.strip() for c in excepted.split(",")] if excepted else None
+        keep = None if excepted else [c.strip().strip("`") for c in proj.split(",")]
+        t0 = self.tables[name]
+        if excepted is not None and "_first" in t0["cols"] and order != "_first":
+            raise _Http(400, "upsert tables must be read in first-write order (ORDER BY _first)")
         t = self.tables[name]
         rows = list(t["rows"])
         if final:
@@ -156,9 +163,13 @@ class FakeClickHouse:
             if col not in t["cols"]:
                 raise _Http(400, f"Code: 47. Unknown identifier {col}")
             rows = [r for r in rows if r.get(col) == v]
-        rows.sort(key=lambda r: r["_ver"])
+        rows.sort(key=lambda r: r[order or "_ver"])
         if limit:
             rows = rows[:int(limit)]
+        if keep is not None:
+            return "".join(json.dumps({k: r[k] for k in keep}) + "\n" for r in rows)
+        if sorted(excepted) != sorted(c for c in ("schema_version", "_ver", "_first") if c in t["cols"]):
+            raise _Http(400, f"the store must hide exactly the DDL-added columns, got {excepted}")
         return "".join(json.dumps({k: v for k, v in r.items() if k not in HIDDEN}) + "\n" for r in rows)
 
 
@@ -189,8 +200,7 @@ def ep_row(eid, resolution="open", cell=(1, 2), **kw):
 
 
 def contract_sequence(st):
-    """One fixed call sequence; returns everything observable. Upsert-table lists are sorted (the order of upserted
-    rows is documented to differ), everything else is compared in order."""
+    """One fixed call sequence; returns everything observable, rows in the order select() returned them."""
     obs = {}
     st.insert("transitions", [dict(run="r", zone="0", robot="Z0-01", ts=100 + i, from_state="IDLE", to_state="MOVING",
                                    cell=[i, 2], order_id="o1") for i in range(3)])
@@ -200,9 +210,9 @@ def contract_sequence(st):
     st.upsert("stuck_episodes", ("run", "episode_id"),
               [ep_row("e1", resolution="moved", end=190, duration_s=90, cell=(1, 2))])
     obs["e1"] = st.select("stuck_episodes", {"run": "r", "episode_id": "e1"})
-    obs["episodes"] = sorted(st.select("stuck_episodes"), key=lambda r: r["episode_id"])
+    obs["episodes"] = st.select("stuck_episodes")  # e1 was replaced after e2 arrived: still [e1, e2]
     obs["open"] = st.select("stuck_episodes", {"resolution": "open"})
-    obs["null_blocker"] = sorted(r["episode_id"] for r in st.select("stuck_episodes", {"blocker": None}))
+    obs["null_blocker"] = [r["episode_id"] for r in st.select("stuck_episodes", {"blocker": None})]
     st.insert("rejects", [dict(run="r", source="file", file="f's\\q", offset=0, reason="json", raw="x'\"\\n")])
     obs["rejects"] = st.select("rejects", {"file": "f's\\q"})
     st.upsert("ingest_runs", ("run",), [dict(run="r", glob="g", emit_ledger=None, emit_status=None, emit_config=None,
@@ -225,16 +235,16 @@ def contract_sequence(st):
         claim={}, rationale="second", expected=1, grade_after=1, recorded_at=9.9)
     obs["exists"] = (st.exists("decisions", dedup_key="stuck_cause:Z0-01:2026-01-01T00:00:00Z"),
                      st.exists("decisions", dedup_key="nope"), st.exists("decisions", id=ids[0], status="open"))
-    obs["decisions_before"] = sorted(st.select("decisions"), key=lambda d: d["id"])
+    obs["decisions_before"] = st.select("decisions")
     obs["stamp1"] = decisions.stamp_grade(st, ids[0], {"ok": True}, None, "right", 4000.5)
     obs["stamp2"] = decisions.stamp_grade(st, ids[0], "other", "e", "wrong", 5000)
     obs["raw_update"] = (st.update_where("decisions", {"id": ids[1], "status": "open"},
                                          dict(status="graded", outcome="x", error=None, verdict="v", graded_at=1)),
                          st.update_where("decisions", {"id": ids[1], "status": "open"}, dict(status="graded")),
                          st.update_where("decisions", {"id": "missing", "status": "open"}, dict(status="graded")))
-    obs["decisions_after"] = sorted(st.select("decisions"), key=lambda d: d["id"])
+    obs["decisions_after"] = st.select("decisions")
     obs["open_after"] = st.select("decisions", {"status": "open"})
-    obs["graded_after"] = sorted(d["subject"] for d in st.select("decisions", {"status": "graded"}))
+    obs["graded_after"] = [d["subject"] for d in st.select("decisions", {"status": "graded"})]
     obs["one"] = st.select("decisions", {"id": ids[0]})
     obs["exists_graded"] = (st.exists("decisions", id=ids[0], status="graded"),
                             st.exists("decisions", id=ids[0], status="open"))
@@ -247,20 +257,20 @@ class StoreContract:
         raise NotImplementedError
 
     def test_same_results_as_memory_store_for_the_same_call_sequence(self):
-        # inject: ClickHouseStore.select returns the schema_version column, reads an upsert table without FINAL, or
-        # decisions are updated in place (the second stamp changes the row); JsonlStore: skip replaying __upd
+        # inject: ClickHouseStore.select returns the schema_version column, or reads an upsert table without FINAL;
+        # JsonlStore: skip replaying __upd records
         got = contract_sequence(self.make_store())
         want = contract_sequence(MemoryStore())
         self.assertEqual(got, want)
 
     def test_contract_facts_hold_on_their_own(self):
-        # inject: ClickHouseStore.upsert versions every row with the same _ver, or update_where counts the rows
-        # matched by the first select instead of the stamps written
+        # inject: ClickHouseStore versions every row with the same _ver, or reads upsert tables without FINAL
         obs = contract_sequence(self.make_store())
         self.assertEqual([{k: v for k, v in r.items() if k in ("resolution", "end", "duration_s")} for r in obs["e1"]],
                          [dict(resolution="moved", end=190, duration_s=90)])  # one row, the later values
         self.assertEqual([r["episode_id"] for r in obs["open"]], ["e2"])
-        self.assertEqual(obs["null_blocker"], ["e1", "e2"])
+        self.assertEqual(obs["null_blocker"], ["e1", "e2"])  # first-write order survives the replacement of e1
+        self.assertEqual([r["episode_id"] for r in obs["episodes"]], ["e1", "e2"])
         self.assertEqual(obs["runs"][0]["expected_messages"], 720)
         self.assertEqual(obs["runs"][0]["emit_config"], {"rate": "flat", "n": [1, 2]})
         self.assertEqual(obs["rejects"][0]["raw"], "x'\"\\n")
@@ -310,14 +320,30 @@ class TestClickHouseSql(unittest.TestCase):
             self.st.upsert("ingest_runs", ("run",), [dict(run="r", glob="a", updated_at=1.0)])
             self.st.upsert("ingest_runs", ("run",), [dict(run="r", glob="b", updated_at=2.0),
                                                      dict(run="r", glob="c", updated_at=3.0)])
-        reqs = [b for _, b, _ in self.fake.requests]
+        reqs = [b for _, b, _ in self.fake.requests if b.startswith("INSERT")]
+        self.assertEqual(len(reqs), 2)
         self.assertTrue(all(b.startswith("INSERT INTO `ingest_runs` FORMAT JSONEachRow\n") for b in reqs))
         rows = [json.loads(ln) for b in reqs for ln in b.splitlines()[1:]]
         self.assertEqual([r["glob"] for r in rows], ["a", "b", "c"])
         vers = [r["_ver"] for r in rows]
         self.assertEqual(vers, sorted(set(vers)))  # strictly increasing
+        self.assertEqual({r["_first"] for r in rows}, {vers[0]})  # every version of the key carries the first write
         self.assertTrue(all("schema_version" not in r for r in rows))
         self.assertEqual(self.st.select("ingest_runs")[0]["glob"], "c")  # the later upsert wins
+
+    def test_first_write_order_survives_a_new_process_and_replacements(self):
+        # inject: start a fresh _first for a key already in the table (skip seeding from the table), or order by _ver
+        key = ("run", "episode_id")
+        self.st.upsert("stuck_episodes", key, [ep_row("e1"), ep_row("e2")])
+        again = chs.ClickHouseStore(self.fake.url, database="fleet")  # a restarted writer: empty in-process state
+        again.upsert("stuck_episodes", key, [ep_row("e1", resolution="moved"), ep_row("e3")])
+        again.upsert("stuck_episodes", key, [ep_row("e2", resolution="moved")])
+        got = [(r["episode_id"], r["resolution"]) for r in again.select("stuck_episodes")]
+        self.assertEqual(got, [("e1", "moved"), ("e2", "moved"), ("e3", "open")])
+        seed = [b for _, b, _ in self.fake.requests if b.startswith("SELECT `run`, `episode_id`, _first FROM")]
+        self.assertEqual(len(seed), 2)  # once per store instance and table, not once per write
+        with self.assertRaises(ValueError):
+            again.upsert("stuck_episodes", ("run",), [ep_row("e4")])  # the key must be the DDL's ORDER BY
 
     def test_select_sql_final_only_for_upsert_tables_and_unquoted_64_bit(self):
         # inject: drop FINAL from the upsert-table query, or add it for every table
@@ -325,11 +351,12 @@ class TestClickHouseSql(unittest.TestCase):
         self.st.select("transitions", {"robot": "Z0-01", "ts": 5})
         self.st.exists("stuck_episodes", run="r", episode_id="e")
         sql = self.fake.sql()
-        self.assertEqual(sql[0], "SELECT * EXCEPT (schema_version, _ver) FROM `ingest_runs` FINAL WHERE `run` = 'r' "
-                                 "ORDER BY _ver FORMAT JSONEachRow")
+        sql = [q for q in sql if not q.startswith("INSERT")]
+        self.assertEqual(sql[0], "SELECT * EXCEPT (schema_version, _ver, _first) FROM `ingest_runs` FINAL WHERE "
+                                 "`run` = 'r' ORDER BY _first FORMAT JSONEachRow")
         self.assertEqual(sql[1], "SELECT * EXCEPT (schema_version, _ver) FROM `transitions` WHERE `robot` = 'Z0-01' "
                                  "AND `ts` = 5 ORDER BY _ver FORMAT JSONEachRow")
-        self.assertIn("FROM `stuck_episodes` FINAL WHERE `run` = 'r' AND `episode_id` = 'e' ORDER BY _ver LIMIT 1",
+        self.assertIn("FROM `stuck_episodes` FINAL WHERE `run` = 'r' AND `episode_id` = 'e' ORDER BY _first LIMIT 1",
                       sql[2])
         for params, _, _ in self.fake.requests:
             self.assertEqual(params["output_format_json_quote_64bit_integers"], "0")
@@ -445,6 +472,11 @@ class TestSchema(unittest.TestCase):
         self.assertEqual(self.schema["decision_grades"]["order"], ["id"])
         self.assertEqual(self.schema["decision_grades"]["engine"], "ReplacingMergeTree")
         self.assertEqual(set(chs.UPSERT_TABLES), set(self.rec.keys) | {"decision_grades", "ingest_consumer_lag"})
+        for table, key in chs.UPSERT_KEYS.items():  # the store's key table is the DDL's ORDER BY
+            self.assertEqual(self.schema[table]["order"], list(key), table)
+            self.assertIn("_first", self.schema[table]["cols"], table)
+        for table in set(self.schema) - set(chs.UPSERT_KEYS):
+            self.assertNotIn("_first", self.schema[table]["cols"], table)
 
     def test_state_sample_has_a_seven_day_ttl_and_only_it(self):
         # inject: change INTERVAL 7 DAY, or add a TTL to another table
@@ -452,7 +484,7 @@ class TestSchema(unittest.TestCase):
         self.assertEqual([t for t, d in self.schema.items() if d["ttl"]], ["state_sample"])
 
     def test_ingest_through_the_fake_clickhouse_equals_ingest_into_memory(self):
-        # inject: ClickHouseStore drops a row on insert, returns upsert rows without FINAL, or reorders insert-only rows
+        # inject: ClickHouseStore drops the last row of every insert request, or returns upsert rows without FINAL
         fake, st = fake_store(self)
         _, mem, _ = ingest_dir(self.dir, MemoryStore(), clock=Clock(), once=True)
         _, ch, _ = ingest_dir(self.dir, st, clock=Clock(), once=True)
@@ -460,14 +492,12 @@ class TestSchema(unittest.TestCase):
         self.assertGreater(len(a["stuck_episodes"]), 0)
         self.assertGreater(len(a["decisions"]), 0)
         self.assertEqual(a, b)
-        key = lambda r: json.dumps(r, sort_keys=True)  # noqa: E731
-        for t in ("rejects", "state_sample", "evidence"):
+        # every table, rows in the order select() returns them (first-write order), nothing sorted or left out
+        for t in ("transitions", "rejects", "state_sample", "evidence", "decisions", "stuck_episodes",
+                  "ingest_checkpoints", "ingest_files", "ingest_ledger", "ingest_runs"):
             self.assertEqual(mem.select(t), ch.select(t), t)
             self.assertGreater(len(mem.select(t)), 0, t)
-        for t in ("ingest_checkpoints", "ingest_files", "ingest_ledger", "ingest_runs"):
-            drop = {"written_at", "updated_at", "msgs_per_s", "mb_per_s"}
-            strip = lambda rows: sorted(({k: v for k, v in r.items() if k not in drop} for r in rows), key=key)  # noqa
-            self.assertEqual(strip(mem.select(t)), strip(ch.select(t)), t)
+        self.assertGreater(len(mem.select("stuck_episodes")), 1)  # open rows were replaced after later episodes opened
 
 
 if __name__ == "__main__":

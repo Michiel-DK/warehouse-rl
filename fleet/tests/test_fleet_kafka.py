@@ -63,6 +63,7 @@ class FakeConsumer:
 
     def consume(self, num_messages=1, timeout=1.0):
         self.calls += 1
+        assert self.calls < 500, "the loop does not end"
         if self.clock is not None:
             self.clock.t += 1
         batch = self.batches.pop(0) if self.batches else []
@@ -338,7 +339,7 @@ class TestConsumerFactoryAndCli(unittest.TestCase):
         self.assertEqual(made["topics"], ["fleet.state"])
 
     def test_missing_library_is_one_line_naming_the_requirements_file(self):
-        # inject: import confluent_kafka at module level in kafka_source, or drop the pip hint
+        # inject: drop the pip hint from the SourceError message
         import ingest as cli
 
         with mock.patch.dict(sys.modules, {"confluent_kafka": None}):
@@ -353,8 +354,28 @@ class TestConsumerFactoryAndCli(unittest.TestCase):
             self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
             self.assertIn("pip install -r fleet/requirements.txt", err.getvalue())
 
+    def test_confluent_kafka_is_imported_only_inside_functions(self):
+        # inject: add a module-level `import confluent_kafka` to kafka_source.py or sinks.py
+        import ast
+
+        seen = 0
+        for path in sorted((ROOT / "fleet").rglob("*.py")):
+            if "tests" in path.parts or "data" in path.parts:
+                continue
+            tree = ast.parse(path.read_text())
+            for node in tree.body:  # module level only, including if/try blocks
+                for sub in ast.walk(node) if not isinstance(node, (ast.FunctionDef, ast.ClassDef)) else ():
+                    names = [a.name for a in sub.names] if isinstance(sub, ast.Import) else \
+                        [sub.module] if isinstance(sub, ast.ImportFrom) else []
+                    self.assertFalse([n for n in names if n and n.split(".")[0] == "confluent_kafka"], str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    seen += any("confluent_kafka" in (getattr(a, "name", "") or "") for a in getattr(node, "names", [])) \
+                        or "confluent_kafka" in (getattr(node, "module", "") or "")
+        self.assertGreaterEqual(seen, 3)  # the lazy imports exist (sinks twice, kafka_source once)
+
     def test_cli_kafka_source_runs_to_idle_and_reports_coverage_line(self):
-        # inject: do not pass --until-idle / --emit-ledger / --topic through to the ingester
+        # inject: pass emit_path=None, or the default topic instead of --topic, or no until_idle to the ingester
         import ingest as cli
 
         msgs = messages()
@@ -458,6 +479,7 @@ class TestKafkaSinkDelivery(unittest.TestCase):
         p = DeliveryProducer()
         sink = sinks.KafkaSink(TOPIC, producer=p)
         produce_all(sink)
+        self.assertEqual((sink.delivered, sink.delivery_failed), (0, 0))  # produced is not delivered
         sink.close()
         self.check_totals(emit_doc_for(sink), 10, 0, True)
         self.assertEqual(p.flushes, 1)

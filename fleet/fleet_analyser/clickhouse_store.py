@@ -4,13 +4,15 @@
 one POST to `/?database=<db>&...`: `INSERT INTO t FORMAT JSONEachRow` followed by one JSON object per line, and
 `SELECT ... FORMAT JSONEachRow` answered with one JSON object per line. The DDL is fleet/sql/schema.sql.
 
-Contract: for the same call sequence select / exists / update_where return what MemoryStore returns, with these
-documented differences. (1) Row order: insert-only tables come back in insert order (the `_ver` sequence); upsert tables
-in last-write order, not first-write order. (2) Columns the DDL adds (`schema_version`, `_ver`) are never returned.
-(3) A missing column comes back as NULL / the column default (MemoryStore omits the key); S5B1 always writes full rows.
+Contract: for the same call sequence select / exists / update_where return what MemoryStore returns, rows in first-write
+order included. The columns the DDL adds (`schema_version`, `_ver`, `_first`) are never returned. One difference: a
+column the writer left out comes back as NULL / the column default (MemoryStore omits the key); S5B1 writes full rows.
 
 Upsert tables are ReplacingMergeTree(_ver) ordered by the upsert key and read with FINAL. `_ver` is a per-process
 strictly increasing integer (nanosecond clock, bumped by one on a tie), so within one writer the later upsert always wins.
+`_first` is the `_ver` of the key's first write, carried by every later version, and upsert tables are read ORDER BY
+`_first`, which is MemoryStore's first-write order (a replaced row keeps its position). The key -> `_first` map is read
+from the table once per table and process (single-writer assumption, as for grading below).
 
 `decisions` is insert-only and first-write-wins (record_decision checks the dedup_key before inserting). A grading stamp
 (`update_where("decisions", ...)`, as decisions.stamp_grade does) is written to `decision_grades` and only if the decision
@@ -32,7 +34,14 @@ from .store import Store
 DEFAULT_PORT = 18123
 DEFAULT_DATABASE = "fleet"
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "sql" / "schema.sql"
-HIDDEN = ("schema_version", "_ver")
+# upsert table -> the key columns S5B1 passes to store.upsert; the schema.sql ORDER BYs are exactly these.
+UPSERT_KEYS = {
+    "stuck_episodes": ("run", "episode_id"), "ingest_ledger": ("run", "source", "minute"),
+    "ingest_files": ("run", "path"), "ingest_checkpoints": ("run", "path"), "ingest_runs": ("run",),
+    "decision_grades": ("id",), "ingest_consumer_lag": ("run", "topic"),
+}
+UPSERT_TABLES = frozenset(UPSERT_KEYS)
+HIDDEN = ("schema_version", "_ver", "_first")
 GRADE_FIELDS = ("status", "outcome", "error", "verdict", "graded_at")
 # (table, column) -> the cell is JSON text in ClickHouse: dumps on write, loads on read (NULL stays None).
 JSON_COLS = frozenset({
@@ -70,6 +79,7 @@ class ClickHouseStore(Store):
         self.timeout = timeout
         self._auth = (user, password) if user else None
         self._last_ver = 0
+        self._firsts = {}  # upsert table -> {key tuple -> _first}
 
     @classmethod
     def from_spec(cls, spec):
@@ -149,18 +159,37 @@ class ClickHouseStore(Store):
             out.append(row)
         return out
 
-    def _query(self, table, eq, final, limit=None):
-        sql = (f"SELECT * EXCEPT (schema_version, _ver) FROM {_ident(table)}{' FINAL' if final else ''}"
-               f"{self._where(table, eq)} ORDER BY _ver{f' LIMIT {limit}' if limit else ''} FORMAT JSONEachRow")
+    def _query(self, table, eq, limit=None):
+        upsert = table in UPSERT_KEYS
+        sql = (f"SELECT * EXCEPT (schema_version, _ver{', _first' if upsert else ''}) FROM {_ident(table)}"
+               f"{' FINAL' if upsert else ''}{self._where(table, eq)} ORDER BY {'_first' if upsert else '_ver'}"
+               f"{f' LIMIT {limit}' if limit else ''} FORMAT JSONEachRow")
         return self._rows_out(table, self._post(sql))
+
+    def _first_map(self, table):
+        """key tuple -> _first for every key already in the upsert table, read once per process."""
+        m = self._firsts.get(table)
+        if m is None:
+            key = UPSERT_KEYS[table]
+            text = self._post(f"SELECT {', '.join(map(_ident, key))}, _first FROM {_ident(table)} FINAL "
+                              f"FORMAT JSONEachRow")
+            m = self._firsts[table] = {}
+            for line in text.splitlines():
+                if line.strip():
+                    o = json.loads(line)
+                    m[tuple(o[c] for c in key)] = o["_first"]
+        return m
 
     def _write(self, table, rows):
         rows = list(rows)
+        firsts = self._first_map(table) if table in UPSERT_KEYS else None
         for i in range(0, len(rows), INSERT_BATCH):
             lines = []
             for r in rows[i:i + INSERT_BATCH]:
                 obj = {k: self._enc(table, k, v) for k, v in r.items()}
-                obj["_ver"] = self._next_ver()
+                obj["_ver"] = ver = self._next_ver()
+                if firsts is not None:
+                    obj["_first"] = firsts.setdefault(tuple(obj.get(c) for c in UPSERT_KEYS[table]), ver)
                 lines.append(json.dumps(obj, separators=(",", ":"), allow_nan=False))
             self._post(f"INSERT INTO {_ident(table)} FORMAT JSONEachRow\n" + "\n".join(lines) + "\n")
 
@@ -170,31 +199,28 @@ class ClickHouseStore(Store):
 
     def upsert(self, table, key_cols, rows):
         # The table's ORDER BY must be exactly key_cols (schema.sql); a different key would silently not dedupe.
+        if UPSERT_KEYS.get(table) != tuple(key_cols):
+            raise ValueError(f"{table} is keyed by {UPSERT_KEYS.get(table)} in schema.sql, not {tuple(key_cols)}")
         self._write(table, rows)
 
     def select(self, table, where=None):
         if table == "decisions":
             return self._select_decisions(where)
-        return self._query(table, where, final=self._is_upsert(table))
+        return self._query(table, where)
 
     def exists(self, table, **eq):
         if table == "decisions" and any(c in GRADE_FIELDS for c in eq):
             return bool(self._select_decisions(eq))
-        return bool(self._query(table, eq, final=self._is_upsert(table), limit=1))
-
-    @staticmethod
-    def _is_upsert(table):
-        return table in UPSERT_TABLES
+        return bool(self._query(table, eq, limit=1))
 
     def _select_decisions(self, where):
         where = dict(where or {})
         d_where = {c: v for c, v in where.items() if c not in GRADE_FIELDS}
         g_where = {c: v for c, v in where.items() if c in GRADE_FIELDS}
-        rows = self._query("decisions", d_where, final=False)
+        rows = self._query("decisions", d_where)
         if not rows:
             return []
-        grades = {g["id"]: g for g in self._query("decision_grades", {"id": d_where["id"]} if "id" in d_where else None,
-                                                  final=True)}
+        grades = {g["id"]: g for g in self._query("decision_grades", {"id": d_where["id"]} if "id" in d_where else None)}
         out = []
         for r in rows:
             g = grades.get(r["id"])
@@ -213,19 +239,16 @@ class ClickHouseStore(Store):
         hit = self._select_decisions(eq)
         if not hit:
             return 0
-        have = {g["id"] for g in self._query("decision_grades", None, final=True)} if len(hit) > 1 else None
+        have = {g["id"] for g in self._query("decision_grades", None)} if len(hit) > 1 else None
         stamped = 0
         for r in hit:
             if have is not None:
                 already = r["id"] in have
             else:
-                already = bool(self._query("decision_grades", {"id": r["id"]}, final=True, limit=1))
+                already = bool(self._query("decision_grades", {"id": r["id"]}, limit=1))
             if already:
                 continue  # graded at most once: a stamp is recorded only if the decision has none
             self._write("decision_grades", [dict({"id": r["id"], "status": "open"}, **values)])
             stamped += 1
         return stamped
 
-
-UPSERT_TABLES = frozenset({"stuck_episodes", "ingest_ledger", "ingest_files", "ingest_checkpoints", "ingest_runs",
-                           "decision_grades", "ingest_consumer_lag"})
