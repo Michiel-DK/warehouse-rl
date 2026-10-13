@@ -35,7 +35,7 @@ SCRIPT = str(ROOT / "scripts" / "evaluate.py")
 HEAVY = {"breakdown": {"rate_per_hour": 20, "duration": [10, 30]}, "delay": {"p_skip": 0.3}}
 
 # The set of types the layer implements; the PR body reports the same set.
-LANDED = {"breakdown", "delay", "blocked_cell", "burst", "outage"}
+LANDED = {"breakdown", "delay", "blocked_cell", "burst", "outage", "floor"}
 
 
 class NoopPolicy(Policy):
