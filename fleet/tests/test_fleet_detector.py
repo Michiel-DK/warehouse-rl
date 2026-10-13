@@ -213,7 +213,8 @@ class TestStatesAndAvoidable(unittest.TestCase):
         self.assertEqual(episodes(run(msgs)[0]), {})
 
     def test_avoidable_true_for_closed_blocked_by_faulted(self):
-        # inject: drop the duration clause or the unresolved clause from the avoidable definition
+        # inject: compute avoidable_s as duration_s (not minus stuck_after) or require cause != blocked_by_faulted
+        # (the duration clause is always true for a closed episode at 5 s steps; the SCOPE note says so)
         a = stopped("Z0-00", 0, 10) + [M("Z0-00", 11, driving=True, x=0, y=4)]
         b = [M("Z0-01", s, order="", faulted=(s >= 1), x=1) for s in range(0, 12)]
         ep = [e for e in episodes(run(a + b)[0]).values() if e["robot"] == "Z0-00"][0]

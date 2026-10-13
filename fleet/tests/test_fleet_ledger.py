@@ -13,11 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "fleet") not in sys.path:
     sys.path.insert(0, str(ROOT / "fleet"))
 
-from fleet.tests.test_fleet_ingest import (INGEST, Clock, emit_real, ingest_dir, interleaved, line,  # noqa: E402
+from fleet.tests.test_fleet_ingest import (INGEST, emit_real, ingest_dir, interleaved, line,  # noqa: E402
                                            scenario, write_gz)
-from fleet_analyser.ingest import Ingester  # noqa: E402
 from fleet_analyser.ledger import SequenceTracker, coverage, lag_enabled  # noqa: E402
-from fleet_analyser.store import JsonlStore, MemoryStore  # noqa: E402
 
 LEDGER = str(ROOT / "fleet" / "ledger.py")
 

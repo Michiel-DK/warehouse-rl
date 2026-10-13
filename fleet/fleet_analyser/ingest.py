@@ -60,6 +60,7 @@ class _File:
         self.in_ledger = False
         self.last_size = -1
         self.last_change = None
+        self.written = None  # signature of the last ingest_files row written
 
 
 class Ingester:
@@ -384,6 +385,10 @@ class Ingester:
     def _write_files(self, only=None):
         rows = []
         for f in ([only] if only else self.files.values()):
+            sig = (f.status, f.size, f.fed, f.consumed, f.in_ledger)
+            if f.written == sig:
+                continue
+            f.written = sig
             rows.append(dict(run=self.run, path=f.path, size_bytes=f.size, bytes_done_uncompressed=f.consumed,
                              bytes_done_compressed=f.fed, status=f.status, sha256=f.sha256,
                              first_header_ids=json.dumps(f.first_h), last_header_ids=json.dumps(f.last_h),

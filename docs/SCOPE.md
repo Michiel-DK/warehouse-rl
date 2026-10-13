@@ -522,6 +522,102 @@ Key order, one line each: `schema_version` ("fleet-state/1"), `headerId`, `times
   this step or null (captured by wrapping the hook instance's `_decide`; decisions are unchanged). `stuck_event` /
   `clash_event`: a stuck / clash decision was made for this robot in this step.
 
+### Sprint 5 / S5B: ingest, stuck detector, ledgers (definitions S5C scores against)
+
+Code: `fleet/fleet_analyser/{parse,detector,ledger,ingest,store,decisions}.py`; thin CLIs `fleet/ingest.py`,
+`fleet/ledger.py`. Words kept apart: a *stopped run* and a *stuck episode* are detector concepts over the messages;
+`run` in a table column and `--run` is the ingest run name; the env's `StuckCounter` / `stuck_count` is not used here.
+Nothing in `parse.py`, `detector.py` or `ingest.py` reads a message's `custom` block: `Message` has no field derived
+from it and `custom` is never copied. A test ingests a real emitter run as written and with every `custom` replaced by a
+fixed garbage object and asserts identical transitions, episodes and decisions.
+
+**Parse.** Valid = JSON object; `headerId` int >= 0; `timestamp` `%Y-%m-%dT%H:%M:%SZ`; `serialNumber` non-empty str;
+`orderId` str; `agvPosition.x/.y` ints; `driving` bool; `errors`, `loads` lists. Reject reasons: `json` (also blank
+line), `type`, `missing:<key>`, `timestamp`. Robot identity is the serialNumber, never parsed from `orderId`.
+Sequence accounting per robot (last accepted headerId h): headerId <= h is a duplicate (counted, not detected); > h + 1
+is a gap (`sequence_gaps` + 1, `missing_messages` += headerId - h - 1) and is processed; a robot's first message with
+headerId k > 0 is one gap with k missing. accepted = valid and not duplicate.
+
+**State machine** (per robot, event time only; `STEP_S` = 5, `stuck_after` default 30 s). Messages are processed in
+complete (zone, ts) batches: a zone's batch T closes when a message of that zone with ts > T arrives or the zone's input
+ends; inside a batch robots are processed in serial order and every cause is decided after the whole batch's states are
+known, so the output is independent of in-batch order and of where a read boundary falls.
+- Precedence per message: `FAULTED` (errors non-empty) > `IDLE` (orderId "") > `MOVING` (driving) > `STUCK` (in a
+  stopped run with ts - since >= stuck_after) > `STOPPED_WITH_ORDER`. `RECOVERED` overrides all of them on exactly the
+  message that ends a stuck episode (so an ending message that is faulted or has orderId "" is `RECOVERED`, not
+  `FAULTED`/`IDLE`); the next message gets its normal state. A message whose ts does not move forward for its robot is
+  skipped.
+- Stopped run: consecutive messages with driving false and the same non-empty orderId as the run's first message;
+  `since` = ts of the first. A faulted message with the same order and driving false continues the run (the clock does
+  not stop for the robot's own fault). The run ends at the first message E with driving true or a different orderId
+  (including ""); if E has driving false and a non-empty order it starts the next run.
+- Stuck episode: opens at the first message of the run with ts - since >= stuck_after (`T_entry`);
+  `episode_id = "<serial>@<since ISO>"`, start = since, cell = (x, y) of the run. It closes at E with end = E.ts,
+  `duration_s` = end - start. Runs shorter than stuck_after produce nothing.
+- Cause, decided once at `T_entry` from the same zone's batch, first match: `faulted_self` (own message faulted) >
+  `blocked_by_faulted` (another robot faulted, Manhattan distance <= 1; `blocker` = lowest serial, `blocker_faulted_s` =
+  T_entry minus the ts its consecutive faulted streak began) > `blocked_by_stuck` (a neighbour whose state at T_entry
+  is `STUCK`; `blocker` = lowest serial) > `traffic` (a neighbour, none faulted or stuck) > `unknown`.
+- Resolution, first match: `order_dropped` (E.orderId differs from the run's, including "") > `fault_cleared` (the
+  robot's own last run message was faulted; E is driving with the same order) > `moved`. An episode still open when the
+  zone's input ends closes with end = the robot's last ts and resolution `unresolved`.
+- Avoidable (literal): cause `blocked_by_faulted` AND resolution != `unresolved` AND `duration_s > stuck_after`;
+  `avoidable_s = duration_s - stuck_after`. With 5 s steps every closed episode has duration_s > stuck_after, so the
+  duration clause never bites; this is the spec's definition and S5C / the operator may tighten it.
+- Transitions: one row per state change per robot `(run, zone, robot, ts, from_state, to_state, cell, order_id)`; the
+  first message of a robot has from_state `NONE`.
+
+**Decision ledger** (`decisions` table, append-only, modelled on restaurant-brain `BrainDecision`). Columns: id (hex
+sha1 of dedup_key), run, decided_at (event epoch s), recorded_at (wall epoch s), kind, subject, claim (JSON string),
+claim_version (1), rationale (one line), expected, grade_after (event epoch s), status (`open`), outcome, graded_at,
+error, verdict, dedup_key. `dedup_key = "<kind>:<subject>:<episode start ISO>"`: EVENT time, not wall time (a flat-out
+replay decides thousands of episodes per wall minute, so wall-time keys collide and re-runs would not be no-ops); this
+replaces the sprint text's "decided-minute". `stuck_cause` at T_entry (subject = serial, claim `{episode_id, cause,
+blocker, blocker_faulted_s, cell}`, expected null, grade_after = T_entry + 3600); `avoidable_reset` at episode close
+when avoidable (claim `{episode_id, blocker, avoidable_s}`, expected = avoidable_s / 60, grade_after = end + 3600).
+`record_decision` is a no-op on an existing dedup_key (first write wins, the run column included); `stamp_grade` sets
+only status (`graded`), outcome, error, verdict, graded_at, and only from status `open`; a second stamp returns False
+and changes nothing. Evidence (`evidence(decision_id, run, zone, lines, line_count, bytes)`): the raw lines of the
+decision's zone in arrival order, 25 before the deciding message and the deciding message plus 24 after it, so at most
+50 lines (the brief's "25 after" and its "<= 50 lines including the deciding line" cannot both hold; the bound won),
+fewer at stream edges; written once the lines after have arrived or the zone's input ended.
+
+**Store.** `Store` interface (`insert`, `upsert`, `select`, `exists`, `update_where`); `MemoryStore` and
+`JsonlStore(dir)` (append-only `<table>.jsonl`, upserts and updates appended and replayed on read, last row per key
+wins). `--store jsonl:<dir>`, default `fleet/data/<run>/store`. Tables: `transitions`, `stuck_episodes` (upsert by
+run + episode_id: a row at T_entry with resolution `open`, replaced at close), `rejects`, `ingest_ledger`
+(run, source, minute), `ingest_files`, `ingest_checkpoints`, `decisions`, `evidence`, `state_sample` (every message with
+headerId % 50 == 0), and `ingest_runs` (run, glob, emit ledger status/config, `expected_messages`: what `ledger.py
+status` needs for coverage).
+
+**File ingest.** Zone files are read strictly in nnn order. A growing gzip is read with `zlib.decompressobj(wbits=31)`;
+only newline-terminated lines are consumed; a file is `complete` only at end of stream (trailer and CRC checked). A file
+whose size is unchanged for 10 s without end of stream while the emit ledger is absent or not `running` is `failed`. A
+file the glob matches but the emit ledger does not list stays `discovered`, and becomes `unlisted` (never ingested) once
+the ledger is `complete` or `failed`: stale rotation files cannot push coverage over 1. No emit ledger: every matched
+file is ingested. Exit 0 when the emit ledger is `complete` and every listed file is `complete`; 1 on a failed file,
+a failed emit run or a listed file missing on disk. Checkpoints: after each chunk's rows are written, `(run, path)` gets
+the uncompressed offset and the sequence tracker; a restart re-decompresses from byte 0 and skips that many bytes.
+Detector state is NOT checkpointed: after a resume the detector starts empty at the checkpoint offset, so an episode
+that spans the resume point can be missed or shortened (and the last open batch before a stop is not detected).
+Retention: kept raw bytes = evidence lines + state_sample lines + reject raws (first 4096 bytes); everything else is
+dropped after parsing; transitions, episodes and decisions are always kept. `--source kafka` prints "kafka source:
+S5B2" and exits 2 in this lane.
+
+**Ingest ledger** (per source and wall minute, upserted every `--ledger-interval` s and at exit): bytes read
+(compressed, uncompressed), messages_parsed (valid lines incl. duplicates), messages_rejected, duplicates,
+sequence_gaps, missing_messages, messages_accepted, lag_p50_s / lag_p99_s, behind_emitter_s, msgs_per_s, mb_per_s,
+bytes_kept, bytes_dropped, backlog_bytes, written_at; `bytes_kept + bytes_dropped == bytes_read_uncompressed` per row.
+**Lag-null rule:** lag (wall clock at parse minus message ts, percentiles over the minute's accepted messages) is null
+unless the emit ledger config says `t0_mode == "now"`, `rate == "realtime"` and `speed == 1`; otherwise the number is
+months or negative and meaningless. `behind_emitter_s` = the emit ledger's latest `last_timestamp` minus the latest
+accepted ts (event seconds), null without an emit ledger. **Coverage = sum(messages_accepted) over the run / emit
+ledger `total.expected_messages`**, null without an emit ledger; it is the single completeness number. A resumed process
+preloads the run's existing ledger rows, so coverage spans processes. `fleet/ledger.py status --run R` prints the last
+1, 5, 60 minutes (back from the latest ledger minute) and total, coverage, files per status, episodes per cause and
+decisions per kind and status; `plot` writes `ledger.png` next to the store directory.
+`emit_ledger.json` config gained `t0_mode` (`now` when `--t0 now`, else `fixed`).
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are
