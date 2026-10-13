@@ -101,8 +101,21 @@ class Clock:
         return self.t
 
 
+def bounded_sleep(limit=300):
+    """A poll sleep that fails the test instead of spinning forever when the loop never finishes."""
+    n = [0]
+
+    def sleep(_s):
+        n[0] += 1
+        if n[0] > limit:
+            raise RuntimeError("the ingest loop did not finish")
+
+    return sleep
+
+
 def ingest_dir(directory, store=None, run="r", clock=None, **kw):
     store = MemoryStore() if store is None else store
+    kw.setdefault("sleep", bounded_sleep())
     ing = Ingester(str(Path(directory) / "*.jsonl.gz"), run, store, poll=0, ledger_interval=0.001,
                    **({"clock": clock} if clock else {}), **kw)
     code = ing.run_loop()
@@ -138,8 +151,7 @@ class TestGrowingFiles(unittest.TestCase):
         self.lines = [ln for _, ln in scenario()["0"]]
 
     def test_growing_file_every_line_once_complete_only_after_close(self):
-        # inject: treat the end of the bytes on disk as the end of the file (complete before the trailer), or consume
-        # the partial tail line
+        # inject: treat the end of the bytes on disk as the end of the file (complete before the trailer)
         path = self.dir / "zone0-000.jsonl.gz"
         data = b"".join(self.lines)
         cut = len(data) // 2
@@ -168,8 +180,7 @@ class TestGrowingFiles(unittest.TestCase):
         self.assertEqual(len(row["sha256"]), 64)
 
     def test_resume_from_checkpoint_zero_duplicates_same_total(self):
-        # inject: restart a file from byte 0 without skipping the checkpoint offset, or not seed the sequence
-        # tracker from the checkpoint
+        # inject: restart a file from byte 0 without skipping the checkpoint offset
         path = self.dir / "zone0-000.jsonl.gz"
         first = 100
         g = GrowingGz(path)
@@ -200,7 +211,7 @@ class TestGrowingFiles(unittest.TestCase):
         store2.close()
 
     def test_truncated_file_is_failed(self):
-        # inject: wait forever on a file that never reaches end of stream (or mark it complete at the last byte)
+        # inject: wait forever on a file that never reaches end of stream
         path = self.dir / "zone0-000.jsonl.gz"
         GrowingGz(path).write(b"".join(self.lines[:30]))
         clock = Clock()
@@ -230,7 +241,7 @@ class TestGrowingFiles(unittest.TestCase):
         self.assertEqual(ing.exit_code, 0)
 
     def test_corrupt_gzip_is_failed(self):
-        # inject: let zlib.error escape (crash) or skip the CRC/trailer check
+        # inject: let zlib.error escape instead of marking the file failed
         path = self.dir / "zone0-000.jsonl.gz"
         write_gz(path, self.lines)
         raw = bytearray(path.read_bytes())
@@ -241,7 +252,7 @@ class TestGrowingFiles(unittest.TestCase):
         self.assertEqual(code, 1)
 
     def test_zone_files_are_read_in_nnn_order(self):
-        # inject: open file nnn+1 while nnn is incomplete (the sequence check then counts a gap)
+        # inject: move on to file nnn+1 while nnn is incomplete (the sequence check then counts a gap)
         p0, p1 = self.dir / "zone0-000.jsonl.gz", self.dir / "zone0-001.jsonl.gz"
         half = 120
         g = GrowingGz(p0)
@@ -259,7 +270,7 @@ class TestGrowingFiles(unittest.TestCase):
         self.assertEqual(ing.ledger.total("sequence_gaps"), 0)
 
     def test_rejects_are_recorded_with_reason_and_offset(self):
-        # inject: drop rejected lines silently, or advance the offset by the stripped length
+        # inject: record offset 0 for every reject
         bad = [b"{broken\n", b"\n", b"[]\n"]
         lines = self.lines[:8] + bad + self.lines[8:12]
         write_gz(self.dir / "zone0-000.jsonl.gz", lines)
@@ -273,7 +284,7 @@ class TestGrowingFiles(unittest.TestCase):
 
 class TestOrderIndependence(unittest.TestCase):
     def test_shuffled_batches_and_mid_batch_split_give_identical_outputs(self):
-        # inject: process a batch in arrival order (or close a batch at a read boundary instead of on a later ts)
+        # inject: process a batch in arrival order instead of serial order
         sc = scenario()
         base = interleaved(sc)
         rng = random.Random(7)
@@ -295,7 +306,10 @@ class TestOrderIndependence(unittest.TestCase):
             g = GrowingGz(tmp / "split" / "zone0-000.jsonl.gz")
             store = MemoryStore()
             ing = Ingester(str(tmp / "split" / "*.jsonl.gz"), "r", store, poll=0)
-            for a, b in ((0, 7), (7, 33), (33, 61), (61, len(base))):
+            ts = [json.loads(ln)["timestamp"] for ln in base]
+            self.assertEqual(ts[6], ts[7])  # the first split point (7) is inside a (zone, ts) batch
+            self.assertEqual(ts[60], ts[61])
+            for a, b in ((0, 7), (7, 32), (32, 61), (61, len(base))):
                 g.write(b"".join(base[a:b])) if b < len(base) else g.close(b"".join(base[a:b]))
                 ing.poll_once()
             ing.finish()
@@ -330,7 +344,7 @@ class TestRealEmitterRuns(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_custom_is_never_read(self):
-        # inject: let any detection or decision depend on a custom value (e.g. open an episode on custom.stuck_event)
+        # inject: let ingest drop lines whose custom.stuck_event is true (any dependency on a custom value)
         corrupt = Path(self.tmp.name) / "corrupt"
         corrupt.mkdir()
         shutil.copy(self.dir / "emit_ledger.json", corrupt)
@@ -367,7 +381,7 @@ class TestRealEmitterRuns(unittest.TestCase):
         self.assertEqual(statuses, {"zone0-000.jsonl.gz": "complete", "zone0-001.jsonl.gz": "unlisted"})
 
     def test_stale_file_waits_as_discovered_while_the_emit_ledger_is_running(self):
-        # inject: mark an unlisted file `unlisted` before the emit ledger is final
+        # inject: mark an unlisted file `unlisted` even while the emit ledger is running
         d = Path(self.tmp.name) / "waiting"
         shutil.copytree(self.dir, d)
         doc = json.loads((d / "emit_ledger.json").read_text())
@@ -380,7 +394,7 @@ class TestRealEmitterRuns(unittest.TestCase):
         self.assertEqual(ing.files[str(d / "zone0-001.jsonl.gz")].fed, 0)
 
     def test_cli_exit_codes_and_kafka_stub(self):
-        # inject: exit 0 on a failed file, or let --source kafka do anything but print the one line and exit 2
+        # inject: change the kafka stub's message or exit code
         r = subprocess.run([sys.executable, INGEST, "--source", "file", "--glob", str(self.dir / "*.jsonl.gz"),
                             "--run", "cli", "--store", f"jsonl:{self.dir.parent}/cli-store", "--poll", "0.1"],
                            capture_output=True, text=True)

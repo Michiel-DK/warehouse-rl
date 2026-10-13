@@ -33,7 +33,7 @@ def raw(**over):
 
 class TestParse(unittest.TestCase):
     def test_good_line_exact_fields(self):
-        # inject: derive faulted from `paused` instead of non-empty errors (or ts as the string, not epoch seconds)
+        # inject: derive faulted from `paused` instead of non-empty errors
         line = raw()
         msg, reason = parse_line(line)
         self.assertIsNone(reason)
@@ -46,19 +46,19 @@ class TestParse(unittest.TestCase):
         self.assertEqual(clean.order_id, "")
 
     def test_identity_is_the_serial_not_the_order_id(self):
-        # inject: take the robot id from orderId ("Z9-9-o1" would give zone 9, the serial says Z3-04)
+        # inject: set Message.serial from orderId
         msg, _ = parse_line(raw(serialNumber="Z3-04", orderId="Z9-9-o1"))
         self.assertEqual((msg.serial, msg.zone), ("Z3-04", "3"))
 
     def test_zone_of_serial(self):
-        # inject: split the serial on the last '-' instead of the first, or default the zone to "0"
+        # inject: take the zone up to the last '-' instead of the first
         self.assertEqual(zone_of("Z12-03"), "12")
         self.assertEqual(zone_of("Zabc-1-2"), "abc")
         self.assertEqual(zone_of("robot-7"), "")
         self.assertEqual(zone_of("Z7"), "")
 
     def test_reject_reasons(self):
-        # inject: return reason "json" for every failure, or accept a bool headerId / a float coordinate
+        # inject: accept a bool as int (headerId / coordinates)
         cases = [
             (b"{not json\n", "json"),
             (b"\n", "json"),
@@ -103,7 +103,7 @@ class TestParse(unittest.TestCase):
             msg.x = 1
 
     def test_custom_is_not_validated(self):
-        # inject: reject lines whose custom is missing or malformed (parse would then read it)
+        # inject: reject a line with no custom block (parse would then read it)
         for custom in (MISSING, None, "garbage", [1]):
             msg, reason = parse_line(raw(custom=custom))
             self.assertIsNone(reason)

@@ -28,7 +28,7 @@ def make(store, start="2026-01-01T00:00:00Z", **kw):
 
 class TestRecordAndStamp(unittest.TestCase):
     def test_dedup_key_uses_event_time_and_id_is_its_sha1(self):
-        # inject: build the key from the wall clock (recorded_at) instead of the episode start
+        # inject: leave the episode start out of the dedup key
         store = MemoryStore()
         did, created = make(store, recorded_at=111.0)
         key = "stuck_cause:Z0-00:2026-01-01T00:00:00Z"
@@ -42,7 +42,7 @@ class TestRecordAndStamp(unittest.TestCase):
         self.assertEqual(len(store.select("decisions")), 1)
 
     def test_row_columns_and_defaults(self):
-        # inject: drop or rename a column, or start a decision as graded
+        # inject: start a decision with status graded
         store = MemoryStore()
         make(store, recorded_at=5.0)
         row = store.select("decisions")[0]
@@ -79,7 +79,7 @@ class TestRecordAndStamp(unittest.TestCase):
         self.assertFalse(decisions.stamp_grade(store, "no-such-id", "x", 0, "y", 1))
 
     def test_record_after_grading_is_still_a_no_op(self):
-        # inject: re-open a graded decision when the same key is recorded again
+        # inject: dedup only against open decisions (a graded one then gets a duplicate)
         store = MemoryStore()
         did, _ = make(store)
         decisions.stamp_grade(store, did, "hit", 0.0, "ok", BASE + 5000)
@@ -104,13 +104,14 @@ class TestStores(unittest.TestCase):
         rows = store.select("t")
         rows[0]["a"] = 1000  # select hands out copies
         self.assertTrue(store.exists("t", a=1))
+        self.assertEqual(store.select("t")[0]["a"], 1)
 
     def test_memory_store_contract(self):
-        # inject: return the live row dicts from select, or keep a stale index after update_where
+        # inject: return the live row dicts from select
         self.check_contract(MemoryStore())
 
     def test_jsonl_store_contract_and_restart(self):
-        # inject: make upsert append without the key tag (last-wins is lost) or skip the update replay on load
+        # inject: append upserts without the key tag (last-wins is lost on reload)
         with tempfile.TemporaryDirectory() as tmp:
             s = JsonlStore(tmp)
             self.check_contract(s)
@@ -124,13 +125,13 @@ class TestStores(unittest.TestCase):
             self.assertTrue((Path(tmp) / "u.jsonl").read_text().count("\n") >= 4)  # append-only: history stays
 
     def test_jsonl_store_ignores_a_torn_last_line(self):
-        # inject: raise on a partial last line left by a killed writer
+        # inject: load an unterminated last line as a row
         with tempfile.TemporaryDirectory() as tmp:
             s = JsonlStore(tmp)
             s.insert("t", [{"a": 1}])
             s.close()
             with open(Path(tmp) / "t.jsonl", "a") as f:
-                f.write('{"a": 2')
+                f.write('{"a": 2}')  # valid JSON, but the newline never made it
             self.assertEqual(JsonlStore(tmp).select("t"), [{"a": 1}])
 
 
@@ -146,7 +147,7 @@ class TestIngestDecisions(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_decisions_per_episode_and_their_contents(self):
-        # inject: write stuck_cause at episode close, use wall time in decided_at, or drop the 3600 s grade_after
+        # inject: change GRADE_AFTER_S from 3600
         _, store, _ = ingest_dir(self.dir, once=True)
         decs = {d["dedup_key"]: d for d in store.select("decisions")}
         self.assertEqual(sorted(decs), [
@@ -170,7 +171,7 @@ class TestIngestDecisions(unittest.TestCase):
             self.assertEqual(d["run"], "r")
 
     def test_second_ingest_of_the_same_files_leaves_decisions_unchanged(self):
-        # inject: key decisions on wall time or on the run name, or drop the exists() check in record_decision
+        # inject: drop the exists() check in record_decision
         ing, store, _ = ingest_dir(self.dir, once=True)
         first = [d["id"] for d in store.select("decisions")]
         n_evidence = len(store.select("evidence"))
@@ -184,7 +185,7 @@ class TestIngestDecisions(unittest.TestCase):
         self.assertTrue(all(d["run"] == "r" for d in store.select("decisions")))  # first write wins, run included
 
     def test_evidence_window_around_the_deciding_message(self):
-        # inject: take 50 lines on each side, include other zones' lines, or drop the deciding line
+        # inject: take 50 lines before the deciding message
         _, store, _ = ingest_dir(self.dir, once=True)
         decs = {d["dedup_key"]: d["id"] for d in store.select("decisions")}
         ev = {e["decision_id"]: e for e in store.select("evidence")}
@@ -205,7 +206,7 @@ class TestIngestDecisions(unittest.TestCase):
         self.assertEqual(e["zone"], "0")
 
     def test_evidence_at_the_end_of_input_has_fewer_lines_after(self):
-        # inject: never write evidence whose 'after' lines did not all arrive (it is written when the zone ends)
+        # inject: skip the end-of-input evidence flush in finish()
         sc = scenario(steps=8)  # the last batch is cut short: Z0-02's T_entry is the 7th of 8 steps
         with tempfile.TemporaryDirectory() as tmp:
             write_gz(Path(tmp) / "zone0-000.jsonl.gz", interleaved(sc))

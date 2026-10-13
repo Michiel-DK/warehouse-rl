@@ -136,7 +136,7 @@ class Ingester:
                 done = self.store.select("ingest_files", {"run": self.run, "path": path})
                 size = os.path.getsize(path)
                 if done and done[0]["status"] == "complete" and done[0]["size_bytes"] == size:
-                    f.status, f.size = "complete", size
+                    f.status, f.size, f.fed = "complete", size, size  # nothing left to read
                     f.sha256 = done[0].get("sha256")
                     f.first_h = json.loads(done[0]["first_header_ids"] or "{}")
                     f.last_h = json.loads(done[0]["last_header_ids"] or "{}")

@@ -33,8 +33,8 @@ class TickClock:
 
 class TestSequence(unittest.TestCase):
     def test_duplicate_gap_and_first_message_gap(self):
-        # inject: treat headerId == h as accepted, count a gap as h - last instead of h - last - 1, or skip the
-        # first-message-k>0 gap
+        # inject: treat headerId == h as accepted, count a gap as h - last instead of h - last - 1, or count a
+        # first message with k > 0 as no gap
         t = SequenceTracker()
         seen = [("A", 0), ("A", 1), ("A", 1), ("A", 3), ("A", 2), ("A", 4), ("B", 5)]
         got = [t.check(s, h) for s, h in seen]
@@ -55,7 +55,7 @@ class TestSequence(unittest.TestCase):
         self.assertEqual(t.check("A", 9), (False, 0))
 
     def test_gaps_and_duplicates_reach_the_ledger_through_ingest(self):
-        # inject: skip the sequence check in the ingest line handler
+        # inject: skip the sequence check in the ingest line handler (accepted, missing = True, 0)
         lines = [line("Z0-00", h, h) for h in (0, 1, 1, 4, 5)] + [line("Z0-01", 3, 3)]
         with tempfile.TemporaryDirectory() as tmp:
             write_gz(Path(tmp) / "zone0-000.jsonl.gz", lines)
@@ -94,7 +94,7 @@ class TestRealRun(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_coverage_is_exactly_one_and_totals_match_the_emit_ledger(self):
-        # inject: count rejects or duplicates as accepted, or drop a zone's last batch
+        # inject: count every accepted message twice in the ledger
         ing, store, code = ingest_dir(self.dir, clock=TickClock(0.01))
         rows = store.select("ingest_ledger", {"run": "r"})
         expected = self.doc["total"]["expected_messages"]
@@ -108,7 +108,7 @@ class TestRealRun(unittest.TestCase):
         self.assertEqual(store.select("ingest_runs", {"run": "r"})[0]["expected_messages"], expected)
 
     def test_kept_plus_dropped_equals_read_per_row_across_minutes(self):
-        # inject: count evidence or state_sample lines as dropped, or count a kept line twice
+        # inject: in IngestLedger.keep add to bytes_kept without subtracting from bytes_dropped
         clock = TickClock(0.05)  # ~50 ms per clock read: the run spans several wall minutes
         ing, store, _ = ingest_dir(self.dir, clock=clock)
         rows = store.select("ingest_ledger", {"run": "r"})
@@ -123,7 +123,7 @@ class TestRealRun(unittest.TestCase):
                          self.doc["total"]["bytes_uncompressed"])
 
     def test_lag_is_null_for_a_fixed_t0_run_and_set_for_now_realtime(self):
-        # inject: compute lag for every run (months of lag for the fixed-t0 emitter)
+        # inject: compute lag for every run, whatever the emit config says (months of lag for the fixed-t0 emitter)
         _, store, _ = ingest_dir(self.dir)
         rows = store.select("ingest_ledger", {"run": "r"})
         self.assertTrue(all(r["lag_p50_s"] is None and r["lag_p99_s"] is None for r in rows))
@@ -137,7 +137,7 @@ class TestRealRun(unittest.TestCase):
         self.assertTrue(all(r["lag_p50_s"] is not None and r["lag_p99_s"] >= r["lag_p50_s"] for r in rows))
 
     def test_behind_emitter_is_event_seconds_and_null_without_an_emit_ledger(self):
-        # inject: report wall seconds, or compute it without an emit ledger
+        # inject: add one second to behind_emitter_s
         _, store, _ = ingest_dir(self.dir)
         self.assertEqual(store.select("ingest_ledger", {"run": "r"})[-1]["behind_emitter_s"], 0)
         with tempfile.TemporaryDirectory() as tmp:
@@ -147,7 +147,7 @@ class TestRealRun(unittest.TestCase):
         self.assertIsNone(store.select("ingest_runs", {"run": "r"})[0]["expected_messages"])
 
     def test_status_cli_prints_coverage_from_a_store_written_by_an_earlier_process(self):
-        # inject: compute coverage from the store of the current process only, or print it without the denominator
+        # inject: print the coverage line without its value
         store_dir = Path(self.tmp.name) / "cli-store"
         r = subprocess.run([sys.executable, INGEST, "--source", "file", "--glob", str(self.dir / "*.jsonl.gz"),
                             "--run", "cli", "--store", f"jsonl:{store_dir}", "--poll", "0.1"],
@@ -170,7 +170,7 @@ class TestRealRun(unittest.TestCase):
         self.assertTrue(png.read_bytes().startswith(b"\x89PNG"))
 
     def test_status_cli_without_an_emit_ledger_prints_coverage_none(self):
-        # inject: print 0.0 or crash when there is no emit ledger
+        # inject: print 0.0 instead of None when there is no emit ledger
         store_dir = Path(self.tmp.name) / "noemit-store"
         data = Path(self.tmp.name) / "noemit"
         data.mkdir()
@@ -184,7 +184,7 @@ class TestRealRun(unittest.TestCase):
 
 class TestRetention(unittest.TestCase):
     def test_kept_bytes_are_exactly_evidence_state_samples_and_reject_raws(self):
-        # inject: keep (count) a line that no evidence / sample / reject holds, or drop a held line from the count
+        # inject: stop marking state_sample lines as kept
         bad = [b"{broken\n", b"x" * 5000 + b"\n"]
         lines = interleaved(scenario(steps=60))
         lines = lines[:50] + bad + lines[50:]
