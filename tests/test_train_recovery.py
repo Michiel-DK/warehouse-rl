@@ -37,15 +37,15 @@ def snapshot(d):
 
 
 class TestWindowRecorder(unittest.TestCase):
-    # inject: put the decision step outside the window (k in (t, t']), drop the discount exponent, or charge the
-    # call-human penalty without the cost factor
+    # inject: put the decision step outside the window (k in (t, t']), drop the discount exponent, charge the
+    # call-human penalty without the cost factor, or price an action cost with stuck_penalty instead of cost_unit
     def test_hand_computed_windows(self):
-        c = dict(line_reward=1.0, stuck_penalty=0.1, gamma=0.5, call_human_cost=10, abandon_cost=15)
+        c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
         rec = tr.WindowRecorder(c, n_agents=2)
         x0, x1, x2 = (np.full(12, v, np.float32) for v in (0.0, 1.0, 2.0))
-        rec.decision(7, 1, x0, 3)                                   # agent 7 abandons at step 1: -0.1 * 15 = -1.5
+        rec.decision(7, 1, x0, 3)                                   # agent 7 abandons at step 1: -0.2 * 15 = -3.0
         rec.step_end(1, 2, {7}, set())                              # r = 2/2 - 0.1            = 0.9
-        rec.step_end(2, 0, {7}, {7})                                # r = -0.1 - 0.1 * 10      = -1.1
+        rec.step_end(2, 0, {7}, {7})                                # r = -0.1 - 0.2 * 10      = -2.1
         rec.decision(7, 3, x1, 4)                                   # next decision at step 3: Delta 2
         rec.decision(7, 3, x2, 0)                                   # second decision, same step: Delta 0
         rec.step_end(3, 0, set(), set())                            # r = 0
@@ -53,18 +53,18 @@ class TestWindowRecorder(unittest.TestCase):
         rec.finish(5)
         (a, b, d) = rec.out
         self.assertEqual((a[1], a[6], a[7], a[8], a[5]), (3, 7, 1, 2, False))
-        self.assertAlmostEqual(a[2], -1.5 + 0.9 + 0.5 * -1.1)       # -1.15 (abandon charge undiscounted)
+        self.assertAlmostEqual(a[2], -3.0 + 0.9 + 0.5 * -2.1)       # -3.15 (abandon charge undiscounted)
         self.assertAlmostEqual(a[3], 0.25)                          # gamma ** Delta
         np.testing.assert_array_equal(a[4], x1)
         self.assertEqual((b[1], b[8], b[2], b[3], b[5]), (4, 0, 0.0, 1.0, False))   # Delta 0: no reward, discount 1
         np.testing.assert_array_equal(b[4], x2)
         self.assertEqual((d[1], d[8], d[5]), (0, 2, True))                         # closed by the episode end
         self.assertAlmostEqual(d[2], 0.0 + 0.5 * 0.5)               # step 3: 0, step 4: 0.5 * 0.5**1
-        self.assertAlmostEqual(a[9], -1.5 + 0.9 - 1.1)              # undiscounted return, used for the log only
+        self.assertAlmostEqual(a[9], -3.0 + 0.9 - 2.1)              # undiscounted return, used for the log only
 
     # inject: no charge, charge on every decision, charge in step_end, or charge the call-human action
     def test_abandon_charged_once_per_abandon_decision_only(self):
-        c = dict(line_reward=1.0, stuck_penalty=0.1, gamma=0.5, call_human_cost=10, abandon_cost=15)
+        c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
         x = np.zeros(12, np.float32)
         for a, name in enumerate(ACTIONS):
             rec = tr.WindowRecorder(c, n_agents=2)
@@ -73,7 +73,7 @@ class TestWindowRecorder(unittest.TestCase):
             rec.step_end(1, 0, set(), set())
             rec.finish(2)
             (o,) = rec.out
-            want = -0.1 * 15 if name == "abandon" else 0.0   # -1.5, undiscounted, once
+            want = -0.2 * 15 if name == "abandon" else 0.0   # -3.0 (cost_unit, not stuck_penalty), undiscounted, once
             self.assertAlmostEqual(o[2], want, msg=name)     # R
             self.assertAlmostEqual(o[9], want, msg=name)     # U
         # two abandons by one agent are charged twice (once per window); the charge is not discounted by the window's
@@ -86,8 +86,25 @@ class TestWindowRecorder(unittest.TestCase):
         rec.step_end(2, 0, set(), set())
         rec.finish(3)
         w1, w2 = rec.out
-        self.assertAlmostEqual(w1[2], -1.5 + 0.5 * 0.5)
-        self.assertAlmostEqual(w2[2], -1.5)
+        self.assertAlmostEqual(w1[2], -3.0 + 0.5 * 0.5)
+        self.assertAlmostEqual(w2[2], -3.0)
+
+    # inject: STUCK_PENALTY back to 0.01, COST_UNIT changed, or an action cost priced with stuck_penalty (now 0)
+    def test_shipped_reward_is_deliveries_minus_action_costs(self):
+        c = lr.reward_constants()
+        self.assertEqual(c, dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99, call_human_cost=60,
+                                 abandon_cost=15))
+        x = np.zeros(12, np.float32)
+        out = {}
+        for name, stuck, relocated in (("abandon", set(), set()), ("wait", {1}, set()), ("call_human", set(), {1})):
+            rec = tr.WindowRecorder(c, n_agents=12)
+            rec.decision(1, 0, x, ACTIONS.index(name))
+            rec.step_end(0, 0, stuck, relocated)
+            rec.finish(1)
+            out[name] = rec.out[0][9]
+        self.assertAlmostEqual(out["abandon"], -0.15, places=12)     # 0.01 x 15, once
+        self.assertEqual(out["wait"], 0.0)                           # a stuck busy step costs nothing
+        self.assertAlmostEqual(out["call_human"], -0.60, places=12)  # 0.01 x 60 per executed relocation
 
 
 class TestRolloutReward(unittest.TestCase):
@@ -105,12 +122,12 @@ class TestRolloutReward(unittest.TestCase):
         trace = {t["k"]: t for t in res["trace"]}
         out = []
         for aid, t0, delta, act in zip(res["AID"], res["T0"], res["DELTA"], res["A"]):
-            total = -consts["stuck_penalty"] * consts["abandon_cost"] * (ACTIONS[int(act)] == "abandon")
+            total = -consts["cost_unit"] * consts["abandon_cost"] * (ACTIONS[int(act)] == "abandon")
             for k in range(int(t0), int(t0) + int(delta)):
                 st = trace[k]
                 r = consts["line_reward"] * st["deliveries"] / n_agents
                 r -= consts["stuck_penalty"] * (int(aid) in st["stuck"])
-                r -= consts["stuck_penalty"] * consts["call_human_cost"] * (int(aid) in st["relocated"])
+                r -= consts["cost_unit"] * consts["call_human_cost"] * (int(aid) in st["relocated"])
                 total += consts["gamma"] ** (k - int(t0)) * r
             out.append(total)
         return np.array(out)
@@ -118,7 +135,8 @@ class TestRolloutReward(unittest.TestCase):
     # inject: change the window to (t, t'], read the env reward, or ignore the passed constants
     def test_trainer_reward_equals_reference_from_trace(self):
         for consts in (lr.reward_constants(),
-                       dict(line_reward=2.0, stuck_penalty=0.5, gamma=0.9, call_human_cost=7, abandon_cost=4)):
+                       dict(line_reward=2.0, stuck_penalty=0.5, cost_unit=0.3, gamma=0.9, call_human_cost=7,
+                            abandon_cost=4)):
             res = self.episode(consts)
             self.assertEqual(res["reward_used"], consts)
             self.assertGreaterEqual(int((res["A"] == ACTIONS.index("abandon")).sum()), 1)  # the abandon term is exercised
@@ -129,7 +147,7 @@ class TestRolloutReward(unittest.TestCase):
             zero = (res["DELTA"] == 0) & (res["A"] != ACTIONS.index("abandon"))  # an abandon is charged even at Delta 0
             self.assertTrue(np.all(res["R"][zero] == 0.0) and np.all(res["DISC"][zero] == 1.0))
             self.assertTrue(np.any(res["R"] != 0.0))
-        # the stuck penalty really enters: a 0.5 penalty makes the total strictly lower than at 0.01 (same actions)
+        # the stuck term is wired (coefficient 0 by default): a 0.5 penalty makes the total strictly lower
         lo = self.episode(lr.reward_constants())["R"].sum()
         hi = self.episode(dict(lr.reward_constants(), stuck_penalty=0.5))["R"].sum()
         self.assertLess(hi, lo)
@@ -137,8 +155,8 @@ class TestRolloutReward(unittest.TestCase):
     # inject: charge call-human on the decision instead of the executed relocation, or attribute it to another agent
     # (e.g. relocs.add(agent.id % 12 + 1)); the check is against the hook's own call_human_steps counter, not the trace
     def test_call_human_charged_on_execution_to_the_deciding_agent(self):
-        for consts in (lr.reward_constants(), dict(line_reward=2.0, stuck_penalty=0.5, gamma=0.9, call_human_cost=7,
-                                                   abandon_cost=4)):
+        for consts in (lr.reward_constants(), dict(line_reward=2.0, stuck_penalty=0.5, cost_unit=0.3, gamma=0.9,
+                                                   call_human_cost=7, abandon_cost=4)):
             res = self.episode(consts)
             executed = sum(len(t["relocated"]) for t in res["trace"])
             decided = sum(a == 4 for t in res["trace"] for _, _, a in t["decisions"])
@@ -181,6 +199,28 @@ class TestRolloutReward(unittest.TestCase):
             row = ev.run_seed("stuck_aware_cta", MEDIUM, 100, 1000, disturb=cfg, recovery=lr.learned_config(ck))
         self.assertEqual(res["pick_rate"], row["pick_rate"])
         self.assertEqual(res["decisions"], row["recovery_stuck_events"] + row["recovery_clash_events"])
+
+    # inject: in run_episode pass prior=None, or random_share=1.0, to LearnedRecovery (train_recovery.py, the
+    # from_state_dict call), or let the collecting instrumentation change the episode
+    def test_training_rollout_with_timeout_prior_equals_evaluate_timeout(self):
+        cfg = tr.point_spec("breakdown", 1)[1]
+        torch.manual_seed(7)
+        sd = lr.QNet().state_dict()
+        for seed in (1000, 1001):
+            row = ev.run_seed("stuck_aware_cta", MEDIUM, 300, seed, disturb=cfg,
+                              recovery={"name": "timeout", "call_human_cost": 60})
+            want = (row["pick_rate"], row["deliveries"], row["recovery_stuck_events"] + row["recovery_clash_events"])
+            self.assertGreater(want[2], 0, seed)  # non-vacuous: the hook decides in this episode
+
+            def go(share):
+                res = tr.run_episode(dict(state_dict=sd, epsilon=1.0, explore_seed=seed, env_id=MEDIUM, disturb=cfg,
+                                          steps=300, seed=seed, call_human_cost=60, consts=lr.reward_constants(),
+                                          collect=True, prior="timeout", random_share=share))
+                self.assertEqual(len(res["A"]), res["decisions"])
+                return res["pick_rate"], res["deliveries"], res["decisions"]
+
+            self.assertEqual(go(0.0), want, seed)
+            self.assertNotEqual(go(1.0), want, seed)  # all-random exploration is a different episode
 
 
 class TestUnits(unittest.TestCase):
@@ -287,6 +327,9 @@ class TestUnits(unittest.TestCase):
         self.assertEqual(cfg["abandon_cost"], 15)
         self.assertEqual(cfg["explore"], {"prior": "timeout", "random_share": 0.1})
         self.assertEqual((cfg["abort_below"], cfg["version"]), (0.5, 2))
+        self.assertEqual((tr.ABORT_AFTER_FRAC, cfg["abort_after_frac"]), (tr.EPS_FRAC, 0.5))
+        self.assertEqual(cfg["reward"], dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99,
+                                             call_human_cost=60, abandon_cost=15))
 
 
 class _RecordingPool:
@@ -407,7 +450,7 @@ class TestSmokeTrainAndResume(unittest.TestCase):
         self.assertTrue(any(not torch.equal(init[k], ck["state_dict"][k]) for k in init))
         # (a) the constants the workers echoed back after using them == the checkpoint's == the module's
         self.assertEqual(ck["reward"], log["reward_used"])
-        self.assertEqual(ck["reward"], dict(line_reward=lr.LINE_REWARD, stuck_penalty=lr.STUCK_PENALTY,
+        self.assertEqual(ck["reward"], dict(line_reward=lr.LINE_REWARD, stuck_penalty=0.0, cost_unit=0.01,
                                             gamma=lr.GAMMA, call_human_cost=lr.CALL_HUMAN_COST, abandon_cost=15))
         self.assertEqual(log["reward_used"]["abandon_cost"], 15)
         self.assertEqual(log["config"]["reward"], ck["reward"])
@@ -572,7 +615,8 @@ class TestAbortAndVersion(unittest.TestCase):
             self.assertEqual(out["status"], "aborted")
             log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
             self.assertIs(log["finished"], False)
-            self.assertEqual(log["aborted"], dict(episode=2, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5))
+            self.assertEqual(log["aborted"], dict(episode=2, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5,
+                                                  abort_after_frac=0.5))
             self.assertEqual(log["reference_pick_rate"], dict(mean=10.0, values=[10.0] * 5))
             self.assertEqual(len(log["intervals"]), 1)
             lines = [c.args[0] for c in pr.call_args_list if c.args and str(c.args[0]).startswith("ABORT")]
@@ -670,6 +714,44 @@ class TestAbortAndVersion(unittest.TestCase):
                 self.go(d, -0.1)
             with self.assertRaises(ValueError):
                 self.go(d, 0, random_share=1.5)
+            for bad in (-0.1, 1.5):
+                with self.assertRaises(ValueError):
+                    self.go(d, 0.5, abort_after_frac=bad)
+
+    def _long(self, d, **kw):
+        """Non-smoke run of 8 episodes with an eval every 2 (patched), every eval fabricated at 0 vs reference 10."""
+        with mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx()), \
+                mock.patch.multiple(tr, EVAL_EVERY=2, ITER_EPISODES=2, WARMUP=32, BATCH=32, TARGET_SYNC=10):
+            return tr.train_run(1, 0, 60, 8, False, 1, d, False, **kw)
+
+    # inject: no grace (check from the first interval), `>` instead of `>=` at the threshold, or a grace on the CLI
+    # value instead of the run's episodes
+    def test_default_grace_never_aborts_before_eps_frac(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self._long(d)  # default abort_below 0.5, abort_after_frac EPS_FRAC: first check at episode 4
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+        self.assertEqual(out["status"], "aborted")
+        self.assertEqual([iv["episode"] for iv in log["intervals"]], [2, 4])  # episode 2 was 0.0 and did not abort
+        self.assertEqual(log["aborted"], dict(episode=4, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5,
+                                              abort_after_frac=0.5))
+        self.assertEqual(log["config"]["abort_after_frac"], 0.5)
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self._long(d, abort_after_frac=0.0)["aborted"]["episode"], 2)
+        with tempfile.TemporaryDirectory() as d:  # 1.0: only the last interval is checked
+            self.assertEqual(self._long(d, abort_after_frac=1.0)["aborted"]["episode"], 8)
+
+    # inject: main ignores --abort-after-frac, swallows the aborted status, or exits 0
+    def test_default_smoke_aborts_on_degenerate_eval_and_exits_1(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx()), \
+                mock.patch.object(sys, "argv", ["t", "--smoke", "--abort-after-frac", "0", "--steps", "60",
+                                                "--results-dir", d]), mock.patch("builtins.print"):
+            with self.assertRaises(SystemExit) as cm:
+                tr.main()  # default --abort-below (0.5); every greedy eval fabricated at 0 vs reference 10
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIs(log["finished"], False)
+        self.assertEqual(log["aborted"], dict(episode=2, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5,
+                                              abort_after_frac=0.0))
 
 
 class TestReference(unittest.TestCase):

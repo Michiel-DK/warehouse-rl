@@ -13,11 +13,16 @@ range k in [t, t'): the step in which the decision is taken counts, the step of 
 of one agent in the same step give Delta = 0 (no reward, discount 1). Per step k in the window:
 
     r_k = LINE_REWARD * shelf_deliveries_k / n_agents        fleet deliveries, equal share (AGVs and pickers decide)
-          - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (info["stuck_busy_agents"] definition)
-          - STUCK_PENALTY * call_human_cost * [executed call-human relocation of the agent in step k]
-          - STUCK_PENALTY * abandon_cost * [this decision is abandon]    (charged once, at the window's first step k = t,
+          - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (0.0 since 13 Oct: off, see below)
+          - COST_UNIT * call_human_cost * [executed call-human relocation of the agent in step k]
+          - COST_UNIT * abandon_cost * [this decision is abandon]        (charged once, at the window's first step k = t,
                                                                           undiscounted: GAMMA ** 0 = 1)
     R = sum_k GAMMA ** (k - t) * r_k,   target = R + GAMMA ** Delta * max_a Q_target(s', a)   (0 bootstrap at the end)
+
+Deliveries plus the real action costs only (13 Oct 2026): every stuck measure the recovery action itself can reset
+(reroute, back_off and abandon reset the StuckCounter) is a free dodge, so the per-step stuck term is 0 and stuck time
+stays an evaluation metric (stuck_busy_agents). COST_UNIT (reward units per stuck-step, the old STUCK_PENALTY value)
+prices abandon and call-human in stuck-steps, so those charges did not move.
 
 Episode end is a time-limit truncation treated as terminal: the value of the last windows is biased low.
 """
@@ -44,14 +49,15 @@ HIDDEN = 64
 
 # reward constants (stored in every checkpoint under "reward")
 LINE_REWARD = 1.0
-STUCK_PENALTY = 0.01  # per agent-step
+STUCK_PENALTY = 0.0  # per busy stuck agent-step; off (was 0.01): resettable by the action, so gameable
+COST_UNIT = 0.01  # reward units per stuck-step of an action cost
 GAMMA = 0.99
-CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = STUCK_PENALTY * 60 = 0.6
+CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = COST_UNIT * 60 = 0.6
 ABANDON_COST = 15  # stuck-steps charged per abandon decision = the timeout rule's own abandon threshold (recovery.py)
 
 
 def reward_constants(call_human_cost=CALL_HUMAN_COST, abandon_cost=ABANDON_COST):
-    return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "gamma": GAMMA,
+    return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "cost_unit": COST_UNIT, "gamma": GAMMA,
             "call_human_cost": call_human_cost, "abandon_cost": abandon_cost}
 
 

@@ -2,7 +2,7 @@
 
 Usage: python scripts/train_recovery.py [--rates 1,2,4] [--seeds 0,1,2] [--workers N] [--episodes E] [--steps 500]
                                         [--smoke] [--resume] [--results-dir DIR] [--max-intervals N]
-                                        [--random-share F] [--abort-below F]
+                                        [--random-share F] [--abort-below F] [--abort-after-frac F]
 --results-dir is the TRAINING ROOT (default results/recovery_train, also recovery_heldout.py's --train-dir default);
 run (r, s) lives in <results-dir>/rate<r>_seed<s>/ with checkpoint.pt (portable policy, see learned_recovery.py),
 log.json ({config, intervals, finished, reward_used, reference_pick_rate[, aborted]}) and train_state.pt (resume state), each written atomically after
@@ -12,8 +12,8 @@ state behind the log (resume drops the log's later intervals and redoes them), n
 
 Setting: medium map (8 AGVs + 4 pickers), disturbance = sweep.point_spec("breakdown", rate), dispatcher
 StuckAwareCtaPolicy, call_human_cost 60. The agent is a semi-MDP DQN over the RecoveryHook decision events; the reward
-is defined in learned_recovery.py (fleet deliveries share, stuck-busy penalty, call-human penalty, abandon penalty; the
-env reward is never read).
+is defined in learned_recovery.py (fleet deliveries share minus the call-human and abandon costs; the stuck-busy term
+is there with coefficient 0; the env reward is never read).
 
 Exploration: with probability epsilon (linear schedule) a training decision is uniform random with probability
 random_share (RANDOM_SHARE, --random-share) and otherwise the timeout rule's action (prior "timeout"), so the fleet keeps
@@ -22,10 +22,11 @@ delivering while exploring; the stored action is the one actually taken. Evaluat
 Reference + abort: at the start of every run that is not skipped (fresh or resumed) the timeout rule is evaluated on
 the 5 EVAL_SEEDS through run_episode in the same pool and stored as log.json["reference_pick_rate"] = {mean, values};
 a resumed run recomputes it (deterministic) and raises ValueError if it differs from the stored one. After every
-interval, if --abort-below B > 0 and eval_pick_rate_mean < B * reference mean, the log is written with finished false
-and aborted = {episode, eval_pick_rate_mean, reference, abort_below}, one ABORT line is printed and train_run returns
-status "aborted" (the run cannot be resumed); main runs the remaining runs and exits 1 if any run aborted. B = 0
-disables the check.
+interval at episode >= abort_after_frac * episodes (--abort-after-frac F, default EPS_FRAC: epsilon has reached EPS_END
+and the net acts on its own; 0 checks from the first interval), if --abort-below B > 0 and eval_pick_rate_mean < B *
+reference mean, the log is written with finished false and aborted = {episode, eval_pick_rate_mean, reference,
+abort_below, abort_after_frac}, one ABORT line is printed and train_run returns status "aborted" (the run cannot be
+resumed); main runs the remaining runs and exits 1 if any run aborted. B = 0 disables the check.
 
 Rollouts: ONE persistent spawn mp.Pool per run (never per interval); every worker builds one env at a time (a fresh
 env per episode, exactly as evaluate.run_seed does) and torch runs on one thread there. Workers return transitions;
@@ -92,6 +93,7 @@ EPS_START, EPS_END, EPS_FRAC = 1.0, 0.05, 0.5   # linear over the first EPS_FRAC
 DEFAULT_EPISODES = 3200
 RANDOM_SHARE = 0.1      # of the exploratory decisions (probability epsilon): this share uniform random, rest = timeout
 ABORT_BELOW = 0.5       # abort a run when an interval's eval pick-rate mean < ABORT_BELOW * timeout reference mean
+ABORT_AFTER_FRAC = EPS_FRAC  # ... checked only at intervals with episode >= this * episodes (exploration has decayed)
 SMOKE = dict(episodes=4, iter_episodes=2, eval_every=2, batch=32, warmup=32, target_sync=10)
 
 
@@ -101,7 +103,7 @@ class WindowRecorder:
 
     decision(aid, t, x, a): the agent decides at step t; an open window of the same agent ends here (Delta = t - t0,
         zero when it is the same step: no step reward, discount 1); an abandon decision opens its window with
-        -stuck_penalty * abandon_cost in R and U (also when that window is superseded in the same step). step_end(k, deliveries, stuck, relocated): step k has
+        -cost_unit * abandon_cost in R and U (also when that window is superseded in the same step). step_end(k, deliveries, stuck, relocated): step k has
         executed; every open window with t0 <= k accrues GAMMA ** (k - t0) * r_k. finish(t_end): close the windows
         still open at the episode end (done=True)."""
 
@@ -120,7 +122,7 @@ class WindowRecorder:
             # Charged once, at decision time, to the new window (offset 0: undiscounted), whatever the hook then does:
             # recovery.py executes "abandon" unconditionally on both the stuck and the clash path (_abandon resets the
             # counter and frees the task; there is no fallback), so the executed and the decided abandon coincide.
-            pen = self.c["stuck_penalty"] * self.c["abandon_cost"]
+            pen = self.c["cost_unit"] * self.c["abandon_cost"]
             self.open[aid]["R"] -= pen
             self.open[aid]["U"] -= pen
         self._decisions.append((aid, t, int(a)))
@@ -130,7 +132,7 @@ class WindowRecorder:
         share = c["line_reward"] * deliveries / self.n_agents
         for aid, o in self.open.items():
             r = (share - c["stuck_penalty"] * (aid in stuck)
-                 - c["stuck_penalty"] * c["call_human_cost"] * (aid in relocated))
+                 - c["cost_unit"] * c["call_human_cost"] * (aid in relocated))
             o["R"] += c["gamma"] ** (k - o["t"]) * r
             o["U"] += r
         if self.trace is not None:
@@ -300,7 +302,8 @@ def epsilon_at(episode_index, episodes):
 
 
 # ------------------------------------------------------------------------------------------------ run management
-def build_config(rate, run_seed, steps, episodes, smoke, random_share=RANDOM_SHARE, abort_below=ABORT_BELOW):
+def build_config(rate, run_seed, steps, episodes, smoke, random_share=RANDOM_SHARE, abort_below=ABORT_BELOW,
+                 abort_after_frac=ABORT_AFTER_FRAC):
     hp = dict(iter_episodes=ITER_EPISODES, eval_every=EVAL_EVERY, batch=BATCH, warmup=WARMUP, target_sync=TARGET_SYNC)
     if smoke:
         hp.update({k: v for k, v in SMOKE.items() if k != "episodes"})
@@ -311,7 +314,8 @@ def build_config(rate, run_seed, steps, episodes, smoke, random_share=RANDOM_SHA
                train_seed_stride=TRAIN_SEED_STRIDE, capacity=CAPACITY, lr=LR, clip_norm=CLIP_NORM,
                grad_per_new=GRAD_PER_NEW, epsilon=dict(start=EPS_START, end=EPS_END, frac=EPS_FRAC), hidden=lr.HIDDEN,
                call_human_cost=lr.CALL_HUMAN_COST, abandon_cost=lr.ABANDON_COST, reward=lr.reward_constants(),
-               explore=dict(prior="timeout", random_share=random_share), abort_below=abort_below, **hp)
+               explore=dict(prior="timeout", random_share=random_share), abort_below=abort_below,
+               abort_after_frac=abort_after_frac, **hp)
     return json.loads(json.dumps(cfg))
 
 
@@ -341,13 +345,15 @@ def reference_pick_rate(pool, cfg, consts):
 
 
 def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resume, max_intervals=None,
-              abort_below=ABORT_BELOW, random_share=RANDOM_SHARE):
+              abort_below=ABORT_BELOW, random_share=RANDOM_SHARE, abort_after_frac=ABORT_AFTER_FRAC):
     """Returns a summary dict {status: skipped|finished|stopped|aborted, ...}."""
     if abort_below < 0:
         raise ValueError(f"abort_below must be >= 0, got {abort_below!r}")
+    if not 0.0 <= abort_after_frac <= 1.0:
+        raise ValueError(f"abort_after_frac must be in [0, 1], got {abort_after_frac!r}")
     if not 0.0 <= random_share <= 1.0:
         raise ValueError(f"random_share must be in [0, 1], got {random_share!r}")
-    cfg = build_config(rate, run_seed, steps, episodes, smoke, random_share, abort_below)
+    cfg = build_config(rate, run_seed, steps, episodes, smoke, random_share, abort_below, abort_after_frac)
     run_dir = Path(results_dir) / run_dir_name(rate, run_seed)
     log_path, ckpt_path, state_path = run_dir / "log.json", run_dir / "checkpoint.pt", run_dir / "train_state.pt"
     log = None
@@ -489,11 +495,13 @@ def train_run(rate, run_seed, steps, episodes, smoke, workers, results_dir, resu
                 lr.save_checkpoint(ckpt_path, online.state_dict(), consts, cfg)
                 iv = intervals[-1]
                 # abort decided before the log write, so a run that aborts at its last interval is never on disk as
-                # finished: true (not even for an instant)
+                # finished: true (not even for an instant); no check during the grace period
                 abort = None
-                if abort_below > 0 and iv["eval_pick_rate_mean"] < abort_below * reference["mean"]:
+                if (abort_below > 0 and done_eps >= abort_after_frac * total
+                        and iv["eval_pick_rate_mean"] < abort_below * reference["mean"]):
                     abort = dict(episode=done_eps, eval_pick_rate_mean=iv["eval_pick_rate_mean"],
-                                 reference=reference["mean"], abort_below=abort_below)
+                                 reference=reference["mean"], abort_below=abort_below,
+                                 abort_after_frac=abort_after_frac)
                 write_log(finished and abort is None, abort)
                 save_state(wall_prior + time.time() - t0)
                 print(f"[rate {rate} seed {run_seed}] ep {done_eps}/{total} train_reward {iv['train_reward_mean']:.3f} "
@@ -544,11 +552,16 @@ def main():
     p.add_argument("--abort-below", type=float, default=ABORT_BELOW,
                    help=f"abort a run when an interval's eval pick-rate mean < this x the timeout reference mean "
                         f"(default {ABORT_BELOW}; 0 disables)")
+    p.add_argument("--abort-after-frac", type=float, default=ABORT_AFTER_FRAC,
+                   help="check the abort only at intervals with episode >= this x episodes "
+                        f"(default {ABORT_AFTER_FRAC} = EPS_FRAC; 0 = from the first interval)")
     a = p.parse_args()
     if not 0.0 <= a.random_share <= 1.0:
         raise ValueError(f"--random-share must be in [0, 1], got {a.random_share}")
     if a.abort_below < 0:
         raise ValueError(f"--abort-below must be >= 0, got {a.abort_below}")
+    if not 0.0 <= a.abort_after_frac <= 1.0:
+        raise ValueError(f"--abort-after-frac must be in [0, 1], got {a.abort_after_frac}")
     rates = parse_rates(a.rates)
     seeds = ev.parse_seeds(a.seeds)
     if a.smoke:
@@ -573,7 +586,8 @@ def main():
     for rate in rates:
         for run_seed in seeds:
             out = train_run(rate, run_seed, a.steps, episodes, a.smoke, workers, results_dir, a.resume,
-                            a.max_intervals, abort_below=a.abort_below, random_share=a.random_share)
+                            a.max_intervals, abort_below=a.abort_below, random_share=a.random_share,
+                            abort_after_frac=a.abort_after_frac)
             if out["status"] == "aborted":
                 aborted.append((rate, run_seed))
             if out["status"] == "finished" and out["rollout_wall_s"] > 0:
