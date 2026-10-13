@@ -6,3 +6,4 @@ results/*.png
 runs/
 wandb/
 .DS_Store
+fleet/data/
