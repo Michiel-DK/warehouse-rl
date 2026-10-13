@@ -227,7 +227,7 @@ class TestKafkaCommitOrder(unittest.TestCase):
 
 class TestKafkaLedger(unittest.TestCase):
     def test_source_name_backlog_null_and_consumer_lag_in_status(self):
-        # inject: write source "file", a numeric backlog_bytes, or drop the lag row / status line
+        # inject: write source "file", drop the consumer-lag row, or drop the lag line from status_lines
         clock = Clock()
         store = MemoryStore()
         msgs = messages()
@@ -499,7 +499,7 @@ class TestKafkaSinkDelivery(unittest.TestCase):
         self.assertEqual((s2.delivered, s2.delivery_failed), (1, 1))
 
     def test_buffer_error_is_polled_and_retried_without_changing_the_produced_count(self):
-        # inject: count messages before the produce succeeds, drop the retry, or poll(0) instead of poll(0.5)
+        # inject: count the message inside the BufferError handler, drop the retry, or poll(0) instead of poll(0.5)
         p = DeliveryProducer(buffer_full={1, 2, 5})  # attempts 1, 2 (the first message twice) and 5 are refused
         sink = sinks.KafkaSink(TOPIC, producer=p)
         produce_all(sink)

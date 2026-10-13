@@ -258,7 +258,7 @@ class StoreContract:
 
     def test_same_results_as_memory_store_for_the_same_call_sequence(self):
         # inject: ClickHouseStore.select returns the schema_version column, or reads an upsert table without FINAL;
-        # JsonlStore: skip replaying __upd records
+        # JsonlStore.update_where returns 0 without applying the update
         got = contract_sequence(self.make_store())
         want = contract_sequence(MemoryStore())
         self.assertEqual(got, want)
