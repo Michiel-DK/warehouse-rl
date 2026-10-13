@@ -208,7 +208,7 @@ class TestStream(unittest.TestCase):
 
 class TestDynamics(unittest.TestCase):
     def test_zone_runner_deliveries_equal_run_seed(self):
-        # inject: build the env with assign_care_for_agents=True in run_zone, or call env.step twice per iteration
+        # inject: reset the env with seed + 1 in run_zone (red demonstrated), or call env.step twice per iteration
         code_zone = (
             "import sys, json; sys.path[:0] = ['%s', '%s', '%s']\n"
             "from fleet_analyser import emitter as em\n"
