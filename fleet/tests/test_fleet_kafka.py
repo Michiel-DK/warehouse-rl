@@ -210,12 +210,16 @@ class TestKafkaCommitOrder(unittest.TestCase):
         self.assertEqual(len(store.select("transitions")), len(ref.select("transitions")))
 
     def test_restart_with_the_same_store_resumes_from_the_checkpoint(self):
-        # inject: skip restoring the sequence tracker from ingest_checkpoints on resume
+        # inject: skip restoring the sequence tracker from ingest_checkpoints on resume, or a numeric backlog_bytes for
+        # the restored minutes
         msgs = messages()
         store = MemoryStore()
         run([msgs[:150]], store=store, until_idle=0)
-        ing, _, _, _ = run([msgs[100:]], store=store, until_idle=0)  # the new process is redelivered 50 old messages
+        # the new process (two wall minutes later) is redelivered 50 old messages
+        run([msgs[100:]], store=store, until_idle=0, clock=Clock(1_800_000_000.0 + 120))
         rows = store.select("ingest_ledger", {"run": "r"})
+        self.assertGreaterEqual(len({r["minute"] for r in rows}), 2)
+        self.assertTrue(all(r["backlog_bytes"] is None for r in rows))  # also the minutes restored from the checkpoint
         self.assertEqual(sum(r["messages_accepted"] for r in rows), len(msgs))
         self.assertEqual(sum(r["duplicates"] for r in rows), 50)
 
@@ -226,11 +230,12 @@ class TestKafkaLedger(unittest.TestCase):
         clock = Clock()
         store = MemoryStore()
         msgs = messages()
-        consumer = FakeConsumer([msgs], clock, high={0: len(msgs) + 25})
+        consumer = FakeConsumer([msgs[:100], msgs[100:]], clock, high={0: len(msgs) + 25})
+        consumer.on_commit = lambda: setattr(clock, "t", clock.t + 120)  # the batches land in different wall minutes
         ing = ks.KafkaIngester("r", store, consumer, TOPIC, until_idle=2, clock=clock, ledger_interval=1e9)
         ing.run_loop()
         rows = store.select("ingest_ledger", {"run": "r"})
-        self.assertTrue(rows)
+        self.assertGreaterEqual(len({r["minute"] for r in rows}), 2)
         self.assertEqual({r["source"] for r in rows}, {"kafka"})
         self.assertTrue(all(r["backlog_bytes"] is None for r in rows))
         self.assertEqual(store.select("ingest_runs", {"run": "r"})[0]["glob"], f"kafka:{TOPIC}")

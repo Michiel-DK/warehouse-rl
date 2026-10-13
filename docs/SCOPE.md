@@ -608,8 +608,8 @@ duration are lower bounds) and writes no decision, because its dedup_key would n
 LOSE decisions (a run censored before its stuck_after threshold is never decided) and one real episode can leave several
 rows (`interrupted` + `left_censored`); episode counts that matter must filter on both (S5C reports do).
 Retention: kept raw bytes = evidence lines + state_sample lines + reject raws (first 4096 bytes); everything else is
-dropped after parsing; transitions, episodes and decisions are always kept. `--source kafka` prints "kafka source:
-S5B2" and exits 2 in this lane.
+dropped after parsing; transitions, episodes and decisions are always kept. `--source kafka` is S5B2 (below); without
+`--bootstrap` it still prints the S5B1 stub line "kafka source: S5B2" on stderr and exits 2 (an S5B1 test pins that line).
 
 **Ingest ledger** (per source and wall minute, upserted every `--ledger-interval` s and at exit): bytes read
 (compressed, uncompressed), messages_parsed (valid lines incl. duplicates), messages_rejected, duplicates,
@@ -624,6 +624,61 @@ continues the counters of the newest checkpoint (or the run's ledger rows when i
 1, 5, 60 minutes (back from the latest ledger minute) and total, coverage, files per status, episodes per cause and
 decisions per kind and status; `plot` writes `ledger.png` next to the store directory.
 `emit_ledger.json` config gained `t0_mode` (`now` when `--t0 now`, else `fixed`).
+
+### Sprint 5 / S5B2: compose stack, ClickHouse store, Kafka source, delivery accounting
+
+Code: `fleet/docker-compose.yml`, `fleet/compose.sh`, `fleet/sql/schema.sql`, `fleet/fleet_analyser/{clickhouse_store,
+kafka_source}.py`, `fleet/grafana/provisioning/`, `fleet/requirements.txt`; `ingest.py` now has one `Pipeline` (parse ->
+sequence -> detector -> store + ledgers) that the file `Ingester` and the `KafkaIngester` share.
+
+**Stack** (`fleet/compose.sh up [service...] | down | reset | status`): Redpanda (Kafka API on host 19092, mem_limit
+1.5g), ClickHouse (HTTP on host 18123, 3g), Grafana (host 13000, 512m, `grafana-clickhouse-datasource`, datasource
+provisioned from `fleet/grafana/provisioning`; the dashboard is S5C). Host ports: `FLEET_KAFKA_PORT`,
+`FLEET_CLICKHOUSE_PORT`, `FLEET_GRAFANA_PORT`. Data lives in bind mounts under `fleet/data/volumes/` (gitignored with
+`fleet/data/`, counts toward the 8 GB cap; this resolves the sprint text's "named volumes under fleet/data"). Measured
+idle memory of the three containers on 13 Oct: grafana 67 MiB, clickhouse 341 MiB, redpanda 238 MiB.
+
+**ClickHouseStore** (`--store clickhouse://host[:port]/db`, default port 18123; stdlib `urllib`, no client library).
+`INSERT ... FORMAT JSONEachRow` / `SELECT ... FORMAT JSONEachRow`; `open_store` creates the database and applies
+`schema.sql` (all `IF NOT EXISTS`). Upsert tables (stuck_episodes, ingest_ledger, ingest_files, ingest_checkpoints,
+ingest_runs, decision_grades, ingest_consumer_lag) are `ReplacingMergeTree(_ver)` ordered by exactly the key columns
+S5B1 passes to `store.upsert` and are read with `FINAL`; `_ver` is a writer-side strictly increasing integer (ns clock,
++1 on a tie), so within one writer the later upsert wins. Insert-only tables are `MergeTree`. Every table has a
+`schema_version` column (a DDL default for the table layout, unrelated to the VDA 5050 message field) that `select()`
+never returns; `state_sample` has `TTL toDateTime(ts) + INTERVAL 7 DAY` on EVENT time, so replaying files whose t0 is
+older than 7 days lets ClickHouse drop those sample rows on merge (use `--t0 now`). `select/exists/update_where` return
+what MemoryStore returns for the same call sequence, except row order: insert-only tables come back in insert order,
+upsert tables in last-write order. Lists and dicts are stored as JSON text and parsed back. `decisions` is insert-only
+(first write wins via the dedup_key check in `record_decision`); `update_where("decisions", ...)` writes the grade to
+`decision_grades(id, status, outcome, error, verdict, graded_at)` only if the decision has none, so for a single writer a
+decision is graded at most once (check-then-insert is not atomic: two concurrent writers can both stamp), and
+`select("decisions")` overlays the grade. Only those five fields can be changed. No other table supports `update_where`.
+
+**Kafka source** (`ingest.py --source kafka --bootstrap localhost:19092 [--topic fleet.state] [--group stuck-analyser]
+[--run NAME] [--emit-ledger PATH] [--until-idle S]`; needs `pip install -r fleet/requirements.txt`, imported lazily).
+Ingest-ledger source name `kafka`. Auto-commit is off; per batch: lines through the pipeline, derived rows to the store,
+one `ingest_checkpoints` row per partition (path `kafka://<topic>/<partition>`, `offset_uncompressed` = the next offset),
+the ingest-ledger and `ingest_runs` rows covering the batch, and only then a synchronous commit (at-least-once; a store
+error commits nothing). Redelivered messages are duplicates by the sequence tracker: counted in `duplicates`, never
+detected twice, so no second decision. Same limit as the file source: detector state is not checkpointed, so the open
+(zone, ts) batch and evidence whose after-window has not arrived are not in the store at commit time. `backlog_bytes` is
+null for this source; the consumer lag (messages: sum over partitions of high watermark minus position) is written to
+`ingest_consumer_lag` with every ledger write and printed by `ledger.py status`. End of input: `--until-idle S` seconds
+without a message (default: until SIGINT/SIGTERM). `--emit-ledger` points at the emitter's `emit_ledger.json` (coverage
+and the lag rule); without it coverage is null.
+
+**KafkaSink delivery accounting** (S5A trap 5 fixed). Each record carries a delivery callback: `delivered` counts
+acknowledged records, `delivery_failed` counts failed callbacks plus what `flush()` returns at close (records whose
+callback has not fired). A full local queue (`BufferError`) polls 0.5 s and retries the same record without counting a
+second message. The emit ledger's kafka zones and total carry integer `delivered` and `delivery_failed`
+(`delivered + delivery_failed == messages` once closed); a kafka zone with `delivery_failed > 0` is not `complete`. File
+zones carry null for both.
+
+**Tests.** Unit (in the gate, no Docker, no skips): `fleet/tests/test_fleet_clickhouse_store.py` (a stdlib fake HTTP
+server emulates the ClickHouse slice; one store-contract class runs on Memory, Jsonl and ClickHouse; schema.sql is
+checked against every table, column and upsert key S5B1 writes) and `fleet/tests/test_fleet_kafka.py` (fake consumer and
+producer). Integration, run explicitly and skipped when `docker info` fails: `.venv/bin/python -m unittest -v
+fleet.tests.integration_fleet_stack` (real ClickHouse, ClickHouse service only).
 
 ## Compute and timing
 
