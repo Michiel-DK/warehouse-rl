@@ -114,6 +114,24 @@ class TestObservationKeys(unittest.TestCase):
         finally:
             env.close()
 
+    # inject: read the frozen mask one step late (`self._masks_at(max(self._t - 1, 0))[0]` in _blocker), or one step
+    # early, so the flag misses (or anticipates) the first step of a breakdown that starts after t = 0
+    def test_flag_turns_on_at_the_first_frozen_step(self):
+        env, h, rec = scenario(frozen=(2,), t0=3, steps=6)
+        try:
+            by_t = {}
+            for t, o in rec.seen:
+                if o["stuck_count"] > 0 or o["event_is_clash"]:
+                    by_t.setdefault(t, set()).add((o["blocker_frozen"], o["blocker_frozen_left"]))
+            for t in (1, 2, 3, 4, 5):
+                self.assertIn(t, by_t, f"A must decide at t={t} (B stands still on A's next cell)")
+            self.assertEqual(by_t[2], {(0.0, 0.0)})
+            self.assertEqual(by_t[3], {(1.0, float(FROZEN_FOR))})
+            self.assertEqual(by_t[4], {(1.0, float(FROZEN_FOR - 1))})
+            self.assertTrue(h.applied_frozen[3][1] and not h.applied_frozen[2][1])
+        finally:
+            env.close()
+
     # inject: check the frozen agent B regardless of where it stands (flag 1 for D on path[-1] swapped), or ignore the frozen run end
     def test_free_cell_and_unfrozen_occupant_give_zero(self):
         env, h, rec = scenario(run=False)
@@ -396,12 +414,11 @@ class TestLearnedFormatV3(unittest.TestCase):
             self.assertEqual(sd["net.0.weight"].shape, (64, 14))
             old = dict(torch.load(good, weights_only=True), version=2, obs_keys=list(OLD_KEYS))
             old["obs_scale"] = {k: v for k, v in old["obs_scale"].items() if k in OLD_KEYS}
-            torch.save(old, d / "v2.pt")
+            torch.save(old, d / "old.pt")  # no digits in the name: the versions must come from the message
             with self.assertRaises(ValueError) as cm:
-                lr.load_checkpoint(d / "v2.pt")
+                lr.load_checkpoint(d / "old.pt")
             msg = str(cm.exception)
-            self.assertIn("2", msg)
-            self.assertIn("3", msg)
+            self.assertIn("checkpoint version 2 != required version 3", msg)
             self.assertIn("12-key", msg)
             self.assertIn("retrain", msg)
 
