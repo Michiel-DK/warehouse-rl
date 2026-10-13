@@ -1,0 +1,3 @@
+# Optional extras for the fleet stack. Not installed by the repo gate (requirements.lock.txt is unchanged); the Kafka
+# sink (fleet/emit.py --sink kafka) and the Kafka source (fleet/ingest.py --source kafka) import it lazily.
+confluent-kafka==2.5.3
