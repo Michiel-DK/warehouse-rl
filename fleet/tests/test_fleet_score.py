@@ -345,7 +345,7 @@ class TestKafkaSource(unittest.TestCase):
         return out
 
     def test_kafka_source_writes_the_same_score_json_as_the_file_source(self):
-        # inject: group the kafka lines by partition instead of by zone, or drop the last batch / the idle wait
+        # inject: kafka_lines drops every record (`if not raw:` -> `if True:`), or keys the zones by a constant
         cli = _load_score_cli()
         lines = self.interleaved()
         batches = [[_Msg(ln) for ln in lines[i:i + 7]] for i in range(0, len(lines), 7)]
@@ -374,7 +374,7 @@ class TestKafkaSource(unittest.TestCase):
         self.assertEqual(kafka_out.read_bytes(), file_out.read_bytes())
 
     def test_kafka_lines_waits_for_until_idle_and_groups_by_zone(self):
-        # inject: return on the first empty poll, or key the zones by the partition
+        # inject: return on the first empty poll (`>= until_idle` -> `>= 0`), or key the zones by a constant
         t = [0.0]
 
         class Slow(_Consumer):
@@ -388,7 +388,7 @@ class TestKafkaSource(unittest.TestCase):
         self.assertGreaterEqual(t[0], 6)  # 3 polls with data/empty gaps, then 3 idle seconds after the last message
 
     def test_kafka_source_needs_a_bootstrap_and_reports_a_missing_library_in_one_line(self):
-        # inject: let the kafka source fall through to the file branch, or print a traceback for a missing library
+        # inject: drop the --bootstrap requirement in fleet/score.py (`if not a.bootstrap:` -> `if False:`)
         cli = _load_score_cli()
         from unittest import mock
         from fleet_analyser import kafka_source
