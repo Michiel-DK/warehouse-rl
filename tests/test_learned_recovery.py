@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import evaluate as ev
 from warehouse_rl import learned_recovery as lr
-from warehouse_rl.recovery import ACTIONS, RecoveryHook
+from warehouse_rl.recovery import ACTIONS, RecoveryHook, TimeoutRecovery
 
 SMALL = "tarware-small-4agvs-2pickers-globalobs-v1"
 EVALUATE = str(ROOT / "scripts" / "evaluate.py")
@@ -108,6 +108,103 @@ class TestDecide(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+def old_decide(pol, obs):
+    """Verbatim copy of LearnedRecovery.decide before the prior / random_share change (action name only)."""
+    x = lr.obs_to_tensor(obs, pol.obs_scale)
+    if pol.epsilon > 0.0 and pol.rng.random() < pol.epsilon:
+        idx = pol.rng.randrange(len(ACTIONS))
+    else:
+        with torch.no_grad():
+            idx = lr.greedy_index(pol.net(x))
+    return ACTIONS[idx]
+
+
+class TestExploration(unittest.TestCase):
+    OBS = [random_obs(random.Random(i)) for i in range(300)]
+
+    # inject: a second rng draw in decide, or consult the prior when it is None
+    def test_share_one_and_no_prior_reproduce_old_decide(self):
+        torch.manual_seed(7)
+        net = lr.QNet()
+        for eps in (0.0, 0.3, 1.0):
+            want = [old_decide(p, o) for p in [lr.LearnedRecovery(net, epsilon=eps, seed=4)] for o in self.OBS]
+            plain = lr.LearnedRecovery(net, epsilon=eps, seed=4)
+            share1 = lr.LearnedRecovery(net, epsilon=eps, seed=4, prior=TimeoutRecovery(), random_share=1.0)
+            noprior = lr.LearnedRecovery(net, epsilon=eps, seed=4, prior=None, random_share=0.0)  # share ignored
+            for pol in (plain, share1, noprior):
+                self.assertEqual([pol.decide(o) for o in self.OBS], want, (eps, pol.random_share))
+
+    # inject: last_idx left at the greedy / random index in the prior branch
+    def test_prior_branch_follows_prior_and_last_idx_is_its_index(self):
+        torch.manual_seed(7)
+        net, prior = lr.QNet(), TimeoutRecovery()
+        pol = lr.LearnedRecovery(net, epsilon=1.0, seed=2, prior=prior, random_share=0.0)
+        for o in self.OBS:
+            a = pol.decide(o)
+            self.assertEqual(a, prior.decide(o))
+            self.assertEqual(pol.last_idx, ACTIONS.index(a))
+            self.assertTrue(torch.equal(pol.last_x, lr.obs_to_tensor(o)))
+        # mixed: the three branches in proportion to one draw each; last_idx matches the returned action every time
+        pol = lr.LearnedRecovery(net, epsilon=0.6, seed=2, prior=prior, random_share=0.5)
+        rng, kinds = random.Random(2), set()
+        for o in self.OBS:
+            u = rng.random()
+            a = pol.decide(o)
+            self.assertEqual(pol.last_idx, ACTIONS.index(a))
+            if u < 0.3:
+                kinds.add("random")
+                rng.randrange(len(ACTIONS))  # the single extra draw of the random branch
+            elif u < 0.6:
+                kinds.add("prior")
+                self.assertEqual(a, prior.decide(o))
+            else:
+                kinds.add("greedy")
+                with torch.no_grad():
+                    self.assertEqual(pol.last_idx, lr.greedy_index(net(lr.obs_to_tensor(o))))
+        self.assertEqual(kinds, {"random", "prior", "greedy"})
+
+    # inject: accept a share outside [0, 1]
+    def test_random_share_validated(self):
+        for bad in (-0.01, 1.01):
+            with self.assertRaises(ValueError):
+                lr.LearnedRecovery(lr.QNet(), random_share=bad)
+        for ok in (0.0, 0.1, 1.0):
+            lr.LearnedRecovery(lr.QNet(), random_share=ok)
+        pol = lr.LearnedRecovery.from_state_dict(lr.QNet().state_dict(), epsilon=0.5, prior=TimeoutRecovery(),
+                                                 random_share=0.25)
+        self.assertEqual((pol.random_share, type(pol.prior)), (0.25, TimeoutRecovery))
+
+    # inject: ignore the prior (greedy/random instead), or let the learned seam change anything else in the episode
+    def test_full_prior_episode_equals_evaluate_timeout(self):
+        from warehouse_rl.policy import StuckAwareCtaPolicy
+
+        cfg = {"breakdown": {"rate_per_hour": 8, "duration": [20, 60], "agent_types": ["agv"]}}
+        medium = "tarware-medium-8agvs-4pickers-globalobs-v1"
+        for seed in (3, 5):
+            want = ev.run_seed("stuck_aware_cta", medium, 200, seed, disturb=cfg,
+                               recovery={"name": "timeout", "call_human_cost": 60})
+            torch.manual_seed(seed)
+            pol = lr.LearnedRecovery(lr.QNet(), epsilon=1.0, seed=seed, prior=TimeoutRecovery(), random_share=0.0)
+            env = lr.make_learned_env(medium, 200, cfg, pol, 60)
+            try:
+                obs, info = env.reset(seed=seed)
+                disp = StuckAwareCtaPolicy()
+                disp.reset(env)
+                deliveries, sums = 0, {k: 0 for k in ev.RECOVERY_SUMS}
+                for _ in range(200):
+                    obs, _, _, _, info = env.step(disp.act(obs, info["action_mask"], info))
+                    deliveries += int(info["shelf_deliveries"])
+                    for k in sums:
+                        sums[k] += int(info[k])
+            finally:
+                env.close()
+            self.assertGreater(pol.calls, 0)
+            self.assertEqual(deliveries, want["deliveries"])
+            self.assertEqual(deliveries * 3600 / (5 * 200), want["pick_rate"])
+            for k, v in sums.items():
+                self.assertEqual(v, want[k], (seed, k))
+
+
 class TestCheckpoint(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -125,6 +222,7 @@ class TestCheckpoint(unittest.TestCase):
         self.assertEqual(ck["obs_keys"], list(RecoveryHook.OBS_KEYS))
         self.assertEqual(ck["actions"], list(ACTIONS))
         self.assertEqual(ck["reward"], lr.reward_constants())
+        self.assertEqual(ck["reward"]["abandon_cost"], lr.ABANDON_COST)
         torch.manual_seed(1)
         direct = lr.LearnedRecovery(lr.QNet())
         loaded = lr.LearnedRecovery.load(path)
@@ -145,6 +243,21 @@ class TestCheckpoint(unittest.TestCase):
             with torch.no_grad():
                 want = ACTIONS[lr.greedy_index(pol.net(lr.obs_to_tensor(o, scale)))]
             self.assertEqual(pol.decide(o), want)
+
+    # inject: accept a checkpoint with no / another version, or save without the version
+    def test_v1_checkpoint_refused(self):
+        good = make_ckpt(self.dir / "v2.pt")
+        ck = torch.load(good, weights_only=True)
+        self.assertEqual(ck["version"], lr.FORMAT_VERSION == 2 and 2)
+        v1 = {k: v for k, v in ck.items() if k != "version"}  # the v1 shape: no version key
+        for name, bad in (("nov.pt", v1), ("v1.pt", dict(v1, version=1)), ("v3.pt", dict(v1, version=3))):
+            torch.save(bad, self.dir / name)
+            for fn in (lr.load_checkpoint, lr.LearnedRecovery.load, lr.learned_config):
+                with self.assertRaises(ValueError) as cm:
+                    fn(self.dir / name)
+                self.assertIn(name, str(cm.exception))
+                self.assertIn("retrain", str(cm.exception))
+        lr.load_checkpoint(good)
 
     # inject: drop the obs_keys / actions comparison in load_checkpoint
     def test_mismatched_keys_or_actions_raise(self):

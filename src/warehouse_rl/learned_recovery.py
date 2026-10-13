@@ -7,15 +7,30 @@ Seam (recovery.py and env.py are untouched): `make_learned_env` builds the env w
 then, before reset, replaces the hook instance's `_recovery` with the learned policy. The hook reads `self._recovery`
 at every decision. This is the ONLY way a learned policy enters an env (trainer, held-out evaluator, evaluate.py).
 
-Reward (training only; the env reward is never read). Semi-MDP per agent: a transition starts at the agent's decision at
-step t and ends at its next decision at step t' (Delta = t' - t) or at episode end. The window is the half-open step
-range k in [t, t'): the step in which the decision is taken counts, the step of the next decision does not. Two decisions
-of one agent in the same step give Delta = 0 (no reward, discount 1). Per step k in the window:
+Reward (training only). Semi-MDP per agent: a transition starts at the agent's decision at step t and ends at its next
+decision at step t' (Delta = t' - t) or at episode end. The window is the half-open step range k in [t, t'): the step in
+which the decision is taken counts, the step of the next decision does not. Two decisions of one agent in the same step
+give Delta = 0 (no reward, discount 1). Per step k in agent i's window:
 
-    r_k = LINE_REWARD * shelf_deliveries_k / n_agents        fleet deliveries, equal share (AGVs and pickers decide)
-          - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (info["stuck_busy_agents"] definition)
-          - STUCK_PENALTY * call_human_cost * [executed call-human relocation of the agent in step k]
+    r_k = LINE_REWARD * own_i,k                               the agent's OWN vendored reward (credit "own", 13 Oct)
+          - STUCK_PENALTY * [agent busy and StuckCounter.count > 0 after step k]   (0.0 since 13 Oct: off, see below)
+          - COST_UNIT * call_human_cost * [executed call-human relocation of the agent in step k]
+          - COST_UNIT * abandon_cost * [this decision is abandon]        (charged once, at the window's first step k = t,
+                                                                          undiscounted: GAMMA ** 0 = 1)
     R = sum_k GAMMA ** (k - t) * r_k,   target = R + GAMMA ** Delta * max_a Q_target(s', a)   (0 bootstrap at the end)
+
+own_i,k is entry i (agent id - 1) of the per-agent reward vector WarehouseEnv.step returns, built by the vendor with
+RewardType.INDIVIDUAL (vendor tarware/warehouse.py:536-606: +0.1 to the picker at whose cell an AGV loads or unloads,
++1 to the AGV that delivers) and with global_reward=False (make_learned_env asserts both), minus the vendor's constant
+-VENDOR_STEP_PENALTY per agent-step (warehouse.py:674), which is added back: at a fixed 500 steps it is the same for
+every policy, so it is left out. Nothing is shared between agents: an agent gets only what the vendor credits to it
+(a single fleet-shared reward is the "lazy agent" case). The evaluation metric is untouched: pick-rate
+is still deliveries * 3600 / (5 * steps) from info["shelf_deliveries"].
+
+Deliveries plus the real action costs only (13 Oct 2026): every stuck measure the recovery action itself can reset
+(reroute, back_off and abandon reset the StuckCounter) is a free dodge, so the per-step stuck term is 0 and stuck time
+stays an evaluation metric (stuck_busy_agents). COST_UNIT (reward units per stuck-step, the old STUCK_PENALTY value)
+prices abandon and call-human in stuck-steps, so those charges did not move.
 
 Episode end is a time-limit truncation treated as terminal: the value of the last windows is biased low.
 """
@@ -25,12 +40,15 @@ import random
 from pathlib import Path
 
 import torch
+from tarware.warehouse import RewardType
 from torch import nn
 
 from warehouse_rl.env import WarehouseEnv
 from warehouse_rl.recovery import ACTIONS, DEFAULT_CALL_HUMAN_COST, RecoveryHook, RecoveryPolicy
 
-FORMAT_VERSION = 1
+# 2: abandon costs ABANDON_COST stuck-steps and checkpoints carry a top-level "version". v1 checkpoints were trained with
+# a zero-cost abandon (the first real run learned to abandon every stuck task) and are refused by load_checkpoint.
+FORMAT_VERSION = 2
 OBS_KEYS = RecoveryHook.OBS_KEYS
 # Fixed per-key divisors (not running statistics) so a checkpoint is portable; the loaded copy is the one used.
 OBS_SCALE = {"event_is_clash": 1.0, "stuck_count": 20.0, "fixing_clash": 4.0, "carrying": 1.0, "is_picker": 1.0,
@@ -40,14 +58,19 @@ HIDDEN = 64
 
 # reward constants (stored in every checkpoint under "reward")
 LINE_REWARD = 1.0
-STUCK_PENALTY = 0.01  # per agent-step
+STUCK_PENALTY = 0.0  # per busy stuck agent-step; off (was 0.01): resettable by the action, so gameable
+COST_UNIT = 0.01  # reward units per stuck-step of an action cost
 GAMMA = 0.99
-CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = STUCK_PENALTY * 60 = 0.6
+CALL_HUMAN_COST = DEFAULT_CALL_HUMAN_COST  # one executed call = COST_UNIT * 60 = 0.6
+ABANDON_COST = 15  # stuck-steps charged per abandon decision = the timeout rule's own abandon threshold (recovery.py)
+CREDIT = "own"  # each agent's own vendored reward (RewardType.INDIVIDUAL), nothing shared
+VENDOR_STEP_PENALTY = 0.001  # the vendor's constant per agent-step term (tarware/warehouse.py:674), added back
 
 
-def reward_constants(call_human_cost=CALL_HUMAN_COST):
-    return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "gamma": GAMMA,
-            "call_human_cost": call_human_cost}
+def reward_constants(call_human_cost=CALL_HUMAN_COST, abandon_cost=ABANDON_COST):
+    return {"line_reward": LINE_REWARD, "stuck_penalty": STUCK_PENALTY, "cost_unit": COST_UNIT, "gamma": GAMMA,
+            "call_human_cost": call_human_cost, "abandon_cost": abandon_cost, "credit": CREDIT,
+            "vendor_step_penalty": "excluded"}
 
 
 def obs_to_tensor(obs, obs_scale=OBS_SCALE):
@@ -77,11 +100,16 @@ def greedy_index(q):
 
 
 class LearnedRecovery(RecoveryPolicy):
-    """decide(obs) -> argmax Q (ties to the lowest index) when epsilon == 0 (the default); with epsilon > 0 a uniform
-    random action with probability epsilon from its own random.Random(seed) (training only)."""
+    """decide(obs) -> argmax Q (ties to the lowest index) when epsilon == 0 (the default). With epsilon > 0 (training
+    only) ONE draw u from its own random.Random(seed) per decision: u < epsilon * share -> uniform random action;
+    elif u < epsilon -> the `prior` policy's action on the raw obs dict; else greedy. share = 1.0 when prior is None
+    (the original epsilon-greedy, same RNG stream), else random_share in [0, 1]."""
     name = "learned"
 
-    def __init__(self, net, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, checkpoint=None):
+    def __init__(self, net, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, checkpoint=None, prior=None, random_share=1.0):
+        if not 0.0 <= random_share <= 1.0:
+            raise ValueError(f"random_share must be in [0, 1], got {random_share!r}")
+        self.prior, self.random_share = prior, random_share
         self.net = net.eval()
         self.obs_scale = dict(obs_scale)
         self.epsilon = epsilon
@@ -93,9 +121,15 @@ class LearnedRecovery(RecoveryPolicy):
 
     def decide(self, obs):
         x = obs_to_tensor(obs, self.obs_scale)
-        if self.epsilon > 0.0 and self.rng.random() < self.epsilon:
-            idx = self.rng.randrange(len(ACTIONS))
-        else:
+        idx = None
+        if self.epsilon > 0.0:
+            u = self.rng.random()
+            share = 1.0 if self.prior is None else self.random_share
+            if u < self.epsilon * share:
+                idx = self.rng.randrange(len(ACTIONS))
+            elif u < self.epsilon:
+                idx = ACTIONS.index(self.prior.decide(obs))
+        if idx is None:
             with torch.no_grad():
                 idx = greedy_index(self.net(x))
         self.calls += 1
@@ -103,10 +137,10 @@ class LearnedRecovery(RecoveryPolicy):
         return ACTIONS[idx]
 
     @classmethod
-    def from_state_dict(cls, state_dict, obs_scale=OBS_SCALE, epsilon=0.0, seed=0):
+    def from_state_dict(cls, state_dict, obs_scale=OBS_SCALE, epsilon=0.0, seed=0, prior=None, random_share=1.0):
         net = QNet()
         net.load_state_dict(state_dict)
-        return cls(net, obs_scale, epsilon, seed)
+        return cls(net, obs_scale, epsilon, seed, prior=prior, random_share=random_share)
 
     @classmethod
     def load(cls, path):
@@ -118,7 +152,7 @@ class LearnedRecovery(RecoveryPolicy):
 
 def save_checkpoint(path, state_dict, reward, train_config, obs_scale=OBS_SCALE):
     """Atomic torch.save of tensors and Python primitives only (loadable with weights_only=True)."""
-    ck = {"state_dict": {k: v.detach().cpu().clone() for k, v in state_dict.items()}, "obs_keys": list(OBS_KEYS),
+    ck = {"version": FORMAT_VERSION, "state_dict": {k: v.detach().cpu().clone() for k, v in state_dict.items()}, "obs_keys": list(OBS_KEYS),
           "actions": list(ACTIONS), "obs_scale": dict(obs_scale), "reward": dict(reward),
           "train_config": train_config}
     path = Path(path)
@@ -129,6 +163,9 @@ def save_checkpoint(path, state_dict, reward, train_config, obs_scale=OBS_SCALE)
 
 def load_checkpoint(path):
     ck = torch.load(path, map_location="cpu", weights_only=True)
+    if ck.get("version") != FORMAT_VERSION:
+        raise ValueError(f"{path}: checkpoint version {ck.get('version')!r} != {FORMAT_VERSION}; v1 checkpoints were "
+                         f"trained with the zero-cost abandon reward and must be retrained")
     for key in ("state_dict", "obs_keys", "actions", "obs_scale", "reward", "train_config"):
         if key not in ck:
             raise ValueError(f"{path}: checkpoint has no {key!r}")
@@ -174,10 +211,14 @@ def make_learned_env(env_id, steps, disturb, policy, call_human_cost, assign_car
     reset."""
     torch.set_num_threads(1)  # one thread per worker process: N workers x N threads would oversubscribe the cores
     env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
-                       recovery={"name": "timeout", "call_human_cost": call_human_cost})
+                       recovery={"name": "timeout", "call_human_cost": call_human_cost}, global_reward=False)
     hook = env.env
     if not isinstance(hook, RecoveryHook):
         raise AssertionError(f"expected a RecoveryHook, got {type(hook).__name__}")
+    # own credit needs both: the wrapper must not broadcast the fleet total, the vendor must credit per agent
+    if env.global_reward is not False or hook.reward_type != RewardType.INDIVIDUAL:
+        raise AssertionError(f"own credit needs global_reward=False and RewardType.INDIVIDUAL, got "
+                             f"{env.global_reward!r} and {hook.reward_type!r}")
     hook._recovery = policy
     if hook._recovery is not policy:
         raise AssertionError("the learned policy swap did not take")

@@ -16,10 +16,13 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import evaluate as ev
 import train_recovery as tr
 from warehouse_rl import learned_recovery as lr
+from warehouse_rl.recovery import ACTIONS
+from tarware.warehouse import RewardType
 
 SCRIPT = str(ROOT / "scripts" / "train_recovery.py")
 MEDIUM = "tarware-medium-8agvs-4pickers-globalobs-v1"
@@ -35,30 +38,168 @@ def snapshot(d):
 
 
 class TestWindowRecorder(unittest.TestCase):
-    # inject: put the decision step outside the window (k in (t, t']), drop the discount exponent, or charge the
-    # call-human penalty without the cost factor
+    # inject: put the decision step outside the window (k in (t, t']), drop the discount exponent, charge the
+    # call-human penalty without the cost factor, or price an action cost with stuck_penalty instead of cost_unit
     def test_hand_computed_windows(self):
-        c = dict(line_reward=1.0, stuck_penalty=0.1, gamma=0.5, call_human_cost=10)
-        rec = tr.WindowRecorder(c, n_agents=2)
+        c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
+        rec = tr.WindowRecorder(c, n_agents=8)
         x0, x1, x2 = (np.full(12, v, np.float32) for v in (0.0, 1.0, 2.0))
-        rec.decision(7, 1, x0, 3)                                   # agent 7 decides at step 1
-        rec.step_end(1, 2, {7}, set())                              # r = 2/2 - 0.1            = 0.9
-        rec.step_end(2, 0, {7}, {7})                                # r = -0.1 - 0.1 * 10      = -1.1
+
+        def own(v7):  # agent 7's own reward v7 (index 6), every other agent 5.0 (must never reach agent 7's windows)
+            return [5.0] * 6 + [v7, 5.0]
+
+        rec.decision(7, 1, x0, 3)                                   # agent 7 abandons at step 1: -0.2 * 15 = -3.0
+        rec.step_end(1, own(1.0), {7}, set())                       # r = 1.0 - 0.1            = 0.9
+        rec.step_end(2, own(0.0), {7}, {7})                         # r = -0.1 - 0.2 * 10      = -2.1
         rec.decision(7, 3, x1, 4)                                   # next decision at step 3: Delta 2
         rec.decision(7, 3, x2, 0)                                   # second decision, same step: Delta 0
-        rec.step_end(3, 0, set(), set())                            # r = 0
-        rec.step_end(4, 1, set(), set())                            # r = 1/2 = 0.5, weight 0.5**(4-3)
+        rec.step_end(3, own(0.0), set(), set())                     # r = 0
+        rec.step_end(4, own(0.5), set(), set())                     # r = 0.5, weight 0.5**(4-3)
         rec.finish(5)
         (a, b, d) = rec.out
         self.assertEqual((a[1], a[6], a[7], a[8], a[5]), (3, 7, 1, 2, False))
-        self.assertAlmostEqual(a[2], 0.9 + 0.5 * -1.1)              # 0.35
+        self.assertAlmostEqual(a[2], -3.0 + 0.9 + 0.5 * -2.1)       # -3.15 (abandon charge undiscounted)
         self.assertAlmostEqual(a[3], 0.25)                          # gamma ** Delta
         np.testing.assert_array_equal(a[4], x1)
         self.assertEqual((b[1], b[8], b[2], b[3], b[5]), (4, 0, 0.0, 1.0, False))   # Delta 0: no reward, discount 1
         np.testing.assert_array_equal(b[4], x2)
         self.assertEqual((d[1], d[8], d[5]), (0, 2, True))                         # closed by the episode end
         self.assertAlmostEqual(d[2], 0.0 + 0.5 * 0.5)               # step 3: 0, step 4: 0.5 * 0.5**1
-        self.assertAlmostEqual(a[9], 0.9 - 1.1)                     # undiscounted return, used for the log only
+        self.assertAlmostEqual(a[9], -3.0 + 0.9 - 2.1)              # undiscounted return, used for the log only
+
+    # inject: no charge, charge on every decision, charge in step_end, or charge the call-human action
+    def test_abandon_charged_once_per_abandon_decision_only(self):
+        c = dict(line_reward=1.0, stuck_penalty=0.1, cost_unit=0.2, gamma=0.5, call_human_cost=10, abandon_cost=15)
+        x = np.zeros(12, np.float32)
+        for a, name in enumerate(ACTIONS):
+            rec = tr.WindowRecorder(c, n_agents=2)
+            rec.decision(1, 0, x, a)
+            rec.step_end(0, [0.0, 0.0], set(), set())       # no own reward, not stuck: the step reward is 0
+            rec.step_end(1, [0.0, 0.0], set(), set())
+            rec.finish(2)
+            (o,) = rec.out
+            want = -0.2 * 15 if name == "abandon" else 0.0   # -3.0 (cost_unit, not stuck_penalty), undiscounted, once
+            self.assertAlmostEqual(o[2], want, msg=name)     # R
+            self.assertAlmostEqual(o[9], want, msg=name)     # U
+        # two abandons by one agent are charged twice (once per window); the charge is not discounted by the window's
+        # later steps: window 1 = steps 0-1 (r_k = 0.5 own reward at k = 1), window 2 = step 2
+        rec = tr.WindowRecorder(c, n_agents=2)
+        rec.decision(1, 0, x, 3)
+        rec.step_end(0, [0.0, 0.0], set(), set())
+        rec.step_end(1, [0.5, 0.0], set(), set())
+        rec.decision(1, 2, x, 3)
+        rec.step_end(2, [0.0, 0.0], set(), set())
+        rec.finish(3)
+        w1, w2 = rec.out
+        self.assertAlmostEqual(w1[2], -3.0 + 0.5 * 0.5)
+        self.assertAlmostEqual(w2[2], -3.0)
+
+    # inject: STUCK_PENALTY back to 0.01, COST_UNIT changed, or an action cost priced with stuck_penalty (now 0)
+    def test_shipped_reward_is_deliveries_minus_action_costs(self):
+        c = lr.reward_constants()
+        self.assertEqual(c, dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99, call_human_cost=60,
+                                 abandon_cost=15, credit="own", vendor_step_penalty="excluded"))
+        x = np.zeros(12, np.float32)
+        out = {}
+        for name, stuck, relocated in (("abandon", set(), set()), ("wait", {1}, set()), ("call_human", set(), {1})):
+            rec = tr.WindowRecorder(c, n_agents=12)
+            rec.decision(1, 0, x, ACTIONS.index(name))
+            rec.step_end(0, [0.0] * 12, stuck, relocated)
+            rec.finish(1)
+            out[name] = rec.out[0][9]
+        self.assertAlmostEqual(out["abandon"], -0.15, places=12)     # 0.01 x 15, once
+        self.assertEqual(out["wait"], 0.0)                           # a stuck busy step costs nothing
+        self.assertAlmostEqual(out["call_human"], -0.60, places=12)  # 0.01 x 60 per executed relocation
+
+
+    # inject: sum the own vector (agent 3 gets 1.1), divide it by n_agents (agent 1 gets 1/12), or index it by aid
+    # instead of aid - 1 (agent 1 gets 0.1)
+    def test_each_agent_credited_with_its_own_reward_only(self):
+        c = dict(lr.reward_constants(), gamma=0.9)
+        x = np.zeros(12, np.float32)
+        rec = tr.WindowRecorder(c, n_agents=12)
+        for aid in (1, 2, 3, 12):
+            rec.decision(aid, 0, x, ACTIONS.index("wait"))
+        own = [0.0] * 12
+        own[0], own[1] = 1.0, 0.1  # agent 1 (index 0) delivers, agent 2 (index 1) loads
+        rec.step_end(0, [0.0] * 12, set(), set())
+        rec.step_end(1, [0.0] * 12, set(), set())
+        rec.step_end(2, own, set(), set())  # offset 2 in every window
+        rec.finish(3)
+        got = {o[6]: o[2] for o in rec.out}
+        self.assertEqual(set(got), {1, 2, 3, 12})
+        self.assertAlmostEqual(got[1], 1.0 * 0.9 ** 2, places=12)
+        self.assertAlmostEqual(got[2], 0.1 * 0.9 ** 2, places=12)
+        self.assertEqual(got[3], 0.0)
+        self.assertEqual(got[12], 0.0)
+        with self.assertRaises(ValueError):
+            rec.step_end(3, [0.0] * 11, set(), set())
+
+
+class TestOwnCreditFromEnv(unittest.TestCase):
+    # inject: drop the VENDOR_STEP_PENALTY add-back in run_episode (a quiet step is then -0.001, not 0)
+    def test_vendor_constant_step_term_is_pinned_and_removed(self):
+        cfg = tr.point_spec("breakdown", 1)[1]
+        env = lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
+        try:
+            env.reset(seed=0)
+            _, rewards, _, _, info = env.step([0] * env.num_agents)  # all NOOP: no load, unload or delivery
+        finally:
+            env.close()
+        self.assertEqual(int(info["shelf_deliveries"]), 0)
+        self.assertEqual([float(r) for r in rewards], [-lr.VENDOR_STEP_PENALTY] * 12)  # vendor warehouse.py:674
+        torch.manual_seed(0)
+        res = tr.run_episode(dict(state_dict=lr.QNet().state_dict(), epsilon=0.0, explore_seed=0, env_id=MEDIUM,
+                                  disturb=cfg, steps=40, seed=0, call_human_cost=60, consts=lr.reward_constants(),
+                                  collect=True, trace=True))
+        self.assertEqual(res["trace"][0]["own"], [0.0] * 12)  # the first step has no event: exactly 0, not -0.001
+        self.assertTrue(all(v >= 0.0 for t in res["trace"] for v in t["own"]))  # no -0.001 left anywhere
+
+    # inject: credit the delivery to another agent (own[aid % 12]), broadcast the total (global_reward=True), or
+    # share deliveries equally; checked against DisturbedWarehouse.delivered_per_agent, the repo's own counter
+    def test_own_reward_matches_per_agent_deliveries(self):
+        cfg = tr.point_spec("breakdown", 1)[1]
+        torch.manual_seed(0)
+        res = tr.run_episode(dict(state_dict=lr.QNet().state_dict(), epsilon=1.0, explore_seed=0, env_id=MEDIUM,
+                                  disturb=cfg, steps=300, seed=1, call_human_cost=60, consts=lr.reward_constants(),
+                                  collect=True, trace=True, prior="timeout", random_share=0.0))
+        self.assertGreater(res["deliveries"], 0)
+        per_agent = [0] * 12
+        loads = 0
+        for t in res["trace"]:
+            whole = [int(math.floor(v + 1e-9)) for v in t["own"]]
+            self.assertEqual(sum(whole), t["deliveries"], f"step {t['k']}")
+            for i, w in enumerate(whole):
+                per_agent[i] += w
+                frac = t["own"][i] - w
+                self.assertAlmostEqual(frac * 10, round(frac * 10), places=6)  # +0.1 per load/unload
+                loads += round(frac * 10)
+        self.assertEqual(per_agent, res["delivered_per_agent"])
+        self.assertEqual(per_agent[8:], [0, 0, 0, 0])  # pickers (ids 9-12) never deliver
+        self.assertGreater(loads, 0)
+        self.assertTrue(any(t["own"][i] > 0 for t in res["trace"] for i in range(8, 12)))  # pickers earn the +0.1
+
+    # inject: build the env with global_reward=True, or drop either half of the assertion in make_learned_env
+    def test_make_learned_env_refuses_a_shared_reward(self):
+        real = lr.WarehouseEnv
+
+        def shared(*a, **kw):
+            kw["global_reward"] = True
+            return real(*a, **kw)
+
+        cfg = tr.point_spec("breakdown", 1)[1]
+        with mock.patch.object(lr, "WarehouseEnv", shared):
+            with self.assertRaisesRegex(AssertionError, "own credit"):
+                lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
+
+        def vendor_global(*a, **kw):  # the vendor broadcasting team credit (RewardType.GLOBAL)
+            env = real(*a, **kw)
+            env.env.reward_type = RewardType.GLOBAL
+            return env
+
+        with mock.patch.object(lr, "WarehouseEnv", vendor_global):
+            with self.assertRaisesRegex(AssertionError, "own credit"):
+                lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
 
 
 class TestRolloutReward(unittest.TestCase):
@@ -71,17 +212,17 @@ class TestRolloutReward(unittest.TestCase):
         task.update(kw)
         return tr.run_episode(task)
 
-    def reference(self, res, consts, n_agents=12):
+    def reference(self, res, consts):
         """Independent recomputation of every transition's reward from the recorded per-step trace."""
         trace = {t["k"]: t for t in res["trace"]}
         out = []
-        for aid, t0, delta in zip(res["AID"], res["T0"], res["DELTA"]):
-            total = 0.0
+        for aid, t0, delta, act in zip(res["AID"], res["T0"], res["DELTA"], res["A"]):
+            total = -consts["cost_unit"] * consts["abandon_cost"] * (ACTIONS[int(act)] == "abandon")
             for k in range(int(t0), int(t0) + int(delta)):
                 st = trace[k]
-                r = consts["line_reward"] * st["deliveries"] / n_agents
+                r = consts["line_reward"] * st["own"][int(aid) - 1]
                 r -= consts["stuck_penalty"] * (int(aid) in st["stuck"])
-                r -= consts["stuck_penalty"] * consts["call_human_cost"] * (int(aid) in st["relocated"])
+                r -= consts["cost_unit"] * consts["call_human_cost"] * (int(aid) in st["relocated"])
                 total += consts["gamma"] ** (k - int(t0)) * r
             out.append(total)
         return np.array(out)
@@ -89,17 +230,19 @@ class TestRolloutReward(unittest.TestCase):
     # inject: change the window to (t, t'], read the env reward, or ignore the passed constants
     def test_trainer_reward_equals_reference_from_trace(self):
         for consts in (lr.reward_constants(),
-                       dict(line_reward=2.0, stuck_penalty=0.5, gamma=0.9, call_human_cost=7)):
+                       dict(line_reward=2.0, stuck_penalty=0.5, cost_unit=0.3, gamma=0.9, call_human_cost=7,
+                            abandon_cost=4)):
             res = self.episode(consts)
             self.assertEqual(res["reward_used"], consts)
+            self.assertGreaterEqual(int((res["A"] == ACTIONS.index("abandon")).sum()), 1)  # the abandon term is exercised
             self.assertGreater(len(res["A"]), 50)
             np.testing.assert_allclose(res["R"], self.reference(res, consts), atol=1e-9)
             np.testing.assert_allclose(res["DISC"], consts["gamma"] ** res["DELTA"], atol=1e-12)
             self.assertEqual(res["busy_stuck_mismatch"], 0)  # recorder's stuck flag == info["stuck_busy_agents"]
-            zero = res["DELTA"] == 0
+            zero = (res["DELTA"] == 0) & (res["A"] != ACTIONS.index("abandon"))  # an abandon is charged even at Delta 0
             self.assertTrue(np.all(res["R"][zero] == 0.0) and np.all(res["DISC"][zero] == 1.0))
             self.assertTrue(np.any(res["R"] != 0.0))
-        # the stuck penalty really enters: a 0.5 penalty makes the total strictly lower than at 0.01 (same actions)
+        # the stuck term is wired (coefficient 0 by default): a 0.5 penalty makes the total strictly lower
         lo = self.episode(lr.reward_constants())["R"].sum()
         hi = self.episode(dict(lr.reward_constants(), stuck_penalty=0.5))["R"].sum()
         self.assertLess(hi, lo)
@@ -107,7 +250,8 @@ class TestRolloutReward(unittest.TestCase):
     # inject: charge call-human on the decision instead of the executed relocation, or attribute it to another agent
     # (e.g. relocs.add(agent.id % 12 + 1)); the check is against the hook's own call_human_steps counter, not the trace
     def test_call_human_charged_on_execution_to_the_deciding_agent(self):
-        for consts in (lr.reward_constants(), dict(line_reward=2.0, stuck_penalty=0.5, gamma=0.9, call_human_cost=7)):
+        for consts in (lr.reward_constants(), dict(line_reward=2.0, stuck_penalty=0.5, cost_unit=0.3, gamma=0.9,
+                                                   call_human_cost=7, abandon_cost=4)):
             res = self.episode(consts)
             executed = sum(len(t["relocated"]) for t in res["trace"])
             decided = sum(a == 4 for t in res["trace"] for _, _, a in t["decisions"])
@@ -150,6 +294,28 @@ class TestRolloutReward(unittest.TestCase):
             row = ev.run_seed("stuck_aware_cta", MEDIUM, 100, 1000, disturb=cfg, recovery=lr.learned_config(ck))
         self.assertEqual(res["pick_rate"], row["pick_rate"])
         self.assertEqual(res["decisions"], row["recovery_stuck_events"] + row["recovery_clash_events"])
+
+    # inject: in run_episode pass prior=None, or random_share=1.0, to LearnedRecovery (train_recovery.py, the
+    # from_state_dict call), or let the collecting instrumentation change the episode
+    def test_training_rollout_with_timeout_prior_equals_evaluate_timeout(self):
+        cfg = tr.point_spec("breakdown", 1)[1]
+        torch.manual_seed(7)
+        sd = lr.QNet().state_dict()
+        for seed in (1000, 1001):
+            row = ev.run_seed("stuck_aware_cta", MEDIUM, 300, seed, disturb=cfg,
+                              recovery={"name": "timeout", "call_human_cost": 60})
+            want = (row["pick_rate"], row["deliveries"], row["recovery_stuck_events"] + row["recovery_clash_events"])
+            self.assertGreater(want[2], 0, seed)  # non-vacuous: the hook decides in this episode
+
+            def go(share):
+                res = tr.run_episode(dict(state_dict=sd, epsilon=1.0, explore_seed=seed, env_id=MEDIUM, disturb=cfg,
+                                          steps=300, seed=seed, call_human_cost=60, consts=lr.reward_constants(),
+                                          collect=True, prior="timeout", random_share=share))
+                self.assertEqual(len(res["A"]), res["decisions"])
+                return res["pick_rate"], res["deliveries"], res["decisions"]
+
+            self.assertEqual(go(0.0), want, seed)
+            self.assertNotEqual(go(1.0), want, seed)  # all-random exploration is a different episode
 
 
 class TestUnits(unittest.TestCase):
@@ -211,7 +377,7 @@ class TestUnits(unittest.TestCase):
     def test_worker_resolution(self):
         seen = []
 
-        def fake(rate, run_seed, steps, episodes, smoke, workers, results_dir, resume, max_intervals=None):
+        def fake(rate, run_seed, steps, episodes, smoke, workers, results_dir, resume, max_intervals=None, **kw):
             seen.append(workers)
             return dict(status="stopped")
 
@@ -247,6 +413,19 @@ class TestUnits(unittest.TestCase):
         self.assertEqual(out.returncode, 0)
         self.assertEqual((tr.DEFAULT_RATES, tr.DEFAULT_SEEDS), ("1,2,4", "0,1,2"))
         self.assertEqual(tr.parse_rates(tr.DEFAULT_RATES), [1, 2, 4])
+        self.assertEqual((tr.DEFAULT_EPISODES, lr.FORMAT_VERSION, lr.ABANDON_COST, tr.RANDOM_SHARE, tr.ABORT_BELOW),
+                         (3200, 2, 15, 0.1, 0.5))
+        self.assertEqual(tr.DEFAULT_EPISODES % tr.EVAL_EVERY, 0)
+        self.assertEqual(tr.DEFAULT_EPISODES % tr.ITER_EPISODES, 0)
+        cfg = tr.build_config(1, 0, 500, 3200, False)
+        self.assertEqual(cfg["reward"]["abandon_cost"], 15)
+        self.assertEqual(cfg["abandon_cost"], 15)
+        self.assertEqual(cfg["explore"], {"prior": "timeout", "random_share": 0.1})
+        self.assertEqual((cfg["abort_below"], cfg["version"]), (0.5, 2))
+        self.assertEqual((tr.ABORT_AFTER_FRAC, cfg["abort_after_frac"]), (tr.EPS_FRAC, 0.5))
+        self.assertEqual(cfg["reward"], dict(line_reward=1.0, stuck_penalty=0.0, cost_unit=0.01, gamma=0.99,
+                                             call_human_cost=60, abandon_cost=15, credit="own",
+                                             vendor_step_penalty="excluded"))
 
 
 class _RecordingPool:
@@ -276,12 +455,15 @@ class TestShippedWeights(unittest.TestCase):
         fake_ctx = mock.Mock()
         fake_ctx.Pool = _RecordingPool
         with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=fake_ctx):
-            out = tr.train_run(1, 0, 100, None, True, 1, d, False)
+            out = tr.train_run(1, 0, 100, None, True, 1, d, False, abort_below=0)
             self.assertEqual(out["status"], "finished")
             ck = lr.load_checkpoint(Path(d) / "rate1_seed0" / "checkpoint.pt")
-        calls = _RecordingPool.calls
+        ref, calls = _RecordingPool.calls[0], _RecordingPool.calls[1:]
+        self.assertTrue(all(t["policy"] == "timeout" and t["state_dict"] is None for t in ref))
         kinds = ["train" if c[0]["collect"] else "eval" for c in calls]
         self.assertEqual(kinds, ["train", "eval", "train", "eval"])  # smoke: iteration = interval = 2 episodes
+        self.assertTrue(all(t["prior"] == "timeout" and t["random_share"] == 0.1 for t in calls[0] + calls[2]))
+        self.assertTrue(all(t["prior"] is None and t["epsilon"] == 0.0 for t in calls[1] + calls[3]))
 
         def eq(a, b):
             return all(torch.equal(a[k], b[k]) for k in a)
@@ -299,12 +481,28 @@ class TestShippedWeights(unittest.TestCase):
         self.assertTrue(all(t["epsilon"] == 0.0 for t in calls[1] + calls[3]))
 
 
+class TestRandomSharePlumbing(unittest.TestCase):
+    # inject: main drops --random-share, or task() uses the RANDOM_SHARE constant instead of the run's config
+    def test_cli_random_share_reaches_every_training_rollout(self):
+        _RecordingPool.calls = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx(
+                _RecordingPool)), mock.patch.object(sys, "argv", ["t", "--smoke", "--random-share", "0.3",
+                                                                   "--abort-below", "0", "--steps", "60",
+                                                                   "--results-dir", d]), mock.patch("builtins.print"):
+            tr.main()
+            cfg = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())["config"]
+        train = [t for c in _RecordingPool.calls for t in c if t.get("collect")]
+        self.assertEqual(len(train), 4)
+        self.assertTrue(all(t["random_share"] == 0.3 and t["prior"] == "timeout" for t in train))
+        self.assertEqual(cfg["explore"], {"prior": "timeout", "random_share": 0.3})
+
+
 class TestSmokeTrainAndResume(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.dir = Path(cls.tmp.name)
-        cls.args = ["--smoke", "--steps", "100", "--workers", "2"]
+        cls.args = ["--smoke", "--steps", "100", "--workers", "2", "--abort-below", "0"]
         cls.first = run(cls.args, cls.dir)
         cls.run_dir = cls.dir / "rate1_seed0"
 
@@ -336,6 +534,24 @@ class TestSmokeTrainAndResume(unittest.TestCase):
         self.assertGreater(last["wall_s"], 0)
         self.assertIn("steps/s", self.first.stdout)
 
+    # inject: omit the reference from the log, write it only at the end, or compute it with another policy / seeds
+    def test_smoke_writes_reference_and_first_interval(self):
+        log = json.loads((self.run_dir / "log.json").read_text())
+        ref = log["reference_pick_rate"]
+        self.assertEqual(set(ref), {"mean", "values"})
+        self.assertEqual(len(ref["values"]), 5)
+        self.assertAlmostEqual(ref["mean"], float(np.mean(ref["values"])))
+        cfg = log["config"]
+        for seed, v in zip(tr.EVAL_SEEDS, ref["values"]):
+            row = ev.run_seed("stuck_aware_cta", tr.MEDIUM_8, cfg["steps"], seed, disturb=cfg["disturb"],
+                              recovery={"name": "timeout", "call_human_cost": cfg["call_human_cost"]})
+            self.assertEqual(v, row["pick_rate"], seed)
+        self.assertIn("eval_pick_rate_mean", log["intervals"][0])
+        self.assertEqual(log["intervals"][0]["episode"], 2)
+        self.assertEqual(cfg["abort_below"], 0)
+        self.assertNotIn("aborted", log)
+        self.assertIn("timeout reference", self.first.stdout)
+
     # inject: save the untrained initial net, or store constants other than the ones the workers used
     def test_checkpoint_trained_and_constants_match_those_used(self):
         ck = torch.load(self.run_dir / "checkpoint.pt", weights_only=True)
@@ -346,8 +562,12 @@ class TestSmokeTrainAndResume(unittest.TestCase):
         self.assertTrue(any(not torch.equal(init[k], ck["state_dict"][k]) for k in init))
         # (a) the constants the workers echoed back after using them == the checkpoint's == the module's
         self.assertEqual(ck["reward"], log["reward_used"])
-        self.assertEqual(ck["reward"], dict(line_reward=lr.LINE_REWARD, stuck_penalty=lr.STUCK_PENALTY,
-                                            gamma=lr.GAMMA, call_human_cost=lr.CALL_HUMAN_COST))
+        self.assertEqual(ck["reward"], dict(line_reward=lr.LINE_REWARD, stuck_penalty=0.0, cost_unit=0.01,
+                                            gamma=lr.GAMMA, call_human_cost=lr.CALL_HUMAN_COST, abandon_cost=15,
+                                            credit="own", vendor_step_penalty="excluded"))
+        self.assertEqual(log["reward_used"]["abandon_cost"], 15)
+        self.assertEqual(log["config"]["reward"], ck["reward"])
+        self.assertEqual(ck["version"], 2)
         self.assertEqual(ck["train_config"], log["config"])
         pol = lr.LearnedRecovery.load(self.run_dir / "checkpoint.pt")
         self.assertEqual(pol.epsilon, 0.0)
@@ -381,7 +601,7 @@ class TestSmokeTrainAndResume(unittest.TestCase):
     # inject: compare no config, or only part of it
     def test_config_mismatch_raises(self):
         before = snapshot(self.run_dir)
-        r = run(["--smoke", "--steps", "101", "--workers", "2", "--resume"], self.dir)
+        r = run(["--smoke", "--steps", "101", "--workers", "2", "--abort-below", "0", "--resume"], self.dir)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("ValueError", r.stderr)
         self.assertIn("refusing to resume", r.stderr)
@@ -468,10 +688,196 @@ class TestSmokeTrainAndResume(unittest.TestCase):
                 mock.patch.object(tr.mp, "get_context", return_value=fake_ctx), \
                 mock.patch.object(_RecordingPool, "map", fail_map):
             with self.assertRaises(Boom):
-                tr.train_run(1, 0, 100, None, True, 1, d, False)
+                tr.train_run(1, 0, 100, None, True, 1, d, False, abort_below=0)
             self.assertEqual(calls, [("train_state.pt", 0)])
             self.assertTrue((Path(d) / "rate1_seed0" / "train_state.pt").exists())
             self.assertFalse((Path(d) / "rate1_seed0" / "log.json").exists())
+
+
+class _FakeEvalPool(_RecordingPool):
+    """In-process pool; the eval and the reference results are overridden with fixed pick-rates (fabricated)."""
+    eval_rate, ref_rate = 0.0, 10.0
+
+    def map(self, fn, tasks, chunksize=1):
+        out = []
+        for t in list(tasks):
+            r = fn(t)
+            if t.get("policy") == "timeout":
+                r["pick_rate"] = self.ref_rate
+            elif not t["collect"]:
+                r["pick_rate"] = self.eval_rate
+            out.append(r)
+        return out
+
+
+def _fake_ctx(pool=_FakeEvalPool):
+    ctx = mock.Mock()
+    ctx.Pool = pool
+    return ctx
+
+
+class TestAbortAndVersion(unittest.TestCase):
+    def go(self, d, abort_below, resume=False, max_intervals=None, **kw):
+        with mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx()):
+            return tr.train_run(1, 0, 60, None, True, 1, d, resume, max_intervals, abort_below=abort_below, **kw)
+
+    # inject: never abort, compare against the wrong threshold, keep finished true, or omit a key of `aborted`
+    def test_abort_fires_on_low_interval(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch("builtins.print") as pr:
+            out = self.go(d, 0.5)
+            self.assertEqual(out["status"], "aborted")
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+            self.assertIs(log["finished"], False)
+            self.assertEqual(log["aborted"], dict(episode=2, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5,
+                                                  abort_after_frac=0.5))
+            self.assertEqual(log["reference_pick_rate"], dict(mean=10.0, values=[10.0] * 5))
+            self.assertEqual(len(log["intervals"]), 1)
+            lines = [c.args[0] for c in pr.call_args_list if c.args and str(c.args[0]).startswith("ABORT")]
+            self.assertEqual(lines, ["ABORT rate 1 seed 0 at episode 2: eval 0.00 < 0.5 x reference 10.00"])
+
+    # inject: abort check skipped on the last interval, or an aborted last interval left as finished true
+    def test_abort_on_last_interval_is_not_finished(self):
+        class LateLow(_FakeEvalPool):
+            n_eval = 0
+
+            def map(self, fn, tasks, chunksize=1):
+                tasks = list(tasks)
+                if tasks[0].get("policy") != "timeout" and not tasks[0]["collect"]:
+                    LateLow.n_eval += 1
+                    type(self).eval_rate = 50.0 if LateLow.n_eval == 1 else 0.0
+                return super().map(fn, tasks, chunksize)
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx(LateLow)):
+            out = tr.train_run(1, 0, 60, None, True, 1, d, False, abort_below=0.5)
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+        self.assertEqual((out["status"], log["finished"], log["aborted"]["episode"]), ("aborted", False, 4))
+
+    # inject: abort_below 0 still aborts
+    def test_no_abort_when_disabled(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self.go(d, 0)
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+            self.assertEqual(out["status"], "finished")
+            self.assertTrue(log["finished"])
+            self.assertNotIn("aborted", log)
+            self.assertEqual(log["config"]["abort_below"], 0)
+
+    # inject: resume continues an aborted run
+    def test_resume_on_aborted_raises_naming_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self.go(d, 0.5)["status"], "aborted")
+            with self.assertRaises(ValueError) as cm:
+                self.go(d, 0.5, resume=True)
+            self.assertIn(str(Path(d) / "rate1_seed0"), str(cm.exception))
+            self.assertIn("aborted", str(cm.exception))
+
+    # inject: main swallows an aborted run's status, or stops the other runs after it
+    def test_main_runs_all_then_exits_nonzero(self):
+        seen = []
+
+        def fake(rate, run_seed, *a, **kw):
+            seen.append(run_seed)
+            return dict(status="aborted" if run_seed == 0 else "stopped")
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr, "train_run", fake), \
+                mock.patch.object(sys, "argv", ["t", "--rates", "1", "--seeds", "0,1", "--results-dir", d]):
+            with self.assertRaises(SystemExit) as cm:
+                tr.main()
+        self.assertEqual((cm.exception.code, seen), (1, [0, 1]))
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr, "train_run", lambda *a, **kw: dict(
+                status="stopped")), mock.patch.object(sys, "argv", ["t", "--rates", "1", "--seeds", "0", "--results-dir", d]):
+            tr.main()  # no abort: returns normally
+
+    # inject: the reference is not recomputed on resume, or a mismatch is ignored
+    def test_resume_recomputes_reference_and_raises_on_mismatch(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self.go(d, 0, max_intervals=1)["status"], "stopped")
+            log_path = Path(d) / "rate1_seed0" / "log.json"
+            self.assertEqual(json.loads(log_path.read_text())["reference_pick_rate"]["mean"], 10.0)
+            with mock.patch.object(_FakeEvalPool, "ref_rate", 11.0), self.assertRaises(ValueError) as cm:
+                self.go(d, 0, resume=True)
+            self.assertIn("reference", str(cm.exception))
+            out = self.go(d, 0, resume=True)  # same reference: continues, and keeps it in the log
+            self.assertEqual(out["status"], "finished")
+            self.assertEqual(json.loads(log_path.read_text())["reference_pick_rate"]["mean"], 10.0)
+
+    # inject: skip or continue a version-1 run, with or without --resume; name the config diff instead of the version
+    def test_version_1_run_dir_raises_with_and_without_resume(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.go(d, 0)
+            rd = Path(d) / "rate1_seed0"
+            log = json.loads((rd / "log.json").read_text())
+            log["config"]["version"] = 1
+            (rd / "log.json").write_text(json.dumps(log))
+            before = snapshot(rd)
+            for resume in (False, True):
+                with self.assertRaises(ValueError) as cm:
+                    self.go(d, 0, resume=resume)
+                self.assertIn(str(rd), str(cm.exception))
+                self.assertIn("version", str(cm.exception))
+            self.assertEqual(snapshot(rd), before)
+            del log["config"]["version"]  # a log with no version at all is also refused
+            (rd / "log.json").write_text(json.dumps(log))
+            with self.assertRaises(ValueError):
+                self.go(d, 0, resume=True)
+
+    def test_bad_arguments(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(ValueError):
+                self.go(d, -0.1)
+            with self.assertRaises(ValueError):
+                self.go(d, 0, random_share=1.5)
+            for bad in (-0.1, 1.5):
+                with self.assertRaises(ValueError):
+                    self.go(d, 0.5, abort_after_frac=bad)
+
+    def _long(self, d, **kw):
+        """Non-smoke run of 8 episodes with an eval every 2 (patched), every eval fabricated at 0 vs reference 10."""
+        with mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx()), \
+                mock.patch.multiple(tr, EVAL_EVERY=2, ITER_EPISODES=2, WARMUP=32, BATCH=32, TARGET_SYNC=10):
+            return tr.train_run(1, 0, 60, 8, False, 1, d, False, **kw)
+
+    # inject: no grace (check from the first interval), `>` instead of `>=` at the threshold, or a grace on the CLI
+    # value instead of the run's episodes
+    def test_default_grace_never_aborts_before_eps_frac(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self._long(d)  # default abort_below 0.5, abort_after_frac EPS_FRAC: first check at episode 4
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+        self.assertEqual(out["status"], "aborted")
+        self.assertEqual([iv["episode"] for iv in log["intervals"]], [2, 4])  # episode 2 was 0.0 and did not abort
+        self.assertEqual(log["aborted"], dict(episode=4, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5,
+                                              abort_after_frac=0.5))
+        self.assertEqual(log["config"]["abort_after_frac"], 0.5)
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self._long(d, abort_after_frac=0.0)["aborted"]["episode"], 2)
+        with tempfile.TemporaryDirectory() as d:  # 1.0: only the last interval is checked
+            self.assertEqual(self._long(d, abort_after_frac=1.0)["aborted"]["episode"], 8)
+
+    # inject: main ignores --abort-after-frac, swallows the aborted status, or exits 0
+    def test_default_smoke_aborts_on_degenerate_eval_and_exits_1(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(tr.mp, "get_context", return_value=_fake_ctx()), \
+                mock.patch.object(sys, "argv", ["t", "--smoke", "--abort-after-frac", "0", "--steps", "60",
+                                                "--results-dir", d]), mock.patch("builtins.print"):
+            with self.assertRaises(SystemExit) as cm:
+                tr.main()  # default --abort-below (0.5); every greedy eval fabricated at 0 vs reference 10
+            log = json.loads((Path(d) / "rate1_seed0" / "log.json").read_text())
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIs(log["finished"], False)
+        self.assertEqual(log["aborted"], dict(episode=2, eval_pick_rate_mean=0.0, reference=10.0, abort_below=0.5,
+                                              abort_after_frac=0.0))
+
+
+class TestReference(unittest.TestCase):
+    # inject: evaluate another policy / other seeds / another disturbance for the reference
+    def test_reference_equals_evaluate_run_seed_timeout(self):
+        cfg = tr.build_config(2, 0, 300, None, True)
+        ref = tr.reference_pick_rate(_RecordingPool(), cfg, lr.reward_constants())
+        want = [ev.run_seed("stuck_aware_cta", tr.MEDIUM_8, 300, s, disturb=cfg["disturb"],
+                            recovery={"name": "timeout", "call_human_cost": cfg["call_human_cost"]})["pick_rate"]
+                for s in tr.EVAL_SEEDS]
+        self.assertEqual(ref["values"], want)
+        self.assertEqual(ref["mean"], float(np.mean(want)))
+        self.assertGreater(ref["mean"], 0.0)  # non-vacuous at this length
 
 
 if __name__ == "__main__":

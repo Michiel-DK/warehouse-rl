@@ -1,0 +1,116 @@
+{
+  "policy": "stuck_aware_cta",
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "steps": 500,
+  "rows": [
+    {
+      "seed": 1000,
+      "steps": 500,
+      "deliveries": 34,
+      "pick_rate": 48.96,
+      "clashes": 41,
+      "stucks": 0,
+      "wall_s": 1.8474400043487549,
+      "stuck_agent_steps": 1207,
+      "stuck_busy_agent_steps": 555,
+      "abandoned_tasks": 0,
+      "clash_agent_steps": 158,
+      "frozen_agent_steps": 141,
+      "delayed_agent_steps": 0,
+      "frozen_fraction": 0.0235,
+      "delivered_per_agent": [
+        5,
+        5,
+        5,
+        4,
+        5,
+        3,
+        4,
+        3,
+        0,
+        0,
+        0,
+        0
+      ],
+      "recovery": {
+        "name": "timeout",
+        "call_human_cost": 60
+      },
+      "recovery_wait": 407,
+      "recovery_back_off": 0,
+      "recovery_reroute": 90,
+      "recovery_abandon": 0,
+      "recovery_call_human": 0,
+      "recovery_stuck_events": 456,
+      "recovery_clash_events": 41,
+      "recovery_fallbacks": 0,
+      "call_human_steps": 0
+    },
+    {
+      "seed": 1001,
+      "steps": 500,
+      "deliveries": 32,
+      "pick_rate": 46.08,
+      "clashes": 23,
+      "stucks": 2,
+      "wall_s": 1.8599088191986084,
+      "stuck_agent_steps": 1316,
+      "stuck_busy_agent_steps": 454,
+      "abandoned_tasks": 2,
+      "clash_agent_steps": 102,
+      "frozen_agent_steps": 215,
+      "delayed_agent_steps": 0,
+      "frozen_fraction": 0.035833333333333335,
+      "delivered_per_agent": [
+        5,
+        2,
+        4,
+        2,
+        4,
+        7,
+        3,
+        5,
+        0,
+        0,
+        0,
+        0
+      ],
+      "recovery": {
+        "name": "timeout",
+        "call_human_cost": 60
+      },
+      "recovery_wait": 341,
+      "recovery_back_off": 0,
+      "recovery_reroute": 68,
+      "recovery_abandon": 2,
+      "recovery_call_human": 0,
+      "recovery_stuck_events": 388,
+      "recovery_clash_events": 23,
+      "recovery_fallbacks": 0,
+      "call_human_steps": 0
+    }
+  ],
+  "n": 2,
+  "pick_rate_mean": 47.519999999999996,
+  "pick_rate_sd": 2.036467529817259,
+  "ci95_low": 29.22335999999998,
+  "ci95_high": 65.81664,
+  "disturb_tag": "cfg-edf2ba3500",
+  "disturb": {
+    "breakdown": {
+      "rate_per_hour": 1,
+      "duration": [
+        20,
+        60
+      ],
+      "agent_types": [
+        "agv"
+      ]
+    }
+  },
+  "recovery_tag": "timeout",
+  "recovery": {
+    "name": "timeout",
+    "call_human_cost": 60
+  }
+}

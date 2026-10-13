@@ -1,0 +1,122 @@
+{
+  "policy": "stuck_aware_cta",
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "steps": 500,
+  "rows": [
+    {
+      "seed": 1000,
+      "steps": 500,
+      "deliveries": 2,
+      "pick_rate": 2.88,
+      "clashes": 2,
+      "stucks": 0,
+      "wall_s": 2.668252944946289,
+      "stuck_agent_steps": 870,
+      "stuck_busy_agent_steps": 832,
+      "abandoned_tasks": 0,
+      "clash_agent_steps": 8,
+      "frozen_agent_steps": 141,
+      "delayed_agent_steps": 0,
+      "frozen_fraction": 0.0235,
+      "delivered_per_agent": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "recovery": {
+        "name": "learned",
+        "checkpoint": "results/recovery_train_smoke/rate1_seed0/checkpoint.pt",
+        "sha256": "b70a8a6f705df00b95a651e27e3a79cc2dfc8d3cf8e53d2f18a418f2bc7a1ed1",
+        "call_human_cost": 60
+      },
+      "recovery_wait": 33,
+      "recovery_back_off": 1,
+      "recovery_reroute": 1401,
+      "recovery_abandon": 0,
+      "recovery_call_human": 0,
+      "recovery_stuck_events": 1427,
+      "recovery_clash_events": 8,
+      "recovery_fallbacks": 0,
+      "call_human_steps": 0
+    },
+    {
+      "seed": 1001,
+      "steps": 500,
+      "deliveries": 0,
+      "pick_rate": 0.0,
+      "clashes": 0,
+      "stucks": 0,
+      "wall_s": 2.7855801582336426,
+      "stuck_agent_steps": 488,
+      "stuck_busy_agent_steps": 12,
+      "abandoned_tasks": 0,
+      "clash_agent_steps": 460,
+      "frozen_agent_steps": 215,
+      "delayed_agent_steps": 0,
+      "frozen_fraction": 0.035833333333333335,
+      "delivered_per_agent": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "recovery": {
+        "name": "learned",
+        "checkpoint": "results/recovery_train_smoke/rate1_seed0/checkpoint.pt",
+        "sha256": "b70a8a6f705df00b95a651e27e3a79cc2dfc8d3cf8e53d2f18a418f2bc7a1ed1",
+        "call_human_cost": 60
+      },
+      "recovery_wait": 11,
+      "recovery_back_off": 0,
+      "recovery_reroute": 1956,
+      "recovery_abandon": 0,
+      "recovery_call_human": 0,
+      "recovery_stuck_events": 1967,
+      "recovery_clash_events": 0,
+      "recovery_fallbacks": 0,
+      "call_human_steps": 0
+    }
+  ],
+  "n": 2,
+  "pick_rate_mean": 1.44,
+  "pick_rate_sd": 2.0364675298172568,
+  "ci95_low": -16.856639999999995,
+  "ci95_high": 19.736639999999998,
+  "disturb_tag": "cfg-edf2ba3500",
+  "disturb": {
+    "breakdown": {
+      "rate_per_hour": 1,
+      "duration": [
+        20,
+        60
+      ],
+      "agent_types": [
+        "agv"
+      ]
+    }
+  },
+  "recovery_tag": "learned-b70a8a6f70",
+  "recovery": {
+    "name": "learned",
+    "checkpoint": "results/recovery_train_smoke/rate1_seed0/checkpoint.pt",
+    "sha256": "b70a8a6f705df00b95a651e27e3a79cc2dfc8d3cf8e53d2f18a418f2bc7a1ed1",
+    "call_human_cost": 60
+  }
+}
