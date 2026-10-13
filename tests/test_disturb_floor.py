@@ -87,6 +87,31 @@ class TestDeterminism(unittest.TestCase):
             env.close()
 
 
+    def test_draws_follow_the_spec_order_from_the_separate_generator(self):
+        # Independent recomputation of the documented draw: own SeedSequence([seed, hash(full config), _SEED_TAG,
+        # _FLOOR_TAG]), then cells without replacement, then p_c, then the (agents, steps) coin matrix.
+        # mutants: floor drawn from the main rng (before or after burst); coin drawn before the cells; replace=True.
+        for cfg in (dz.PRESETS["floor-light"], {**dz.PRESETS["breakdown-light"], "burst": {"start": 5, "end": 20,
+                                                                                         "extra": 3},
+                                                **dz.PRESETS["floor-heavy"]}):
+            for seed in (0, 7):
+                with self.subTest(cfg=cfg, seed=seed):
+                    env = reset_env(SMALL, cfg, seed=seed, steps=60)
+                    try:
+                        e = env.env
+                        f = e.disturb_config["floor"]
+                        frng = np.random.default_rng(np.random.SeedSequence(
+                            [seed, dz.config_hash_int(e.disturb_config), dz._SEED_TAG, dz._FLOOR_TAG]))
+                        idx = frng.choice(len(e._blockable_cells), size=f["cells"], replace=False)
+                        ps = frng.uniform(f["p"][0], f["p"][1], size=f["cells"])
+                        expect = {e._blockable_cells[int(i)]: float(pc) for i, pc in zip(idx, ps)}
+                        coin = frng.random((e.num_agents, e.max_steps))
+                        self.assertEqual(e.floor_cells, expect)
+                        np.testing.assert_array_equal(e.floor_coin, coin)
+                    finally:
+                        env.close()
+
+
 class TestCells(unittest.TestCase):
     # mutant: candidates not restricted to highway non-goal cells.
     def test_every_floor_cell_is_highway_non_goal(self):
@@ -99,6 +124,22 @@ class TestCells(unittest.TestCase):
                 for (x, y) in e.floor_cells:
                     self.assertGreater(e.highways[y, x], 0)
                     self.assertNotIn((x, y), goals)
+            finally:
+                env.close()
+
+    def test_cells_are_drawn_without_replacement(self):
+        # mutant: replace=True. K = every candidate must give every candidate exactly once.
+        env = reset_env(SMALL, {"floor": {"cells": 248, "p": [0.1, 0.2]}})
+        try:
+            e = env.env
+            self.assertEqual(len(e._blockable_cells), 248)
+            self.assertEqual(set(e.floor_cells), set(e._blockable_cells))
+        finally:
+            env.close()
+        for seed in range(30):
+            env = reset_env(SMALL, dz.PRESETS["floor-heavy"], seed=seed, steps=5)
+            try:
+                self.assertEqual(len(env.env.floor_cells), 12)
             finally:
                 env.close()
 
@@ -329,6 +370,40 @@ class TestUnitSemantics(unittest.TestCase):
         a, _ = self.prep()
         self.run_once()
         self.assertTrue(self.e._suppressed[a.id - 1])
+
+    def test_coin_is_read_at_the_executing_step(self):
+        # mutant: coin indexed [a, t + 1] / [a, t - 1]. Only the column of step t decides.
+        for t in (0, 3):
+            for hit, expect in ((True, 1), (False, 0)):
+                with self.subTest(t=t, hit=hit):
+                    self.env.close()
+                    self.setUp()
+                    a, _ = self.prep(p=0.5)
+                    self.e._t = t
+                    self.e.floor_coin[:] = 0.9 if hit else 0.1  # every other step says the opposite
+                    self.e.floor_coin[a.id - 1, t] = 0.1 if hit else 0.9
+                    self.assertEqual(int(self.run_once().sum()), expect)
+
+    def test_skip_neither_increments_nor_resets_a_nonzero_stuck_counter(self):
+        # Oracle from the vendor StuckCounter.update (W:79-85): a busy NOOP agent at the same cell would go 3 -> 4,
+        # a move would reset it to 0. A floor-skipped agent is hidden from resolve_stuck_agents: it stays 3.
+        # mutants: skip not ORed into _suppressed (-> 4); skip resets the counter (-> 0).
+        for floor_hits, expect in ((True, 3), (False, 4)):
+            with self.subTest(floor_hits=floor_hits):
+                self.env.close()
+                self.setUp()
+                a, _ = self.prep(p=0.5, coin=0.1 if floor_hits else 0.9)
+                if not floor_hits:
+                    a.req_action = Action.NOOP  # control: same agent, plain NOOP, visible to the vendor
+                for o in self.e.agents:
+                    o.busy = o is a
+                c = self.e.stuck_counters[a.id - 1]
+                c.position, c.count = (a.x, a.y), 3
+                self.e.resolve_move_conflict(self.e.agents)
+                self.e.resolve_stuck_agents()
+                self.assertEqual(c.count, expect)
+                self.assertEqual(c.position, (a.x, a.y))
+                self.assertTrue(a.busy)
 
     def test_out_of_range_step_does_not_index_the_coin(self):
         a, _ = self.prep()
