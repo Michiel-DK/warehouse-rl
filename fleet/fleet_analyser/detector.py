@@ -29,6 +29,7 @@ RESOLUTIONS = ("moved", "order_dropped", "fault_cleared", "unresolved")
 
 class _Robot:
     __slots__ = ("state", "last_ts", "fault_since", "run", "episode")
+    # run["censored"]: the run began at the robot's first message after a resume, so its true start is unknown
 
     def __init__(self):
         self.state = None
@@ -50,8 +51,12 @@ def _near(a, b):
 
 
 class Detector:
-    def __init__(self, stuck_after=DEFAULT_STUCK_AFTER):
+    def __init__(self, stuck_after=DEFAULT_STUCK_AFTER, resumed=False):
+        """resumed=True: this detector starts mid-stream at a checkpoint. A stopped run that begins at a robot's first
+        message seen here may have started before the checkpoint; episodes from such a run carry left_censored=True
+        (their start and duration are lower bounds)."""
         self.stuck_after = stuck_after
+        self.resumed = resumed
         self._zones = {}
 
     # ------------------------------------------------------------------ input
@@ -137,7 +142,8 @@ class Detector:
                 recovered = True
             r.run = run = None
         if run is None and not m.driving and m.order_id != "":
-            r.run = run = dict(order=m.order_id, since=m.ts, cell=[m.x, m.y], faulted_last=m.faulted)
+            r.run = run = dict(order=m.order_id, since=m.ts, cell=[m.x, m.y], faulted_last=m.faulted,
+                               censored=self.resumed and r.last_ts is None)
         elif run is not None:
             run["faulted_last"] = m.faulted
         stuck_now = run is not None and m.ts - run["since"] >= self.stuck_after
@@ -160,7 +166,7 @@ class Detector:
                                       order_id=run["order"], start=start, start_iso=iso(start), t_entry=m.ts,
                                       cell=list(run["cell"]), cause=None, blocker=None, blocker_faulted_s=None,
                                       end=None, duration_s=None, resolution="open", avoidable=False,
-                                      avoidable_s=None)
+                                      avoidable_s=None, left_censored=run["censored"])
         return state, closed, opened
 
     def _cause(self, z, m, batch, states):

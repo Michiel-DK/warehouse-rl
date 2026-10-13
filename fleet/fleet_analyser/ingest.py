@@ -7,9 +7,13 @@ checked). The emit ledger (<dir of glob>/emit_ledger.json), when present, says w
 rotation files are never ingested) and when the run is over.
 
 Checkpoints: after each processed chunk the chunk's rows are written, then ingest_checkpoints(run, path) is upserted with
-the uncompressed offset of the last consumed line and the sequence tracker. A restart re-decompresses a file from byte 0
-and skips that many bytes (gzip cannot seek). Detector state is NOT checkpointed: it restarts empty at the checkpoint
-offset, so an episode spanning the resume point can be missed or shortened.
+the uncompressed offset of the last consumed line, the sequence tracker and a snapshot of the ingest-ledger counters, in
+one row, so a hard kill can never leave the ledger behind or ahead of the offsets (a resume restores the counters from
+the newest checkpoint row, not from ingest_ledger rows, which are written only every --ledger-interval). A restart
+re-decompresses a file from byte 0 and skips that many bytes (gzip cannot seek). Detector state is NOT checkpointed: it
+restarts empty at the checkpoint offset. Episodes still `open` from the killed process are closed as `interrupted`; an
+episode whose stopped run begins at a robot's first message after the resume is `left_censored` and writes no decision
+(its start is unknown, so its dedup_key would not match the original episode's).
 
 Retention: kept raw bytes = evidence lines + state_sample lines + reject raws; every other raw line is dropped after
 parsing. Transitions, episodes and decisions are derived rows and always kept. Nothing here reads a message's `custom`.
@@ -75,7 +79,10 @@ class Ingester:
         self.emit_path = Path(os.path.dirname(glob) or ".") / "emit_ledger.json"
         self.emit = None  # last good emit ledger document
         self.files = {}
-        self.det = Detector(stuck_after)
+        self._checkpoints = {}
+        self._cp_seq = 0
+        resuming = bool(store.select("ingest_checkpoints", {"run": run}))
+        self.det = Detector(stuck_after, resumed=resuming)
         self.ledger = IngestLedger(run, "file", clock)
         self.seq = SequenceTracker()
         self.exit_code = 0
@@ -87,17 +94,29 @@ class Ingester:
         self._next_seq = {}  # zone -> next arrival seq
         self._ts_first_seq = {}  # zone -> {ts: first seq of that ts}
         self._pending_ev = []  # evidence waiting for its lines after the deciding message
-        self._checkpoints = {}
         self._load_resume()
 
     # ------------------------------------------------------------------ resume
     def _load_resume(self):
-        self.ledger.preload(self.store.select("ingest_ledger", {"run": self.run}))
-        for cp in self.store.select("ingest_checkpoints", {"run": self.run}):
+        cps = self.store.select("ingest_checkpoints", {"run": self.run})
+        if not cps:
+            self.ledger.preload(self.store.select("ingest_ledger", {"run": self.run}))
+            return
+        for cp in cps:
             self._checkpoints[cp["path"]] = cp
             for serial, h in json.loads(cp["last_header_ids"]).items():
                 if h > self.seq.last.get(serial, -1):
                     self.seq.last[serial] = h
+        newest = max(cps, key=lambda cp: cp.get("cp_seq") or 0)
+        self._cp_seq = newest.get("cp_seq") or 0
+        if newest.get("ledger_counters"):
+            self.ledger.restore(json.loads(newest["ledger_counters"]))
+        else:
+            self.ledger.preload(self.store.select("ingest_ledger", {"run": self.run}))
+        stale = [dict(ep, resolution="interrupted") for ep in self.store.select("stuck_episodes", {"run": self.run})
+                 if ep.get("resolution") == "open"]
+        if stale:
+            self.store.upsert("stuck_episodes", ("run", "episode_id"), stale)
 
     def stop(self, *_):
         self._stop.set()
@@ -317,6 +336,8 @@ class Ingester:
             row = {k: v for k, v in ev.items() if k not in ("kind", "decided_by")}
             row["run"] = self.run
             self.store.upsert("stuck_episodes", ("run", "episode_id"), [row])
+            if ev.get("left_censored"):
+                continue  # start unknown after a resume: no decision (its dedup_key would be a second key)
             if kind == "episode_open":
                 self._decide("stuck_cause", ev, ev["t_entry"], dict(
                     episode_id=ev["episode_id"], cause=ev["cause"], blocker=ev["blocker"],
@@ -378,9 +399,10 @@ class Ingester:
 
     # ------------------------------------------------------------------ checkpoints / files / ledger rows
     def _checkpoint(self, f):
+        self._cp_seq += 1
         self.store.upsert("ingest_checkpoints", ("run", "path"), [dict(
             run=self.run, path=f.path, offset_uncompressed=f.consumed, last_header_ids=json.dumps(self.seq.last),
-            updated_at=self.clock())])
+            ledger_counters=json.dumps(self.ledger.snapshot()), cp_seq=self._cp_seq, updated_at=self.clock())])
 
     def _write_files(self, only=None):
         rows = []

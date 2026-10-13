@@ -210,6 +210,51 @@ class TestGrowingFiles(unittest.TestCase):
         self.assertEqual(sum(r["sequence_gaps"] for r in rows), 0)
         store2.close()
 
+    def test_hard_kill_resume_ledger_matches_checkpoint(self):
+        # inject: on resume, preload the counters from ingest_ledger rows instead of the newest checkpoint's snapshot
+        path = self.dir / "zone0-000.jsonl.gz"
+        first = 100
+        g = GrowingGz(path)
+        g.write(b"".join(self.lines[:first]))
+        store = JsonlStore(self.dir / "store")
+        ing1 = Ingester(str(self.dir / "*.jsonl.gz"), "r", store, poll=0, ledger_interval=1e9)
+        ing1.poll_once()  # then the process dies: no finish(), no ledger row ever written
+        self.assertEqual(store.select("ingest_ledger", {"run": "r"}), [])
+        self.assertEqual(store.select("ingest_checkpoints", {"run": "r"})[0]["offset_uncompressed"],
+                         sum(map(len, self.lines[:first])))
+        store.close()
+        g.close(b"".join(self.lines[first:]))
+        store2 = JsonlStore(self.dir / "store")
+        ing2 = Ingester(str(self.dir / "*.jsonl.gz"), "r", store2, poll=0, once=True)
+        ing2.run_loop()
+        self.assertEqual(accepted_total(store2), len(self.lines))
+        rows = store2.select("ingest_ledger", {"run": "r"})
+        self.assertEqual(sum(r["duplicates"] for r in rows), 0)
+        self.assertEqual(sum(r["sequence_gaps"] for r in rows), 0)
+        store2.close()
+
+    def test_resume_censors_runs_and_interrupts_open_episodes(self):
+        # inject: write the stuck_cause decision for a left_censored episode (drop the left_censored skip in ingest)
+        path = self.dir / "zone0-000.jsonl.gz"
+        lines = [line("Z0-00", t, t, order="o1", driving=t >= 30, x=0 if t < 30 else 1) for t in range(40)]
+        g = GrowingGz(path)
+        g.write(b"".join(lines[:12]))
+        store = JsonlStore(self.dir / "store")
+        ing1 = Ingester(str(self.dir / "*.jsonl.gz"), "r", store, poll=0, ledger_interval=1e9)
+        ing1.poll_once()  # stuck at step 6, then the process dies with the episode open
+        self.assertEqual(len(store.select("decisions")), 1)
+        store.close()
+        g.close(b"".join(lines[12:]))
+        store2 = JsonlStore(self.dir / "store")
+        Ingester(str(self.dir / "*.jsonl.gz"), "r", store2, poll=0, once=True).run_loop()
+        eps = {e["episode_id"]: e for e in store2.select("stuck_episodes", {"run": "r"})}
+        self.assertEqual(eps[f"Z0-00@{iso(BASE)}"]["resolution"], "interrupted")
+        resumed = [e for e in eps.values() if e["left_censored"]]
+        self.assertEqual(len(resumed), 1)
+        self.assertEqual(resumed[0]["resolution"], "moved")
+        self.assertEqual(len(store2.select("decisions")), 1)  # no second stuck_cause under a shifted dedup_key
+        store2.close()
+
     def test_truncated_file_is_failed(self):
         # inject: wait forever on a file that never reaches end of stream
         path = self.dir / "zone0-000.jsonl.gz"

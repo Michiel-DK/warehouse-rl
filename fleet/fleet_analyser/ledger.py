@@ -76,6 +76,19 @@ class IngestLedger:
                     c[k] += r[k] or 0
                 c["behind"], c["backlog"] = r.get("behind_emitter_s"), r.get("backlog_bytes") or 0
 
+    def snapshot(self):
+        """The exact counters (lag samples excluded) as JSON-able {minute: {sum: n}}; stored in every checkpoint row so
+        a resume continues from counters that match the checkpoint's offsets exactly."""
+        return {str(m): {k: c[k] for k in _SUMS} for m, c in self.minutes.items()}
+
+    def restore(self, snap):
+        """Replace the counters with a snapshot() taken at a checkpoint (lag samples of those minutes are lost)."""
+        self.minutes = {}
+        for m, sums in snap.items():
+            c = self.minutes.setdefault(int(m), _blank())
+            for k in _SUMS:
+                c[k] = sums.get(k, 0)
+
     def minute_now(self):
         return int(self.clock() // 60) * 60
 

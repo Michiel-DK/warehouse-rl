@@ -597,9 +597,14 @@ file the glob matches but the emit ledger does not list stays `discovered`, and 
 the ledger is `complete` or `failed`: stale rotation files cannot push coverage over 1. No emit ledger: every matched
 file is ingested. Exit 0 when the emit ledger is `complete` and every listed file is `complete`; 1 on a failed file,
 a failed emit run or a listed file missing on disk. Checkpoints: after each chunk's rows are written, `(run, path)` gets
-the uncompressed offset and the sequence tracker; a restart re-decompresses from byte 0 and skips that many bytes.
-Detector state is NOT checkpointed: after a resume the detector starts empty at the checkpoint offset, so an episode
-that spans the resume point can be missed or shortened (and the last open batch before a stop is not detected).
+the uncompressed offset, the sequence tracker and a snapshot of the ingest-ledger counters (one row, `cp_seq`
+increasing); a restart re-decompresses from byte 0, skips that many bytes and restores the counters from the newest
+checkpoint row, so a hard kill (laptop sleep, SIGKILL) cannot leave coverage behind the offsets (lag samples of the
+restored minutes are lost). A kill between a chunk's rows and its checkpoint can duplicate that chunk's transitions.
+Detector state is NOT checkpointed: after a resume the detector starts empty at the checkpoint offset (the last open
+batch before a stop is not detected). Episodes still `open` from the killed process get resolution `interrupted`; an
+episode whose stopped run begins at a robot's first message after the resume has `left_censored = true` (start and
+duration are lower bounds) and writes no decision, because its dedup_key would not match the original episode's.
 Retention: kept raw bytes = evidence lines + state_sample lines + reject raws (first 4096 bytes); everything else is
 dropped after parsing; transitions, episodes and decisions are always kept. `--source kafka` prints "kafka source:
 S5B2" and exits 2 in this lane.
@@ -613,7 +618,7 @@ unless the emit ledger config says `t0_mode == "now"`, `rate == "realtime"` and 
 months or negative and meaningless. `behind_emitter_s` = the emit ledger's latest `last_timestamp` minus the latest
 accepted ts (event seconds), null without an emit ledger. **Coverage = sum(messages_accepted) over the run / emit
 ledger `total.expected_messages`**, null without an emit ledger; it is the single completeness number. A resumed process
-preloads the run's existing ledger rows, so coverage spans processes. `fleet/ledger.py status --run R` prints the last
+continues the counters of the newest checkpoint (or the run's ledger rows when it has none), so coverage spans processes. `fleet/ledger.py status --run R` prints the last
 1, 5, 60 minutes (back from the latest ledger minute) and total, coverage, files per status, episodes per cause and
 decisions per kind and status; `plot` writes `ledger.png` next to the store directory.
 `emit_ledger.json` config gained `t0_mode` (`now` when `--t0 now`, else `fixed`).
