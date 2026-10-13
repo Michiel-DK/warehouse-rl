@@ -6,6 +6,10 @@ Config (a plain dict, `{}` = no disturbance, validated fail-closed by `validate_
   blocked_cell: {rate_per_hour, duration: [lo, hi]}                                    map-level, highway non-goal cells
   burst:        {start, end, extra}                                                    extra requests for steps [start, end)
   outage:       {rate_per_hour, duration: [lo, hi]}                                    map-level, a goal becomes impassable
+  floor:        {cells: K, p: [lo, hi]}                                                K fixed bad-floor highway non-goal cells
+floor: K cells are drawn without replacement at reset, each with a slip probability p_c ~ U[lo, hi]; an agent that
+requests FORWARD into one (ENTER semantics, see resolve_move_conflict) is NOOPed for that step iff its pre-drawn coin
+floor_coin[agent, t] < p_c. Floor skips are counted in info["floor_skips"], never in delayed_agents / applied_delayed.
 rate_per_hour is the onset rate per robot-hour (map-level for blocked_cell / outage); one step is 5 s, so the
 per-step onset probability is rate_per_hour * 5 / 3600. Durations are uniform integers in [lo, hi] steps, lo >= 1.
 
@@ -13,7 +17,10 @@ Common random numbers: the whole schedule is generated in `reset` from an own np
 SeedSequence([seed, sha256(config) as int, fixed tag]); nothing is drawn lazily or conditionally on env state, and the
 layer never touches the global `np.random` / `random` (the vendor env seeds and draws from those). The freeze, delay,
 blocked-cell and outage schedules are a pure function of (seed, config, num_agents, max_steps, layout), so they are
-identical across policies.
+identical across policies. The floor draws (cells, p_c, the (agents, steps) coin matrix) come from a SEPARATE generator,
+and the main generator is seeded from the config WITHOUT the `floor` key, so adding `floor` to a config never shifts
+any other type's draws. The floor cells and coins are a function of (seed, full config) only; the realised skips also
+depend on where the robots drive.
 
 Burst is only APPROXIMATELY paired across policies. Its timing and size (start, end, extra) are pure functions of the
 config, and the shelf identities follow a fixed priority order (a permutation of all shelves drawn at reset from the
@@ -39,15 +46,18 @@ import pyastar2d
 
 STEP_SECONDS = 5  # same constant as pick-rate = deliveries * 3600 / (5 * steps)
 _SEED_TAG = 0x44495354  # fixed tag mixed into the layer SeedSequence ("DIST")
+_FLOOR_TAG = 0x464C4F52  # extra tag for the separate floor generator ("FLOR")
 
 # Types the layer implements. A key outside this set raises ValueError (never a silent no-op).
-LANDED_TYPES = ("breakdown", "delay", "blocked_cell", "burst", "outage")
+LANDED_TYPES = ("breakdown", "delay", "blocked_cell", "burst", "outage", "floor")
 
 PRESETS = {
     "none": {},
     "breakdown-light": {"breakdown": {"rate_per_hour": 2.0, "duration": [20, 60]}},
     "breakdown-heavy": {"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}},
     "delay-10": {"delay": {"p_skip": 0.1}},
+    "floor-light": {"floor": {"cells": 6, "p": [0.05, 0.25]}},
+    "floor-heavy": {"floor": {"cells": 12, "p": [0.2, 0.6]}},
 }
 
 
@@ -120,6 +130,15 @@ def validate_config(config):
             raise ValueError(f"burst start/end/extra must be ints, got {s!r}")
         if s["start"] < 0 or s["end"] <= s["start"] or s["extra"] < 1:
             raise ValueError(f"burst needs 0 <= start < end and extra >= 1, got {s!r}")
+    if "floor" in config:
+        f = config["floor"]
+        _check_keys("floor", f, ("cells", "p"))
+        if not _is_int(f["cells"]) or f["cells"] < 1:
+            raise ValueError(f"floor.cells must be an int >= 1, got {f['cells']!r}")
+        p = f["p"]
+        if (not isinstance(p, (list, tuple)) or len(p) != 2 or not all(_is_real(x) for x in p)
+                or not 0 <= p[0] <= p[1] <= 1):
+            raise ValueError(f"floor.p must be [lo, hi] with 0 <= lo <= hi <= 1, got {p!r}")
     return json.loads(json.dumps(config))
 
 
@@ -186,6 +205,9 @@ class DisturbedWarehouse(Warehouse):
         self._t = 0
         self.applied_frozen = []
         self.applied_delayed = []
+        self.applied_floor = []  # per step: bool array, agents NOOPed by a floor skip
+        self.floor_cells = {}  # (x, y) -> p_c, simulator-side ground truth; nothing outside this module reads it
+        self.floor_coin = np.zeros((A, T))  # pre-drawn uniform coins; a no-floor config never reads them
         self._suppressed = np.zeros(A, dtype=bool)
         self._abandoned = 0
         self.delivered_per_agent = [0] * A
@@ -197,7 +219,8 @@ class DisturbedWarehouse(Warehouse):
         cfg = self.disturb_config
         T, A = self.max_steps, self.num_agents
         s = int(seed) if seed is not None else int(np.random.SeedSequence().entropy)
-        h = config_hash_int(cfg)
+        # The main rng is seeded from the config WITHOUT `floor`, so adding floor never shifts the other types' draws.
+        h = config_hash_int({k: v for k, v in cfg.items() if k != "floor"})
         rng = np.random.default_rng(np.random.SeedSequence([s, h, _SEED_TAG]))
         p_step = lambda rate: min(1.0, rate * STEP_SECONDS / 3600)  # noqa: E731
 
@@ -235,6 +258,15 @@ class DisturbedWarehouse(Warehouse):
                     out[u].add(int(goal_idx[t]))
         if "burst" in cfg:  # drawn last, so adding a burst never moves the other types' draws
             self.burst_order = [self.shelfs[int(i)].id for i in rng.permutation(len(self.shelfs))]
+        if "floor" in cfg:  # own generator; fixed order: cells, p_c, coin matrix
+            f = cfg["floor"]
+            if f["cells"] > len(self._blockable_cells):
+                raise ValueError(f"floor.cells={f['cells']} exceeds the {len(self._blockable_cells)} candidate cells")
+            frng = np.random.default_rng(np.random.SeedSequence([s, config_hash_int(cfg), _SEED_TAG, _FLOOR_TAG]))
+            idx = frng.choice(len(self._blockable_cells), size=f["cells"], replace=False)
+            ps = frng.uniform(f["p"][0], f["p"][1], size=f["cells"])
+            self.floor_cells = {self._blockable_cells[int(i)]: float(pc) for i, pc in zip(idx, ps)}
+            self.floor_coin = frng.random((A, T))
         for t in range(T):
             if blocked[t]:
                 self._blocked_by_step[t] = frozenset(blocked[t])
@@ -329,14 +361,32 @@ class DisturbedWarehouse(Warehouse):
         self.applied_frozen.append(frozen.copy())
         self.applied_delayed.append(delayed.copy())
         self._suppressed = frozen | delayed
+        floor_skipped = np.zeros(self.num_agents, dtype=bool)
         self._abandoned = 0
         obstacles = self._obstacles_now()
         for agent in agent_list:
             if self._suppressed[agent.id - 1]:
                 agent.req_action = Action.NOOP  # all micro-actions: FORWARD, LEFT, RIGHT, TOGGLE_LOAD
+            elif self.floor_cells and self._floor_skips(agent, t):
+                # Floor: ENTER semantics, not leave. req_location is the target cell the vendor's move resolution
+                # evaluates; a move INTO a bad cell is the physical event (wheel slip on a bad patch / floor marker
+                # misread on arrival). "Leave" would also fire for agents parked on a floor cell. Precedence
+                # frozen > delayed > floor > obstacle, hence this branch sits between them.
+                agent.req_action = Action.NOOP
+                floor_skipped[agent.id - 1] = True
             elif obstacles and agent.req_action == Action.FORWARD and agent.req_location(self.grid_size) in obstacles:
                 agent.req_action = Action.NOOP  # stored paths ignore the mask until replan
+        self.applied_floor.append(floor_skipped)
+        self._suppressed = self._suppressed | floor_skipped  # same hiding from resolve_stuck_agents as a delay skip
         return super().resolve_move_conflict(agent_list)
+
+    def _floor_skips(self, agent, t):
+        if agent.req_action != Action.FORWARD or t >= self.max_steps:
+            return False
+        target = agent.req_location(self.grid_size)
+        if target == (agent.x, agent.y) or target not in self.floor_cells:
+            return False
+        return bool(self.floor_coin[agent.id - 1, t] < self.floor_cells[target])
 
     def resolve_stuck_agents(self):
         # Agents the layer NOOPed this step must not advance their StuckCounter, be replanned or lose their task.
@@ -404,6 +454,7 @@ class DisturbedWarehouse(Warehouse):
         info["clash_agents"] = sum(int(a.fixing_clash > 0) for a in self.agents)
         info["frozen_agents"] = int(frozen.sum())
         info["delayed_agents"] = int(delayed.sum())
+        info["floor_skips"] = int(self.applied_floor[-1].sum())
         info["frozen_fraction"] = int(frozen.sum()) / self.num_agents
         info["delivered_per_agent"] = list(self.delivered_per_agent)
         info["blocked_cells"] = len(self._blocked_by_step[t]) if t < self.max_steps else 0

@@ -192,7 +192,8 @@ def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=F
 DISTURB_SUMS = dict(stuck_agent_steps="stuck_agents", stuck_busy_agent_steps="stuck_busy_agents",
                     abandoned_tasks="abandoned_tasks",
                     clash_agent_steps="clash_agents", frozen_agent_steps="frozen_agents",
-                    delayed_agent_steps="delayed_agents")
+                    delayed_agent_steps="delayed_agents",
+                    floor_skip_steps="floor_skips")  # floor_skip_steps: agent-steps NOOPed by a floor cell, 0 w/o floor
 
 # recovery rows only (kept apart from DISTURB_SUMS so non-recovery disturbed runs never need these info keys)
 RECOVERY_SUMS = ("recovery_wait", "recovery_back_off", "recovery_reroute", "recovery_abandon", "recovery_call_human",
