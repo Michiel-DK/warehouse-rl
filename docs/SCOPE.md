@@ -604,7 +604,9 @@ restored minutes are lost). A kill between a chunk's rows and its checkpoint can
 Detector state is NOT checkpointed: after a resume the detector starts empty at the checkpoint offset (the last open
 batch before a stop is not detected). Episodes still `open` from the killed process get resolution `interrupted`; an
 episode whose stopped run begins at a robot's first message after the resume has `left_censored = true` (start and
-duration are lower bounds) and writes no decision, because its dedup_key would not match the original episode's.
+duration are lower bounds) and writes no decision, because its dedup_key would not match the original episode's. So a resume can
+LOSE decisions (a run censored before its stuck_after threshold is never decided) and one real episode can leave several
+rows (`interrupted` + `left_censored`); episode counts that matter must filter on both (S5C reports do).
 Retention: kept raw bytes = evidence lines + state_sample lines + reject raws (first 4096 bytes); everything else is
 dropped after parsing; transitions, episodes and decisions are always kept. `--source kafka` prints "kafka source:
 S5B2" and exits 2 in this lane.
