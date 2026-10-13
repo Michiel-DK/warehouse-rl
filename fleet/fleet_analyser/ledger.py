@@ -177,6 +177,53 @@ def _active_s(row):
     return row["messages_parsed"] / row["msgs_per_s"] if row["msgs_per_s"] else 0.0
 
 
+def exclusion(ep):
+    """Why a stuck_episodes row is not countable, or None when it is. One precedence everywhere (scorer, report, status):
+    left_censored (start unknown after a resume), then interrupted (the process died with it open), then open."""
+    if ep.get("left_censored"):
+        return "left_censored"
+    if ep["resolution"] in ("interrupted", "open"):
+        return ep["resolution"]
+    return None
+
+
+def countable(episodes):
+    return [e for e in episodes if exclusion(e) is None]
+
+
+def excluded_counts(episodes):
+    out = {"left_censored": 0, "interrupted": 0, "open": 0}
+    for e in episodes:
+        why = exclusion(e)
+        if why:
+            out[why] += 1
+    return out
+
+
+GRADE_WINDOW_S = 86400
+VERDICT_ORDER = ("confirmed", "refuted", "inconclusive")
+
+
+def grade_lines(store, run):
+    """One `grades last day [<kind>]` line per decision kind of the run. Window: decided_at >= (the latest decided_at of
+    any decision of the run) - 86400 s, event time. Only graded decisions' verdicts are counted."""
+    decs = [d for d in store.select("decisions") if d["run"] == run]
+    if not decs:
+        return []
+    anchor = max(d["decided_at"] for d in decs)
+    out = []
+    for kind in sorted({d["kind"] for d in decs}):
+        counts = {}
+        for d in decs:
+            if d["kind"] == kind and d["status"] == "graded" and d["decided_at"] >= anchor - GRADE_WINDOW_S:
+                counts[d["verdict"]] = counts.get(d["verdict"], 0) + 1
+        verdicts = list(VERDICT_ORDER) + sorted(v for v in counts if v not in VERDICT_ORDER and v is not None)
+        a, b = counts.get("confirmed", 0), counts.get("refuted", 0)
+        out.append(f"grades last day [{kind}]: " + ", ".join(f"{v} {counts.get(v, 0)}" for v in verdicts)
+                   + f", accuracy {a / (a + b) if a + b else 'null'}")
+    return out
+
+
 def status_lines(store, run):
     """The text of `ledger.py status`: the last 1, 5, 60 minutes (back from the latest ledger minute) and total."""
     rows = store.select("ingest_ledger", {"run": run})
@@ -212,7 +259,8 @@ def status_lines(store, run):
         files[f["status"]] = files.get(f["status"], 0) + 1
     out.append("files: " + (", ".join(f"{k} {v}" for k, v in sorted(files.items())) or "none"))
     eps = {}
-    for e in store.select("stuck_episodes", {"run": run}):
+    all_eps = store.select("stuck_episodes", {"run": run})
+    for e in countable(all_eps):
         eps[(e["cause"], e["resolution"])] = eps.get((e["cause"], e["resolution"]), 0) + 1
     by_cause = {}
     for (cause, _), n in eps.items():
@@ -221,11 +269,15 @@ def status_lines(store, run):
     out.append("episodes per resolution: " + (", ".join(
         f"{k} {v}" for k, v in sorted({r: sum(n for (_, rr), n in eps.items() if rr == r) for _, r in eps}.items()))
         or "none"))
+    ex = excluded_counts(all_eps)
+    out.append(f"episodes excluded: left_censored {ex['left_censored']}, interrupted {ex['interrupted']}, "
+               f"open {ex['open']}")
     decs = {}
     for d in store.select("decisions"):
         if d["run"] == run:
             decs[(d["kind"], d["status"])] = decs.get((d["kind"], d["status"]), 0) + 1
     out.append("decisions: " + (", ".join(f"{k}/{s} {v}" for (k, s), v in sorted(decs.items())) or "none"))
+    out.extend(grade_lines(store, run))
     return out
 
 

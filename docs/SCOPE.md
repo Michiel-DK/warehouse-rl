@@ -680,6 +680,72 @@ checked against every table, column and upsert key S5B1 writes) and `fleet/tests
 producer). Integration, run explicitly and skipped when `docker info` fails: `.venv/bin/python -m unittest -v
 fleet.tests.integration_fleet_stack` (real ClickHouse, ClickHouse service only).
 
+### Sprint 5 / S5C1: ground-truth scorer, decision grader, report, alert
+
+Code: `fleet/fleet_analyser/{score,grade,report,alert}.py`, thin CLIs `fleet/{score,grade,report,alert}.py`; `ledger.py
+status` gained the countable filter and a grade rollup. Only `score.py` reads a message's `custom` block; `grade.py`,
+`report.py`, `alert.py`, `ledger.py` and the CLIs work on store tables, and the isolation test
+`test_detector_and_grader_never_read_custom` runs ingest + grade over a real emitter run as written and with every
+`custom` block replaced by one garbage object (identical transitions, episodes, decisions and grades).
+
+**Countable episode** (scorer, report, status): `left_censored` false and resolution not `open` / `interrupted`. One
+precedence for what is left out: left_censored, then interrupted, then open. The alert is wider: `left_censored` false and
+any resolution but `interrupted` (open rows alert at T_entry).
+
+**Truth definition.** A *truth stuck step* is a message t of a robot (not its last) with `driving` false, `orderId`
+non-empty and `errors` empty, where the SAME robot's next message has `custom.stuck_event` true (the simulator wanted the
+robot to move at step t and it did not; measured 13 Oct on 1 zone x 300 steps: 153 of 156 such steps). A *truth episode* is
+a maximal run of consecutive truth stuck steps of one robot with one `orderId`; start = ts of its first message, end = ts
+of the message after its last; kept when `end - start >= stuck_after` (6 steps at 5 s). `custom.stuck_count` is not used
+(the timeout policy resets it before it reaches 6).
+
+**Matching.** Detected = `stuck_episodes` rows of the run that are countable and not `faulted_self` (those are scored
+apart: count, and the fraction whose robot is frozen at the `t_entry` message). A detected and a truth episode match when
+they are the same robot and their intervals overlap by more than 0 s (touching is not overlapping). Greedy, one-to-one,
+pairs ordered by (robot, detected start, truth start). precision = matched / detected, recall = matched / truth, `null`
+on a zero denominator. Unmatched detected episodes are split: the robot is frozen inside the episode (`frozen`), it
+overlaps a truth run shorter than `stuck_after` (`short_truth`), else `by_design` (the robot was stopped by design, for
+example waiting at a shelf; an episode that overlaps a long truth episode already taken by another match also lands here).
+Truth is a lower bound on what a rule-based detector could be asked to find, so low precision here is mostly `by_design`,
+not noise; read it with the split.
+
+**`cause_proximity_agreement` (never called accuracy).** For each matched pair the truth class is `clash` when any message
+of the robot in [start, end] has `clash_event` true, else `frozen_neighbour` when another robot of the zone with `errors`
+non-empty is within Manhattan 1 at any such message, else `other`. The detector's cause agrees when `blocked_by_faulted`
+meets `frozen_neighbour`, `traffic` / `blocked_by_stuck` meet `clash` or `other`, `unknown` meets `other`. Caveat, also
+written into `score.json`: frozen is public in the message, the simulator does not expose which robot blocks which, and
+`clash_event` is a decision event; this measures agreement with a proximity proxy, not ground truth about cause. The
+resolution agreement compares the detector's `order_dropped` with "some message of the robot in [start, end] has
+`recovery_action == abandon`". `score.json` is deterministic (sorted keys); `results/fleet/*.json` come from the
+`wr-s5-benchmark` queue item, not from a lane.
+
+**Grader.** `grade.py` stamps only through `decisions.stamp_grade`; a second run stamps nothing. `now` is the run's latest
+transition ts for `--once` (event time) and the wall clock for `--every`; `graded_at` is `now`. A decision is due when it
+is open and its episode has a terminal resolution (moved, order_dropped, fault_cleared, unresolved) or is interrupted, or
+`grade_after <= now`. A due decision whose episode is missing, left_censored or interrupted grades `inconclusive`. A kind
+outside `decisions.KINDS` (Sprint 8's `hotspot_forecast`, `reroute_recommendation`) stays open and is counted as
+`skipped_kind`. `stuck_cause` outcome `{resolution, end, blocker_state_at_end, blocker_cleared_at}`, error null:
+- `blocked_by_faulted`: confirmed when resolution `moved` and the blocker has a transition out of FAULTED at a ts in
+  (t_entry, end]; else refuted when `moved` and the blocker's latest transition at or before end is to FAULTED; else
+  inconclusive (confirmed is checked first, so a blocker that cleared and re-faulted before end still confirms).
+- `blocked_by_stuck`: confirmed when `moved` and the blocker has an episode whose [start, end] contains t_entry and whose
+  end <= this end; refuted when that episode's end > this end; else inconclusive.
+- `faulted_self`: confirmed when `fault_cleared`, else inconclusive. `traffic`, `unknown`: inconclusive.
+`avoidable_reset` records `{resolution, reset}` with reset = resolution `order_dropped` (the only reset visible in public
+data); verdict `reset_happened` or `no_reset`. The detector's `avoidable` is near-tautological at 5 s steps (every closed
+`blocked_by_faulted` episode beyond `stuck_after`), so reports label it so; its definition is not changed.
+
+**Report and alert.** `report.py` reads through `Store.select` only, so it runs on both stores; sections: hotspots (top 20
+by (zone, cell), ties by zone then cell), episodes per event hour, duration and time-to-resolution (nearest-rank p50/p95),
+cause and resolution mix, avoidable (labelled), repeat robots (>= 3 episodes), grades per kind and verdict. No wall-clock
+text: the same store gives a byte-identical `report.md`; `hotspots.png` (one heatmap per zone) sits next to it. The alert
+prints `<robot> stuck at <x>-<y> for <int(t_entry - start)> s, <cause>` plus the blocker (`(faulted <int s>)` for
+`blocked_by_faulted`), skips episodes present at startup unless `--from-start`, and with `--latency-out` appends JSON
+lines whose latencies mean something only when the emit config is now / realtime / speed 1. `ledger.py status` counts only
+countable episodes, prints `episodes excluded: ...`, and adds `grades last day [<kind>]` lines: verdict counts of graded
+decisions with `decided_at >= (latest decided_at of the run) - 86400`, accuracy = confirmed / (confirmed + refuted), `null`
+when that is 0. This grade-verdict accuracy is unrelated to the cause figure above.
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are

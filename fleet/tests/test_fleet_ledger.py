@@ -15,7 +15,10 @@ if str(ROOT / "fleet") not in sys.path:
 
 from fleet.tests.test_fleet_ingest import (INGEST, emit_real, ingest_dir, interleaved, line,  # noqa: E402
                                            scenario, write_gz)
-from fleet_analyser.ledger import SequenceTracker, coverage, lag_enabled  # noqa: E402
+from fleet.tests.test_fleet_ingest import BASE  # noqa: E402
+from fleet_analyser import decisions  # noqa: E402
+from fleet_analyser.ledger import SequenceTracker, coverage, lag_enabled, status_lines  # noqa: E402
+from fleet_analyser.store import MemoryStore  # noqa: E402
 
 LEDGER = str(ROOT / "fleet" / "ledger.py")
 
@@ -201,6 +204,74 @@ class TestRetention(unittest.TestCase):
         self.assertEqual(max(len(r["raw"]) for r in store.select("rejects")), 4096)  # first 4096 bytes only
         self.assertGreater(len(store.select("state_sample")), 0)
         self.assertTrue(all(json.loads(s["raw"])["headerId"] % 50 == 0 for s in store.select("state_sample")))
+
+
+class TestStatusCountableAndGrades(unittest.TestCase):
+    """S5C1: status counts only countable episodes (and says what it left out) and rolls the grades up per kind."""
+
+    @staticmethod
+    def episode(i, cause="unknown", resolution="moved", left_censored=False):
+        return dict(run="r", episode_id=f"E{i}", zone="0", robot=f"Z0-{i:02d}", order_id="o", start=BASE + i,
+                    start_iso="", t_entry=BASE + i + 30, cell=[0, 0], cause=cause, blocker=None, blocker_faulted_s=None,
+                    end=None if resolution in ("open", "interrupted") else BASE + i + 99, duration_s=None,
+                    resolution=resolution, avoidable=False, avoidable_s=None, left_censored=left_censored)
+
+    @staticmethod
+    def decide(store, kind, subject, decided_at, verdict=None):
+        did, _ = decisions.record_decision(store, run="r", kind=kind, subject=subject, start_iso=f"{subject}-{decided_at}",
+                                           decided_at=decided_at, claim={}, rationale="x", expected=None,
+                                           grade_after=decided_at + 3600, recorded_at=1.0)
+        if verdict:
+            decisions.stamp_grade(store, did, {}, None, verdict, decided_at + 5)
+
+    def test_status_counts_only_countable_episodes_and_reports_the_rest(self):
+        # inject: count every stuck_episodes row in the per-cause and per-resolution lines
+        store = MemoryStore()
+        store.insert("stuck_episodes", [
+            self.episode(1, "traffic"), self.episode(2, "unknown", "unresolved"), self.episode(3, "unknown"),
+            self.episode(4, "unknown", "open"), self.episode(5, "traffic", "interrupted"),
+            self.episode(6, "traffic", left_censored=True), self.episode(7, "traffic", "interrupted", left_censored=True)])
+        lines = status_lines(store, "r")
+        self.assertIn("episodes per cause: traffic 1, unknown 2", lines)
+        self.assertIn("episodes per resolution: moved 2, unresolved 1", lines)
+        self.assertIn("episodes excluded: left_censored 2, interrupted 1, open 1", lines)
+
+    def test_excluded_line_is_printed_even_when_nothing_is_excluded(self):
+        # inject: print the excluded line only when something was excluded
+        store = MemoryStore()
+        store.insert("stuck_episodes", [self.episode(1)])
+        self.assertIn("episodes excluded: left_censored 0, interrupted 0, open 0", status_lines(store, "r"))
+
+    def test_grade_lines_per_kind_with_accuracy_from_confirmed_and_refuted(self):
+        # inject: divide by all graded decisions instead of confirmed + refuted, or count open decisions as graded
+        t = BASE + 200_000
+        store = MemoryStore()
+        for i, v in enumerate(("confirmed", "confirmed", "refuted", "inconclusive")):
+            self.decide(store, "stuck_cause", f"R{i}", t - i, v)
+        self.decide(store, "stuck_cause", "ROPEN", t)  # still open: not a verdict
+        self.decide(store, "stuck_cause", "ROLD", t - 90_000, "refuted")  # outside the 86400 s window
+        self.decide(store, "avoidable_reset", "R9", t - 10, "reset_happened")
+        lines = status_lines(store, "r")
+        self.assertIn("grades last day [stuck_cause]: confirmed 2, refuted 1, inconclusive 1, accuracy 0.6666666666666666",
+                      lines)
+        self.assertIn("grades last day [avoidable_reset]: confirmed 0, refuted 0, inconclusive 0, reset_happened 1, "
+                      "accuracy null", lines)
+
+    def test_window_is_anchored_on_the_latest_decision_of_the_run_not_the_wall_clock(self):
+        # inject: anchor the window on the latest graded decision, or on time.time()
+        t = BASE
+        store = MemoryStore()
+        self.decide(store, "stuck_cause", "A", t, "confirmed")
+        self.decide(store, "stuck_cause", "B", t + 86_400, "refuted")  # exactly 86400 s later: A is still inside
+        lines = [ln for ln in status_lines(store, "r") if ln.startswith("grades last day")]
+        self.assertEqual(lines, ["grades last day [stuck_cause]: confirmed 1, refuted 1, inconclusive 0, accuracy 0.5"])
+        self.decide(store, "stuck_cause", "LATEOPEN", t + 86_401)  # an open decision still moves the anchor
+        lines = [ln for ln in status_lines(store, "r") if ln.startswith("grades last day")]
+        self.assertEqual(lines, ["grades last day [stuck_cause]: confirmed 0, refuted 1, inconclusive 0, accuracy 0.0"])
+
+    def test_no_grade_lines_without_decisions(self):
+        # inject: print a grades line for a kind that has no decision in the run
+        self.assertFalse([ln for ln in status_lines(MemoryStore(), "r") if ln.startswith("grades last day")])
 
 
 if __name__ == "__main__":
