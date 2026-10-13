@@ -456,7 +456,9 @@ Decisions:
 - **Sprint 4 (learned task assignment) deprioritised** behind a new direction, **Sprint 5: stuck analyser**, a
   diagnostic tool for a real AGV fleet (where and why robots get stuck, what precedes a manual reset, avoidable
   resets). Buildable against synthetic VDA 5050-shaped logs emitted by this simulator; the real value needs a client
-  log sample, which is the open operator item. Placeholder brief: laptop-scheduler `jobs/wr-s5-stuck-analyser-scoping.md`.
+  log sample, which is the open operator item. Brief and sprint map (S5 structured path + ledger, S6 messy text + typed labeller, S7 Spark/Delta + dbt/Dagster,
+  S8 models, S9 deploy/CI/demo, cross-cutting checklist): laptop-scheduler `jobs/wr-s5-stuck-analyser.md`. Code
+  under `fleet/` here (private repo), extracted to a public repo in S9; no client data in any repo, ever.
 
 ## Compute and timing
 
