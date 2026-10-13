@@ -66,6 +66,11 @@ class TestRealClickHouse(unittest.TestCase):
         self.assertEqual(len(got), 1)
         self.assertEqual((got[0]["resolution"], got[0]["end"], got[0]["duration_s"], got[0]["cell"]),
                          ("moved", 91, 90, [1, 2]))
+        # first-write order survives a replacement, also from a second writer process (fresh store instance)
+        st.upsert("stuck_episodes", key, [dict(row, episode_id="e2")])
+        self.store().upsert("stuck_episodes", key, [dict(row, resolution="unresolved")])
+        order = [(r["episode_id"], r["resolution"]) for r in self.store().select("stuck_episodes", {"run": "c"})]
+        self.assertEqual(order, [("e", "unresolved"), ("e2", "open")])
         did, created = decisions.record_decision(st, run="c", kind="stuck_cause", subject="Z0-01", start_iso="a",
                                                  decided_at=31, claim={"cause": "unknown"}, rationale="r",
                                                  expected=None, grade_after=3631)
