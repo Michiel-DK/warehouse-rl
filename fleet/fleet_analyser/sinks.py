@@ -2,7 +2,8 @@
 
 A sink is per zone (one zone = one process). Interface: write(serial, line, timestamp=None, header_id=None) with `line`
 the exact bytes of one JSON line (including the trailing newline), stats() -> dict, close().
-stats() keys: messages, bytes_uncompressed, bytes_compressed (None for kafka), files (list of dicts, [] for kafka).
+stats() keys: messages, bytes_uncompressed, bytes_compressed (None for kafka), files (list of dicts, [] for kafka),
+delivered and delivery_failed (ints for kafka, None for files).
 """
 import gzip
 import os
@@ -75,7 +76,8 @@ class FileSink:
                 f["bytes_compressed"] = os.path.getsize(self.directory / f["name"])
             files.append(f)
         return dict(messages=self.messages, bytes_uncompressed=self.bytes_uncompressed,
-                    bytes_compressed=sum(f["bytes_compressed"] for f in files), files=files)
+                    bytes_compressed=sum(f["bytes_compressed"] for f in files), files=files, delivered=None,
+                    delivery_failed=None)
 
     def close(self):
         self._close_current()
@@ -98,30 +100,55 @@ def _make_confluent_producer(bootstrap):
 
 
 class KafkaSink:
-    """One record per message: key = serialNumber (str), value = the exact line bytes. flush() at close.
-    producer is injectable (needs produce(topic, key=, value=) and flush()); None builds a confluent_kafka.Producer,
-    importing the library lazily. Ledger counting: uncompressed bytes only, compressed is None."""
+    """One record per message: key = serialNumber (str), value = the exact line bytes.
+    producer is injectable (needs produce(topic, key=, value=, on_delivery=), poll(timeout) and flush()); None builds a
+    confluent_kafka.Producer, importing the library lazily. Ledger counting: uncompressed bytes only, compressed is None.
+
+    Delivery accounting (S5A trap 5: `messages` is what was handed to the producer, not what the broker acknowledged):
+    every produce carries a delivery callback. `delivered` counts acknowledged records, `delivery_failed` counts failed
+    callbacks plus, at close, whatever flush() reports as still queued (n counts only records whose callback has not
+    fired). Once closed, delivered + delivery_failed == messages. A full local queue (BufferError) polls 0.5 s and retries
+    the same record; the retry does not count as a second message."""
 
     def __init__(self, topic, bootstrap="localhost:9092", producer=None):
         self.topic = topic
         self._producer = producer if producer is not None else _make_confluent_producer(bootstrap)
         self.messages = 0
         self.bytes_uncompressed = 0
+        self.delivered = 0
+        self.delivery_failed = 0
+        self._closed = False
+
+    def _on_delivery(self, err, msg):
+        if err is not None:
+            self.delivery_failed += 1
+        else:
+            self.delivered += 1
 
     def write(self, serial, line, timestamp=None, header_id=None):
-        self._producer.produce(self.topic, key=serial, value=line)
+        while True:
+            try:
+                self._producer.produce(self.topic, key=serial, value=line, on_delivery=self._on_delivery)
+                break
+            except BufferError:
+                self._producer.poll(0.5)
         self.messages += 1
         self.bytes_uncompressed += len(line)
         poll = getattr(self._producer, "poll", None)
         if poll is not None and self.messages % 1000 == 0:
-            poll(0)
+            poll(0)  # serve delivery callbacks
 
     def stats(self):
         return dict(messages=self.messages, bytes_uncompressed=self.bytes_uncompressed, bytes_compressed=None,
-                    files=[])
+                    files=[], delivered=self.delivered, delivery_failed=self.delivery_failed)
 
     def close(self):
-        self._producer.flush()
+        if self._closed:
+            return
+        self._closed = True
+        queued = self._producer.flush()
+        if isinstance(queued, int) and queued > 0:
+            self.delivery_failed += queued
 
 
 def make_sink(spec, zone):

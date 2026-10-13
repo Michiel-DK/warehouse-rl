@@ -200,10 +200,16 @@ def default_store_dir(run):
 
 
 def open_store(spec, run):
-    """'jsonl:<dir>' (or None -> fleet/data/<run>/store) -> JsonlStore."""
+    """'jsonl:<dir>' (or None -> fleet/data/<run>/store) -> JsonlStore; 'clickhouse://host[:port]/db' -> ClickHouseStore."""
     if spec is None:
         return JsonlStore(default_store_dir(run))
+    if spec.startswith("clickhouse://"):
+        from .clickhouse_store import ClickHouseStore
+
+        st = ClickHouseStore.from_spec(spec)
+        st.ensure_schema()
+        return st
     kind, _, rest = spec.partition(":")
     if kind == "jsonl" and rest:
         return JsonlStore(rest)
-    raise ValueError(f"--store must be jsonl:<dir>, got {spec!r}")
+    raise ValueError(f"--store must be jsonl:<dir> or clickhouse://host[:port]/db, got {spec!r}")

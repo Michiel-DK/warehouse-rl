@@ -1,0 +1,78 @@
+# Local fleet stack: Redpanda (Kafka API), ClickHouse, Grafana. Run it through fleet/compose.sh.
+#
+# Host ports (override with env vars): Kafka API 19092 (FLEET_KAFKA_PORT), ClickHouse HTTP 18123
+# (FLEET_CLICKHOUSE_PORT), Grafana 13000 (FLEET_GRAFANA_PORT). Memory caps: redpanda 1.5g, clickhouse 3g, grafana 512m.
+# Data lives in bind mounts under fleet/data/volumes/ (gitignored via fleet/data/; counts toward the 8 GB cap).
+name: fleet
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    mem_limit: 1.5g
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:${FLEET_KAFKA_PORT:-19092}
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${FLEET_KAFKA_PORT:-19092}
+    ports:
+      - "${FLEET_KAFKA_PORT:-19092}:${FLEET_KAFKA_PORT:-19092}"
+    volumes:
+      - ./data/volumes/redpanda:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 24
+      start_period: 10s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    mem_limit: 3g
+    environment:
+      CLICKHOUSE_DB: fleet
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    ports:
+      - "${FLEET_CLICKHOUSE_PORT:-18123}:8123"
+    volumes:
+      - ./data/volumes/clickhouse:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8123/ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    mem_limit: 512m
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${FLEET_GRAFANA_PORT:-13000}:3000"
+    volumes:
+      - ./data/volumes/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 20s

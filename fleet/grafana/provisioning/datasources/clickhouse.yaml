@@ -1,0 +1,20 @@
+apiVersion: 1
+
+# ClickHouse datasource for the stuck-analyser dashboards (the dashboards themselves are S5C).
+# Grafana reaches ClickHouse over the compose network: service name `clickhouse`, container HTTP port 8123.
+datasources:
+  - name: ClickHouse
+    uid: fleet-clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      host: clickhouse
+      port: 8123
+      protocol: http
+      secure: false
+      username: default
+      defaultDatabase: fleet
+    secureJsonData:
+      password: ""
