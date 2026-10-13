@@ -71,14 +71,14 @@ class TestSections(unittest.TestCase):
         self.assertIn("5 countable episodes (excluded: left_censored 1, interrupted 1, open 1).", self.text)
 
     def test_hotspots_episodes_per_hour_and_mixes(self):
-        # inject: sort hotspots by cell only, or bucket hours by end instead of start
+        # inject: sort hotspots by ascending count, or bucket the hours in 2 h blocks
         self.assertIn("- zone 0 cell 1-1: 3\n- zone 1 cell 2-2: 2\n", self.text)
         self.assertIn("- 2026-01-01T00:00:00Z: 3\n- 2026-01-01T01:00:00Z: 1\n- 2026-01-01T02:00:00Z: 1\n", self.text)
         self.assertIn("## Cause mix\n\n- blocked_by_faulted: 2\n- traffic: 1\n- unknown: 2\n", self.text)
         self.assertIn("## Resolution mix\n\n- moved: 3\n- order_dropped: 1\n- unresolved: 1\n", self.text)
 
     def test_duration_and_time_to_resolution_are_nearest_rank(self):
-        # inject: interpolate the percentiles, or measure time to resolution from start instead of t_entry
+        # inject: use floor instead of ceil in the nearest-rank index, or measure time to resolution from start
         self.assertEqual(report.nearest_rank([10, 20, 30, 40, 100], 0.5), 30)
         self.assertEqual(report.nearest_rank([10, 20, 30, 40, 100], 0.95), 100)
         self.assertIsNone(report.nearest_rank([], 0.5))
@@ -89,27 +89,27 @@ class TestSections(unittest.TestCase):
         self.assertIn("nearest-rank", self.text)
 
     def test_avoidable_is_labelled_near_tautological(self):
-        # inject: drop the label text or count avoidable rows that are not countable
+        # inject: replace the label text near-tautological
         sec = self.text.split("## Avoidable")[1].split("##")[0]
         self.assertIn("near-tautological", self.text)
         self.assertIn(report.AVOIDABLE_LABEL, self.text)
         self.assertIn("- episodes: 1\n- minutes: 0.17\n", sec)
 
     def test_repeat_robots_need_three_episodes(self):
-        # inject: list robots with >= 2 episodes
+        # inject: list robots only from 4 episodes up
         sec = self.text.split("## Repeat robots")[1].split("##")[0]
         self.assertIn("- R1: 3\n", sec)
         self.assertNotIn("R2", sec)
 
     def test_grades_per_kind_and_verdict(self):
-        # inject: count open decisions under their (null) verdict or skip graded ones
+        # inject: key open decisions by their null verdict (the sort then fails)
         sec = self.text.split("## Decision grades")[1]
         for needle in ("- stuck_cause / confirmed: 1", "- stuck_cause / refuted: 1", "- stuck_cause / inconclusive: 1",
                        "- stuck_cause / open: 1"):
             self.assertIn(needle, sec)
 
     def test_hotspots_top_twenty_ties_by_zone_then_cell(self):
-        # inject: keep 21 hotspots or break ties by robot
+        # inject: keep 21 hotspots
         eps = [ep(f"R{i}", i, 40, zone="1" if i % 2 else "0", cell=(i % 5, i // 5)) for i in range(30)]
         top = report.hotspots(eps)
         self.assertEqual(len(top), 20)
@@ -121,7 +121,7 @@ class TestSections(unittest.TestCase):
         self.assertEqual(report.hotspots(eps)[0], ("1", (9, 9), 2))
 
     def test_empty_run(self):
-        # inject: divide or index into an empty list (crash on a run without episodes)
+        # inject: return 0 instead of None for an empty percentile
         text = report.report_run(MemoryStore(), "r")
         self.assertIn("0 countable episodes (excluded: left_censored 0, interrupted 0, open 0).", text)
         self.assertIn("- p50: n/a", text)
@@ -129,7 +129,7 @@ class TestSections(unittest.TestCase):
 
 class TestFiles(unittest.TestCase):
     def test_same_store_gives_byte_identical_report_and_a_png_next_to_it(self):
-        # inject: add a wall-clock line to the report, or write the png somewhere else
+        # inject: write the png under another name
         with tempfile.TemporaryDirectory() as tmp:
             a, b = Path(tmp) / "a" / "report.md", Path(tmp) / "b" / "report.md"
             md1, png1 = report.write_report(scripted_store(), "r", a)
@@ -141,7 +141,7 @@ class TestFiles(unittest.TestCase):
             self.assertTrue(empty.read_bytes().startswith(b"\x89PNG"))
 
     def test_report_reads_only_through_select(self):
-        # inject: call store.insert (or any non-select method) from the report
+        # inject: call store.insert from the report
         store = OnlySelect(scripted_store())
         with tempfile.TemporaryDirectory() as tmp:
             report.write_report(store, "r", Path(tmp) / "report.md")

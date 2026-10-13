@@ -79,7 +79,7 @@ R = "Z0-00"
 
 class TestTruth(unittest.TestCase):
     def test_a_six_step_run_counts_and_a_five_step_run_does_not(self):
-        # inject: keep truth runs of end - start >= stuck_after - 5 (accept 5 steps), or > instead of >= (reject 6)
+        # inject: reject 6 steps (> instead of >= stuck_after)
         six = run_score([robot(R, 30, stuck_run(3, 6))], [])
         five = run_score([robot(R, 30, stuck_run(3, 5))], [])
         self.assertEqual(six["truth_episodes"], 1)
@@ -150,7 +150,7 @@ class TestMatching(unittest.TestCase):
         self.assertIsNone(res["faulted_self"]["frozen_at_entry"])
 
     def test_only_countable_non_faulted_self_rows_are_detected(self):
-        # inject: count open rows (or left_censored rows) as detected
+        # inject: treat open rows as detected
         rows = [ep(R, 4, 12), ep(R, 20, 21, resolution="open", end=None), ep(R, 22, 23, resolution="interrupted"),
                 ep(R, 24, 25, left_censored=True), ep(R, 26, 27, cause="faulted_self", resolution="fault_cleared"),
                 ep(R, 28, 29, left_censored=True, resolution="interrupted")]
@@ -159,7 +159,7 @@ class TestMatching(unittest.TestCase):
         self.assertEqual(res["detected_excluded"], {"left_censored": 2, "interrupted": 1, "open": 1, "faulted_self": 1})
 
     def test_unmatched_detected_split(self):
-        # inject: report every unmatched detected episode as by_design
+        # inject: never report frozen or short_truth
         short = stuck_run(3, 4)  # 20 s truth run: shorter than stuck_after
         frozen = {t: dict(order="o1", driving=False, faulted=True) for t in range(12, 20)}
         ov = {**short, **frozen}
@@ -181,7 +181,7 @@ class TestCauseAndResolution(unittest.TestCase):
         self.assertEqual(res["cause_proximity_agreement"]["agreement"], 1.0)
 
     def test_truth_class_frozen_neighbour(self):
-        # inject: require Manhattan distance 0 instead of <= 1, or look at neighbours of any zone
+        # inject: require Manhattan distance 0 instead of <= 1
         neighbour = robot("Z0-01", 30, x=1, y=0, faulted=True)
         far = robot("Z0-01", 30, x=3, y=0, faulted=True)
         near = run_score([robot(R, 30, stuck_run(3, 8)), neighbour], [ep(R, 3, 11, cause="blocked_by_faulted")])
@@ -207,7 +207,7 @@ class TestCauseAndResolution(unittest.TestCase):
         self.assertIn("not ground truth", res["cause_proximity_agreement"]["note"])
 
     def test_abandon_agrees_with_order_dropped(self):
-        # inject: compare the detector resolution with the abandon flag inverted, or look only before the end message
+        # inject: invert the abandon flag
         dropped = stuck_run(3, 8, end_order="", action="abandon")
         plain = stuck_run(3, 8)
         cases = [(dropped, "order_dropped", ("order_dropped", "abandon")), (plain, "moved", ("not_order_dropped", "no_abandon")),
@@ -222,8 +222,8 @@ class TestCauseAndResolution(unittest.TestCase):
                 ("order_dropped", "abandon"), ("not_order_dropped", "no_abandon")) else 0.0)
 
     def test_faulted_self_is_scored_apart_and_checks_the_frozen_flag_at_entry(self):
-        # inject: count faulted_self rows in precision, or test the frozen flag at the episode start instead of t_entry
-        frozen = {t: dict(order="o1", driving=False, faulted=True) for t in range(3, 12)}
+        # inject: test the frozen flag at the episode start instead of t_entry
+        frozen = {t: dict(order="o1", driving=False, faulted=t >= 9) for t in range(3, 12)}  # freezes at t_entry (step 9)
         thawed = {t: dict(order="o1", driving=False) for t in range(20, 29)}
         rows = [ep(R, 3, 11, cause="faulted_self", resolution="fault_cleared"),
                 ep("Z0-01", 20, 28, cause="faulted_self", resolution="fault_cleared")]
@@ -235,7 +235,7 @@ class TestCauseAndResolution(unittest.TestCase):
 
 class TestOutput(unittest.TestCase):
     def test_keys_and_byte_identical_json(self):
-        # inject: drop sort_keys, or add a wall-clock field to the result
+        # inject: add a wall-clock field to the result
         lines = [robot(R, 30, stuck_run(3, 8, clash=True))]
         a = score.dumps(run_score(lines, [ep(R, 3, 11, cause="traffic")]))
         b = score.dumps(run_score(lines, [ep(R, 3, 11, cause="traffic")]))
@@ -256,14 +256,15 @@ class TestOutput(unittest.TestCase):
         self.assertEqual(run_score(lines, [], stuck_after=20)["truth_episodes"], 1)
 
     def test_zone_files_are_in_numeric_order_and_the_cli_writes_score_json(self):
-        # inject: sort zone files as strings (zone10 before zone2, 10 before 9)
+        # inject: sort zones as strings, or sort nnn as strings
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            for name in ("zone2-000", "zone10-000", "zone2-010", "zone2-009", "zone2-002"):
+            for name in ("zone2-0", "zone10-0", "zone2-10", "zone2-9", "zone2-2"):
                 write_gz(d / f"{name}.jsonl.gz", [])
             files = score.zone_files(str(d / "*.jsonl.gz"))
             self.assertEqual(list(files), ["2", "10"])
-            self.assertEqual([Path(p).name[6:9] for p in files["2"]], ["000", "002", "009", "010"])
+            self.assertEqual([Path(p).name for p in files["2"]],
+                             [f"zone2-{n}.jsonl.gz" for n in (0, 2, 9, 10)])
             data = d / "run"
             data.mkdir()
             write_gz(data / "zone0-000.jsonl.gz", robot(R, 30, stuck_run(3, 8)))

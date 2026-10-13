@@ -65,7 +65,7 @@ class TestBlockedByFaulted(unittest.TestCase):
     EP = episode(cause="blocked_by_faulted", blocker="B")
 
     def test_confirmed_when_the_blocker_left_faulted_inside_the_window(self):
-        # inject: accept a clear at or before t_entry (use >= t_entry), or one after the episode end
+        # inject: never confirm (drop the confirmed branch)
         d, counts = run_one(self.EP, transitions=[tr("B", 500, "IDLE", "FAULTED"), tr("B", 1100, "FAULTED", "IDLE")])
         self.assertEqual((d["status"], d["verdict"], d["error"], d["graded_at"]), ("graded", "confirmed", None, NOW))
         self.assertEqual(d["outcome"], dict(resolution="moved", end=T0 + 200, blocker_state_at_end="IDLE",
@@ -73,7 +73,7 @@ class TestBlockedByFaulted(unittest.TestCase):
         self.assertEqual(counts["verdicts"], {"stuck_cause": {"confirmed": 1}})
 
     def test_a_clear_outside_the_window_does_not_confirm(self):
-        # inject: ignore the (t_entry, end] window when looking for the clear
+        # inject: drop the lower bound of the (t_entry, end] window when looking for the clear
         before = [tr("B", 500, "IDLE", "FAULTED"), tr("B", 1030, "FAULTED", "IDLE")]  # exactly at t_entry: not after it
         after = [tr("B", 500, "IDLE", "FAULTED"), tr("B", T0 + 201, "FAULTED", "IDLE")]
         for tx in (before, after):
@@ -81,14 +81,14 @@ class TestBlockedByFaulted(unittest.TestCase):
             self.assertNotEqual(d["verdict"], "confirmed")
 
     def test_refuted_when_moved_while_the_blocker_is_still_faulted(self):
-        # inject: refute on resolution alone (without looking at the blocker's latest state)
+        # inject: never refute (drop the refuted branch)
         d, _ = run_one(self.EP, transitions=[tr("B", 500, "IDLE", "FAULTED")])
         self.assertEqual(d["verdict"], "refuted")
         self.assertEqual(d["outcome"]["blocker_state_at_end"], "FAULTED")
         self.assertIsNone(d["outcome"]["blocker_cleared_at"])
 
     def test_inconclusive_otherwise(self):
-        # inject: confirm without requiring resolution moved
+        # inject: refute on resolution alone, or confirm without requiring resolution moved
         faulted = [tr("B", 500, "IDLE", "FAULTED")]
         cleared = [tr("B", 500, "IDLE", "FAULTED"), tr("B", 1100, "FAULTED", "IDLE")]
         d1, _ = run_one(episode(cause="blocked_by_faulted", blocker="B", resolution="order_dropped"), transitions=cleared)
@@ -113,7 +113,7 @@ class TestBlockedByStuck(unittest.TestCase):
             self.assertEqual(d["outcome"]["blocker_cleared_at"], b_end)
 
     def test_refuted_when_the_blocker_episode_outlasted_this_one(self):
-        # inject: refute when the blocker episode ended earlier instead of later
+        # inject: swap confirmed and refuted
         d, _ = run_one(self.EP, other_eps=[self.blocker_ep(T0 - 100, T0 + 260)])
         self.assertEqual(d["verdict"], "refuted")
 
@@ -173,7 +173,7 @@ class TestOtherCauses(unittest.TestCase):
 
 class TestDueRuleAndWrites(unittest.TestCase):
     def test_second_run_stamps_nothing_and_changes_nothing(self):
-        # inject: grade decisions whatever their status (drop the status == open filter)
+        # inject: drop the status == open filter and count a refused stamp as stamped
         store, did = world(episode(cause="faulted_self", resolution="fault_cleared"))
         first = grade.grade_run(store, "r", NOW)
         before = store.select("decisions")

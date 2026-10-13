@@ -46,7 +46,7 @@ def make(store=None, episodes=(), **kw):
 
 class TestLine(unittest.TestCase):
     def test_line_format_with_both_blocker_suffixes_and_integer_seconds(self):
-        # inject: print round() instead of int() seconds, drop either suffix, or print the faulted seconds as a float
+        # inject: use round() instead of int() for the seconds
         faulted = ep("A", cause="blocked_by_faulted", blocker="B", blocker_faulted_s=125.9, t_entry=BASE + 30.9)
         stuck = ep("C", 5, cause="blocked_by_stuck", blocker="D", blocker_faulted_s=None)
         plain = ep("E", 9, cause="unknown", resolution="open", end=None)
@@ -138,7 +138,7 @@ class TestCli(unittest.TestCase):
             self.assertNotIn("stuck at", skipped.stdout)
 
     def test_watch_reopens_the_store_each_cycle_and_stops_on_the_event(self):
-        # inject: poll a store opened once (a JsonlStore never sees rows appended by another process)
+        # inject: cache the store across cycles (a JsonlStore never sees rows appended by another process)
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp) / "st"
             spec = f"jsonl:{d}"
