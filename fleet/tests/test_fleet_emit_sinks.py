@@ -52,7 +52,7 @@ class FakeProducer:
 
 class TestRotation(unittest.TestCase):
     def test_rotation_on_line_boundaries_matches_unrotated_output(self):
-        # inject: rotate AFTER the write that crosses the limit (files exceed rotate_bytes), or split lines at the limit
+        # inject: drop `+ n` from the rotation condition in FileSink.write (rotate after the crossing write; red)
         limit = 20_000
         with tempfile.TemporaryDirectory() as small, tempfile.TemporaryDirectory() as big:
             r1 = em.run_zone(zone_cfg(), sinks.FileSink(small, 0, limit))
@@ -77,7 +77,7 @@ class TestRotation(unittest.TestCase):
             self.assertEqual(len(list(Path(big).glob("*.gz"))), 1)
 
     def test_oversized_line_goes_alone_and_gzip_header_is_deterministic(self):
-        # inject: write the oversized line into the previous file, or pass a real mtime / filename to GzipFile
+        # inject: drop `+ n` from the rotation condition, or mtime=1 in GzipFile (each red)
         with tempfile.TemporaryDirectory() as d:
             s = sinks.FileSink(d, 5, rotate_bytes=30)
             for n in (10, 10, 10, 50, 10, 10):
@@ -108,7 +108,7 @@ class TestLedger(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_exit_status_and_completeness(self):
-        # inject: compute expected as robots * (steps - 1), or set complete without comparing to expected
+        # inject: compute expected as robots * (steps - 1) in EmitLedger (red)
         self.assertEqual(self.proc.returncode, 0, self.proc.stderr)
         led = self.ledger
         self.assertEqual(led["status"], "complete")
@@ -130,7 +130,7 @@ class TestLedger(unittest.TestCase):
         self.assertFalse(list(self.dir.glob("*.tmp")))
 
     def test_sums_and_disk_agree(self):
-        # inject: count bytes_compressed from the uncompressed length, or drop the last file from a zone's sums
+        # inject: store a closed file's bytes_compressed as its uncompressed size (red)
         led = self.ledger
         total_msgs = total_unc = total_comp = 0
         for z in led["zones"]:
@@ -158,7 +158,7 @@ class TestLedger(unittest.TestCase):
         self.assertEqual((t["robots"], t["agvs"], t["pickers"]), (24, 16, 8))
 
     def test_atomic_write_via_tmp_and_replace(self):
-        # inject: write the target path directly (open(path, "w")) instead of tmp + os.replace
+        # inject: tmp = self.path, i.e. write the target in place (red)
         led = el.EmitLedger(self.dir / "atomic" / "emit_ledger.json", {"seed_base": 0}, zones=1, steps=4)
         led.update(0, dict(robots=2, agvs=1, pickers=1, messages=3), "running")
         led.write("running")
@@ -197,7 +197,7 @@ class TestLedger(unittest.TestCase):
         self.assertEqual(bad, [])
 
     def test_kafka_style_counts_have_null_compressed(self):
-        # inject: report bytes_compressed as 0 (or the uncompressed size) for a sink that cannot know it
+        # inject: sum None as 0 for the total bytes_compressed, or force zone complete = True (each red)
         led = el.EmitLedger(self.dir / "kafka" / "emit_ledger.json", {"seed_base": 10}, zones=2, steps=5)
         snap = dict(messages=10, bytes_uncompressed=1000, bytes_compressed=None, files=[], robots=2, agvs=1,
                     pickers=1, steps_done=5, first_timestamp="a", last_timestamp="b")
@@ -213,7 +213,7 @@ class TestLedger(unittest.TestCase):
         self.assertEqual(doc["zones"][1]["seed"], 11)
 
     def test_zone_crash_gives_failed_ledger_and_nonzero_exit(self):
-        # inject: report status "complete" whenever every zone process has exited, ignoring errors
+        # inject: report run status "complete" unconditionally in run_fleet (red)
         with tempfile.TemporaryDirectory() as d:
             r = cli("--zones", 2, "--steps", 10, "--speed", 0, "--sink", "file", "--dir", d, "--workers", 1,
                     "--env", "tarware-no-such-env-v1")
@@ -230,7 +230,7 @@ class TestLedger(unittest.TestCase):
 
 class TestKafka(unittest.TestCase):
     def test_one_record_per_message_key_value_and_flush_at_exit(self):
-        # inject: key by zone instead of serialNumber, re-encode the value, or skip flush() in close()
+        # inject: key by a counter instead of serialNumber, or make KafkaSink.close() skip flush() (each red)
         fake = FakeProducer()
         keep = sinks.KafkaSink("fleet.state", producer=fake)
         mem = []
@@ -266,7 +266,7 @@ class TestKafka(unittest.TestCase):
         self.assertEqual(st["files"], [])
 
     def test_missing_library_is_a_clear_one_line_error(self):
-        # inject: let the ImportError propagate (a traceback) or construct the producer at import time
+        # inject: bare `raise` in check_kafka_available so the ImportError escapes (red)
         with mock.patch.dict(sys.modules, {"confluent_kafka": None}):
             with self.assertRaises(sinks.SinkError) as cm:
                 sinks.KafkaSink("t")

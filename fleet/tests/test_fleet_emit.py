@@ -100,7 +100,7 @@ class TestStream(unittest.TestCase):
         return [m for m in self.msgs if m["serialNumber"] == serial]
 
     def test_schema_keys_order_and_count(self):
-        # inject: swap "orderId" and "serialNumber" in build_message, or emit a reset message before step 0
+        # inject: swap "orderId" and "serialNumber" in build_message (red)
         self.assertEqual(self.n, 12)
         self.assertEqual((self.result["snapshot"]["agvs"], self.result["snapshot"]["pickers"]), (8, 4))
         self.assertEqual(len(self.msgs), self.n * STEPS)  # robots x steps: no reset message
@@ -117,7 +117,7 @@ class TestStream(unittest.TestCase):
             self.assertEqual(m["lastNodeId"], f"{m['agvPosition']['x']}-{m['agvPosition']['y']}")
 
     def test_header_ids_and_timestamps(self):
-        # inject: start headerId at 1, or compute the timestamp from step + 1
+        # inject: start headers at 1 instead of 0 (red)
         for i in range(self.n):
             rows = self.by_robot(i)
             self.assertEqual([m["headerId"] for m in rows], list(range(STEPS)))
@@ -127,7 +127,7 @@ class TestStream(unittest.TestCase):
         self.assertEqual(self.by_robot(0)[1]["timestamp"], "2026-01-01T00:00:05Z")
 
     def test_errors_nonempty_exactly_when_frozen(self):
-        # inject: read frozen_schedule[:, step + 1] (or applied_frozen[-2]) instead of applied_frozen[-1]
+        # inject: use frozen_schedule[:, step + 1] instead of applied_frozen[-1] (red)
         self.assertGreater(int(self.schedule.sum()), 0)  # breakdown-heavy seed 3 has frozen steps
         seen = 0
         for step in range(STEPS):
@@ -141,7 +141,7 @@ class TestStream(unittest.TestCase):
         self.assertGreater(seen, 0)
 
     def test_order_id_from_busy_transitions_in_a_real_run(self):
-        # inject: key the id on custom.recovery_action, or reset k on abandon so an id repeats
+        # inject: reset k to 0 when a robot goes not busy (red)
         self.assertGreaterEqual(len(self.abandons), 2)
         pattern = re.compile(r"^Z0-(\d+)-o(\d+)$")
         for i in range(self.n):
@@ -175,7 +175,7 @@ class TestStream(unittest.TestCase):
                 self.assertEqual(int(later.rsplit("-o", 1)[1]), k_before + 1)
 
     def test_order_tracker_scripted(self):
-        # inject: drop the `target != self.target[i]` branch (a retarget keeps the old id) or reuse k after an abandon
+        # inject: drop the `target != self.target[i]` branch of OrderTracker.update (red)
         t = em.OrderTracker(zone=2, n_agents=1)
         seq = [(False, 0), (True, 5), (True, 5), (True, 7), (False, 0), (True, 7), (True, 7), (False, 0), (False, 0),
                (True, 5)]
@@ -184,7 +184,7 @@ class TestStream(unittest.TestCase):
         self.assertEqual(len(set(g for g in got if g)), 4)
 
     def test_ground_truth_only_in_custom(self):
-        # inject: add "stuck_count" (or "recovery_action", or paused=stuck) as a top-level key in build_message
+        # inject: add a top-level "stuck_count" key in build_message (red)
         contract = set(em.TOP_KEYS)
         for m in self.msgs:
             self.assertEqual(set(m), contract)
@@ -208,7 +208,7 @@ class TestStream(unittest.TestCase):
 
 class TestDynamics(unittest.TestCase):
     def test_zone_runner_deliveries_equal_run_seed(self):
-        # inject: reset the env with seed + 1 in run_zone (red demonstrated), or call env.step twice per iteration
+        # inject: reset the env with seed + 1 in run_zone (red)
         code_zone = (
             "import sys, json; sys.path[:0] = ['%s', '%s', '%s']\n"
             "from fleet_analyser import emitter as em\n"
@@ -241,7 +241,7 @@ class TestDynamics(unittest.TestCase):
         self.assertEqual(z[2], 12 * 250)
 
     def test_same_seed_twice_in_separate_processes_is_byte_identical(self):
-        # inject: gzip mtime=None (wall clock) in FileSink, or default --t0 to the wall clock
+        # inject: gzip mtime=None (wall clock) in FileSink (red)
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             for d in (a, b):
                 r = cli("--zones", 2, "--steps", 60, "--speed", 0, "--sink", "file", "--dir", d, "--workers", 2)
@@ -284,7 +284,7 @@ class TestCli(unittest.TestCase):
             self.assertFalse(list(Path(d).iterdir()))
 
     def test_t0_validation(self):
-        # inject: accept any string as --t0
+        # inject: narrow resolve_t0's except to KeyError so a bad --t0 is not reported by name (red)
         r = cli("--t0", "yesterday", "--steps", 5, "--dir", tempfile.gettempdir() + "/s5a-never-created")
         self.assertEqual(r.returncode, 2)
         self.assertIn("--t0 must be", r.stderr)
@@ -307,13 +307,13 @@ class TestPacing(unittest.TestCase):
         return sleeps, now[0] - 100.0
 
     def test_realtime_paces_against_the_schedule(self):
-        # inject: sleep 5 / speed after every step (drift accumulates) instead of waiting for start + step * 5 / speed
+        # inject: wait = STEP_SECONDS / speed per step instead of waiting for start + step * 5 / speed (red)
         sleeps, elapsed = self.run_paced(rate="realtime", speed=2.0)
         self.assertAlmostEqual(elapsed, 5 * 5 / 2.0)  # step 5 is due at 5 * 5 s / speed; the sim itself takes 0 here
         self.assertEqual(len(sleeps), 5)  # step 0 is immediate
 
     def test_flat_and_speed_zero_never_sleep(self):
-        # inject: treat speed 0 as realtime (divide by zero) or sleep in flat mode
+        # inject: drop the `speed > 0` guard so flat-out speed 0 is treated as paced (red)
         self.assertEqual(self.run_paced(rate="flat", speed=1.0)[0], [])
         self.assertEqual(self.run_paced(rate="realtime", speed=0)[0], [])
 
