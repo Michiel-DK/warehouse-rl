@@ -20,11 +20,11 @@ give Delta = 0 (no reward, discount 1). Per step k in agent i's window:
     R = sum_k GAMMA ** (k - t) * r_k,   target = R + GAMMA ** Delta * max_a Q_target(s', a)   (0 bootstrap at the end)
 
 own_i,k is entry i (agent id - 1) of the per-agent reward vector WarehouseEnv.step returns, built by the vendor with
-RewardType.INDIVIDUAL (vendor tarware/warehouse.py:536-606: +0.1 to the AGV and to the picker for a load or an unload,
+RewardType.INDIVIDUAL (vendor tarware/warehouse.py:536-606: +0.1 to the picker at whose cell an AGV loads or unloads,
 +1 to the AGV that delivers) and with global_reward=False (make_learned_env asserts both), minus the vendor's constant
 -VENDOR_STEP_PENALTY per agent-step (warehouse.py:674), which is added back: at a fixed 500 steps it is the same for
-every policy, so it is left out. Nothing is shared between agents: an agent is credited for its own loads, unloads and
-deliveries only (a single fleet-shared reward is the "lazy agent" case). The evaluation metric is untouched: pick-rate
+every policy, so it is left out. Nothing is shared between agents: an agent gets only what the vendor credits to it
+(a single fleet-shared reward is the "lazy agent" case). The evaluation metric is untouched: pick-rate
 is still deliveries * 3600 / (5 * steps) from info["shelf_deliveries"].
 
 Deliveries plus the real action costs only (13 Oct 2026): every stuck measure the recovery action itself can reset

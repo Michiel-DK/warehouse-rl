@@ -382,7 +382,8 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         episode 40 vs reference 50.11; the greedy net still reroutes at 1442 of 1461 and 1996 of 2016 stuck events
         (seeds 1000, 1001). The retrain decides whether that changes once exploration has decayed.
       - 13 Oct pm operator decision: per-agent own credit. Each agent's window gets its own entry of the vendored
-        per-agent reward (`RewardType.INDIVIDUAL`: +1 own delivery, +0.1 own load/unload, `global_reward=False`, both
+        per-agent reward (`RewardType.INDIVIDUAL`: +1 to the delivering AGV, +0.1 to the picker
+        serving a load/unload, `global_reward=False`, both
         asserted in `make_learned_env`) instead of an equal share of the fleet's deliveries; the two action costs
         are unchanged; `reward_constants()` records `credit: "own"`. Why: the TA-RWARE authors train on individual
         rewards (Krnjaic et al., arXiv 2212.11498, Sec. C4), and one shared team reward is the documented "lazy
