@@ -134,6 +134,19 @@ class TestReportSqlEqualsReport(unittest.TestCase):
                 self.assertEqual(got, section(self.secs, heading))
                 print(f"{path.name}: {len(rows)} row(s), first line: {got[0]}", file=sys.stderr)
 
+    def test_every_dashboard_panel_query_runs_on_clickhouse(self):
+        dash = json.loads((ROOT / "fleet" / "grafana" / "dashboard.json").read_text())
+        n = 0
+        stack = list(dash["panels"])
+        while stack:
+            p = stack.pop()
+            stack += p.get("panels", [])
+            for t in p.get("targets", []):
+                sql = t["rawSql"].replace("${run}", RUN)
+                ClickHouseStore(self.url, self.db)._post(sql.rstrip().rstrip(";") + "\nFORMAT JSONEachRow")
+                n += 1
+        self.assertGreater(n, 10)
+
     def test_the_sql_applies_the_countable_filter_where_it_counts_episodes(self):
         eps = self.store.select("stuck_episodes", {"run": RUN})
         countable = report.countable(eps)

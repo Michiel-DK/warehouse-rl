@@ -70,6 +70,7 @@ services:
     volumes:
       - ./data/volumes/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboard.json:/etc/grafana/dashboards/dashboard.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health"]
       interval: 5s

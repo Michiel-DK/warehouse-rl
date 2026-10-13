@@ -1,0 +1,641 @@
+{
+  "uid": "fleet-stuck-analyser",
+  "title": "Fleet stuck analyser",
+  "tags": [
+    "fleet"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "run",
+        "label": "run",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "fleet-clickhouse"
+        },
+        "refresh": 2,
+        "query": "SELECT DISTINCT run FROM stuck_episodes FINAL ORDER BY run DESC",
+        "definition": "SELECT DISTINCT run FROM stuck_episodes FINAL ORDER BY run DESC",
+        "sort": 0,
+        "multi": false,
+        "includeAll": false,
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "INTEGRATION",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Coverage (accepted / emitted)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT (SELECT sum(messages_accepted) FROM ingest_ledger FINAL WHERE run = '${run}') / (SELECT max(expected_messages) FROM ingest_runs FINAL WHERE run = '${run}') AS coverage"
+        }
+      ],
+      "description": "Accepted messages over the emit ledger's expected total; 1 means nothing was lost."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Consumer lag (messages)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(lag_messages) AS lag_messages FROM ingest_consumer_lag FINAL WHERE run = '${run}'"
+        }
+      ],
+      "description": "Kafka source only: high watermark minus position at the last ledger write."
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Sequence accounting",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(messages_rejected) AS rejected, sum(duplicates) AS duplicates, sum(sequence_gaps) AS gaps, sum(missing_messages) AS missing FROM ingest_ledger FINAL WHERE run = '${run}'"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Ingest rate (messages/s)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT fromUnixTimestamp(minute) AS time, max(msgs_per_s) AS msgs_per_s FROM ingest_ledger FINAL WHERE run = '${run}' GROUP BY time ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Messages per minute",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT fromUnixTimestamp(minute) AS time, sum(messages_parsed) AS parsed, sum(messages_accepted) AS accepted, sum(messages_rejected) AS rejected FROM ingest_ledger FINAL WHERE run = '${run}' GROUP BY time ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Ingest lag p50 / p99 (s)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT fromUnixTimestamp(minute) AS time, max(lag_p50_s) AS lag_p50_s, max(lag_p99_s) AS lag_p99_s FROM ingest_ledger FINAL WHERE run = '${run}' GROUP BY time ORDER BY time"
+        }
+      ],
+      "description": "Per wall minute; only meaningful for a live run (emit config now / realtime / speed 1)."
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "SIMULATION",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Hotspots (top 20 cells)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT zone, JSONExtractInt(cell, 1) AS x, JSONExtractInt(cell, 2) AS y, count() AS episodes\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')\nGROUP BY zone, x, y\nORDER BY episodes DESC, zone ASC, x ASC, y ASC\nLIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Episodes per event hour",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT intDiv(toInt64(`start`), 3600) * 3600 AS hour, count() AS episodes\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')\nGROUP BY hour\nORDER BY hour ASC"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "piechart",
+      "title": "Cause mix",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 4,
+        "x": 16,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT ifNull(cause, 'None') AS cause_label, count() AS episodes\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')\nGROUP BY cause_label\nORDER BY cause_label ASC"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "piechart",
+      "title": "Resolution mix",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 4,
+        "x": 20,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT resolution, count() AS episodes\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')\nGROUP BY resolution\nORDER BY resolution ASC"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Duration p50 / p95 (s)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH arraySort(groupArray(duration_s)) AS d, length(d) AS n\nSELECT if(n = 0, NULL, d[greatest(1, toUInt64(ceil(0.5 * n)))]) AS p50,\n       if(n = 0, NULL, d[greatest(1, toUInt64(ceil(0.95 * n)))]) AS p95\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Time from stuck to resolution p50 / p95 (s)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH arraySort(groupArray(`end` - t_entry)) AS w, length(w) AS n\nSELECT if(n = 0, NULL, w[greatest(1, toUInt64(ceil(0.5 * n)))]) AS p50,\n       if(n = 0, NULL, w[greatest(1, toUInt64(ceil(0.95 * n)))]) AS p95\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Avoidable (detector definition, near-tautological)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT countIf(avoidable) AS episodes, round(sumIf(ifNull(avoidable_s, 0), avoidable) / 60, 2) AS minutes\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')"
+        }
+      ],
+      "description": "Every closed blocked_by_faulted episode qualifies at 5 s steps; read it as a count of faulted-blocker episodes."
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Repeat robots (>= 3 episodes)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT robot, count() AS episodes\nFROM stuck_episodes FINAL\nWHERE run = '${run}' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted')\nGROUP BY robot\nHAVING episodes >= 3\nORDER BY episodes DESC, robot ASC"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "table",
+      "title": "Decision grades per kind and verdict",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT d.kind AS kind, if(g.status = 'graded', JSONExtractString(g.verdict), 'open') AS verdict, count() AS decisions\nFROM decisions AS d\nLEFT JOIN (SELECT id, status, verdict FROM decision_grades FINAL) AS g ON d.id = g.id\nWHERE d.run = '${run}'\nGROUP BY kind, verdict\nORDER BY kind ASC, verdict ASC"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "row",
+      "title": "RESULTS",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "panels": []
+    },
+    {
+      "id": 19,
+      "type": "stat",
+      "title": "Score: precision",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 36
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT argMax(value, loaded_at) AS precision FROM results WHERE kind = 'score' AND run = '${run}' AND `key` = 'precision'"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Score: recall",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 36
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT argMax(value, loaded_at) AS recall FROM results WHERE kind = 'score' AND run = '${run}' AND `key` = 'recall'"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "Score: matched / truth / detected",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT `key`, argMax(value, loaded_at) AS value FROM results WHERE kind = 'score' AND run = '${run}' AND `key` IN ('matched', 'truth_episodes', 'detected_episodes') GROUP BY `key` ORDER BY `key`"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Score (every numeric leaf of score.json)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT `key`, argMax(value, loaded_at) AS value FROM results WHERE kind = 'score' AND run = '${run}' GROUP BY `key` ORDER BY `key`"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "table",
+      "title": "Benchmark (every numeric leaf of benchmark.json, by git sha)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "fleet-clickhouse"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "fleet-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT run, `key`, argMax(value, loaded_at) AS value FROM results WHERE kind = 'benchmark' GROUP BY run, `key` ORDER BY run, `key`"
+        }
+      ]
+    }
+  ]
+}
