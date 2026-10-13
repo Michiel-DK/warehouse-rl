@@ -22,6 +22,7 @@ import evaluate as ev
 import train_recovery as tr
 from warehouse_rl import learned_recovery as lr
 from warehouse_rl.recovery import ACTIONS
+from tarware.warehouse import RewardType
 
 SCRIPT = str(ROOT / "scripts" / "train_recovery.py")
 MEDIUM = "tarware-medium-8agvs-4pickers-globalobs-v1"
@@ -178,7 +179,7 @@ class TestOwnCreditFromEnv(unittest.TestCase):
         self.assertGreater(loads, 0)
         self.assertTrue(any(t["own"][i] > 0 for t in res["trace"] for i in range(8, 12)))  # pickers earn the +0.1
 
-    # inject: build the env with global_reward=True, or drop the assertion in make_learned_env
+    # inject: build the env with global_reward=True, or drop either half of the assertion in make_learned_env
     def test_make_learned_env_refuses_a_shared_reward(self):
         real = lr.WarehouseEnv
 
@@ -188,6 +189,15 @@ class TestOwnCreditFromEnv(unittest.TestCase):
 
         cfg = tr.point_spec("breakdown", 1)[1]
         with mock.patch.object(lr, "WarehouseEnv", shared):
+            with self.assertRaisesRegex(AssertionError, "own credit"):
+                lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
+
+        def vendor_global(*a, **kw):  # the vendor broadcasting team credit (RewardType.GLOBAL)
+            env = real(*a, **kw)
+            env.env.reward_type = RewardType.GLOBAL
+            return env
+
+        with mock.patch.object(lr, "WarehouseEnv", vendor_global):
             with self.assertRaisesRegex(AssertionError, "own credit"):
                 lr.make_learned_env(MEDIUM, 10, cfg, lr.LearnedRecovery(lr.QNet()), 60)
 
