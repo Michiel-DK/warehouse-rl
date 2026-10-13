@@ -436,3 +436,7 @@ Action mix of those checkpoints with `scripts/evaluate.py --recovery learned:` o
 | timeout | 48.96 / 46.08 | 0 / 2 | 90 / 68 | 407 / 341 | 0 / 0 | 456 / 388 |
 
 After 40 episodes the greedy net still reroutes at almost every stuck event under both rewards. 40 episodes at epsilon 0.98 was too early to judge. The one-run pilot (3200 episodes, with the abort grace) decided: it aborted at episode 1600 with greedy eval 0.0 (see "Learned recovery: kill criterion hit" above), and the retrain was dropped.
+
+## Sprint 5: fleet stuck analyser (in progress)
+
+`fleet/emit.py` turns simulated medium-map episodes into a synthetic fleet log: one VDA 5050-shaped state message per robot per step, written to gzip JSONL files (or Kafka behind a flag) together with an `emit_ledger.json` that counts exactly what was emitted. The simulator's stuck, recovery and clash ground truth sits only in each message's `custom` block. The message contract and field semantics are in the "Sprint 5 / S5A" note of [docs/SCOPE.md](docs/SCOPE.md). Output goes under `fleet/data/` (not committed).

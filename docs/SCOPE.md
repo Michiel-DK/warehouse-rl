@@ -494,6 +494,34 @@ Decisions:
   S8 models, S9 deploy/CI/demo, cross-cutting checklist): laptop-scheduler `jobs/wr-s5-stuck-analyser.md`. Code
   under `fleet/` here (private repo), extracted to a public repo in S9; no client data in any repo, ever.
 
+### Sprint 5 / S5A: fleet state emitter (message contract)
+
+`fleet/emit.py` runs `--zones N` medium-map episodes (zone z = seed base + z, one env per process, disturbance
+`breakdown-heavy` or JSON, recovery `timeout`, dispatch `stuck_aware_cta`, built exactly like `evaluate.run_seed`, so
+deliveries per zone equal run_seed's) and emits one VDA 5050-shaped JSON line per robot per executed step (steps
+0..steps-1, no reset message) to gzip JSONL files (`zone<z>-<nnn>.jsonl.gz`, rotation on line boundaries, gzip mtime 0)
+or, behind a flag, Kafka. Every agent is a robot: AGVs and pickers both occupy cells and block each other; the ledger
+records the AGV/picker split. `emit_ledger.json` (atomic rewrites) holds the exact message and byte counts per zone and
+in total, `expected = robots * steps`, and `complete`/`status`; it is the denominator for every later coverage number.
+Key order, one line each: `schema_version` ("fleet-state/1"), `headerId`, `timestamp`, `manufacturer` ("sim"),
+`serialNumber`, `orderId`, `lastNodeId`, `agvPosition` {x, y, mapId}, `driving`, `paused`, `errors`, `loads`,
+`custom` {stuck_count, carrying, recovery_action, stuck_event, clash_event}.
+- `headerId`: per robot, from 0, +1 per message, continuous across file rotation. `timestamp`: `t0 + 5 s * step`
+  (`disturb.STEP_SECONDS`), `--t0` default `2026-01-01T00:00:00Z` (byte-reproducible), `--t0 now` for live use.
+  `serialNumber`: `Z<zone>-<agent id, two digits>`.
+- `orderId`: `""` when the robot is not busy. Every new assignment (not busy -> busy, or busy with a changed target)
+  takes a never-used id `Z<zone>-<id>-o<k>` with a per-robot counter k that is never reset; an abandon (busy -> not busy
+  without a delivery) gives `""` and the next assignment gets k+1. Keyed on the busy transition read from the env after
+  the step, not on `custom.recovery_action`.
+- `errors`: `[{"errorType": "BREAKDOWN", "errorLevel": "FATAL"}]` exactly when the robot was frozen in that step
+  (`applied_frozen[-1]`, equal to `frozen_schedule[:, t]`), else `[]`. `driving`: position changed in this step.
+  `paused` is always false and is not a stuck signal. `loads`: the carried shelf, if any.
+- `custom` is the simulator's ground truth and the ONLY place stuck, recovery and clash information appears (the
+  contract's own fields errors, orderId, loads, driving excepted). The later detector must never read it; the scorer
+  will. `stuck_count`: the StuckCounter after the step. `recovery_action`: the last action decided for this robot in
+  this step or null (captured by wrapping the hook instance's `_decide`; decisions are unchanged). `stuck_event` /
+  `clash_event`: a stuck / clash decision was made for this robot in this step.
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are
