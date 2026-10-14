@@ -11,6 +11,8 @@ Replay of one CTA episode: open `results/replay_small.html` in a browser (made b
 
 ## Setup (macOS)
 
+Absolute simulator numbers in this README are macOS arm64 numbers; Linux gives different absolute values (A* tie-breaking) and the same paired comparisons. See [docs/PLATFORM.md](docs/PLATFORM.md).
+
 ```
 ./scripts/setup.sh
 .venv/bin/python scripts/evaluate.py --policy cta --env tarware-medium-8agvs-4pickers-globalobs-v1 --seeds 0-9 --steps 500
@@ -448,3 +450,46 @@ After 40 episodes the greedy net still reroutes at almost every stuck event unde
 After an ingest, `fleet/grade.py --run NAME --once` grades the analyser's decisions against what happened next, `fleet/score.py --run NAME --glob 'fleet/data/NAME/*.jsonl.gz'` scores the detected episodes against the simulator's ground truth (the one place that reads the `custom` block) and writes `score.json`, `fleet/report.py --run NAME` writes `report.md` and a hotspot heatmap, and `fleet/alert.py --run NAME` prints a line per new stuck episode while an ingest runs. `fleet/ledger.py status` now counts only countable episodes and adds a per-kind grade rollup. Definitions, the truth rule and the grade rules are in the "Sprint 5 / S5C1" note of [docs/SCOPE.md](docs/SCOPE.md).
 
 The report sections also exist as ClickHouse queries under `fleet/sql/reports/` (one file per section, parameterised by the run) and as a provisioned Grafana dashboard (`fleet/grafana/dashboard.json`, loaded when the stack starts, with rows for the integration, the simulation and the results). `fleet/fleet_analyser/bench.py` loads a benchmark JSON and a score JSON into the `results` table. `fleet/score.py --source kafka` scores straight from the topic. `fleet/benchmark.py` runs the batch and live benchmark on the host (the simulator never runs in a container); `--smoke` is the quick version and writes to a temporary file. The definitions are in the "Sprint 5 / S5C2" note of [docs/SCOPE.md](docs/SCOPE.md); the real run is a scheduler queue item and its numbers come from the results JSON it writes.
+
+## Sprint 8, analyst half: floor imperfections and the hotspot map (2026-10-14)
+
+The closed loop of Sprint 8 is "the analyst finds the bad floor, the planner avoids it, reality grades both". This section is the first half, measured; the planner half (cost-aware routing, S8C) is not built yet. Lane reports: `laptop-scheduler/reports/wr-lane-s8a.md`, `wr-lane-s8b.md`. Figures: `scripts/plot_sprint8.py` (reads results files only).
+
+### Ground truth: the `floor` disturbance type (S8A)
+
+`floor` = K highway cells, drawn once per (seed, config) from the same candidate set as `blocked_cell` (380 highway non-goal cells on the medium map), each with its own move-failure probability p_c uniform in [lo, hi]. A move INTO a bad cell is skipped with probability p_c ("enter" semantics, drawn in fixed agent order from the disturbance layer's own RNG, so identical across policies). Existing presets are bit-identical to before (regression against `results/recovery/timeout.json` and the undisturbed rows). Two facts the analyser has to live with: a floor skip never reaches the vendor's `StuckCounter`, so it does not show up as stuck time, and it is the robot's NEXT cell that is bad, not the one it reports.
+
+Severity on the medium map, `stuck_aware_cta` with the `timeout` recovery, 30 seeds x 500 steps (`results/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_{floor-light,floor-heavy,cfg-*}_timeout.json`; reference = undisturbed CTA, `results/cta_tarware-medium-8agvs-4pickers-globalobs-v1_500.json`):
+
+| bad cells | p range | pick-rate (lines/h) | 95% CI | floor skips / episode |
+|---|---|---|---|---|
+| 0 (undisturbed CTA) | - | 53.66 | +/- 2.33 | 0 |
+| 6 (`floor-light`) | 0.05-0.25 | 52.99 | +/- 2.54 | 5 |
+| 12 (`floor-heavy`) | 0.2-0.6 | 53.62 | +/- 2.06 | 35 |
+| 40 | 0.3-0.7 | 51.02 | +/- 2.04 | 167 |
+| 80 | 0.3-0.7 | 47.52 | +/- 1.60 | 305 |
+| 120 | 0.5-0.9 | 34.85 | +/- 1.84 | 950 |
+| 200 | 0.5-0.9 | 28.42 | +/- 1.73 | 1278 |
+
+![floor severity](results/floor_severity.png)
+
+The two committed presets are too mild to measure; the Sprint 8 regime is `{"floor": {"cells": 80, "p": [0.3, 0.7]}}`, an 11% loss. Caveat: cells are drawn uniformly over the highway; real floor damage clusters on busy aisles. A traffic-weighted draw is a later one-lane change.
+
+### The hotspot map (S8B)
+
+The analyser never sees `floor_cells`. From the stream alone it counts, per robot, consecutive messages with an active order and no cell change ("stalls"), attributes each stall to the robot's next cell, drops stalls that fall inside detector stuck episodes caused by a faulted blocker, and aggregates per cell with a decayed, count-weighted score into a cost map in [0, 1] (`fleet/costmap.py`). Every publish writes `hotspot_forecast` decisions to the decision ledger; they are graded twice, against the next hour's observed stalls (outcome) and, when a truth sidecar exists, against the real floor cells (truth). The emitter writes that sidecar (`truth.json`) next to the run and never into a message. Scoring: `fleet/hotspot_score.py`, data `results/fleet/hotspot_s8b-medium-80-p03-07.json` (10 zones x 500 steps, seeds 0-9, the 80-cell regime, platform macOS arm64).
+
+| K cells flagged | precision@K (mean of 10 zones) | recall@K |
+|---|---|---|
+| 20 | 0.965 | 0.241 |
+| 40 | 0.825 | 0.412 |
+| 80 | 0.556 | 0.556 |
+| 120 | 0.371 | 0.556 |
+
+![hotspot precision recall](results/fleet/hotspot_precision_recall.png)
+
+Random flagging would give precision 80/380 = 0.21. Recall plateaus at 0.56 because 44% of the true bad cells never see a stall in 500 steps (no robot drives into them), which is a traffic ceiling, not a detector limit. Spearman between cost and true p over flagged cells: 0.37. Grading: outcome 136 ok / 306 off (the stall-count forecasts are weak), truth 796 hits / 280 false alarms. Of 2028 stalls, 115 fell inside detector stuck episodes. One zone, cost map against the true cells:
+
+![cost map zone 0](results/fleet/hotspot_costmap_zone0.png)
+
+What this earns: "the stream alone finds the worst floor cells with high precision; it cannot see the ones nobody drives over". What it does not earn yet: any pick-rate recovered, which is S8C's measurement.
