@@ -305,14 +305,25 @@
   }
  },
  "grading_counts": {
-  "outcome": {
+  "outcome_count": {
    "ok": 136,
    "off": 306
+  },
+  "outcome": {
+   "ok": 120,
+   "off": 80
   },
   "truth": {
    "hit": 796,
    "false_alarm": 280
   }
+ },
+ "rank_grading": {
+  "top_k": [
+   20
+  ],
+  "rank_graded": 200,
+  "unranked": 242
  },
  "stall_in_episode": {
   "total_stalls": 2028,

@@ -2,13 +2,14 @@
 
 Usage: python fleet/costmap.py --glob 'fleet/data/<run>/*.jsonl.gz' [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB]
        [--run NAME] [--window-hours 1] [--half-life-h 1] [--min-stalls 1] [--publish-every S] [--include-occupied]
-       [--horizon-s 3600] [--out fleet/data/<run>/costmap.json]
+       [--horizon-s 3600] [--top-k 20] [--out fleet/data/<run>/costmap.json]
 Reads the zone files and the store's stuck_episodes (written by fleet/ingest.py), extracts stalls (fleet_analyser/hotspot.py)
 and upserts them into the store's `stalls` table. Publishes at every multiple of --publish-every event seconds after the
 first message that is <= the stream end, plus one at the stream end (only the stream end without --publish-every). Per
 publish and zone cost = decayed score / the zone's max score (cells with fewer than --min-stalls window stalls are 0 and
 omitted), written to the `costmap` table; the LAST publish is written to --out (atomic). Every nonzero cell also gets a
-`hotspot_forecast` decision deduped on (kind, Z<zone>:x,y, publish event-time ISO), so a re-run is a no-op.
+`hotspot_forecast` decision (claim_version 2: the claim carries rank, top_k and the map parameters the rank
+grader recomputes with) deduped on (kind, Z<zone>:x,y, publish event-time ISO), so a re-run is a no-op.
 Every per-cell quantity is per zone: each zone has its own seed and floor layout. Analyst side: input is the stream and the
 store only.
 """
@@ -23,10 +24,12 @@ if str(FLEET) not in sys.path:
     sys.path.insert(0, str(FLEET))
 
 from fleet_analyser import decisions, hotspot, store as store_mod  # noqa: E402
+from fleet_analyser.hotspot import cost_zones  # noqa: E402,F401  (re-export: costmap.cost_zones stays importable)
 from fleet_analyser.parse import iso  # noqa: E402
 
 SCHEMA_VERSION = "fleet-costmap/1"
 DEFAULT_HORIZON_S = 3600
+DEFAULT_TOP_K = 20
 
 
 def publish_times(first_ts, end_ts, every):
@@ -41,24 +44,8 @@ def publish_times(first_ts, end_ts, every):
     return times
 
 
-def cost_zones(stalls, at_ts, window_h, half_life_h, min_stalls, exclude_occupied):
-    """{zone: {cell: dict(cost, score, stalls)}} for one publish; only nonzero cells, max cost exactly 1.0 per zone."""
-    agg = hotspot.aggregate(stalls, at_ts, window_h, half_life_h, exclude_occupied)
-    by_zone = {}
-    for (zone, cell), a in agg.items():
-        if a["stalls"] >= min_stalls:
-            by_zone.setdefault(zone, {})[cell] = a
-    out = {}
-    for zone, cells in by_zone.items():
-        top = max(a["score"] for a in cells.values())
-        out[zone] = {c: dict(cost=round(a["score"] / top, 6), score=a["score"], stalls=a["stalls"])
-                     for c, a in cells.items()}
-        out[zone] = {c: v for c, v in out[zone].items() if v["cost"] > 0}
-    return out
-
-
 def build_costmap(messages, store, run, window_h=1.0, half_life_h=1.0, min_stalls=1, publish_every=None,
-                  exclude_occupied=True, horizon_s=DEFAULT_HORIZON_S):
+                  exclude_occupied=True, horizon_s=DEFAULT_HORIZON_S, top_k=DEFAULT_TOP_K):
     """Extract + persist stalls, publish cost maps and forecasts. Returns the last publish as the costmap.json dict."""
     if not messages:
         raise ValueError("no messages")
@@ -76,13 +63,14 @@ def build_costmap(messages, store, run, window_h=1.0, half_life_h=1.0, min_stall
         covered = min(window_h * 3600, t - first_ts)
         if covered > 0:
             for z, cells in sorted(maps.items()):
-                ranked = sorted(cells.items(), key=lambda kv: (-kv[1]["cost"], kv[0]))
+                ranked = hotspot.rank_cells(cells)
                 for k, (c, v) in enumerate(ranked, 1):
                     x = v["stalls"] * 3600 / covered
                     decisions.record_decision(
                         store, run=run, kind="hotspot_forecast", subject=f"Z{z}:{c}", start_iso=iso(t), decided_at=t,
                         claim=dict(expected_stalls_next_hour=x, cost=v["cost"], rank=k, horizon_s=horizon_s,
-                                   window_hours=window_h),
+                                   window_hours=window_h, top_k=top_k, half_life_h=half_life_h,
+                                   min_stalls=min_stalls, exclude_occupied=exclude_occupied),
                         rationale=f"{v['stalls']} stalls at {c} in zone {z} over the last {covered:.0f}s; cost "
                                   f"{v['cost']}, rank {k}",
                         expected=x, grade_after=t + horizon_s)
@@ -114,6 +102,8 @@ def build_parser():
     p.add_argument("--publish-every", type=int, default=None, metavar="S", help="event seconds between publishes")
     p.add_argument("--include-occupied", action="store_true", help="also count stalls whose cell another robot occupied")
     p.add_argument("--horizon-s", type=int, default=DEFAULT_HORIZON_S)
+    p.add_argument("--top-k", type=int, default=DEFAULT_TOP_K,
+                   help="K of the rank claim: a forecast of rank <= K claims its cell stays in the zone's top K")
     p.add_argument("--out", default=None, help="costmap.json path (default fleet/data/<run>/costmap.json)")
     return p
 
@@ -121,9 +111,9 @@ def build_parser():
 def main(argv=None):
     p = build_parser()
     a = p.parse_args(argv)
-    if a.window_hours <= 0 or a.half_life_h <= 0 or a.min_stalls < 1 or a.horizon_s < 1 \
+    if a.window_hours <= 0 or a.half_life_h <= 0 or a.min_stalls < 1 or a.horizon_s < 1 or a.top_k < 1 \
             or (a.publish_every is not None and a.publish_every < 1):
-        p.error("--window-hours and --half-life-h must be > 0; --min-stalls, --horizon-s, --publish-every >= 1")
+        p.error("--window-hours and --half-life-h must be > 0; --min-stalls, --horizon-s, --top-k, --publish-every >= 1")
     run = a.run or os.path.basename(os.path.dirname(os.path.abspath(a.glob))) or "run"
     try:
         st = store_mod.open_store(a.store, run)
@@ -134,7 +124,7 @@ def main(argv=None):
         print(f"error: no messages under {a.glob}", file=sys.stderr)
         return 2
     doc = build_costmap(messages, st, run, a.window_hours, a.half_life_h, a.min_stalls, a.publish_every,
-                        not a.include_occupied, a.horizon_s)
+                        not a.include_occupied, a.horizon_s, a.top_k)
     st.close()
     out = a.out or str(FLEET / "data" / run / "costmap.json")
     write_json(out, doc)

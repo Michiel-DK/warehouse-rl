@@ -2,12 +2,21 @@
 The other grade source of forecast_grades is written by fleet/grade.py, not here.
 
 For each open forecast published at P with claim horizon H: graded iff H >= min_horizon_s and stream_end[zone] >= P + H, i.e.
-only on a fully observed window; otherwise it stays open (no forecast_grades row, no stamp). Observed = stalls of that
-zone and cell (hotspot.counted: no faulted-episode stalls, no next_occupied stalls unless exclude_occupied is False)
-with start in [P, P + H); expected = claimed stalls per hour * H / 3600; verdict "ok" iff
-|observed - expected| <= tolerance * max(expected, 1), else "off". horizon_s in the row is H, graded_at is stream_end[zone].
-Order of writes: the forecast_grades row (grade_source "outcome") first, then decisions.stamp_grade. A crash between the
-two leaves the decision open and the row present; a re-run finds the row, skips it and stamps the decision.
+only on a fully observed window; otherwise it stays open (no forecast_grades row, no stamp). Two grades per eligible forecast:
+  * COUNT grade, grade_source "outcome_count", for every eligible forecast (any rank, any claim version): observed = stalls
+    of that zone and cell (hotspot.counted: no faulted-episode stalls, no next_occupied stalls unless exclude_occupied is
+    False) with start in [P, P + H); expected = claimed stalls per hour * H / 3600; verdict "ok" iff
+    |observed - expected| <= tolerance * max(expected, 1), else "off".
+  * RANK grade, grade_source "outcome", only for a claim with rank k <= top_k = K (claim_version 2): the cell's rank r in
+    the zone's map recomputed at window_end = P + H from the stalls table with the CLAIM's window_hours, half_life_h,
+    min_stalls and exclude_occupied (never the grader's CLI flags), ranked by hotspot.rank_cells exactly as costmap.py
+    ranks the claim; r is None when the cell is not in the map. outcome = r, expected = K, error None, verdict "ok" iff
+    r is not None and r <= K, else "off". The decision is stamped with outcome = r, error None, that verdict.
+  * k > K or a v1 claim (no top_k): no "outcome" row; the decision is stamped terminally with verdict "unranked",
+    outcome = observed count, error = count error (never left open).
+horizon_s in the rows is H, graded_at is stream_end[zone], window_end is P + H.
+Order of writes: the forecast_grades rows ("outcome_count", then "outcome") first, then decisions.stamp_grade. A crash
+between leaves the decision open and the rows present; a re-run finds the rows, skips them and stamps the decision.
 Stream end (event time) is PER ZONE: the ts of the last message the ingester ACCEPTED from that zone (zone = msg.zone,
 never the file path or Kafka partition; passed parse and the sequence check, rejects and duplicates never move it):
 max over the run's ingest_checkpoints rows of last_message_ts_by_zone[zone], None when no row has the zone (then that
@@ -54,15 +63,32 @@ def write_once(store, row):
     return True
 
 
+def ranked_zone(stalls_by_zone, cache, zone, at_ts, claim):
+    """{cell: 1-based rank} of zone `zone`'s map at `at_ts`, recomputed from the stalls with the CLAIM's own map
+    parameters (never the grader's CLI flags) and the ranking costmap.py publishes with (hotspot.rank_cells)."""
+    params = (zone, at_ts, claim["window_hours"], claim["half_life_h"], claim["min_stalls"], claim["exclude_occupied"])
+    if params not in cache:
+        maps = hotspot.cost_zones(stalls_by_zone.get(zone, ()), at_ts, claim["window_hours"], claim["half_life_h"],
+                                  claim["min_stalls"], claim["exclude_occupied"])
+        cache[params] = {c: r for r, (c, _) in enumerate(hotspot.rank_cells(maps.get(zone, {})), 1)}
+    return cache[params]
+
+
 def grade_outcomes(store, run, min_horizon_s=DEFAULT_MIN_HORIZON_S, tolerance=DEFAULT_TOLERANCE,
                    exclude_occupied=True):
-    """Returns dict(graded, open)."""
+    """Returns dict(graded, open, rank_graded, unranked). graded = decisions stamped by this call = rank_graded
+    (claim rank k <= claim top_k K: grade_source "outcome" row, stamp follows the rank grade) + unranked (k > K, or a
+    v1 claim without top_k: no "outcome" row, stamp verdict "unranked" with the observed count). Every eligible
+    forecast also gets its "outcome_count" row."""
     ends = {}  # zone -> stream_end, read once per call
     by_cell = {}
+    stalls_by_zone = {}
     for s in store.select("stalls", {"run": run}):
+        stalls_by_zone.setdefault(s["zone"], []).append(s)
         if hotspot.counted(s, exclude_occupied):
             by_cell.setdefault((s["zone"], s["cell"]), []).append(s["start"])
-    graded = still_open = 0
+    rank_cache = {}
+    rank_graded = unranked = still_open = 0
     for d in forecasts(store, run):
         if d["status"] != "open":
             continue
@@ -80,9 +106,18 @@ def grade_outcomes(store, run, min_horizon_s=DEFAULT_MIN_HORIZON_S, tolerance=DE
         expected = claim["expected_stalls_next_hour"] * horizon / 3600
         error = observed - expected
         verdict = "ok" if abs(error) <= tolerance * max(expected, 1) else "off"
-        write_once(store, dict(id=d["id"], run=run, grade_source="outcome", outcome=observed, expected=expected,
+        write_once(store, dict(id=d["id"], run=run, grade_source="outcome_count", outcome=observed, expected=expected,
                                error=error, verdict=verdict, horizon_s=horizon, graded_at=end,
                                window_end=p + horizon))
-        if decisions.stamp_grade(store, d["id"], observed, error, verdict, end):
-            graded += 1
-    return dict(graded=graded, open=still_open)
+        k, top_k = claim.get("rank"), claim.get("top_k")
+        if top_k is not None and k is not None and k <= top_k:
+            rank = ranked_zone(stalls_by_zone, rank_cache, zone, p + horizon, claim).get(cell)
+            rank_verdict = "ok" if rank is not None and rank <= top_k else "off"
+            write_once(store, dict(id=d["id"], run=run, grade_source="outcome", outcome=rank, expected=top_k,
+                                   error=None, verdict=rank_verdict, horizon_s=horizon, graded_at=end,
+                                   window_end=p + horizon))
+            if decisions.stamp_grade(store, d["id"], rank, None, rank_verdict, end):
+                rank_graded += 1
+        elif decisions.stamp_grade(store, d["id"], observed, error, "unranked", end):
+            unranked += 1
+    return dict(graded=rank_graded + unranked, open=still_open, rank_graded=rank_graded, unranked=unranked)

@@ -114,7 +114,7 @@ class TestRealClickHouse(unittest.TestCase):
             self.assertGreater(len(mem.select(table, {"run": "s8b"})), 0, table)
             self.assertEqual(canon(ch, table), canon(mem, table), table)
         sources = {r["grade_source"] for r in ch.select("forecast_grades", {"run": "s8b"})}
-        self.assertEqual(sources, {"outcome", "truth"})
+        self.assertEqual(sources, {"outcome", "outcome_count", "truth"})
         graded = [d for d in ch.select("decisions", {"run": "s8b"}) if d["status"] == "graded"]
         self.assertGreater(len(graded), 0)
         self.assertGreater(len(before), 0)  # the outcome stamps wrote decision_grades; truth grading left them alone

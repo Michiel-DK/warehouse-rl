@@ -54,6 +54,14 @@ class TestRecordAndStamp(unittest.TestCase):
         self.assertEqual(json.loads(row["claim"]), {"episode_id": "Z0-00@2026-01-01T00:00:00Z", "cause": "unknown"})
         self.assertEqual(row["recorded_at"], 5.0)
 
+    def test_claim_version_is_per_kind(self):
+        # inject: one CLAIM_VERSION for every kind (hotspot_forecast stuck at 1, or the other kinds bumped to 2)
+        store = MemoryStore()
+        for kind in decisions.KINDS:
+            did, _ = make(store, kind=kind, subject=f"s-{kind}")
+            row = next(r for r in store.select("decisions") if r["id"] == did)
+            self.assertEqual(row["claim_version"], 2 if kind == "hotspot_forecast" else 1, kind)
+
     def test_first_write_wins_nothing_is_overwritten(self):
         # inject: make record_decision an upsert (the second call would replace the claim)
         store = MemoryStore()

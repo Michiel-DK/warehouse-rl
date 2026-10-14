@@ -10,7 +10,7 @@ import time
 
 KINDS = ("stuck_cause", "avoidable_reset", "hotspot_forecast")
 GRADE_FIELDS = ("status", "outcome", "error", "verdict", "graded_at")
-CLAIM_VERSION = 1
+CLAIM_VERSIONS = {"stuck_cause": 1, "avoidable_reset": 1, "hotspot_forecast": 2}
 GRADE_AFTER_S = 3600
 
 
@@ -32,7 +32,7 @@ def record_decision(store, *, run, kind, subject, start_iso, decided_at, claim, 
     store.insert("decisions", [dict(
         id=did, run=run, decided_at=decided_at, recorded_at=time.time() if recorded_at is None else recorded_at,
         kind=kind, subject=subject, claim=json.dumps(claim, sort_keys=True, separators=(",", ":")),
-        claim_version=CLAIM_VERSION, rationale=rationale, expected=expected, grade_after=grade_after, status="open",
+        claim_version=CLAIM_VERSIONS.get(kind, 1), rationale=rationale, expected=expected, grade_after=grade_after, status="open",
         outcome=None, graded_at=None, error=None, verdict=None, dedup_key=key)])
     return did, True
 
