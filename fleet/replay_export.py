@@ -52,7 +52,7 @@ Payload (every key is always present unless marked optional):
               hotspot_score.precision_recall(zone map, floor cells, ks=(20,))[20] on the unrounded costs.
   grades      {per_publish, timeline}. per_publish[i] belongs to publishes[i]: counts over the forecast_grades rows whose id
               joins to a decisions row of kind hotspot_forecast, subject prefix "Z<zone>:" and decided_at == t. Keys:
-              t, forecasts, rank {ok, off} (grade_source "outcome"), count {ok, off} (grade_source "outcome_count"),
+              t, forecasts, outcome {ok, off} (grade_source "outcome"), outcome_count {ok, off} (grade_source "outcome_count"),
               truth {hit, false_alarm} (grade_source "truth"), open (forecasts with no "outcome" row whose decision is
               still open), unranked (decisions stamped verdict "unranked"), outcome_kind, window_end (+ _step): the
               latest window_end of the publish's outcome rows, null without any (the time the outcome grades exist). The source names are kept.
@@ -60,7 +60,7 @@ Payload (every key is always present unless marked optional):
               (top_k present: ok = the cell is still in the zone's top K at window_end), "count" for older v1 claims
               (the "outcome" row is then the expected-stall-count grade), null when the publish has no "outcome" row.
               The page must only call a rank grade "still in top 20 after the horizon" when outcome_kind is "rank".
-              timeline: cumulative counts by event time [{t, step, rank_ok, rank_off, truth_hit, truth_false_alarm}],
+              timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
               [{start_step, end_step (null = open), robot, cell [x, y], cause, resolution, left_censored}]. Only the
@@ -299,7 +299,7 @@ def build_grades(st, run, zone, publishes, t0_ts, step_seconds=STEP_SECONDS):
     per_publish = []
     for p in publishes:
         mine = [d for d in decs if d["decided_at"] == p["t"]]
-        rank, count, truth = dict(ok=0, off=0), dict(ok=0, off=0), dict(hit=0, false_alarm=0)
+        outcome, count, truth = dict(ok=0, off=0), dict(ok=0, off=0), dict(hit=0, false_alarm=0)
         n_open = unranked = 0
         kinds = set()
         for d in mine:
@@ -307,8 +307,8 @@ def build_grades(st, run, zone, publishes, t0_ts, step_seconds=STEP_SECONDS):
             has_outcome = False
             for g in rows:
                 src, v = g["grade_source"], g["verdict"]
-                if src == "outcome" and v in rank:
-                    rank[v] += 1
+                if src == "outcome" and v in outcome:
+                    outcome[v] += 1
                     has_outcome = True
                     kinds.add("rank" if d.get("claim_version", 1) >= 2 and "top_k" in _claim(d) else "count")
                 elif src == "outcome_count" and v in count:
@@ -323,19 +323,19 @@ def build_grades(st, run, zone, publishes, t0_ts, step_seconds=STEP_SECONDS):
         ends = [g["window_end"] for d in mine for g in rows_by_id.get(d["id"], [])
                 if g["grade_source"] in ("outcome", "outcome_count") and g.get("window_end") is not None]
         end = max(ends) if ends else None
-        per_publish.append(dict(t=p["t"], forecasts=len(mine), rank=rank, count=count, truth=truth, open=n_open,
+        per_publish.append(dict(t=p["t"], forecasts=len(mine), outcome=outcome, outcome_count=count, truth=truth, open=n_open,
                                 unranked=unranked, outcome_kind=kind, window_end=end,
                                 window_end_step=None if end is None else (end - t0_ts) // step_seconds))
     events = {}
     for gid, rows in rows_by_id.items():
         for g in rows:
             t = g["window_end"] if g.get("window_end") is not None else by_id[gid]["decided_at"]
-            e = events.setdefault(t, dict(rank_ok=0, rank_off=0, truth_hit=0, truth_false_alarm=0))
-            key = {("outcome", "ok"): "rank_ok", ("outcome", "off"): "rank_off", ("truth", "hit"): "truth_hit",
+            e = events.setdefault(t, dict(outcome_ok=0, outcome_off=0, truth_hit=0, truth_false_alarm=0))
+            key = {("outcome", "ok"): "outcome_ok", ("outcome", "off"): "outcome_off", ("truth", "hit"): "truth_hit",
                    ("truth", "false_alarm"): "truth_false_alarm"}.get((g["grade_source"], g["verdict"]))
             if key:
                 e[key] += 1
-    timeline, cum = [], dict(rank_ok=0, rank_off=0, truth_hit=0, truth_false_alarm=0)
+    timeline, cum = [], dict(outcome_ok=0, outcome_off=0, truth_hit=0, truth_false_alarm=0)
     for t in sorted(events):
         for k in cum:
             cum[k] += events[t][k]

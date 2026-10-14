@@ -409,11 +409,11 @@ class TestGrades(Fixture):
         st = self.store()
         ids = {d["id"] for d in st.select("decisions", {"run": RUN})
                if d["kind"] == "hotspot_forecast" and d["subject"][:3] == "Z0:" and d["decided_at"] == t}
-        out = dict(rank_ok=0, rank_off=0, hit=0, false_alarm=0, count_ok=0, count_off=0)
+        out = dict(outcome_ok=0, outcome_off=0, hit=0, false_alarm=0, count_ok=0, count_off=0)
         for g in st.select("forecast_grades", {"run": RUN}):
             if g["id"] not in ids:
                 continue
-            key = {"outcome": "rank_", "outcome_count": "count_"}.get(g["grade_source"])
+            key = {"outcome": "outcome_", "outcome_count": "count_"}.get(g["grade_source"])
             if key:
                 out[key + g["verdict"]] += 1
             elif g["grade_source"] == "truth":
@@ -429,8 +429,8 @@ class TestGrades(Fixture):
             ids, want = self.recompute(p["t"])
             self.assertEqual(g["t"], p["t"])
             self.assertEqual(g["forecasts"], len(ids))
-            self.assertEqual(g["rank"], dict(ok=want["rank_ok"], off=want["rank_off"]))
-            self.assertEqual(g["count"], dict(ok=want["count_ok"], off=want["count_off"]))
+            self.assertEqual(g["outcome"], dict(ok=want["outcome_ok"], off=want["outcome_off"]))
+            self.assertEqual(g["outcome_count"], dict(ok=want["count_ok"], off=want["count_off"]))
             self.assertEqual(g["truth"], dict(hit=want["hit"], false_alarm=want["false_alarm"]))
             self.assertEqual(g["truth"]["hit"] + g["truth"]["false_alarm"], len(ids))
 
@@ -448,16 +448,16 @@ class TestGrades(Fixture):
         self.assertEqual((a["open"], b["open"]), (0, 0))
         self.assertEqual((a["outcome_kind"], b["outcome_kind"], c["outcome_kind"]), ("rank", "rank", None))
         self.assertEqual(c["open"], c["forecasts"])
-        self.assertEqual(c["rank"], dict(ok=0, off=0))
-        self.assertEqual(a["rank"]["ok"] + a["rank"]["off"], a["forecasts"])
+        self.assertEqual(c["outcome"], dict(ok=0, off=0))
+        self.assertEqual(a["outcome"]["ok"] + a["outcome"]["off"], a["forecasts"])
 
     def test_timeline_is_cumulative_and_ends_at_the_totals(self):
         tl = self.payload["grades"]["timeline"]
-        for key in ("rank_ok", "rank_off", "truth_hit", "truth_false_alarm"):
+        for key in ("outcome_ok", "outcome_off", "truth_hit", "truth_false_alarm"):
             vals = [e[key] for e in tl]
             self.assertEqual(vals, sorted(vals))
         per = self.payload["grades"]["per_publish"]
-        self.assertEqual(tl[-1]["rank_ok"], sum(g["rank"]["ok"] for g in per))
+        self.assertEqual(tl[-1]["outcome_ok"], sum(g["outcome"]["ok"] for g in per))
         self.assertEqual(tl[-1]["truth_hit"], sum(g["truth"]["hit"] for g in per))
         self.assertEqual([e["t"] for e in tl], sorted({e["t"] for e in tl}))
 

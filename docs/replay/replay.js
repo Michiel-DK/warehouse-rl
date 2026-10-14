@@ -263,8 +263,8 @@
       } else if (!outcomeKnown) {
         seg(b1, g.forecasts, g.forecasts, 'var(--open)', 'pending until ' + clock(g.window_end_step));
       } else {
-        seg(b1, g.rank.ok, g.forecasts, 'var(--ok)', isRank ? 'still in top 20 after the horizon' : 'stall count about as claimed');
-        seg(b1, g.rank.off, g.forecasts, 'var(--off)', isRank ? 'dropped out' : 'stall count off');
+        seg(b1, g.outcome.ok, g.forecasts, 'var(--ok)', isRank ? 'still in top 20 after the horizon' : 'stall count about as claimed');
+        seg(b1, g.outcome.off, g.forecasts, 'var(--off)', isRank ? 'dropped out' : 'stall count off');
         seg(b1, g.open, g.forecasts, 'var(--open)', 'open');
       }
       r1.appendChild(b1); box.appendChild(r1);
@@ -278,8 +278,8 @@
       t.style.fontSize = '12.5px';
       var parts = [];
       if (outcomeKnown) {
-        parts.push(isRank ? g.rank.ok + ' still in top 20 after the horizon, ' + g.rank.off + ' dropped out'
-                          : g.rank.ok + ' stall count about as claimed, ' + g.rank.off + ' off (older count grade)');
+        parts.push(isRank ? g.outcome.ok + ' still in top 20 after the horizon, ' + g.outcome.off + ' dropped out'
+                          : g.outcome.ok + ' stall count about as claimed, ' + g.outcome.off + ' off (older count grade)');
       } else if (g.window_end_step === null) {
         parts.push(g.open + ' open: the horizon ends after the stream');
       } else {
