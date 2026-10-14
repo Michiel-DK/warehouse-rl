@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import numpy as np
 
-from tarware.definitions import AgentType
+from tarware.definitions import AgentType, CollisionLayers
 from tarware.warehouse import Warehouse
 
 from warehouse_rl import disturb as dz
@@ -175,16 +175,66 @@ class TestWeightedRouting(unittest.TestCase):
             self._set(c, E - 1)
             self.assertIn(c, e.find_path(start, goal, self.agv, care_for_agents=False))
 
-    def test_weights_never_open_inf_cells(self):
-        # a map cell that is a wall (shelf) stays inf: the weighted path may never walk through a shelf cell
+    # Cells that are inf on the BINARY grid keep the weighted grid's `if grid[wy, wx] == 1:` guard honest. A cost is never
+    # non-finite (validate_cost_map rejects it at construction, so the guard is the only thing standing between a costed
+    # wall and a finite weight). Each test below costs wall cells with a tiny alpha (weight ~1.001: if the guard let it
+    # through, the wall would become the cheapest shortcut) on a query where such a shortcut exists, then asserts the
+    # returned path is non-empty and never enters those cells. Mutation proof: with the guard replaced by `if True:`
+    # every one of these fails (see the PR body).
+    TINY = 0.001
+
+    def _cost_walls(self, cells):
         e = self.e
-        shelf_cells = [(int(x), int(y)) for y, x in np.argwhere(e.highways == 0)]
-        start, goal, c, plain, detour, E = self._query()
-        e._cost_map_arg = {s: 1.0 for s in shelf_cells[:20]}
-        e.cost_alpha = 4.0
+        e._cost_map_arg, e.cost_alpha = {c: 1.0 for c in cells}, self.TINY
         e._set_active_map()
-        got = e.find_path(start, goal, self.agv, care_for_agents=False)
-        self.assertEqual(got, plain)
+        self.assertTrue(e._weights)  # an active map
+
+    def test_non_finite_costs_are_rejected_not_weighted(self):
+        for bad in (float("inf"), float("nan")):
+            with self.assertRaises(ValueError):
+                WarehouseEnv(SMALL, max_steps=5, disturb={}, cost_map={(1, 1): bad})
+
+    def test_costed_rack_cells_stay_walls_for_a_picker(self):
+        e = self.e
+        picker = agent_of(e, "picker")
+        rack = {(int(x), int(y)) for y, x in np.argwhere(e.highways == 0)}
+        hw = free_cells(e)
+        self._cost_walls(rack)
+        rng = np.random.default_rng(0)
+        shortcuts = 0
+        for _ in range(300):
+            a, b = (hw[i] for i in rng.choice(len(hw), 2, replace=False))
+            path = e.find_path((a[1], a[0]), (b[1], b[0]), picker, care_for_agents=False)
+            if not Warehouse.find_path(e, (a[1], a[0]), (b[1], b[0]), picker, False):
+                continue  # unroutable even without a map (e.g. the picker's bottom row is a wall)
+            self.assertTrue(path, (a, b))  # still routable through the highways
+            self.assertFalse(rack & set(path), (a, b))
+            if len(path) > abs(a[0] - b[0]) + abs(a[1] - b[1]):  # a straight shortcut through the racks existed
+                shortcuts += 1
+        self.assertGreater(shortcuts, 20)  # non-vacuous: the racks really were tempting
+
+    def test_costed_active_obstacle_cell_stays_a_wall(self):
+        start, goal, c, plain, detour, E = self._query()
+        e = self.e
+        self._cost_walls({c})
+        with mock.patch.object(type(e), "_obstacles_now", return_value=frozenset({c})):
+            path = e.find_path(start, goal, self.agv, care_for_agents=False)
+        self.assertTrue(path)
+        self.assertNotIn(c, path)
+        self.assertIn(c, plain)  # the cell was on the unobstructed route: blocking it mattered
+
+    def test_costed_cell_under_another_agent_stays_a_wall_with_care_for_agents(self):
+        start, goal, c, plain, detour, E = self._query()
+        e = self.e
+        self._cost_walls({c})
+        layer = e.grid[CollisionLayers.AGVS]
+        layer[c[1], c[0]] = 1  # another AGV stands on c
+        try:
+            path = e.find_path(start, goal, self.agv, care_for_agents=True)
+        finally:
+            layer[c[1], c[0]] = 0
+        self.assertTrue(path)
+        self.assertNotIn(c, path)
 
     def test_start_on_a_map_cell_is_trimmed_like_the_plain_path(self):
         start, goal, c, plain, detour, E = self._query()

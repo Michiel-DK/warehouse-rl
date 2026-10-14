@@ -261,7 +261,7 @@ def _check_same_config(path, doc, tag, config):
 def _check_same_costmap(path, doc, cm_header):
     """cm_header = {} without a map flag; a file written without the fields stores None for both."""
     want = cm_header or {}
-    for k in ("costmap", "costmap_alpha"):
+    for k in ("costmap", "costmap_alpha", "costmap_seed_base"):
         if doc.get(k) != want.get(k):
             raise ValueError(f"{path} stores {k} {doc.get(k)!r}, requested {want.get(k)!r}; refusing to merge")
 
@@ -322,14 +322,15 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
             raise ValueError(f"--costmap-alpha must be a finite number >= 0, got {cm_alpha!r}")
         if costmap_oracle:
             cm_suffix = "_cm-oracle"
-            cm_header = dict(costmap="oracle", costmap_alpha=float(cm_alpha), costmap_generated_at=None)
+            cm_header = dict(costmap="oracle", costmap_alpha=float(cm_alpha), costmap_generated_at=None,
+                             costmap_seed_base=None)  # the oracle has no zones, so no seed base
         else:
             cm_tag, generated_at, zones = _load_costmap(costmap)
             for sd in seeds:  # fail before anything runs
                 _cost_map_for_seed(zones, sd, cm_base)
             cm_suffix = f"_cm-{cm_tag}"
             cm_header = dict(costmap=f"{cm_tag}:{costmap}", costmap_alpha=float(cm_alpha),
-                             costmap_generated_at=generated_at)
+                             costmap_generated_at=generated_at, costmap_seed_base=cm_base)
 
     rec_tag = rec_config = None
     if recovery is not None:

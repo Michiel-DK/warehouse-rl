@@ -283,14 +283,34 @@ class TestCostMapFlags(unittest.TestCase):
         self.assertEqual(f.name, base_file.name[:-len(".json")] + f"_cm-{self.sha10}.json")
         self.assertEqual(doc["costmap"], f"{self.sha10}:{self.cm}")
         self.assertEqual((doc["costmap_alpha"], doc["costmap_generated_at"]), (3.0, "2026-10-14T10:00:00Z"))
+        self.assertEqual(doc["costmap_seed_base"], 0)  # omitted flag = effective base 0
         d, _ = self._run("or", costmap_oracle=True)
         f, doc = self._only_doc(d)
         self.assertEqual(f.name, base_file.name[:-len(".json")] + "_cm-oracle.json")
         self.assertEqual(doc["costmap"], "oracle")
         self.assertEqual((doc["costmap_alpha"], doc["costmap_generated_at"]), (4.0, None))
+        self.assertIsNone(doc["costmap_seed_base"])  # the oracle has no zones, hence no base
         # recovery runs: the name is the recovery name plus the suffix
         d, _ = self._run("rec", policy="stuck_aware_cta", recovery="timeout", costmap_oracle=True)
         self.assertTrue(self._only_doc(d)[0].name.endswith("_timeout_cm-oracle.json"))
+
+    def test_seed_base_is_part_of_the_identity(self):  # inject: leave costmap_seed_base out of the header / the check
+        seeds = (1, 2)  # base 0 -> zones 1, 2; base 1 -> zones 0, 1: different routing for the same seeds
+        d, _ = self._run("sb", seeds=seeds, costmap=str(self.cm))
+        _, doc = self._only_doc(d)
+        self.assertEqual(doc["costmap_seed_base"], 0)
+        with mock.patch.object(ev.mp, "Pool", _InProcessPool):
+            # an explicit 0 is the same identity as the omitted flag: resumes
+            ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(self.cm), costmap_seed_base=0)
+            with self.assertRaises(ValueError):
+                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(self.cm), costmap_seed_base=5)
+            with self.assertRaises(ValueError):
+                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(self.cm), costmap_seed_base=1)
+        # base 5 into its own dir records 5 (seeds 5, 6 -> zones 0, 1)
+        d5, _ = self._run("sb5", seeds=(5, 6), costmap=str(self.cm), costmap_seed_base=5)
+        self.assertEqual(self._only_doc(d5)[1]["costmap_seed_base"], 5)
+        # the stored rows were not touched by the refused runs
+        self.assertEqual([r["seed"] for r in self._only_doc(d)[1]["rows"]], list(seeds))
 
     def test_undisturbed_rows_unchanged(self):
         d, _ = self._run("u", disturb="none")
