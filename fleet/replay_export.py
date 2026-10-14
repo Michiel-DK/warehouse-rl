@@ -54,7 +54,8 @@ Payload (every key is always present unless marked optional):
               joins to a decisions row of kind hotspot_forecast, subject prefix "Z<zone>:" and decided_at == t. Keys:
               t, forecasts, rank {ok, off} (grade_source "outcome"), count {ok, off} (grade_source "outcome_count"),
               truth {hit, false_alarm} (grade_source "truth"), open (forecasts with no "outcome" row whose decision is
-              still open), unranked (decisions stamped verdict "unranked"), outcome_kind. The source names are kept.
+              still open), unranked (decisions stamped verdict "unranked"), outcome_kind, window_end (+ _step): the
+              latest window_end of the publish's outcome rows, null without any (the time the outcome grades exist). The source names are kept.
               outcome_kind says what the "outcome" rows of that publish mean: "rank" when their decisions carry a v2 claim
               (top_k present: ok = the cell is still in the zone's top K at window_end), "count" for older v1 claims
               (the "outcome" row is then the expected-stall-count grade), null when the publish has no "outcome" row.
@@ -319,8 +320,12 @@ def build_grades(st, run, zone, publishes, t0_ts, step_seconds=STEP_SECONDS):
             if d.get("verdict") == "unranked":
                 unranked += 1
         kind = None if not kinds else (next(iter(kinds)) if len(kinds) == 1 else "mixed")
+        ends = [g["window_end"] for d in mine for g in rows_by_id.get(d["id"], [])
+                if g["grade_source"] in ("outcome", "outcome_count") and g.get("window_end") is not None]
+        end = max(ends) if ends else None
         per_publish.append(dict(t=p["t"], forecasts=len(mine), rank=rank, count=count, truth=truth, open=n_open,
-                                unranked=unranked, outcome_kind=kind))
+                                unranked=unranked, outcome_kind=kind, window_end=end,
+                                window_end_step=None if end is None else (end - t0_ts) // step_seconds))
     events = {}
     for gid, rows in rows_by_id.items():
         for g in rows:
