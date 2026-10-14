@@ -443,7 +443,7 @@ WITH_MAP_NOTE = ("Re-simulation of this zone's seed with the cost-aware router. 
 
 
 # ------------------------------------------------------------------------------------------------ assembly
-def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=run_env_worker, log=print,
+def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, log=print,
                   run_dir_arg=None, closed_loop_arg=None):
     zone = str(zone)
     run_dir = Path(run_dir)
@@ -483,7 +483,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=run_en
     if closed_loop and wm is None:
         closed_loop = None
     job = dict(env_id=truth["env_id"], steps=steps, seed=seed, zone=zone, run=wm[0] if wm else None)
-    env = env_runner(job)
+    env = (env_runner or run_env_worker)(job)
     grid = env["grid"]
     robots = [dict(serial=s, kind=k) for s, k in sorted(env["kinds"].items())]
 
