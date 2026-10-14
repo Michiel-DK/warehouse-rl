@@ -34,7 +34,8 @@ SMOKE_BATCH = dict(zones=2, steps=300)
 SMOKE_LIVE = dict(zones=2, seconds=60)
 PROBE = dict(zones=1, steps=200)
 MAX_ESTIMATE_BYTES = 6_000_000_000  # abort before emitting when the uncompressed estimate is above this
-DATA_CAP_BYTES = 8_000_000_000  # fleet/data must stay under this (the fleet_* Docker volumes: `fleet/compose.sh status`)
+DATA_CAP_BYTES = 8_000_000_000  # files under fleet/data must stay under this; the preflight does NOT count the fleet_*
+# Docker volumes (they live in Docker's disk image since S5C2 pass 3): check those by hand with `fleet/compose.sh status`
 DISK_FACTOR = 3  # free disk must be at least this many times the uncompressed estimate
 PIP_LINE = "pip install -r fleet/requirements.txt"
 
