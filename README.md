@@ -439,7 +439,7 @@ Action mix of those checkpoints with `scripts/evaluate.py --recovery learned:` o
 
 After 40 episodes the greedy net still reroutes at almost every stuck event under both rewards. 40 episodes at epsilon 0.98 was too early to judge. The one-run pilot (3200 episodes, with the abort grace) decided: it aborted at episode 1600 with greedy eval 0.0 (see "Learned recovery: kill criterion hit" above), and the retrain was dropped.
 
-## Sprint 5: fleet stuck analyser (in progress)
+## Sprint 5: fleet stuck analyser (Stage 1 measured 2026-10-14)
 
 `fleet/emit.py` turns simulated medium-map episodes into a synthetic fleet log: one VDA 5050-shaped state message per robot per step, written to gzip JSONL files (or Kafka behind a flag) together with an `emit_ledger.json` that counts exactly what was emitted. The simulator's stuck, recovery and clash ground truth sits only in each message's `custom` block. The message contract and field semantics are in the "Sprint 5 / S5A" note of [docs/SCOPE.md](docs/SCOPE.md). Output goes under `fleet/data/` (not committed).
 
@@ -450,6 +450,69 @@ After 40 episodes the greedy net still reroutes at almost every stuck event unde
 After an ingest, `fleet/grade.py --run NAME --once` grades the analyser's decisions against what happened next, `fleet/score.py --run NAME --glob 'fleet/data/NAME/*.jsonl.gz'` scores the detected episodes against the simulator's ground truth (the one place that reads the `custom` block) and writes `score.json`, `fleet/report.py --run NAME` writes `report.md` and a hotspot heatmap, and `fleet/alert.py --run NAME` prints a line per new stuck episode while an ingest runs. `fleet/ledger.py status` now counts only countable episodes and adds a per-kind grade rollup. Definitions, the truth rule and the grade rules are in the "Sprint 5 / S5C1" note of [docs/SCOPE.md](docs/SCOPE.md).
 
 The report sections also exist as ClickHouse queries under `fleet/sql/reports/` (one file per section, parameterised by the run) and as a provisioned Grafana dashboard (`fleet/grafana/dashboard.json`, loaded when the stack starts, with rows for the integration, the simulation and the results). `fleet/fleet_analyser/bench.py` loads a benchmark JSON and a score JSON into the `results` table. `fleet/score.py --source kafka` scores straight from the topic. `fleet/benchmark.py` runs the batch and live benchmark on the host (the simulator never runs in a container); `--smoke` is the quick version and writes to a temporary file. The definitions are in the "Sprint 5 / S5C2" note of [docs/SCOPE.md](docs/SCOPE.md); the real run is a scheduler queue item and its numbers come from the results JSON it writes.
+
+### Sprint 5 results: benchmark (2026-10-14)
+
+Every number below comes from `results/fleet/benchmark.json` (git sha 56dc46c, written by `fleet/benchmark.py`) or the run files copied next to it under `results/fleet/s5_benchmark/{batch,live}/` (`score.json`, `report.md`, `ingest_ledger.json`, `emit_ledger.json`, `hotspots.png`). The two `score.json` files are identical to the `score` blocks inside `benchmark.json`. Platform: `macOS-14.3.1-arm64`. The simulator ran on the Mac host and only Redpanda, ClickHouse and Grafana ran in Docker, because the vendored A* breaks ties differently on Linux ([docs/PLATFORM.md](docs/PLATFORM.md)).
+
+**What it is.** This is a plugin that reads a robot fleet's state logs as they arrive. It finds stuck episodes and names a likely cause. It keeps two ledgers: a volume ledger (what was retrieved and kept) and a decision ledger (every call, graded later against what happened). Think of it as a flight recorder that also writes its own incident reports and later checks whether they were right.
+
+```
+fleet/emit.py (simulator, host)        fleet/ingest.py (same pipeline for both sources)
+  zone files *.jsonl.gz ---- poll ---> parse -> validate -> per-robot state machine -> ClickHouse
+  Kafka topic fleet.state -- consume ->                                                 transitions, stuck_episodes,
+  emit_ledger.json (denominator)                                                        decisions, ingest_ledger, rejects
+                                     fleet/grade.py, score.py, report.py, alert.py <--- ClickHouse ---> Grafana dashboard
+```
+
+**Batch (files from cold).** 8 zones x 12 robots (96 robots) x 72,000 steps, so 100 simulated hours per zone. That is 6,912,000 messages, 3.42 GB uncompressed and 46.7 MB gzip (`emit_ledger.json`), with the `breakdown-heavy` preset under the timeout rule.
+
+| | value |
+|---|---|
+| emit wall time | 315 s |
+| ingest wall time | 2,478 s (41 min) |
+| ingest throughput | 2,789 msgs/s, 0.083 GB/min uncompressed (0.0011 GB/min compressed) |
+| coverage (accepted / expected from the emit ledger) | 1.0 |
+| rejects, duplicates, sequence gaps (`ingest_ledger.json`, 46 minute rows) | 0, 0, 0 |
+| bytes kept / read (retention policy) | 0.70 / 3.42 GB = 20.5% |
+
+**Live (Kafka, real time).** The emitter ran at `--speed 1` into Redpanda for 601 s with the ingester on. The feed was 11,520 messages = 19.2 msgs/s, which is the real-time rate of 96 robots at one message per 5 s. This shows the ingester kept up with that feed. It is not a capacity number; the capacity number is the batch one.
+
+| | value |
+|---|---|
+| coverage | 1.0 |
+| lag, wall clock at parse minus message time | p50 2.6 s, p99 5.2 s |
+| alert latency from the moment the detector could know (`t_entry`) | p50 8.5 s, p99 9.7 s |
+| alert latency from the episode start | p50 38.5 s, p99 39.7 s (30 s of this is the `stuck_after` definition itself) |
+| bytes kept / read | 47% (the raw evidence block around each decision weighs more in a short run) |
+
+**Scoring against the simulator's ground truth** (`score.json`; the truth rule and the matching are in the "Sprint 5 / S5C1" note of [docs/SCOPE.md](docs/SCOPE.md)):
+
+| | batch | live |
+|---|---|---|
+| truth episodes | 5,103 | 16 |
+| detected (countable, excluding `faulted_self`) | 16,506 | 93 |
+| matched | 3,561 | 16 |
+| recall | 0.698 | 1.0 (n = 16) |
+| precision | 0.216 | 0.172 |
+| unmatched detected: stopped by design / robot frozen inside / short truth run | 5,600 / 7,246 / 99 | 51 / 26 / 0 |
+| resolution agreement (`order_dropped` vs simulator abandon) | 0.981 | 1.0 |
+| cause agreement with a proximity proxy | 0.907 | 0.938 |
+
+Low precision is mostly a definition gap, not noise. The detector flags every robot that is stopped with an order for 30 s or more. Ground truth counts only stops that the simulator itself flags as stuck. Batch precision with the two named split classes taken out of the denominator: 3,561 / (16,506 - 5,600) = 0.33 without `by_design`, and 3,561 / (16,506 - 5,600 - 7,246) = 0.97 without `frozen` too. Whether a robot waiting at a shelf for 30 s counts as "stuck" is a definition the client has to give us (open operator item). Cause agreement is **not cause accuracy**. The simulator does not expose which robot blocks which, so the score compares the detector's cause with a proximity proxy built from the same public data. Cause accuracy against real ground truth is not measured. A further 12,076 batch episodes are `faulted_self`, and in every one of them the robot is frozen at `t_entry`.
+
+**Decision ledger, batch** (`fleet/grade.py`, one pass after the ingest; the live run's grades were never run, so all of its decisions are still `open`). `stuck_cause`: 7,251 confirmed, 135 refuted, 21,196 inconclusive out of 28,582. Three in four are inconclusive by construction (`fleet/fleet_analyser/grade.py`). The 13,804 `traffic` and `unknown` claims have no grading rule. A `faulted_self` claim is confirmed only when the episode ends with `fault_cleared`. A blocked claim is confirmed only when the robot moved after its named blocker recovered. `avoidable_reset`: 1,821 calls, a reset happened in 1,406, not in 415. The report itself calls "avoidable" near-tautological at 5 s steps: it is every closed `blocked_by_faulted` episode. So these 1,821 are a count, not a finding.
+
+**Report excerpt** (`results/fleet/s5_benchmark/batch/report.md`, 28,582 countable episodes). Duration p50 270 s, p95 1,250 s. Stuck to resolution p50 240 s, p95 1,220 s. Cause mix: unknown 12,597, faulted_self 12,076, blocked_by_faulted 1,825, traffic 1,207, blocked_by_stuck 877. Resolution: order_dropped 15,843, fault_cleared 7,030, moved 5,650, unresolved 59. Top hotspot: zone 6 cell 7-15 with 63 episodes. The load is very uneven across zones under the same preset. Robots in zones 1, 4, 5 and 6 have 390 to 613 episodes each, zones 2 and 3 have 69 to 122, and zones 0 and 7 have 13 to 40. So the top-20 hotspot list comes entirely from zones 1, 4, 5 and 6. This is a seed effect that has not been investigated, and no reading is put on it here.
+
+**Prior art (13 Oct check).** Formant sells incident management for AMR/AGV fleets, with per-alarm context and trend analysis of recurring problems. InOrbit has a "time capsule" replay for root-cause analysis. Vendor fleet managers have avoid zones and cost maps. The dashboard here is not new. The parts this builds that are not on the shelf: a vendor-agnostic plugin that reads the files a client already has, the two ledgers (volume and graded decisions), and, in Sprint 8, a measured loop from hotspot map to router in a simulator where the ground truth is known.
+
+**Caveats.**
+- The logs are synthetic and clean: zero rejects, zero gaps and zero duplicates is what a simulator produces, not what a real fleet produces. Sprint 6 adds messy text and noise on purpose.
+- The parser expects the VDA 5050 state shape. A real client sample needs a mapping file (`fleet/mapping/<client>.yaml`) and the client's own definitions of "stuck" and "manual reset". Neither exists yet.
+- Simulator rules, not a real warehouse: no claim transfers to a real fleet.
+- The numbers are from one run on one laptop (10 cores, 16 GB), macOS-arm64 only.
+- The Grafana dashboard is provisioned, but the benchmark run took no screenshot, so none is shown here.
 
 ## Sprint 8, analyst half: floor imperfections and the hotspot map (2026-10-14)
 

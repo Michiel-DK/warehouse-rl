@@ -1,0 +1,64 @@
+{
+  "cause_proximity_agreement": {
+    "agreement": 0.9073294018534119,
+    "confusion": {
+      "blocked_by_faulted": {
+        "clash": 275,
+        "frozen_neighbour": 401,
+        "other": 0
+      },
+      "blocked_by_stuck": {
+        "clash": 83,
+        "frozen_neighbour": 5,
+        "other": 102
+      },
+      "traffic": {
+        "clash": 44,
+        "frozen_neighbour": 6,
+        "other": 270
+      },
+      "unknown": {
+        "clash": 21,
+        "frozen_neighbour": 23,
+        "other": 2331
+      }
+    },
+    "note": "Agreement with a proximity proxy, not ground truth about cause: the frozen state of a neighbour is public in the message, the simulator does not expose which robot blocks which, and a clash flag is a decision event of the simulator. traffic and blocked_by_stuck agree with clash or other, blocked_by_faulted with frozen_neighbour, unknown with other."
+  },
+  "detected_episodes": 16506,
+  "detected_excluded": {
+    "faulted_self": 12076,
+    "interrupted": 0,
+    "left_censored": 0,
+    "open": 0
+  },
+  "faulted_self": {
+    "count": 12076,
+    "frozen_at_entry": 1.0
+  },
+  "matched": 3561,
+  "precision": 0.21573973100690658,
+  "recall": 0.69782480893592,
+  "resolution_agreement": {
+    "agreement": 0.9806234203875316,
+    "table": {
+      "not_order_dropped": {
+        "abandon": 0,
+        "no_abandon": 1783
+      },
+      "order_dropped": {
+        "abandon": 1709,
+        "no_abandon": 69
+      }
+    }
+  },
+  "run": "bench-batch-20261014T133703",
+  "stuck_after": 30,
+  "truth_definition": "truth stuck step = robot message t (not the last) with driving false, orderId non-empty and errors empty whose next message has the simulator stuck flag; truth episode = maximal run of such steps of one robot and one orderId, start = ts of its first message, end = ts of the message after its last, kept when end - start >= stuck_after",
+  "truth_episodes": 5103,
+  "unmatched_detected": {
+    "by_design": 5600,
+    "frozen": 7246,
+    "short_truth": 99
+  }
+}

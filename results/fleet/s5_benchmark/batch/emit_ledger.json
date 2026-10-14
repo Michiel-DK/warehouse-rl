@@ -1,0 +1,439 @@
+{
+  "status": "complete",
+  "config": {
+    "env_id": "tarware-medium-8agvs-4pickers-globalobs-v1",
+    "steps": 72000,
+    "seed_base": 0,
+    "zones": 8,
+    "disturb_tag": "breakdown-heavy",
+    "disturb": {
+      "breakdown": {
+        "rate_per_hour": 8.0,
+        "duration": [
+          20,
+          60
+        ]
+      }
+    },
+    "recovery": {
+      "name": "timeout",
+      "call_human_cost": 60
+    },
+    "policy": "stuck_aware_cta",
+    "t0": "2026-10-14T12:37:06Z",
+    "t0_mode": "now",
+    "rate": "flat",
+    "speed": 1.0,
+    "sink": "file",
+    "rotate_bytes": 209715200,
+    "workers": 8,
+    "schema_version": "fleet-state/2"
+  },
+  "zones": [
+    {
+      "zone": 0,
+      "status": "complete",
+      "seed": 0,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 411703504,
+      "bytes_compressed": 4737449,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone0-000.jsonl.gz",
+          "bytes_uncompressed": 209715133,
+          "bytes_compressed": 2465113,
+          "messages": 438712,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T15:23:41Z",
+          "first_headerId": 0,
+          "last_headerId": 36559,
+          "closed": true
+        },
+        {
+          "name": "zone0-001.jsonl.gz",
+          "bytes_uncompressed": 201988371,
+          "bytes_compressed": 2272336,
+          "messages": 425288,
+          "first_timestamp": "2026-10-16T15:23:41Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 36559,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 1,
+      "status": "complete",
+      "seed": 1,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 444922496,
+      "bytes_compressed": 7138175,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone1-000.jsonl.gz",
+          "bytes_uncompressed": 209715017,
+          "bytes_compressed": 3351944,
+          "messages": 406858,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T11:42:26Z",
+          "first_headerId": 0,
+          "last_headerId": 33904,
+          "closed": true
+        },
+        {
+          "name": "zone1-001.jsonl.gz",
+          "bytes_uncompressed": 209714865,
+          "bytes_compressed": 3376971,
+          "messages": 407463,
+          "first_timestamp": "2026-10-16T11:42:26Z",
+          "last_timestamp": "2026-10-18T10:52:06Z",
+          "first_headerId": 33904,
+          "last_headerId": 67860,
+          "closed": true
+        },
+        {
+          "name": "zone1-002.jsonl.gz",
+          "bytes_uncompressed": 25492614,
+          "bytes_compressed": 409260,
+          "messages": 49679,
+          "first_timestamp": "2026-10-18T10:52:06Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 67860,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 2,
+      "status": "complete",
+      "seed": 2,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 413783852,
+      "bytes_compressed": 4825053,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone2-000.jsonl.gz",
+          "bytes_uncompressed": 209714935,
+          "bytes_compressed": 2656499,
+          "messages": 431503,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T14:33:36Z",
+          "first_headerId": 0,
+          "last_headerId": 35958,
+          "closed": true
+        },
+        {
+          "name": "zone2-001.jsonl.gz",
+          "bytes_uncompressed": 204068917,
+          "bytes_compressed": 2168554,
+          "messages": 432497,
+          "first_timestamp": "2026-10-16T14:33:36Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 35958,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 3,
+      "status": "complete",
+      "seed": 3,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 413599644,
+      "bytes_compressed": 4715077,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone3-000.jsonl.gz",
+          "bytes_uncompressed": 209714893,
+          "bytes_compressed": 2614909,
+          "messages": 431408,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T14:32:56Z",
+          "first_headerId": 0,
+          "last_headerId": 35950,
+          "closed": true
+        },
+        {
+          "name": "zone3-001.jsonl.gz",
+          "bytes_uncompressed": 203884751,
+          "bytes_compressed": 2100168,
+          "messages": 432592,
+          "first_timestamp": "2026-10-16T14:32:56Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 35950,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 4,
+      "status": "complete",
+      "seed": 4,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 443115659,
+      "bytes_compressed": 6980567,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone4-000.jsonl.gz",
+          "bytes_uncompressed": 209715039,
+          "bytes_compressed": 3396600,
+          "messages": 406993,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T11:43:26Z",
+          "first_headerId": 0,
+          "last_headerId": 33916,
+          "closed": true
+        },
+        {
+          "name": "zone4-001.jsonl.gz",
+          "bytes_uncompressed": 209715154,
+          "bytes_compressed": 3317262,
+          "messages": 407202,
+          "first_timestamp": "2026-10-16T11:43:26Z",
+          "last_timestamp": "2026-10-18T10:51:11Z",
+          "first_headerId": 33916,
+          "last_headerId": 67849,
+          "closed": true
+        },
+        {
+          "name": "zone4-002.jsonl.gz",
+          "bytes_uncompressed": 23685466,
+          "bytes_compressed": 266705,
+          "messages": 49805,
+          "first_timestamp": "2026-10-18T10:51:11Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 67849,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 5,
+      "status": "complete",
+      "seed": 5,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 444867689,
+      "bytes_compressed": 7102140,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone5-000.jsonl.gz",
+          "bytes_uncompressed": 209715160,
+          "bytes_compressed": 3341863,
+          "messages": 407358,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T11:45:56Z",
+          "first_headerId": 0,
+          "last_headerId": 33946,
+          "closed": true
+        },
+        {
+          "name": "zone5-001.jsonl.gz",
+          "bytes_uncompressed": 209714930,
+          "bytes_compressed": 3357050,
+          "messages": 406601,
+          "first_timestamp": "2026-10-16T11:45:56Z",
+          "last_timestamp": "2026-10-18T10:49:31Z",
+          "first_headerId": 33946,
+          "last_headerId": 67829,
+          "closed": true
+        },
+        {
+          "name": "zone5-002.jsonl.gz",
+          "bytes_uncompressed": 25437599,
+          "bytes_compressed": 403227,
+          "messages": 50041,
+          "first_timestamp": "2026-10-18T10:49:31Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 67829,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 6,
+      "status": "complete",
+      "seed": 6,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 446032473,
+      "bytes_compressed": 7232641,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone6-000.jsonl.gz",
+          "bytes_uncompressed": 209715041,
+          "bytes_compressed": 3421717,
+          "messages": 406052,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T11:36:51Z",
+          "first_headerId": 0,
+          "last_headerId": 33837,
+          "closed": true
+        },
+        {
+          "name": "zone6-001.jsonl.gz",
+          "bytes_uncompressed": 209714839,
+          "bytes_compressed": 3388072,
+          "messages": 406187,
+          "first_timestamp": "2026-10-16T11:36:51Z",
+          "last_timestamp": "2026-10-18T10:37:36Z",
+          "first_headerId": 33837,
+          "last_headerId": 67686,
+          "closed": true
+        },
+        {
+          "name": "zone6-002.jsonl.gz",
+          "bytes_uncompressed": 26602593,
+          "bytes_compressed": 422852,
+          "messages": 51761,
+          "first_timestamp": "2026-10-18T10:37:36Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 67686,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "zone": 7,
+      "status": "complete",
+      "seed": 7,
+      "messages": 864000,
+      "expected_messages": 864000,
+      "complete": true,
+      "bytes_uncompressed": 398295950,
+      "bytes_compressed": 3965106,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 72000,
+      "steps_done": 72000,
+      "first_timestamp": "2026-10-14T12:37:06Z",
+      "last_timestamp": "2026-10-18T16:37:01Z",
+      "files": [
+        {
+          "name": "zone7-000.jsonl.gz",
+          "bytes_uncompressed": 209714996,
+          "bytes_compressed": 2159676,
+          "messages": 452317,
+          "first_timestamp": "2026-10-14T12:37:06Z",
+          "last_timestamp": "2026-10-16T16:58:11Z",
+          "first_headerId": 0,
+          "last_headerId": 37693,
+          "closed": true
+        },
+        {
+          "name": "zone7-001.jsonl.gz",
+          "bytes_uncompressed": 188580954,
+          "bytes_compressed": 1805430,
+          "messages": 411683,
+          "first_timestamp": "2026-10-16T16:58:11Z",
+          "last_timestamp": "2026-10-18T16:37:01Z",
+          "first_headerId": 37693,
+          "last_headerId": 71999,
+          "closed": true
+        }
+      ]
+    }
+  ],
+  "total": {
+    "messages": 6912000,
+    "expected_messages": 6912000,
+    "complete": true,
+    "bytes_uncompressed": 3416321267,
+    "bytes_compressed": 46696208,
+    "delivered": null,
+    "delivery_failed": null,
+    "robots": 96,
+    "agvs": 64,
+    "pickers": 32,
+    "steps_done": 576000
+  },
+  "truth": {
+    "file": "truth.json",
+    "bytes": 4033088
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "cause_proximity_agreement": {
+    "agreement": 0.9375,
+    "confusion": {
+      "blocked_by_faulted": {
+        "clash": 0,
+        "frozen_neighbour": 1,
+        "other": 0
+      },
+      "blocked_by_stuck": {
+        "clash": 0,
+        "frozen_neighbour": 0,
+        "other": 0
+      },
+      "traffic": {
+        "clash": 1,
+        "frozen_neighbour": 0,
+        "other": 0
+      },
+      "unknown": {
+        "clash": 0,
+        "frozen_neighbour": 1,
+        "other": 13
+      }
+    },
+    "note": "Agreement with a proximity proxy, not ground truth about cause: the frozen state of a neighbour is public in the message, the simulator does not expose which robot blocks which, and a clash flag is a decision event of the simulator. traffic and blocked_by_stuck agree with clash or other, blocked_by_faulted with frozen_neighbour, unknown with other."
+  },
+  "detected_episodes": 93,
+  "detected_excluded": {
+    "faulted_self": 45,
+    "interrupted": 0,
+    "left_censored": 0,
+    "open": 0
+  },
+  "faulted_self": {
+    "count": 45,
+    "frozen_at_entry": 1.0
+  },
+  "matched": 16,
+  "precision": 0.17204301075268819,
+  "recall": 1.0,
+  "resolution_agreement": {
+    "agreement": 1.0,
+    "table": {
+      "not_order_dropped": {
+        "abandon": 0,
+        "no_abandon": 8
+      },
+      "order_dropped": {
+        "abandon": 8,
+        "no_abandon": 0
+      }
+    }
+  },
+  "run": "bench-live-20261014T133703",
+  "stuck_after": 30,
+  "truth_definition": "truth stuck step = robot message t (not the last) with driving false, orderId non-empty and errors empty whose next message has the simulator stuck flag; truth episode = maximal run of such steps of one robot and one orderId, start = ts of its first message, end = ts of the message after its last, kept when end - start >= stuck_after",
+  "truth_episodes": 16,
+  "unmatched_detected": {
+    "by_design": 51,
+    "frozen": 26,
+    "short_truth": 0
+  }
+}
