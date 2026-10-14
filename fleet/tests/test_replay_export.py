@@ -8,6 +8,7 @@ import copy
 import gzip
 import json
 import re
+import shutil
 import sys
 import tempfile
 import unittest
@@ -620,6 +621,19 @@ class TestExtractor(Fixture):
         with self.assertRaises(ValueError):
             rx.verify_check(totals, check)
         rx.verify_check(totals, None)
+
+    def test_export_raises_when_the_zone_file_no_longer_matches_its_checkpoint(self):
+        # the export itself must run the check: a zone file with one line more than the ingester saw is refused
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / "run"
+            shutil.copytree(self.dir, d)
+            path = d / "zone0-000.jsonl.gz"
+            with gzip.open(path, "rb") as f:
+                lines = f.read().splitlines(keepends=True)
+            write_gz(path, lines + [b"one line the ingester never read\n"])
+            with self.assertRaisesRegex(ValueError, "disagree with the ingest checkpoint"):
+                rx.build_payload(d, f"jsonl:{d / 'store'}", "0", env_runner=fake_env, run_dir_arg=str(d),
+                                 closed_loop_arg=None)
 
     def test_rejected_line_before_any_good_line_counts_at_step_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
