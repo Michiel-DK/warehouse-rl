@@ -210,6 +210,93 @@ class TestSchema(Fixture):
             self.assertEqual(len(s), 5)
         self.assertEqual(p["meta"]["source"], dict(run_dir=str(self.dir), store=self.spec, closed_loop=None))
 
+    def test_documented_keys_and_types_of_every_section(self):
+        p = self.payload
+        num = (int, float)
+        pp = p["grades"]["per_publish"]
+        self.assertEqual(len(pp), len(p["publishes"]))
+        for g in pp:
+            self.assert_shape(g, dict(t=int, forecasts=int, outcome=dict, outcome_count=dict, truth=dict, open=int, unranked=int,
+                                      outcome_kind=(str, type(None)), window_end=(int, type(None)),
+                                      window_end_step=(int, type(None))))
+            self.assertEqual(set(g["outcome"]), {"ok", "off"})
+            self.assertEqual(set(g["outcome_count"]), {"ok", "off"})
+            self.assertEqual(set(g["truth"]), {"hit", "false_alarm"})
+            self.assertIn(g["outcome_kind"], ("rank", "count", "mixed", None))
+        self.assertTrue(p["grades"]["timeline"])
+        for e in p["grades"]["timeline"]:
+            self.assert_shape(e, dict(t=int, step=int, outcome_ok=int, outcome_off=int, truth_hit=int, truth_false_alarm=int))
+        for pub in p["publishes"]:
+            self.assert_shape(pub, dict(t=int, step=int, cells=list, precision_at_20=num, hits_at_20=int, n_flagged=int))
+            for cell, cost, stalls in pub["cells"]:
+                self.assertIsInstance(cell, str)
+                self.assertIsInstance(cost, num)
+                self.assertIsInstance(stalls, int)
+        x = p["extractor"]
+        self.assertEqual(set(x), {"series", "totals", "check"})
+        series_keys = set(rx.SERIES_KEYS) | {"rejected_by_reason", "coverage"}
+        self.assertEqual(set(x["series"]), series_keys)
+        for k in rx.SERIES_KEYS:
+            self.assertEqual(len(x["series"][k]), STEPS, k)
+            self.assertTrue(all(isinstance(v, int) for v in x["series"][k]), k)
+        self.assertIsInstance(x["series"]["rejected_by_reason"], dict)
+        self.assertTrue(x["series"]["rejected_by_reason"])
+        for reason, vals in x["series"]["rejected_by_reason"].items():
+            self.assertIsInstance(reason, str)
+            self.assertEqual(len(vals), STEPS)
+            self.assertTrue(all(isinstance(v, int) for v in vals))
+        self.assertEqual(len(x["series"]["coverage"]), STEPS)
+        self.assertTrue(all(c is None or isinstance(c, num) for c in x["series"]["coverage"]))
+        self.assertEqual(set(x["totals"]), series_keys | {"expected_messages", "bytes_compressed"})
+        for k in rx.SERIES_KEYS + ("expected_messages", "bytes_compressed"):
+            self.assertIsInstance(x["totals"][k], int, k)
+        self.assertIsInstance(x["totals"]["rejected_by_reason"], dict)
+        self.assertIsInstance(x["totals"]["coverage"], num)
+        self.assertEqual(set(x["check"]), set(rx.CHECK_KEYS))
+        self.assertTrue(all(isinstance(v, int) for v in x["check"].values()))
+        self.assertTrue(p["obstacles"])
+        for o in p["obstacles"]:
+            self.assert_shape(o, dict(kind=str, cell=str, p=num, hidden_from_analyser=bool))
+            self.assertEqual(o["kind"], "floor")
+        for r in p["robots"]:
+            self.assert_shape(r, dict(serial=str, kind=str))
+        for e in p["episodes"]:
+            self.assert_shape(e, dict(start_step=int, end_step=(int, type(None)), robot=str, cell=list, cause=str,
+                                      resolution=str, left_censored=bool))
+        for s_ in p["stalls"]:
+            robot, cell, a, b, counted = s_
+            self.assertIsInstance(robot, str)
+            self.assertIsInstance(a, int)
+            self.assertIsInstance(b, int)
+            self.assertIsInstance(counted, bool)
+
+    def assert_shape(self, d, shape):
+        self.assertEqual(set(d), set(shape))
+        for k, typ in shape.items():
+            self.assertIsInstance(d[k], typ, k)
+            if typ is int:
+                self.assertNotIsInstance(d[k], bool, k)
+
+    def test_with_map_keys_and_types(self):
+        def env(job):
+            return dict(fake_env(job), lines=[ln for s, ln in zone0_lines()], deliveries=7, pick_rate=5.04)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "cl"
+            (base / "phaseA").mkdir(parents=True)
+            (base / "phaseA" / "costmap.json").write_text(json.dumps(
+                dict(run="p", generated_at="2026-01-01T00:41:35Z", zones={"0": {"3,2": 1.0}})))
+            (base / "summary.json").write_text(json.dumps(dict(headline_arm="a", arms={"a": {"alpha": 4.0}})))
+            p = rx.build_payload(self.dir, self.spec, "0", str(base), env_runner=env, closed_loop_arg=str(base))
+        wm = p["with_map"]
+        self.assert_shape(wm, dict(arm=str, alpha=float, map_path=str, map_generated_at=str, map_tag=(str, type(None)),
+                                   deliveries=int, pick_rate=float, frames=list, episodes=list, note=str))
+        self.assertEqual(len(wm["frames"]), STEPS)
+        self.assertTrue(wm["episodes"])
+        for e in wm["episodes"]:
+            self.assert_shape(e, dict(start_step=int, end_step=(int, type(None)), robot=str, cell=list, cause=str,
+                                      resolution=str, left_censored=bool))
+
     def test_obstacles_are_the_zones_hidden_floor_cells(self):
         obs = self.payload["obstacles"]
         self.assertEqual({o["cell"]: o["p"] for o in obs}, FLOOR["0"])
@@ -434,14 +521,26 @@ class TestGrades(Fixture):
             self.assertEqual(g["truth"], dict(hit=want["hit"], false_alarm=want["false_alarm"]))
             self.assertEqual(g["truth"]["hit"] + g["truth"]["false_alarm"], len(ids))
 
-    def test_the_other_zone_is_not_counted(self):
+    def recompute_all(self, publish_ts, zones):
+        """Per publish t: truth grades of hotspot_forecast decisions whose subject is in `zones`, from the raw store."""
         st = self.store()
-        both = {}
-        for g in st.select("forecast_grades", {"run": RUN}):
-            if g["grade_source"] == "truth":
-                both[g["verdict"]] = both.get(g["verdict"], 0) + 1
-        ours = sum(g["truth"]["hit"] + g["truth"]["false_alarm"] for g in self.payload["grades"]["per_publish"])
-        self.assertLess(ours, sum(both.values()))
+        decs = [d for d in st.select("decisions", {"run": RUN}) if d["kind"] == "hotspot_forecast"
+                and d["subject"].split(":")[0] in zones]
+        out = []
+        for t in publish_ts:
+            ids = {d["id"] for d in decs if d["decided_at"] == t}
+            out.append(sum(1 for g in st.select("forecast_grades", {"run": RUN})
+                           if g["id"] in ids and g["grade_source"] == "truth"))
+        return out
+
+    def test_the_other_zone_is_not_counted(self):
+        ts = [p["t"] for p in self.payload["publishes"]]
+        ours = [g["truth"]["hit"] + g["truth"]["false_alarm"] for g in self.payload["grades"]["per_publish"]]
+        self.assertEqual(ours, self.recompute_all(ts, {"Z0"}))
+        with_z1 = self.recompute_all(ts, {"Z0", "Z1"})
+        self.assertNotEqual(ours, with_z1)  # negative control: counting zone 1 as well would change the numbers
+        self.assertTrue(all(a <= b for a, b in zip(ours, with_z1)))
+        self.assertGreater(sum(with_z1), sum(ours))
 
     def test_open_forecasts_and_outcome_kind(self):
         a, b, c = self.payload["grades"]["per_publish"]
@@ -559,11 +658,18 @@ class TestWithMap(Fixture):
         self.assertEqual((wm["arm"], wm["alpha"], wm["deliveries"]), ("map_a4", 4.0, 7))
         self.assertEqual(wm["map_path"], str(cl) + "/phaseA/costmap.json")
         self.assertEqual(wm["map_generated_at"], "2026-01-01T00:41:35Z")
-        self.assertIn("FINAL phaseA map", wm["note"])
+        self.assertIn("final map from this same run", wm["note"])
         self.assertIn("in-sample", wm["note"])
         self.assertEqual(len(wm["frames"]), STEPS)
         self.assertTrue(all(len(f) == 4 for f in wm["frames"]))
-        self.assertNotIn("stuck", {e[2] for f in wm["frames"] for e in f})  # no detector episodes for this layer
+        # the detector runs over the layer's own messages: the same stuck AGV as in the main layer shows as stuck
+        self.assertEqual(wm["frames"][20][0], p["frames"][20][0])
+        self.assertEqual(wm["frames"][20][0][2], "stuck")
+        self.assertEqual(wm["frames"], p["frames"])  # the stand-in stream is zone 0's own, so the layers must agree
+        self.assertEqual(wm["episodes"], p["episodes"])
+        self.assertNotIn("stuck never occurs", wm["note"])
+        self.assertIn("in-sample", wm["note"])
+        self.assertIn("not learned live", wm["note"])
         self.assertEqual(seen["run"]["cost_alpha"], 4.0)
         self.assertEqual(seen["run"]["cost_map"], {(3, 2): 1.0, (4, 2): 0.5})
         self.assertEqual((seen["run"]["seed"], seen["run"]["policy"]), (0, "stuck_aware_cta"))
@@ -580,6 +686,39 @@ class TestWithMap(Fixture):
             cl = self.closed_loop(tmp, map_tag="0000000000")
             with self.assertRaises(ValueError):
                 rx.build_payload(self.dir, self.spec, "0", str(cl), env_runner=fake_env)
+
+
+class TestDeriveLayer(unittest.TestCase):
+    """The with_map-style derivation (detector over the layer's own messages), exercised without an env."""
+
+    ROBOTS = [dict(serial="Z0-01", kind="agv")]
+
+    def standing(self, n):
+        # one robot with an order, not driving, at (1, 1), for n messages 5 s apart
+        return [message(header_id=i, ts=BASE + 5 * i, order_id="o") for i in range(n)]
+
+    def test_a_robot_standing_with_an_order_longer_than_stuck_after_is_stuck(self):
+        n = rx.detector.DEFAULT_STUCK_AFTER // 5 + 6
+        frames, rows, stalls = rx.derive_layer(self.standing(n), self.ROBOTS, BASE, n, GRID, RUN)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["robot"], rows[0]["cell"]), ("Z0-01", [1, 1]))
+        states = [f[0][2] for f in frames]
+        self.assertEqual(states[-1], "stuck")
+        self.assertIn("stuck", states)
+        self.assertEqual(states[0], "stuck")  # an episode runs from the start of the stop, as in the store rows
+        eps = rx.build_episodes(rows, "0", BASE)
+        self.assertEqual((eps[0]["start_step"], eps[0]["resolution"]), (0, "unresolved"))
+
+    def test_a_short_wait_is_stalled_not_stuck(self):
+        n = rx.detector.DEFAULT_STUCK_AFTER // 5 - 2
+        msgs = [message(header_id=i, ts=BASE + 5 * i, order_id="o", next_x=2, next_y=1) for i in range(n)]
+        frames, rows, _ = rx.derive_layer(msgs, self.ROBOTS, BASE, n, GRID, RUN)
+        self.assertEqual(rows, [])
+        self.assertNotIn("stuck", {f[0][2] for f in frames})
+
+    def test_default_stuck_after_is_the_ingest_default(self):
+        from fleet_analyser import ingest
+        self.assertIs(ingest.DEFAULT_STUCK_AFTER, rx.detector.DEFAULT_STUCK_AFTER)
 
 
 class TestRealEnv(unittest.TestCase):
@@ -651,7 +790,9 @@ class TestCommittedData(unittest.TestCase):
         for key in rx.SERIES_KEYS:
             self.assertEqual(series[key][-1], data["extractor"]["totals"][key])
             self.assertEqual(series[key], sorted(series[key]))
+        self.assertEqual(data["grades"]["per_publish"][0]["outcome_kind"], "count")  # publish 1: the older count grade
         if "with_map" in data:
+            self.assertIn("episodes", data["with_map"])
             self.assertEqual(data["with_map"]["alpha"], 4.0)
             self.assertFalse(data["with_map"]["map_path"].startswith("/"))
 
@@ -671,7 +812,9 @@ class TestPageStatic(unittest.TestCase):
 
     def test_classic_scripts_data_first_and_no_network(self):
         scripts = re.findall(r"<script[^>]*>", self.html)
-        self.assertEqual([re.search(r'src="([^"]+)"', s).group(1) for s in scripts], ["data.js", "replay.js"])
+        external = [s for s in scripts if "src=" in s]
+        self.assertEqual([re.search(r'src="([^"]+)"', s).group(1) for s in external], ["data.js", "replay.js"])
+        self.assertEqual(len(scripts) - len(external), 1)  # the one inline theme script in <head>, before first paint
         self.assertFalse(any("module" in s for s in scripts))
         for text in (self.html, self.js, self.css):
             self.assertIsNone(re.search(r"https?://", text.replace("http://www.w3.org/2000/svg", "")))
@@ -683,6 +826,29 @@ class TestPageStatic(unittest.TestCase):
         self.assertIn("still in top 20 after the horizon", self.js)
         self.assertIn("Hidden floor problems: the analyser cannot see these", self.html + self.js)
         self.assertNotIn("rank hit", (self.html + self.js).lower())
+        for word in ("analyst", "AGV", "re-simulation", "ingester", "emit ledger"):
+            self.assertNotIn(word, self.html + self.js, word)
+
+    def test_rank_wording_lives_only_in_the_rank_branch(self):
+        phrase = "still in top 20 after the horizon"
+        self.assertEqual(self.js.count(phrase), 1)
+        before = self.js[:self.js.index(phrase)]
+        self.assertIn("kind === 'rank'", before.splitlines()[-1])  # same line as the rank test
+        self.assertNotIn(phrase, self.html)
+        self.assertIn("stall count about as claimed", self.js)
+
+    def test_polite_live_region_is_not_written_by_the_frame_loop(self):
+        draw = self.js[self.js.index("function draw()"):self.js.index("function setPlaying")]
+        self.assertNotIn("'live'", draw)
+
+    def test_keyboard_handler_leaves_controls_and_modifiers_alone(self):
+        h = self.js[self.js.index("addEventListener('keydown'"):]
+        for token in ("altKey", "ctrlKey", "metaKey", "'INPUT'", "'SELECT'", "'TEXTAREA'", "'BUTTON'"):
+            self.assertIn(token, h)
+
+    def test_dark_palette_is_declared_once(self):
+        self.assertEqual(self.css.count("--bg: #12151a"), 1)
+        self.assertNotIn("@media (prefers-color-scheme", self.css)
 
 
 if __name__ == "__main__":

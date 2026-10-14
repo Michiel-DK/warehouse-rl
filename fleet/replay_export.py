@@ -68,11 +68,12 @@ Payload (every key is always present unless marked optional):
   stalls      [[robot, cell, start_step, end_step, counted]] from hotspot.extract_stalls, counted = hotspot.counted() after
               annotate_episodes (the filter the cost map uses).
   with_map    OPTIONAL, only with --closed-loop DIR when DIR/summary.json names a headline_arm and DIR/phaseA/costmap.json
-              exists: {arm, alpha, map_path, map_generated_at, map_tag, deliveries, pick_rate, frames, note}. DIR holds
+              exists: {arm, alpha, map_path, map_generated_at, map_tag, deliveries, pick_rate, frames, episodes, note}. DIR holds
               per-seed aggregates only, so this layer RE-SIMULATES the zone's seed (same env, disturbance, recovery and
               policy, steps) with the cost-aware router and the FINAL phaseA map of this zone applied from step 0
-              (in-sample, not learned live). frames use the same derive_state(); episodes are not available for it, so
-              its "stuck" state never occurs and "stalled" comes from stall extraction only. Env numbers are
+              (in-sample, not learned live). Its episodes come from running fleet_analyser.detector.Detector (the ingest
+              default stuck_after) over the re-simulated messages (same row shape as the top-level episodes); frames use
+              the same derive_state() and stuck overlay as the main layer (derive_layer). Env numbers are
               platform-dependent (pyastar2d tie-breaks): only the layer's layout is stable across machines.
 """
 import argparse
@@ -92,7 +93,7 @@ for _p in (FLEET, REPO / "src", REPO / "scripts"):
         sys.path.insert(0, str(_p))
 
 import hotspot_score  # noqa: E402
-from fleet_analyser import emitter, hotspot, ledger, store as store_mod  # noqa: E402
+from fleet_analyser import detector, emitter, hotspot, ledger, store as store_mod  # noqa: E402
 from fleet_analyser.parse import epoch_of, parse_line  # noqa: E402
 
 SCHEMA = "replay/1"
@@ -442,9 +443,33 @@ def with_map_job(closed_loop, zone, run_cfg, log=print):
     return cfg, info
 
 
-WITH_MAP_NOTE = ("Re-simulation of this zone's seed with the cost-aware router. The map is the FINAL phaseA map, built from "
-                 "this same seed's episode, applied from step 0 (in-sample, not learned live). No detector episodes exist "
-                 "for this layer, so 'stuck' never occurs here and 'stalled' comes from stall extraction only.")
+WITH_MAP_NOTE = ("A second run of the same shift with the map switched on. The map is the final map from this same run, "
+                 "switched on from the start, so it is in-sample and was not learned live. Its stuck periods come from "
+                 "running the same detector on the messages of this second run.")
+
+
+def detect_episodes(messages, stuck_after=detector.DEFAULT_STUCK_AFTER):
+    """Run the ingest detector (default stuck_after) over parsed messages in ts order and return episode rows of the
+    shape store.select("stuck_episodes") gives (an episode_close replaces its episode_open, by episode_id)."""
+    det = detector.Detector(stuck_after=stuck_after)
+    rows = {}
+    events = []
+    for m in sorted(messages, key=lambda m: (m.ts, m.serial)):
+        events += det.feed(m)
+    events += det.end_all()
+    for ev in events:
+        if ev["kind"] in ("episode_open", "episode_close"):
+            rows[ev["episode_id"]] = {k: v for k, v in ev.items() if k not in ("kind", "decided_by")}
+    return list(rows.values())
+
+
+def derive_layer(messages, robots, t0_ts, steps, grid, run, stuck_after=detector.DEFAULT_STUCK_AFTER):
+    """(frames, episode_rows, stalls) of a layer that has no store: the same state function and stuck overlay as the
+    main layer, with the episodes found by running the detector on the layer's own messages."""
+    episode_rows = detect_episodes(messages, stuck_after)
+    stalls = hotspot.extract_stalls(messages, run)
+    hotspot.annotate_episodes(stalls, episode_rows)
+    return build_frames(messages, robots, t0_ts, steps, episode_rows, stalls, grid), episode_rows, stalls
 
 
 # ------------------------------------------------------------------------------------------------ assembly
@@ -518,12 +543,11 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
             if m is None:
                 raise ValueError(f"the with_map re-simulation emitted an unparsable line ({reason})")
             wm_msgs.append(m)
-        wm_stalls = hotspot.extract_stalls(wm_msgs, run)
-        wm_frames = build_frames(wm_msgs, robots, t0_ts, steps, [], wm_stalls, grid)
+        wm_frames, wm_rows, _ = derive_layer(wm_msgs, robots, t0_ts, steps, grid, run)
         payload["with_map"] = dict(arm=info["arm"], alpha=info["alpha"], map_path=info["map_path"],
                                    map_generated_at=info["map_generated_at"], map_tag=info["map_tag"],
                                    deliveries=env["deliveries"], pick_rate=round(env["pick_rate"], 2), frames=wm_frames,
-                                   note=WITH_MAP_NOTE)
+                                   episodes=build_episodes(wm_rows, zone, t0_ts), note=WITH_MAP_NOTE)
     return payload
 
 

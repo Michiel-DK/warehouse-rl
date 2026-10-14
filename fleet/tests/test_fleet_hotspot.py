@@ -1145,6 +1145,12 @@ class TestAnalystIsolation(unittest.TestCase):
                                     "alert.py", "replay_export.py")]
         return files
 
+    def test_no_analyser_module_imports_replay_export(self):
+        # replay_export.py is exempt from the truth scan above only because nothing in the analyser reads it back
+        for p in sorted((ROOT / "fleet" / "fleet_analyser").glob("*.py")):
+            self.assertNotRegex(p.read_text(), r"(?m)^\s*(from|import)\s+(\.*\s*)?replay_export\b|import\s+.*replay_export",
+                                p.name)
+
     def test_no_ground_truth_in_analyst_code(self):
         # inject: mention truth.json / floor_cells in costmap.py, hotspot.py or any new analyst module
         names = {p.name for p in self.analyst_files()}

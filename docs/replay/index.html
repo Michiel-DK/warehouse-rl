@@ -4,15 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fleet replay: one zone of a real run</title>
+<script>if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark');</script>
 <link rel="stylesheet" href="replay.css">
 </head>
 <body>
 <header class="head">
   <div>
     <h1>Fleet replay</h1>
-    <p class="sub" id="subtitle">One zone of a fleet run: the log passes an extractor, the analyst finds patterns, and the fleet builds a memory of the bad floor.</p>
+    <p class="sub" id="subtitle">One zone of a fleet run: the log goes through an extractor, the analyser looks for stuck robots, and a map remembers the bad floor.</p>
   </div>
-  <button type="button" id="theme" class="btn" aria-label="Switch between light and dark theme">Theme: auto</button>
+  <button type="button" id="theme" class="btn">Theme: auto</button>
 </header>
 
 <div id="nodata" class="notice" hidden>
@@ -23,7 +24,7 @@
 
 <main id="app" hidden>
   <section class="controls" aria-label="Playback controls">
-    <button type="button" id="play" class="btn primary" aria-label="Play">Play</button>
+    <button type="button" id="play" class="btn primary">Play</button>
     <label class="field">Speed
       <select id="speed">
         <option value="1">1x</option><option value="2">2x</option><option value="5">5x</option>
@@ -31,7 +32,7 @@
       </select>
     </label>
     <label class="field grow">Time
-      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub through the run, in steps">
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1">
     </label>
     <output id="clock" class="clock" aria-hidden="true">step 0</output>
     <fieldset id="routerBox" class="router" hidden>
@@ -40,7 +41,7 @@
       <label><input type="radio" name="router" value="with"> with map</label>
     </fieldset>
   </section>
-  <p class="hint">1x = 1 step (5 s of fleet time) per wall second. Space plays or pauses, the arrow keys step (Shift: 10 steps).</p>
+  <p class="hint">1x = 1 step (5 s of fleet time) per second. When focus is not on a control, Space plays or pauses and the arrow keys step (Shift: 10 steps).</p>
   <p class="mapnote" id="mapnote" hidden></p>
 
   <div class="grid">
@@ -51,8 +52,8 @@
       <p class="legend2"><span class="sw box"></span> Hidden floor problems: the analyser cannot see these
         <span class="sw shade"></span> cost map (darker = costlier)
         <span class="sw ring"></span> detector stuck episode
-        &nbsp;Circle = AGV, square = picker.</p>
-      <p class="cap">A stall is a robot with an order that tried to move and did not. Frozen means the robot reports an error (faulted).</p>
+        <span class="kinds">Circle = carrier robot, square = picker.</span></p>
+      <p class="cap">A stall is a robot with an order that tried to move and did not.</p>
       <p class="state" id="mapstate"></p>
     </section>
 
@@ -65,11 +66,11 @@
     </section>
 
     <section class="panel wide" aria-labelledby="h-ana">
-      <h2 id="h-ana">3. The analyst and the fleet memory</h2>
+      <h2 id="h-ana">3. The analyser and the fleet memory</h2>
       <div class="ana">
         <div>
-          <h3>Precision at 20, one point per cost-map publish</h3>
-          <canvas id="prec" role="img" aria-label="Precision at 20 per publish"></canvas>
+          <h3>Top-20 hit rate, one dot per published map</h3>
+          <canvas id="prec" role="img" aria-label="Top-20 hit rate per published map, one dot each; the values are listed in the graded calls"></canvas>
           <p class="state" id="precstate"></p>
           <h3>Top 10 cells of the latest map</h3>
           <ol class="toplist" id="top"></ol>
@@ -80,9 +81,10 @@
           <ul class="legend" id="glegend"></ul>
         </div>
       </div>
-      <p class="cap">The map is rules plus a decayed count of stalls per cell; nothing is learned.</p>
-      <p class="cap">Every call is graded afterwards: the rank grade against what happened next, the truth grade against the hidden layout, which the analyser never reads.</p>
-      <p class="cap">Cells nobody drives over cannot be found.</p>
+      <p class="cap">Top-20 hit rate: of the 20 most-flagged cells, how many sit on a hidden floor problem.</p>
+      <p class="cap">The map is rules plus a decayed count of stalls per cell, and nothing is trained.</p>
+      <p class="cap">Every call is graded afterwards, the count and rank grades against what happened next and the truth grade against the hidden layout, which the analyser never reads.</p>
+      <p class="cap">Cells nobody drives over cannot be found, because a stall needs a robot to try to enter the cell.</p>
     </section>
   </div>
   <div id="live" class="sr" aria-live="polite"></div>
