@@ -3,7 +3,7 @@
 This is the walkthrough you can show today. The polished demo pack is Sprint 9 (S9D); this is its draft.
 
 **Timing: about 4 min of command wall time** (12 s stack up, 4 s emit, 5 s file ingest + status, 207 s live Kafka
-leg, 4 s scoring, 4 s teardown), run on 14 Oct 2026 between 16:15:45 and 16:21. The 207 s live leg sets the length.
+leg, 4 s scoring, 4 s teardown), run on 14 Oct 2026 from 16:15:45 to about 16:21 (last stamp 16:20:03, then 4 s of scoring and 4 s of teardown). The 207 s live leg sets the length.
 Allow 10 minutes once you add talking and a look at Grafana.
 
 Every command below was run as written in that session, from the repo root, on master `a6a305a`. The run names it
@@ -26,6 +26,7 @@ fleet/compose.sh up
 docker exec fleet-redpanda-1 rpk cluster info | head -6
 curl -s localhost:18123/ping
 curl -s localhost:13000/api/health
+ls /tmp/ck/confluent_kafka | head -3
 ```
 
 You see (12 s):
@@ -42,6 +43,9 @@ CLUSTER
 redpanda.ba60397c-dcce-4b52-b38f-2b44e9cd0801
 Ok.
 { "database": "ok", "version": "11.2.0", ... }
+__init__.py
+__pycache__
+_model
 ```
 
 `fleet/compose.sh up` wraps `docker compose -f fleet/docker-compose.yml up -d --wait`. It starts Redpanda (Kafka API on
@@ -51,7 +55,9 @@ container has a memory cap: redpanda 1.5g, clickhouse 3g, grafana 512m. The data
 about 0.2 MB of files.
 
 The Kafka client is not in `.venv`. The lanes installed it with `pip install --target /tmp/ck confluent-kafka==2.5.3`,
-and this demo uses that copy through `PYTHONPATH=/tmp/ck`. On a fresh machine, run that install first.
+and this demo uses that copy through `PYTHONPATH=/tmp/ck`. The install was not run in this job because the copy was
+already there (the `ls` above). macOS clears `/tmp` on reboot. If the `ls` fails, run the install before step 3b, or
+the Kafka leg stops with `ModuleNotFoundError: No module named 'confluent_kafka'`.
 
 ## 2. Emit a fleet log (small map, file sink)
 
@@ -151,8 +157,8 @@ The same seeds give the same episodes on both paths: the cause counts match 3a e
 **There is no "inject now" command.** Breakdowns come from the disturbance preset passed to the emitter:
 `--disturb breakdown-heavy`. That is the emitter's default and the preset the S5 lanes and the benchmark used:
 `{"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}` in `src/warehouse_rl/disturb.py`. The schedule is fixed
-by (seed, config). So "injecting a breakdown" in this demo means starting step 3b with that preset. A key-press
-injection is a Sprint 9 item, not built.
+by (seed, config). So "injecting a breakdown" in this demo means starting step 3b with that preset. Injecting a
+breakdown on a key press is not built and is not in the current plan.
 
 You see in terminal 3 within seconds of the start (78 lines over the run; first lines):
 
@@ -171,17 +177,20 @@ real-time latency (see README "Sprint 5", live table).
 **Grafana.** Open `http://localhost:13000/d/fleet-stuck-analyser/fleet-stuck-analyser`, the dashboard **"Fleet stuck
 analyser"** provisioned from `fleet/grafana/dashboard.json`. It has 23 panels in rows INTEGRATION, SIMULATION and
 RESULTS. Pick the run in the **`run`** drop-down at the top. It sorts newest-name-first, and older runs such as
-`s8b-score` sort above `demo-*`, so select yours by hand. The panel to watch is **"Cause mix"** (SIMULATION row). Other
-panels that move during the live leg: **"Coverage (accepted / emitted)"** and **"Consumer lag (messages)"**
-(INTEGRATION row) and **"Episodes per event hour"**.
+`s8b-score` sort above `demo-*`, so select yours by hand. The panel to watch is **"Cause mix"** (SIMULATION row). It is the only
+panel checked in this run, and only on the file run `demo-20261014T1616`. **"Coverage (accepted / emitted)"** and
+**"Consumer lag (messages)"** (INTEGRATION row) should move during the live leg. That was not checked.
 
 In this job nobody opened a browser, so there is no screenshot. Instead, the "Cause mix" panel's own SQL was sent
 through Grafana's datasource API, the same path the panel uses, before and after the ingest:
 
 ```sh
 curl -s -u admin:admin localhost:13000/api/dashboards/uid/fleet-stuck-analyser   # -> "Fleet stuck analyser", 23 panels
-curl -s -u admin:admin -H 'Content-Type: application/json' localhost:13000/api/ds/query --data @/tmp/gq.json
-# /tmp/gq.json = the panel's rawSql with run = 'demo-20261014T1616', datasource uid fleet-clickhouse
+cat > /tmp/gq.json <<EOF
+{"queries":[{"refId":"A","datasource":{"type":"grafana-clickhouse-datasource","uid":"fleet-clickhouse"},"rawSql":"SELECT ifNull(cause, 'None') AS cause_label, count() AS episodes FROM stuck_episodes FINAL WHERE run = 'demo-20261014T1616' AND NOT left_censored AND resolution NOT IN ('open', 'interrupted') GROUP BY cause_label ORDER BY cause_label ASC","format":1,"queryType":"table","editorType":"sql"}],"from":"now-6h","to":"now"}
+EOF
+curl -s -u admin:admin -H 'Content-Type: application/json' localhost:13000/api/ds/query --data @/tmp/gq.json \
+  | .venv/bin/python -c "import json,sys;r=json.load(sys.stdin)['results']['A'];f=r['frames'][0];print(r.get('status'), list(zip(*f['data']['values'])))"
 ```
 
 You see: the panel was empty before the ingest (the same SQL against ClickHouse returned no rows). After it, Grafana
