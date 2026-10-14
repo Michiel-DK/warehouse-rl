@@ -345,7 +345,10 @@ class TestCostMap(unittest.TestCase):
         st, _ = self.build(publish_every=1000)
         d = next(r for r in st.select("decisions") if r["dedup_key"] == "hotspot_forecast:Z0:6,5:1970-01-01T00:16:40Z")
         claim = json.loads(d["claim"])
-        self.assertEqual(set(claim), {"expected_stalls_next_hour", "cost", "rank", "horizon_s", "window_hours"})
+        self.assertEqual(set(claim), {"expected_stalls_next_hour", "cost", "rank", "horizon_s", "window_hours", "top_k",
+                                      "half_life_h", "min_stalls", "exclude_occupied"})
+        self.assertEqual((d["claim_version"], claim["top_k"], claim["half_life_h"], claim["min_stalls"],
+                          claim["exclude_occupied"]), (2, costmap.DEFAULT_TOP_K, 1.0, 1, True))
         # at P=1000: window stalls at 6,5 end at 105, 205 -> 2 over covered = min(3600, 1000 - 0) = 1000 s
         self.assertAlmostEqual(claim["expected_stalls_next_hour"], 2 * 3600 / 1000, delta=1e-9)
         self.assertEqual((claim["rank"], d["decided_at"], d["grade_after"], d["status"]), (1, 1000, 1000 + 3600, "open"))
@@ -365,17 +368,22 @@ class TestGrading(unittest.TestCase):
 
     def test_outcome_grade_values_and_open_below_min_horizon(self):
         # inject: count stalls with start <= P - 1 or end in the window, or grade at horizon < min
-        res = res = forecast_grade.grade_outcomes(self.store, "r", min_horizon_s=600)
+        res = forecast_grade.grade_outcomes(self.store, "r", min_horizon_s=600)
         d = self.forecast(self.id)
         # P=1000, stream end 3000 -> horizon 2000; stalls at 6,5 starting in [1000, 3000): 1500, 2500
-        self.assertEqual((d["status"], d["outcome"]), ("graded", 2))
+        # the claim is rank 1 <= K: the decision follows the RANK grade (6,5 is still rank 1 at window_end 3000)
+        self.assertEqual((d["status"], d["outcome"], d["error"], d["verdict"]), ("graded", 1, None, "ok"))
         expected = (2 * 3600 / 1000) * 2000 / 3600  # x = 2 window stalls over 1000 s covered
-        self.assertAlmostEqual(d["error"], 2 - expected, delta=1e-9)
-        self.assertEqual(d["verdict"], "ok")  # |2 - 4| = 2 <= 0.5 * max(4, 1)
         self.assertTrue(res["open"] > 0)  # forecasts published at 3000 have horizon 0
-        (g,) = self.store.select("forecast_grades", {"id": self.id})
-        self.assertEqual((g["grade_source"], g["outcome"], g["horizon_s"]), ("outcome", 2, 2000))
+        rows = {g["grade_source"]: g for g in self.store.select("forecast_grades", {"id": self.id})}
+        self.assertEqual(set(rows), {"outcome", "outcome_count"})
+        g = rows["outcome_count"]
+        self.assertEqual((g["outcome"], g["horizon_s"], g["verdict"]), (2, 2000, "ok"))  # |2 - 4| = 2 <= 0.5 * 4
+        self.assertAlmostEqual(g["error"], 2 - expected, delta=1e-9)
         self.assertAlmostEqual(g["expected"], expected, delta=1e-9)
+        r = rows["outcome"]
+        self.assertEqual((r["outcome"], r["expected"], r["error"], r["verdict"], r["horizon_s"], r["graded_at"],
+                          r["window_end"]), (1, costmap.DEFAULT_TOP_K, None, "ok", 2000, 3000, 3000))
         late = [r for r in self.store.select("decisions") if r["decided_at"] == 3000]
         self.assertTrue(late and all(r["status"] == "open" for r in late))
 
@@ -390,7 +398,9 @@ class TestGrading(unittest.TestCase):
     def test_verdict_tolerance(self):
         # inject: drop the max(expected, 1) floor or flip ok / off
         forecast_grade.grade_outcomes(self.store, "r", min_horizon_s=600, tolerance=0.4)
-        self.assertEqual(self.forecast(self.id)["verdict"], "off")  # 2 > 0.4 * 4
+        (g,) = self.store.select("forecast_grades", {"id": self.id, "grade_source": "outcome_count"})
+        self.assertEqual(g["verdict"], "off")  # 2 > 0.4 * 4
+        self.assertEqual(self.forecast(self.id)["verdict"], "ok")  # the stamp is the rank verdict, not the tolerance one
 
     def test_occupied_stalls_not_counted_by_default(self):
         # inject: grade without the cost map's filter
@@ -400,7 +410,8 @@ class TestGrading(unittest.TestCase):
                 s["next_occupied"] = True
         self.store.upsert("stalls", ("run", "zone", "robot", "start"), stalls)
         forecast_grade.grade_outcomes(self.store, "r", min_horizon_s=600)
-        self.assertEqual(self.forecast(self.id)["outcome"], 1)
+        (g,) = self.store.select("forecast_grades", {"id": self.id, "grade_source": "outcome_count"})
+        self.assertEqual(g["outcome"], 1)
 
     SNAP = ("decisions", "forecast_grades", "decision_grades")
 
@@ -413,7 +424,8 @@ class TestGrading(unittest.TestCase):
         before = self.snap()
         grade.grade_truth(self.store, "r", self.truth)
         rows = self.store.select("forecast_grades", {"id": self.id})
-        self.assertEqual(sorted((r["grade_source"], r["verdict"]) for r in rows), [("outcome", "ok"), ("truth", "hit")])
+        self.assertEqual(sorted((r["grade_source"], r["verdict"]) for r in rows), [("outcome", "ok"), ("outcome_count", "ok"),
+                                                                               ("truth", "hit")])
         other = decisions.decision_id("hotspot_forecast:Z0:7,5:1970-01-01T00:16:40Z")
         self.assertEqual([r["verdict"] for r in self.store.select("forecast_grades", {"id": other})
                           if r["grade_source"] == "truth"], ["false_alarm"])
@@ -450,7 +462,8 @@ class TestGrading(unittest.TestCase):
         seen = []
 
         def crash(store, did, *a, **k):
-            seen.append((did, store.exists("forecast_grades", id=did, grade_source="outcome")))
+            seen.append((did, store.exists("forecast_grades", id=did, grade_source="outcome")
+                         and store.exists("forecast_grades", id=did, grade_source="outcome_count")))
             raise RuntimeError("crash between the row and the stamp")
 
         with mock.patch.object(decisions, "stamp_grade", crash):
@@ -458,7 +471,7 @@ class TestGrading(unittest.TestCase):
                 forecast_grade.grade_outcomes(self.store, "r", min_horizon_s=600)
         self.assertEqual(seen[0][1], True)  # the row existed when the stamp was attempted
         self.assertEqual(self.forecast(seen[0][0])["status"], "open")
-        self.assertEqual(len(self.store.select("forecast_grades")), 1)
+        self.assertEqual(len(self.store.select("forecast_grades")), 2)  # outcome_count + outcome of the one decision
         self.assertIs(decisions.stamp_grade, real)
         res = forecast_grade.grade_outcomes(self.store, "r", min_horizon_s=600)  # the re-run backfills the stamp
         self.assertGreater(res["graded"], 0)
@@ -490,7 +503,7 @@ class TestGrading(unittest.TestCase):
             st = JsonlStore(d / "st")
             sources = {r["grade_source"] for r in st.select("forecast_grades")}
             st.close()
-            self.assertEqual(sources, {"outcome"})  # no --truth, no truth rows
+            self.assertEqual(sources, {"outcome", "outcome_count"})  # no --truth, no truth rows
             with contextlib.redirect_stdout(io.StringIO()):
                 grade.main(["--run", "r", "--store", spec, "--once", "--truth", str(d / "truth.json")])
                 grade.main(["--run", "r", "--store", spec, "--once", "--truth", str(d / "truth.json")])
@@ -499,7 +512,8 @@ class TestGrading(unittest.TestCase):
             by = {}
             for r in rows:
                 by.setdefault(r["grade_source"], set()).add(r["id"])
-            self.assertEqual(len(rows), len(by["outcome"]) + len(by["truth"]))  # two runs, no duplicates
+            self.assertEqual(len(rows), len(by["outcome"]) + len(by["outcome_count"]) + len(by["truth"]))  # no dups
+            self.assertEqual(by["outcome"], by["outcome_count"])  # every forecast here is rank-graded
             self.assertTrue(by["outcome"] <= by["truth"] and self.id in by["outcome"])
             self.assertEqual(st.select("decision_grades"), [])
             st.close()
@@ -562,7 +576,7 @@ class TestOutcomeWindow(unittest.TestCase):
             ids[cell] = forecast_row(store, "0", cell, self.P, self.H)
         checkpoint_at(store, self.P + self.H)  # data reaches exactly P + H: the window is closed
         res = forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
-        self.assertEqual(res, dict(graded=4, open=0))
+        self.assertEqual(res, dict(graded=4, open=0, rank_graded=0, unranked=4))  # hand-built v1 claims: count-only
         got = {c: next(r for r in store.select("decisions") if r["id"] == i)["outcome"] for c, i in ids.items()}
         self.assertEqual(got, {c: v[2] for c, v in cases.items()})
         rows = {r["id"]: r for r in store.select("forecast_grades")}
@@ -578,11 +592,13 @@ class TestOutcomeWindow(unittest.TestCase):
         for data_end in (1000, 1100, 4099):  # the planned end (3600) is never consulted
             checkpoint_at(store, data_end)
             self.assertEqual(forecast_grade.stream_end(store, "r", "0"), data_end)
-            self.assertEqual(forecast_grade.grade_outcomes(store, "r", min_horizon_s=600), dict(graded=0, open=1))
+            self.assertEqual(forecast_grade.grade_outcomes(store, "r", min_horizon_s=600),
+                             dict(graded=0, open=1, rank_graded=0, unranked=0))
             self.assertEqual(status(), "open")
             self.assertEqual(store.select("forecast_grades"), [])
         checkpoint_at(store, 4100)
-        self.assertEqual(forecast_grade.grade_outcomes(store, "r", min_horizon_s=600), dict(graded=1, open=0))
+        self.assertEqual(forecast_grade.grade_outcomes(store, "r", min_horizon_s=600),
+                         dict(graded=1, open=0, rank_graded=0, unranked=1))
         (g,) = store.select("forecast_grades")
         self.assertEqual((g["outcome"], g["horizon_s"], g["graded_at"], g["window_end"]), (1, 3600, 4100, 4100))
         self.assertEqual(status(), "graded")
@@ -673,13 +689,13 @@ class TestStreamEndThroughIngest(unittest.TestCase):
         self.costmap(first, publish_every=500, horizon_s=600)
         self.store.upsert("ingest_runs", ("run",), [dict(run="r", emit_config=dict(t0=iso_of(BASE), steps=721))])  # 3600
         self.assertEqual(self.statuses()[(500, "Z0:6,5")], "open")  # a forecast at P = 500 exists, P + H = 1100
-        self.assertEqual(self.grade(), dict(graded=0, open=len(self.statuses())))
+        self.assertEqual(self.grade(), dict(graded=0, open=len(self.statuses()), rank_graded=0, unranked=0))
         # a duplicate header id with a LATER ts and a rejected line, then a resume that sees nothing else
         dup = sline("Z0-02", 5, 1500, order="", x=1, y=1)
         g.write(dup + b"this is not json\n")
         self.ingest()
         self.assertEqual(forecast_grade.stream_end(self.store, "r", "0"), BASE + 1000)  # unmoved, and not lost on resume
-        self.assertEqual(self.grade(), dict(graded=0, open=len(self.statuses())))
+        self.assertEqual(self.grade(), dict(graded=0, open=len(self.statuses()), rank_graded=0, unranked=0))
         self.assertEqual(self.statuses()[(500, "Z0:6,5")], "open")
         # one more accepted message at 1100 from the robot that never stalls: P = 500 + H = 600 is now observed
         g.write(self.msgs("Z0-02", [1100])[0])
@@ -707,14 +723,14 @@ class TestStreamEndThroughIngest(unittest.TestCase):
         rows = {r["published_at"] for r in self.store.select("costmap", {"run": "r"})}
         self.assertEqual(rows, {BASE + 1000, BASE + 1500})  # the publish at 2000 is empty
         self.assertEqual(forecast_grade.stream_end(self.store, "r", "0"), BASE + 2000)
-        self.assertEqual(self.grade(), dict(graded=1, open=1))  # P = 1000 (window to 1600) graded; P = 1500 open
+        self.assertEqual(self.grade(), dict(graded=1, open=1, rank_graded=1, unranked=0))  # P = 1000 (window to 1600) graded; P = 1500 open
         st = self.statuses()
         self.assertEqual((st[(1000, "Z0:6,5")], st[(1500, "Z0:6,5")]), ("graded", "open"))
 
     def test_a_late_grade_keeps_graded_at_at_the_stream_end_and_window_end_at_p_plus_h(self):
         # inject: m1 graded_at = window_end on the forecast_grades row; m2 the same on the decision stamp
         self.scenario_to(1700)
-        self.assertEqual(self.grade(), dict(graded=1, open=len(self.statuses()) - 1))
+        self.assertEqual(self.grade(), dict(graded=1, open=len(self.statuses()) - 1, rank_graded=1, unranked=0))
         (row,) = [r for r in self.store.select("forecast_grades") if r["grade_source"] == "outcome"]
         self.assertEqual((row["window_end"], row["graded_at"]), (BASE + 1600, BASE + 1700))
         d = next(r for r in self.store.select("decisions") if r["id"] == row["id"])
@@ -741,16 +757,16 @@ class TestStreamEndThroughIngest(unittest.TestCase):
         self.assertEqual(forecast_grade.stream_end(self.store, "r", "0"), BASE + 3000)
         self.assertEqual(forecast_grade.stream_end(self.store, "r", "1"), BASE + 1000)
         self.assertIsNone(forecast_grade.stream_end(self.store, "r", "2"))
-        self.assertEqual(self.grade(), dict(graded=1, open=2))
+        self.assertEqual(self.grade(), dict(graded=1, open=2, rank_graded=0, unranked=1))
         self.assertEqual([self.decision(ids[z])["status"] for z in "012"], ["graded", "open", "open"])
         self.assertEqual(self.decision(ids["0"])["graded_at"], BASE + 3000)
         # one more accepted message of zone 1 at 1700: its window [1000, 1600) is observed, graded at ITS end
         g1.write(b"".join(self.msgs("Z1-01", [1700])))
         self.ingest()
-        self.assertEqual(self.grade(), dict(graded=1, open=1))
+        self.assertEqual(self.grade(), dict(graded=1, open=1, rank_graded=0, unranked=1))
         self.assertEqual([self.decision(ids[z])["status"] for z in "012"], ["graded", "graded", "open"])
         self.assertEqual(self.decision(ids["1"])["graded_at"], BASE + 1700)  # not 3000
-        rows = {r["id"]: r for r in self.store.select("forecast_grades") if r["grade_source"] == "outcome"}
+        rows = {r["id"]: r for r in self.store.select("forecast_grades") if r["grade_source"] == "outcome_count"}
         self.assertEqual((rows[ids["1"]]["graded_at"], rows[ids["1"]]["window_end"]), (BASE + 1700, BASE + 1600))
         self.assertEqual((rows[ids["0"]]["graded_at"], rows[ids["0"]]["window_end"]), (BASE + 3000, BASE + 1600))
         # a fresh Ingester resuming on the same store restores the per-zone map (1 stays at 1700, not 3000)
@@ -779,7 +795,7 @@ class TestStreamEndThroughIngest(unittest.TestCase):
         self.assertEqual(forecast_grade.stream_end(self.store, "r", "0"), BASE + 3000)
         self.assertEqual(forecast_grade.stream_end(self.store, "r", "1"), BASE + 1000)
         ids = self.zone_forecasts()
-        self.assertEqual(self.grade(), dict(graded=1, open=2))
+        self.assertEqual(self.grade(), dict(graded=1, open=2, rank_graded=0, unranked=1))
         self.assertEqual(self.decision(ids["1"])["status"], "open")
 
     def test_stream_end_is_limited_to_the_run(self):

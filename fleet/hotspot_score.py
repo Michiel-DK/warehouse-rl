@@ -7,7 +7,10 @@ DIR holds truth.json and emit_ledger.json (the emitter's output). Per zone and a
 flagged cells counts the missing slots as misses; n_flagged is reported) and recall@K = those hits / |floor cells of the
 zone|. Cost ties break on the cell string. Spearman (average ranks on ties) between cost and true p (0 for non-floor
 cells) over the flagged cells, null below 3 flagged cells or when either side is constant. zero_stall_share = share of
-the zone's floor cells with no stall of any kind in the store. Also: forecast_grades counts by (grade_source, verdict),
+the zone's floor cells with no stall of any kind in the store. Also: forecast_grades counts by (grade_source, verdict) as grading_counts: "outcome" = the
+rank grade (cell still in the zone's top K at window_end), "outcome_count" = the count grade (stall count within
+tolerance), "truth"; rank_grading = {top_k: sorted K values seen, rank_graded: n forecasts with an "outcome" row,
+unranked: n forecasts with an "outcome_count" row but no "outcome" row (rank > K or a v1 claim)};
 stall_in_episode counts by detector cause, platform.
 """
 import argparse
@@ -97,11 +100,15 @@ def score_run(truth, costmap, stalls, grades, ks=KS):
     for g in grades:
         grading.setdefault(g["grade_source"], {}).setdefault(g["verdict"], 0)
         grading[g["grade_source"]][g["verdict"]] += 1
+    outcome_ids = {g["id"] for g in grades if g["grade_source"] == "outcome"}
+    count_ids = {g["id"] for g in grades if g["grade_source"] == "outcome_count"}
+    rank_grading = dict(top_k=sorted({g["expected"] for g in grades if g["grade_source"] == "outcome"}),
+                        rank_graded=len(outcome_ids), unranked=len(count_ids - outcome_ids))
     in_episode = {}
     for s in stalls:
         if s["in_episode"] is not None:
             in_episode[s["in_episode"]] = in_episode.get(s["in_episode"], 0) + 1
-    return dict(zones=zones, mean=mean, grading_counts=grading,
+    return dict(zones=zones, mean=mean, grading_counts=grading, rank_grading=rank_grading,
                 stall_in_episode=dict(total_stalls=len(stalls), in_episode=sum(in_episode.values()),
                                       by_cause=dict(sorted(in_episode.items()))))
 
@@ -145,7 +152,8 @@ def main(argv=None):
     for k in KS:
         rec = m['k'][str(k)]['recall']  # None when the run has no floor cells
         print(f"  K={k}: precision {m['k'][str(k)]['precision']:.3f} recall {'n/a' if rec is None else format(rec, '.3f')}")
-    print(f"  grading {res['grading_counts']}; stall_in_episode {res['stall_in_episode']}")
+    print(f"  grading {res['grading_counts']}; rank_grading {res['rank_grading']}; "
+          f"stall_in_episode {res['stall_in_episode']}")
     print(f"-> {out}")
     return 0
 

@@ -1,5 +1,5 @@
 """Outcome grader for hotspot_forecast decisions: reads the store tables only (decisions, stalls, costmap, ingest_runs).
-The "truth" grade source of forecast_grades is written by fleet/grade.py, not here.
+The other grade source of forecast_grades is written by fleet/grade.py, not here.
 
 For each open forecast published at P with claim horizon H: graded iff H >= min_horizon_s and stream_end[zone] >= P + H, i.e.
 only on a fully observed window; otherwise it stays open (no forecast_grades row, no stamp). Two grades per eligible forecast:
@@ -13,7 +13,7 @@ only on a fully observed window; otherwise it stays open (no forecast_grades row
     ranks the claim; r is None when the cell is not in the map. outcome = r, expected = K, error None, verdict "ok" iff
     r is not None and r <= K, else "off". The decision is stamped with outcome = r, error None, that verdict.
   * k > K or a v1 claim (no top_k): no "outcome" row; the decision is stamped terminally with verdict "unranked",
-    outcome = observed count, error = count error (it is graded on truth only, never left open).
+    outcome = observed count, error = count error (never left open).
 horizon_s in the rows is H, graded_at is stream_end[zone], window_end is P + H.
 Order of writes: the forecast_grades rows ("outcome_count", then "outcome") first, then decisions.stamp_grade. A crash
 between leaves the decision open and the rows present; a re-run finds the rows, skips them and stamps the decision.

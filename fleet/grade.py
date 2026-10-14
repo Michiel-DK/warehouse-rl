@@ -6,8 +6,10 @@ Usage: python fleet/grade.py --run NAME [--store jsonl:DIR | clickhouse://HOST[:
 and exits. --every S repeats every S seconds with the wall clock as `now` (for a live run) until SIGINT/SIGTERM, opening
 the store afresh each cycle. Grades are written only through decisions.stamp_grade; a decision is graded once. Verdict
 rules: docs/SCOPE.md "S5C1". Logic: fleet_analyser/grade.py.
-hotspot_forecast decisions (S8B) are outcome-graded in every cycle too (stream only, fleet_analyser/forecast_grade.py:
-the decision is stamped and a forecast_grades row "outcome" written). --truth PATH additionally truth-grades every
+hotspot_forecast decisions (S8B) are outcome-graded in every cycle too (stream only, fleet_analyser/forecast_grade.py):
+a forecast_grades row "outcome_count" (stall count within tolerance) for every eligible forecast, a row "outcome" (the
+claimed rank <= top_k still holds at window_end) for a claim with rank <= top_k, and the decision is stamped (with the
+rank grade, or verdict "unranked" when there is no rank claim to grade). --truth PATH additionally truth-grades every
 forecast against that run's truth.json: forecast_grades rows with grade_source "truth", verdict "hit" iff the cell is
 one of the zone's floor_cells else "false_alarm"; the decision and decision_grades are never touched, and a forecast
 in a zone truth.json does not list raises. This file is the only place the grading path reads truth.json.
