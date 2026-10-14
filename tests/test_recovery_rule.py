@@ -10,7 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
+import _platform
 from tarware.heuristic import MissionType
 
 from warehouse_rl import recovery as rc
@@ -154,8 +156,9 @@ class TestValidationAndRegistry(unittest.TestCase):
                          "rec-0fc956f7ab")
 
 
-# a pinned real abandon: small map, blocked cells 300/h, rule (2, 3, 6), seed 4; AGV 3 loses a PICKING order at step 166
-PIN = dict(env=SMALL, seed=4, steps=500, rule=(2, 3, 6), disturb={"blocked_cell": {"rate_per_hour": 300,
+# a pinned real abandon: small map, blocked cells 300/h, rule (2, 3, 6). The seed is per platform (tests/platform_expected.json,
+# rule_abandon_pin): on the darwin-arm64 trajectory seed 4 has AGV 3 lose a PICKING order at step 166.
+PIN = dict(env=SMALL, seed=None, steps=500, rule=(2, 3, 6), disturb={"blocked_cell": {"rate_per_hour": 300,
                                                                                     "duration": [20, 60]}})
 
 
@@ -168,10 +171,11 @@ def find_pinned_abandon():
     by hand: busy=False, path cleared, its order dropped from the policy's books, and the other unassigned requests are
     removed from the queue so the abandoned item is the first one dispatched. The abandoner itself is untouched: its
     busy=False is the hook's doing."""
+    seed = _platform.expected("rule_abandon_pin", "seed")  # SkipTest for a platform with no reference yet
     cfg = rc.normalise_recovery(dict(name="rule", back_off_after=PIN["rule"][0], reroute_after=PIN["rule"][1],
                                      abandon_after=PIN["rule"][2]))
     env = WarehouseEnv(PIN["env"], max_steps=PIN["steps"], disturb=PIN["disturb"], recovery=cfg)
-    o, info = env.reset(seed=PIN["seed"])
+    o, info = env.reset(seed=seed)
     pol = StuckAwareCtaPolicy()
     pol.reset(env)
     for t in range(PIN["steps"]):

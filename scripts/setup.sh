@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce the working environment on macOS (tested: M1 Pro, pyenv Python 3.10.6, 2026-10-09).
+# Reproduce the working environment on macOS and Linux (CI) (tested: M1 Pro, pyenv Python 3.10.6, 2026-10-09).
 # Two gotchas this script works around:
 #  1. pyastar2d (TA-RWARE's A*) fails to compile when pyenv Python's baked-in Xcode -I flags mix with
 #     the CommandLineTools SDK headers. Fix: build with the Xcode SDK as sysroot.
@@ -13,6 +13,9 @@ python3 -m venv .venv
 mkdir -p vendor
 [ -d vendor/tarware ]   || git clone -q https://github.com/uoe-agents/task-assignment-robotic-warehouse.git vendor/tarware
 [ -d vendor/pyastar2d ] || git clone -q https://github.com/raulsteleac/pyastar2d_TARWARE vendor/pyastar2d
+# Pin both deps to the commits the results were produced with (no-op on a checkout already there).
+git -C vendor/tarware checkout -q 6109c33f7228cace1e463c81f0568b754ff5f198
+git -C vendor/pyastar2d checkout -q ff9257df2166e659f6c0a51bfc09b119db58d3d8
 XSDK=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
 if [ -d "$XSDK" ]; then
   export SDKROOT=$XSDK CFLAGS="-isysroot $XSDK" CPPFLAGS="-isysroot $XSDK" CXXFLAGS="-isysroot $XSDK" LDFLAGS="-isysroot $XSDK"

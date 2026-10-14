@@ -17,6 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
+
+import _platform
 
 import numpy as np
 from tarware.definitions import Direction
@@ -373,19 +376,29 @@ class TestExistingPoliciesBitIdentical(unittest.TestCase):
         if not path.exists():
             self.skipTest(f"{path} absent")
         import sweep
-        stored = [r for r in json.loads(path.read_text())["rows"] if r["point"] == 1 and r["seed"] in (0, 1)]
+        stored_doc = json.loads(path.read_text())
+        stored = [r for r in stored_doc["rows"] if r["point"] == 1 and r["seed"] in (0, 1)]
         self.assertEqual(sorted(r["seed"] for r in stored), [0, 1])
         env_id, cfg, _ = sweep.point_spec("breakdown", 1)
         fields = ["pick_rate", "deliveries", "clashes", "stucks", "call_human_steps", "stuck_busy_agent_steps",
                   "abandoned_tasks", "frozen_agent_steps"]
         fields += [k for k in ev.RECOVERY_SUMS if k.startswith("recovery_")]
+        rows = []
         for r in stored:
             row = ev.run_seed("stuck_aware_cta", env_id, 500, r["seed"], disturb=cfg,
                               recovery=rc.normalise_recovery({"name": "timeout"}))
             for f in fields:
                 self.assertIn(f, r, f)
-                self.assertEqual(row[f], r[f], (r["seed"], f))
             self.assertEqual(row["decisions_while_blocker_frozen"] >= 0, True)
+            rows.append((r, row))
+        # everything above is portable; the values are only comparable on the platform the stored file was measured on
+        file_platform = _platform.results_platform(stored_doc)
+        if _platform.tag() != file_platform:
+            self.skipTest(f"{path.relative_to(ROOT)} measured on {file_platform}, running on {_platform.tag()}: "
+                          "value comparison skipped")
+        for r, row in rows:
+            for f in fields:
+                self.assertEqual(row[f], r[f], (r["seed"], f))
 
 
 class TestLearnedFormatV3(unittest.TestCase):
