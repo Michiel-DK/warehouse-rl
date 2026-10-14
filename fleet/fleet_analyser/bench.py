@@ -162,7 +162,7 @@ def check_sizes(probes, est, data_dir=DATA_DIR):
     if free < DISK_FACTOR * unc:
         raise PreflightError(f"free disk {free / 1e9:.2f} GB is below {DISK_FACTOR}x the estimated "
                              f"{unc / 1e9:.2f} GB uncompressed batch")
-    have = probes.tree_bytes(data_dir) if Path(data_dir).exists() else 0
+    have = probes.tree_bytes(data_dir)  # os.walk on a missing directory yields nothing, so 0
     if have + est["compressed_bytes"] > DATA_CAP_BYTES:
         raise PreflightError(f"fleet/data would reach {(have + est['compressed_bytes']) / 1e9:.2f} GB, above the "
                              f"{DATA_CAP_BYTES / 1e9:.0f} GB cap")
