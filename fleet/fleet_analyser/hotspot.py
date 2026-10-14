@@ -161,3 +161,25 @@ def aggregate(stalls, at_ts, window_h=DEFAULT_WINDOW_H, half_life_h=DEFAULT_HALF
     for a in acc.values():
         a["robots"] = len(a["robots"])
     return acc
+
+
+def cost_zones(stalls, at_ts, window_h, half_life_h, min_stalls, exclude_occupied):
+    """{zone: {cell: dict(cost, score, stalls)}} for one publish; only nonzero cells, max cost exactly 1.0 per zone."""
+    agg = aggregate(stalls, at_ts, window_h, half_life_h, exclude_occupied)
+    by_zone = {}
+    for (zone, cell), a in agg.items():
+        if a["stalls"] >= min_stalls:
+            by_zone.setdefault(zone, {})[cell] = a
+    out = {}
+    for zone, cells in by_zone.items():
+        top = max(a["score"] for a in cells.values())
+        out[zone] = {c: dict(cost=round(a["score"] / top, 6), score=a["score"], stalls=a["stalls"])
+                     for c, a in cells.items()}
+        out[zone] = {c: v for c, v in out[zone].items() if v["cost"] > 0}
+    return out
+
+
+def rank_cells(cells):
+    """[(cell, v)] of one zone's {cell: dict(cost, ...)} map, rounded cost descending then cell string. The one ranking
+    shared by the published claim rank (costmap.py) and the rank grader; rank = 1-based position."""
+    return sorted(cells.items(), key=lambda kv: (-kv[1]["cost"], kv[0]))
