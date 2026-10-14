@@ -22,17 +22,47 @@ SMALL = "tarware-small-4agvs-2pickers-globalobs-v1"
 FLOOR12 = {"floor": {"cells": 12, "p": [0.3, 0.7]}}
 BD_FLOOR = {"breakdown": {"rate_per_hour": 20, "duration": [5, 20]}, "floor": {"cells": 8, "p": [0.3, 0.7]}}
 ALWAYS = {"floor": {"cells": 10, "p": [1, 1]}}
-# pyastar2d is not an exact shortest-path search on weighted grids (measured on 1.0.6: with a detour of +2 steps it still
-# goes straight at an extra cost of 4 and detours from 5): "alpha*cost > d" is not enough for a detour. The detour cases
-# use alpha*cost = DETOUR_FACTOR * d (far above any such slack); the straight cases use alpha*cost = d - 1 < d.
-DETOUR_FACTOR = 10
-
-
+# The vendored pyastar2d fork (vendor/pyastar2d/src/cpp/astar.cpp L115-139) costs a path as the sum of the entered
+# cells' weights plus 1 per change of direction (the turn penalty, skipped when the entered weight is >= 100), and marks a
+# cell it has relaxed with `weights += 100` (so it is not an exact optimum in general). The detour tests therefore state
+# E = (extra steps) + (extra turns) of the detour versus the straight path, computed by an independent exact search
+# (exact_cost below), and put the single costed cell at alpha*cost = E + 1 (detour) and E - 1 (straight). For the cases
+# used here the fork honours margin 1 on both sides (measured; no visited-marker deviation to report).
 def make(disturb, cost_map=None, alpha=4.0, seed=0, steps=60, recovery=None):
     env = WarehouseEnv(SMALL, max_steps=steps, disturb=disturb, cost_map=cost_map, cost_alpha=alpha,
                        recovery=recovery)
     env.reset(seed=seed)
     return env
+
+
+def exact_cost(shape, start, goal, blocked=frozenset(), cell=None, weight=1.0):
+    """Independent exact optimum of the fork's cost model on a 4-connected grid: the sum of entered-cell weights (1, or
+    `weight` on `cell`) plus 1 per direction change. States are (row, col, direction). start/goal/blocked/cell are
+    (row, col). Returns the optimal cost, or None."""
+    import heapq
+    rows, cols = shape
+    pq, seen = [(0.0, start, -1)], set()
+    while pq:
+        d, p, dr = heapq.heappop(pq)
+        if (p, dr) in seen:
+            continue
+        seen.add((p, dr))
+        if p == goal:
+            return d
+        for i, (dy, dx) in enumerate(((-1, 0), (0, -1), (0, 1), (1, 0))):
+            q = (p[0] + dy, p[1] + dx)
+            if 0 <= q[0] < rows and 0 <= q[1] < cols and q not in blocked:
+                heapq.heappush(pq, (d + (weight if q == cell else 1.0) + (1 if dr >= 0 and dr != i else 0), q, i))
+    return None
+
+
+def detour_extra(shape, start, goal, c, walls=frozenset()):
+    """E = optimal cost with the cell c forbidden minus the optimal cost with it free (extra steps + extra turns).
+    start/goal are (row, col) as find_path takes them; c and walls are (x, y) = (col, row)."""
+    blocked = {(y, x) for x, y in walls}
+    free = exact_cost(shape, start, goal, blocked)
+    around = exact_cost(shape, start, goal, blocked | {(c[1], c[0])})
+    return around - free
 
 
 def agent_of(e, kind):
@@ -87,63 +117,69 @@ class TestWeightedRouting(unittest.TestCase):
     def tearDown(self):
         self.env.close()
 
+    # (start, goal, costed cell c) in find_path's (row, col) / the map's (x, y) frames, plus the extra obstacle walls
+    # ((x, y) cells) that lengthen the detour. The straight path crosses exactly ONE costed cell (the map is {c: cost}).
+    CASES = (
+        ((2, 5), (12, 5), (5, 7), frozenset(), 4),  # open grid: out, down, back = +2 steps +2 turns
+        ((2, 5), (12, 5), (5, 7), frozenset((x, y) for y in range(6, 9) for x in (4, 6)), 6),  # walls beside c
+        ((2, 5), (12, 5), (5, 7), frozenset((x, y) for y in range(5, 10) for x in (3, 4, 6, 7)), 8),
+    )
+
     def _query(self):
-        """A start/goal pair on the highway whose plain path has a middle cell c with a detour of extra length d >= 2.
-        Returns (start_yx, goal_yx, c, plain, detour, d)."""
-        e = self.e
-        cells = free_cells(e)
-        for sx, sy in cells:
-            for gx, gy in cells:
-                if abs(sx - gx) + abs(sy - gy) < 4:
-                    continue
-                plain = e.find_path((sy, sx), (gy, gx), self.agv, care_for_agents=False)
-                for c in plain[1:-1]:
-                    e._cost_map_arg = {c: 1.0}
-                    e.cost_alpha = 1000.0
-                    e._set_active_map()
-                    detour = e.find_path((sy, sx), (gy, gx), self.agv, care_for_agents=False)
-                    e._cost_map_arg, e.cost_alpha = None, 4.0
-                    e._set_active_map()
-                    if c not in detour and len(detour) - len(plain) >= 2:
-                        return (sy, sx), (gy, gx), c, plain, detour, len(detour) - len(plain)
-        self.fail("no query with a detour found")
+        """The open-grid case: (start, goal, c, plain, detour, E)."""
+        start, goal, c, walls, E = self.CASES[0]
+        self.assertEqual(detour_extra(self.e.grid_size, start, goal, c), E)
+        self._set(c, 0)
+        plain = self.e.find_path(start, goal, self.agv, care_for_agents=False)
+        self._set(c, E + 1)
+        detour = self.e.find_path(start, goal, self.agv, care_for_agents=False)
+        self.assertIn(c, plain)
+        self.assertNotIn(c, detour)
+        return start, goal, c, plain, detour, E
 
     def _set(self, cell, alpha, cost=1.0):
         e = self.e
         e._cost_map_arg, e.cost_alpha = {cell: cost}, float(alpha)
         e._set_active_map()
 
+    def _fp(self, start, goal, walls):
+        with mock.patch.object(type(self.e), "_obstacles_now", return_value=frozenset(walls)):
+            return self.e.find_path(start, goal, self.agv, care_for_agents=False)
+
     def test_detour_when_cheaper_straight_when_dearer_no_ties(self):
-        start, goal, c, plain, detour, d = self._query()
-        e = self.e
-        # extra cost of the costed cell = alpha * cost; the detour costs d extra steps. No ties: d - 1 < d << 10 d.
-        self._set(c, DETOUR_FACTOR * d)
-        self.assertEqual(e.find_path(start, goal, self.agv, care_for_agents=False), detour)
-        self._set(c, d - 1)
-        got = e.find_path(start, goal, self.agv, care_for_agents=False)
-        self.assertIn(c, got)
-        self.assertEqual(len(got), len(plain))
-        # cost below 1 scales the same way
-        self._set(c, 2 * DETOUR_FACTOR * d, cost=0.5)
-        self.assertEqual(e.find_path(start, goal, self.agv, care_for_agents=False), detour)
-        self._set(c, 2 * (d - 1), cost=0.5)
-        self.assertIn(c, e.find_path(start, goal, self.agv, care_for_agents=False))
+        seen_E = set()
+        for start, goal, c, walls, E in self.CASES:
+            with self.subTest(E=E):
+                # E from the independent exact search (extra steps + extra turns), not from the router
+                self.assertEqual(detour_extra(self.e.grid_size, start, goal, c, walls), E)
+                seen_E.add(E)
+                self._set(c, 0)
+                plain = self._fp(start, goal, walls)
+                self.assertIn(c, plain)
+                for cost in (1.0, 0.5):  # alpha*cost is what matters
+                    self._set(c, (E + 1) / cost, cost=cost)
+                    detour = self._fp(start, goal, walls)
+                    self.assertNotIn(c, detour)
+                    self.assertGreater(len(detour), len(plain))
+                    self._set(c, (E - 1) / cost, cost=cost)
+                    self.assertEqual(self._fp(start, goal, walls), plain)
+        self.assertGreaterEqual(len(seen_E), 2)
 
     def test_detour_with_active_obstacle_uses_the_weighted_search_too(self):
-        start, goal, c, plain, detour, d = self._query()
+        start, goal, c, plain, detour, E = self._query()
         e = self.e
-        self._set(c, DETOUR_FACTOR * d)
+        self._set(c, E + 1)
         far = next(x for x in free_cells(e) if x not in plain and x not in detour)
         with mock.patch.object(type(e), "_obstacles_now", return_value=frozenset({far})):
             self.assertEqual(e.find_path(start, goal, self.agv, care_for_agents=False), detour)
-            self._set(c, d - 1)
+            self._set(c, E - 1)
             self.assertIn(c, e.find_path(start, goal, self.agv, care_for_agents=False))
 
     def test_weights_never_open_inf_cells(self):
         # a map cell that is a wall (shelf) stays inf: the weighted path may never walk through a shelf cell
         e = self.e
         shelf_cells = [(int(x), int(y)) for y, x in np.argwhere(e.highways == 0)]
-        start, goal, c, plain, detour, d = self._query()
+        start, goal, c, plain, detour, E = self._query()
         e._cost_map_arg = {s: 1.0 for s in shelf_cells[:20]}
         e.cost_alpha = 4.0
         e._set_active_map()
@@ -151,7 +187,7 @@ class TestWeightedRouting(unittest.TestCase):
         self.assertEqual(got, plain)
 
     def test_start_on_a_map_cell_is_trimmed_like_the_plain_path(self):
-        start, goal, c, plain, detour, d = self._query()
+        start, goal, c, plain, detour, E = self._query()
         e = self.e
         sx_sy = (start[1], start[0])
         self._set(sx_sy, 4.0)  # weight on the start cell only: the route is the plain one, start still trimmed
@@ -160,7 +196,7 @@ class TestWeightedRouting(unittest.TestCase):
         self.assertNotEqual(got[0], sx_sy)
         # start on a map cell AND another costed cell on the way
         e._cost_map_arg = {sx_sy: 1.0, c: 1.0}
-        e.cost_alpha = float(DETOUR_FACTOR * d)
+        e.cost_alpha = float(E + 1)
         e._set_active_map()
         got = e.find_path(start, goal, self.agv, care_for_agents=False)
         self.assertEqual(got, detour)
@@ -283,34 +319,56 @@ class TestCounters(unittest.TestCase):
         finally:
             env.close()
 
-    def test_routes_changed_matches_independent_count_all_callers(self):
-        probe = make(FLOOR12)
+    def _count_against_reference(self, disturb, steps, alpha=8.0, seed=0):
+        """Run a stuck-aware CTA episode with the floor layout as the map. Every find_path call (all callers, policy
+        scoring included) is checked against a reference computed OUTSIDE the env's counter code: the vendor
+        Warehouse.find_path when no obstacle is active, else the obstacle port with weights=None. Returns
+        (total counted, counted while an obstacle was active)."""
+        probe = WarehouseEnv(SMALL, max_steps=steps, disturb=disturb)
+        probe.reset(seed=seed)
         cells = dict(probe.env.floor_cells)
         probe.close()
-        env = WarehouseEnv(SMALL, max_steps=80, disturb=FLOOR12, cost_map=cells, cost_alpha=8.0)
+        env = WarehouseEnv(SMALL, max_steps=steps, disturb=disturb, cost_map=cells, cost_alpha=alpha)
         try:
             pol = StuckAwareCtaPolicy()
-            obs, info = env.reset(seed=0)
+            obs, info = env.reset(seed=seed)
             e = env.env
             pol.reset(env)
             orig = type(e).find_path
-            window = []
+            window = []  # (changed, obstacle_active) per call since the previous step
 
             def watched(start, goal, agent, care_for_agents=True):
                 got = orig(e, start, goal, agent, care_for_agents)
-                window.append(got != Warehouse.find_path(e, start, goal, agent, care_for_agents))
+                obstacles = e._obstacles_now()
+                if obstacles:
+                    ref = e._find_path_with_obstacles(start, goal, agent, care_for_agents, obstacles, None)
+                else:
+                    ref = Warehouse.find_path(e, start, goal, agent, care_for_agents)
+                window.append((got != ref, bool(obstacles)))
                 return got
 
             e.find_path = watched
-            total = 0
-            for _ in range(80):
+            total = with_obstacle = 0
+            for _ in range(steps):
                 obs, _, _, _, info = env.step(pol.act(obs, info["action_mask"], info))
-                self.assertEqual(info["routes_changed_by_map"], sum(window))
-                total += sum(window)
+                self.assertEqual(info["routes_changed_by_map"], sum(c for c, _ in window))
+                total += sum(c for c, _ in window)
+                with_obstacle += sum(c for c, o in window if o)
                 del window[:]
-            self.assertGreater(total, 0, "the map never changed a route; the test would be vacuous")
+            return total, with_obstacle
         finally:
             env.close()
+
+    def test_routes_changed_matches_independent_count_all_callers(self):
+        total, _ = self._count_against_reference(FLOOR12, 80)
+        self.assertGreater(total, 0, "the map never changed a route; the test would be vacuous")
+
+    def test_routes_changed_matches_independent_count_with_active_obstacles(self):
+        cfg = dict(FLOOR12, blocked_cell={"rate_per_hour": 720, "duration": [20, 30]})  # onset probability 1 per step
+        total, with_obstacle = self._count_against_reference(cfg, 80)
+        self.assertGreater(total, 0, "the map never changed a route; the test would be vacuous")
+        self.assertGreater(with_obstacle, 0, "no counted route differed while an obstacle was active; the obstacle "
+                                             "branch of the count was not exercised")
 
     def test_zero_without_a_map_and_keys_always_present(self):
         for cm in (None, {}, "oracle"):  # oracle on a config with no floor is no map

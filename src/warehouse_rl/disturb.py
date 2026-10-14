@@ -426,7 +426,17 @@ class DisturbedWarehouse(Warehouse):
         grid[np.where(grid == 0)] = 1
         # the start-cell trim reads the BINARY grid (inf = the start was blocked); weights below must not change it
         trim = 1 - int(grid[start[0], start[1]] > 1)
-        if weights:  # binary grid first, then weight only the cells that are still finite; vendor (x, y) -> grid[y, x]
+        # Weighted grid (S8C). The binary grid {1, inf} above is built exactly as without a map; only then does each map
+        # cell that is still finite get weight 1 + cost_alpha * cost (vendor (x, y) -> grid[y, x]); inf cells stay inf.
+        # The pyastar2d fork charges the sum of the entered cells' weights PLUS 1 per change of direction
+        # (astar.cpp L116: skipped when the entered weight is >= 100, i.e. for alpha*cost >= 99, where a costed cell
+        # is also indistinguishable from the fork's own "visited" marker `weights += 100`). So a sidestep around ONE
+        # costed cell costs extra steps + extra turns, not just extra steps: in open space out/down/back is +2 steps +2
+        # turns = 4, with walls beside the cell 6 or more. The detour is taken iff alpha*cost exceeds that E: at the
+        # headline alpha 4 and cost <= 1 (max +4 per cell) an isolated costed cell with a +2-step detour is NOT
+        # sidestepped (needs > 4 open, > 6 with walls). The map acts on runs of costed cells and on equal-length
+        # alternatives. If the path crosses k costed cells the threshold is k * alpha * cost > E.
+        if weights:
             for (wx, wy), cost in weights.items():
                 if grid[wy, wx] == 1:
                     grid[wy, wx] = np.float32(1 + self.cost_alpha * cost)

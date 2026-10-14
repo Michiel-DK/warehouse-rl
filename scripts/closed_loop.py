@@ -58,8 +58,13 @@ def phase_a(out_dir, env, seeds, steps, disturb, workers):
     """Emit -> ingest -> costmap, all under out_dir/phaseA. Returns the costmap.json path."""
     pa = out_dir / "phaseA"
     costmap = pa / "costmap.json"
+    meta_path = pa / "phaseA_meta.json"
+    meta = {"env": env, "seeds": seeds, "steps": steps, "disturb": disturb}
     if costmap.exists():
-        print(f"phase A: {costmap} exists, skipped")
+        have = json.loads(meta_path.read_text()) if meta_path.exists() else None
+        if have != meta:
+            raise RuntimeError(f"{costmap} exists but was built for {have}, this run is {meta}; use a new --out-dir")
+        print(f"phase A: {costmap} exists (same env/seeds/steps/disturb), skipped")
         return costmap
     print("phase A: emit -> ingest -> costmap")
     py = sys.executable
@@ -72,6 +77,7 @@ def phase_a(out_dir, env, seeds, steps, disturb, workers):
           "--once"])
     _run([py, REPO / "fleet" / "costmap.py", "--glob", glob, "--run", "closed_loop", "--store", store, "--out",
           str(costmap)])
+    meta_path.write_text(json.dumps(meta, indent=1))
     return costmap
 
 
