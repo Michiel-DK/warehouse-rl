@@ -28,6 +28,8 @@ class WarehouseEnv(gym.Env):
         disturb=None,
         assign_care_for_agents=False,
         recovery=None,
+        cost_map=None,
+        cost_alpha=4.0,
     ):
         # disturb=None: the S1 path, untouched. disturb=dict: DisturbedWarehouse (see disturb.py); {} = no disturbance.
         # Preset names / JSON strings are resolved by the caller (disturb.resolve_disturb), not here.
@@ -36,6 +38,10 @@ class WarehouseEnv(gym.Env):
         # recovery=None: today's code path. recovery=dict (recovery.normalise_recovery): RecoveryHook; needs a disturb dict.
         if recovery is not None and disturb is None:
             raise ValueError("recovery needs a disturb dict (pass {} for no disturbance)")
+        # cost_map (None | {(x, y): cost} | "oracle") and cost_alpha: the cost-aware router, see DisturbedWarehouse.
+        if cost_map is not None and disturb is None:
+            raise ValueError("cost_map needs a disturb dict (the cost-aware router lives in the disturbance layer)")
+        map_kwargs = dict(cost_map=cost_map, cost_alpha=cost_alpha)
         if disturb is None:
             self.env = gym.make(env_id, max_steps=max_steps).unwrapped
         elif isinstance(disturb, dict):
@@ -45,9 +51,10 @@ class WarehouseEnv(gym.Env):
                 rcfg = normalise_recovery(recovery)
                 self.env = RecoveryHook(disturb=disturb, recovery=make_recovery(rcfg),
                                         call_human_cost=rcfg["call_human_cost"],
-                                        assign_care_for_agents=assign_care_for_agents, **kwargs)
+                                        assign_care_for_agents=assign_care_for_agents, **map_kwargs, **kwargs)
             else:
-                self.env = DisturbedWarehouse(disturb=disturb, assign_care_for_agents=assign_care_for_agents, **kwargs)
+                self.env = DisturbedWarehouse(disturb=disturb, assign_care_for_agents=assign_care_for_agents,
+                                              **map_kwargs, **kwargs)
         else:
             raise ValueError(f"disturb must be None or a dict, got {type(disturb).__name__}")
         self.disturb = disturb

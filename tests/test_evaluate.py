@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import os
 import json
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -179,6 +181,171 @@ class TestThroughput(unittest.TestCase):
         fallback = max(1, os.cpu_count() - 2)
         self.assertEqual(self._run(["--workers"], {"SCHED_WORKERS": ""})["workers"], fallback)
         self.assertEqual(self._run(["--workers", ""], {"SCHED_WORKERS": ""})["workers"], fallback)
+
+
+class _InProcessPool:
+    """Stand-in for mp.Pool: runs the jobs in this process, in order (so a spy on WarehouseEnv sees every env)."""
+
+    def __init__(self, n):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def imap_unordered(self, fn, jobs):
+        return (fn(j) for j in jobs)
+
+
+FLOOR_JSON = '{"floor": {"cells": 6, "p": [0.3, 0.6]}}'
+
+
+class TestCostMapFlags(unittest.TestCase):
+    """S8C: evaluate --costmap / --costmap-oracle / --costmap-alpha / --costmap-seed-base."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.cm = self.tmp / "costmap.json"
+        self.cm.write_text(json.dumps({"schema_version": "fleet-costmap/1", "run": "t", "generated_at": "2026-10-14T10:00:00Z",
+                                       "zones": {"0": {"3,4": 0.5, "5,6": 1.0}, "1": {"7,8": 0.25}, "2": {}}}))
+        self.sha10 = hashlib.sha256(self.cm.read_bytes()).hexdigest()[:10]
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _run(self, name, seeds=(0, 1), disturb=FLOOR_JSON, policy="cta", recovery=None, **kw):
+        """evaluate() in-process with a spy on every WarehouseEnv built. -> (results dir, [kwargs of each env])."""
+        import warehouse_rl.env as envmod
+
+        d = self.tmp / name
+        built = []
+        real = envmod.WarehouseEnv
+
+        def spy(*a, **k):
+            built.append(dict(k))
+            return real(*a, **k)
+
+        with mock.patch.object(ev.mp, "Pool", _InProcessPool), mock.patch.object(envmod, "WarehouseEnv", spy):
+            ev.evaluate(policy, ENV_ID, 10, list(seeds), 1, d, disturb, recovery, **kw)
+        return d, built
+
+    def _only_doc(self, d):
+        files = sorted(d.glob("*.json"))
+        self.assertEqual(len(files), 1, files)
+        return files[0], json.loads(files[0].read_text())
+
+    def test_env_of_every_seed_gets_its_zone_and_alpha(self):
+        for policy, rec in (("cta", None), ("stuck_aware_cta", "timeout")):  # both env-building paths
+            with self.subTest(recovery=rec):
+                d, built = self._run(f"z-{policy}", seeds=(10, 11, 12), policy=policy, recovery=rec, costmap=str(self.cm),
+                                     costmap_alpha=2.5, costmap_seed_base=10)
+                self.assertEqual([b["cost_map"] for b in built], [{(3, 4): 0.5, (5, 6): 1.0}, {(7, 8): 0.25}, {}])
+                self.assertEqual([b["cost_alpha"] for b in built], [2.5] * 3)
+
+    def test_oracle_envs(self):
+        d, built = self._run("o", costmap_oracle=True)
+        self.assertEqual([b["cost_map"] for b in built], ["oracle", "oracle"])
+        self.assertEqual([b["cost_alpha"] for b in built], [4.0, 4.0])
+
+    def test_missing_zone_raises_and_empty_zone_is_an_inactive_map(self):
+        with self.assertRaises(ValueError):
+            self._run("m", seeds=(0, 3), costmap=str(self.cm))
+        with self.assertRaises(ValueError):  # seed base shifts the zones: seed 0 -> zone "-1"
+            self._run("m2", seeds=(0,), costmap=str(self.cm), costmap_seed_base=1)
+        d, built = self._run("e", seeds=(2,), costmap=str(self.cm))
+        self.assertEqual(built[0]["cost_map"], {})
+
+    def test_rejected_flag_combinations(self):
+        cm = str(self.cm)
+        bad = [dict(costmap=cm, costmap_oracle=True), dict(costmap=cm, disturb="none"),
+               dict(costmap_oracle=True, disturb="none"), dict(costmap_alpha=2.0), dict(costmap_seed_base=1),
+               dict(costmap_oracle=True, costmap_seed_base=0), dict(costmap=cm, costmap_alpha=-1.0),
+               dict(costmap=cm, costmap_alpha=float("nan")),
+               dict(costmap_oracle=True, policy="stuck_aware_cta", recovery="learned:/nonexistent.pt")]
+        for i, kw in enumerate(bad):
+            with self.subTest(kw=kw):
+                with self.assertRaises(ValueError):
+                    self._run(f"r{i}", **kw)
+                self.assertEqual(list((self.tmp / f"r{i}").glob("*.json")), [])
+
+    def test_header_filename_and_rows(self):
+        base, _ = self._run("base")
+        base_file, base_doc = self._only_doc(base)
+        # no map flag: the header carries no costmap fields; disturbed rows gain the two zero sums
+        self.assertFalse({"costmap", "costmap_alpha", "costmap_generated_at"} & set(base_doc))
+        for r in base_doc["rows"]:
+            self.assertEqual((r["routes_changed_by_map"], r["map_cells_entered"]), (0, 0))
+        d, _ = self._run("cm", costmap=str(self.cm), costmap_alpha=3.0)
+        f, doc = self._only_doc(d)
+        self.assertEqual(f.name, base_file.name[:-len(".json")] + f"_cm-{self.sha10}.json")
+        self.assertEqual(doc["costmap"], f"{self.sha10}:{self.cm}")
+        self.assertEqual((doc["costmap_alpha"], doc["costmap_generated_at"]), (3.0, "2026-10-14T10:00:00Z"))
+        self.assertEqual(doc["costmap_seed_base"], 0)  # omitted flag = effective base 0
+        d, _ = self._run("or", costmap_oracle=True)
+        f, doc = self._only_doc(d)
+        self.assertEqual(f.name, base_file.name[:-len(".json")] + "_cm-oracle.json")
+        self.assertEqual(doc["costmap"], "oracle")
+        self.assertEqual((doc["costmap_alpha"], doc["costmap_generated_at"]), (4.0, None))
+        self.assertIsNone(doc["costmap_seed_base"])  # the oracle has no zones, hence no base
+        # recovery runs: the name is the recovery name plus the suffix
+        d, _ = self._run("rec", policy="stuck_aware_cta", recovery="timeout", costmap_oracle=True)
+        self.assertTrue(self._only_doc(d)[0].name.endswith("_timeout_cm-oracle.json"))
+
+    def test_seed_base_is_part_of_the_identity(self):  # inject: leave costmap_seed_base out of the header / the check
+        # A map whose zones '0'..'6' cover every seed used below under bases 0, 1 and 5, so the missing-zone
+        # ValueError (message says "seed base", with a space) can never fire: every refusal here must come from
+        # _check_same_costmap, whose message names the key costmap_seed_base (underscore).
+        cm7 = self.tmp / "costmap7.json"
+        cm7.write_text(json.dumps({"schema_version": "fleet-costmap/1", "run": "t7", "generated_at": "2026-10-14T10:00:00Z",
+                                   "zones": {str(z): {f"{3 + z},4": 0.5} for z in range(7)}}))
+        seeds = (5, 6)  # base 0 -> zones 5, 6; base 5 -> zones 0, 1; base 1 -> zones 4, 5: all exist
+        d, _ = self._run("sb", seeds=seeds, costmap=str(cm7))
+        _, doc = self._only_doc(d)
+        self.assertEqual(doc["costmap_seed_base"], 0)
+        rows_before = json.loads(json.dumps(doc["rows"]))
+        with mock.patch.object(ev.mp, "Pool", _InProcessPool):
+            # base 5 first, so the mutant (key dropped from the identity check) fails on this line
+            with self.assertRaisesRegex(ValueError, "costmap_seed_base"):
+                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(cm7), costmap_seed_base=5)
+            with self.assertRaisesRegex(ValueError, "costmap_seed_base"):
+                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(cm7), costmap_seed_base=1)
+            # an explicit 0 is the same identity as the omitted flag: resumes
+            ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(cm7), costmap_seed_base=0)
+        # the stored rows were not touched by the refused runs
+        self.assertEqual(self._only_doc(d)[1]["rows"], rows_before)
+        # base 5 into its own dir records 5 (seeds 5, 6 -> zones 0, 1)
+        d5, _ = self._run("sb5", seeds=seeds, costmap=str(cm7), costmap_seed_base=5)
+        self.assertEqual(self._only_doc(d5)[1]["costmap_seed_base"], 5)
+
+    def test_undisturbed_rows_unchanged(self):
+        d, _ = self._run("u", disturb="none")
+        _, doc = self._only_doc(d)
+        self.assertNotIn("routes_changed_by_map", doc["rows"][0])
+        self.assertNotIn("costmap", doc)
+
+    def test_resume_with_another_map_or_alpha_raises(self):
+        self._run("res", costmap_oracle=True, costmap_alpha=4.0)
+        d = self.tmp / "res"
+        with mock.patch.object(ev.mp, "Pool", _InProcessPool):
+            ev.evaluate("cta", ENV_ID, 10, [0, 1], 1, d, FLOOR_JSON, None, costmap_oracle=True)  # same: resumes
+            with self.assertRaises(ValueError):
+                ev.evaluate("cta", ENV_ID, 10, [0, 1], 1, d, FLOOR_JSON, None, costmap_oracle=True, costmap_alpha=2.0)
+        self._run("res2", costmap=str(self.cm), costmap_alpha=4.0)
+        d2 = self.tmp / "res2"
+        with mock.patch.object(ev.mp, "Pool", _InProcessPool):
+            with self.assertRaises(ValueError):
+                ev.evaluate("cta", ENV_ID, 10, [0, 1], 1, d2, FLOOR_JSON, None, costmap=str(self.cm), costmap_alpha=2.0)
+        # a stored header that differs (file edited / other map under the same name) raises too
+        f = next(d2.glob("*.json"))
+        doc = json.loads(f.read_text())
+        doc["costmap"] = "oracle"
+        f.write_text(json.dumps(doc))
+        with mock.patch.object(ev.mp, "Pool", _InProcessPool):
+            with self.assertRaises(ValueError):
+                ev.evaluate("cta", ENV_ID, 10, [0, 1], 1, d2, FLOOR_JSON, None, costmap=str(self.cm))
 
 
 if __name__ == "__main__":

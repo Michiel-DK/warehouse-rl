@@ -147,9 +147,11 @@ class TestSmokeAndResume(unittest.TestCase):
         committed = json.loads((ROOT / "results" / "recovery" / "timeout.json").read_text())["rows"]
         theirs = next(r for r in committed if r["point"] == 1 and r["seed"] == 0)
         # rows written since lane E also carry the two blocker_frozen counters; the committed rows predate them
-        # and the S8A floor_skip_steps sum, which is 0 in a run without a floor config
-        new = {"decisions_while_blocker_frozen", "reroutes_while_blocker_frozen", "floor_skip_steps"}
-        self.assertEqual(mine["floor_skip_steps"], 0)
+        # and the S8A floor_skip_steps sum, which is 0 in a run without a floor config, and the two S8C map sums
+        # (routes_changed_by_map, map_cells_entered), which are 0 in a run without a cost map
+        new = {"decisions_while_blocker_frozen", "reroutes_while_blocker_frozen", "floor_skip_steps",
+               "routes_changed_by_map", "map_cells_entered"}
+        self.assertEqual((mine["floor_skip_steps"], mine["routes_changed_by_map"], mine["map_cells_entered"]), (0, 0, 0))
         self.assertEqual(set(mine) - set(theirs), new)
         # everything above is portable; the values are only comparable on the platform the committed file was measured on
         file_platform = _platform.results_platform(json.loads((ROOT / "results" / "recovery" / "timeout.json").read_text()))
