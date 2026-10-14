@@ -1139,9 +1139,17 @@ class TestAnalystIsolation(unittest.TestCase):
         files = [p for p in sorted(fa.glob("*.py")) if p.name not in ("emitter.py", "emit_ledger.py", "sinks.py", "score.py")]
         files += [p for p in sorted((ROOT / "fleet").glob("*.py"))
                   # score.py, report.py, alert.py: S5C1 CLIs (score.py is the ground-truth scorer), not lane-added
+                  # replay_export.py (S8-REPLAY): a viewer of a finished run that reads truth.json on purpose, to draw
+                  # the hidden floor problems; nothing it reads feeds back into any analyst module
                   if p.name not in ("emit.py", "grade.py", "hotspot_score.py", "__init__.py", "score.py", "report.py",
-                                    "alert.py")]
+                                    "alert.py", "replay_export.py")]
         return files
+
+    def test_no_analyser_module_imports_replay_export(self):
+        # replay_export.py is exempt from the truth scan above only because nothing in the analyser reads it back
+        for p in sorted((ROOT / "fleet" / "fleet_analyser").glob("*.py")):
+            self.assertNotRegex(p.read_text(), r"(?m)^\s*(from|import)\s+(\.*\s*)?replay_export\b|import\s+.*replay_export",
+                                p.name)
 
     def test_no_ground_truth_in_analyst_code(self):
         # inject: mention truth.json / floor_cells in costmap.py, hotspot.py or any new analyst module
