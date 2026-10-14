@@ -561,7 +561,7 @@ What this earns: "the stream alone finds the worst floor cells with high precisi
 
 ## Sprint 8: the closed loop (2026-10-14)
 
-The analyst's cost map goes back to the central planner: `DisturbedWarehouse.find_path` puts weight `1 + alpha * cost` on every mapped cell for every path search (macro-action assignment, vendor replans, recovery reroute, CTA's distance scoring). One run of `scripts/closed_loop.py --seeds 30 --steps 500 --alphas 2,4,8 --workers 8 --out-dir results/closed_loop` (88 s wall). Medium map, `stuck_aware_cta` + `timeout`, the Sprint 8 floor regime `{"floor": {"cells": 80, "p": [0.3, 0.7]}}`, seeds 0-29, every arm paired per seed. Phase A emits the 30 zones with no map, ingests them and publishes one cost map per zone at the stream end (`results/closed_loop/phaseA/costmap.json`); Phase B replays seed z with zone z's map. Data: `results/closed_loop/summary.json`, the per-arm results under `results/closed_loop/<arm>/`. Lane report: `laptop-scheduler/reports/wr-lane-s8c.md`.
+The analyst's cost map goes back to the central planner: `DisturbedWarehouse.find_path` puts weight `1 + alpha * cost` on every mapped cell for every path search (macro-action assignment, vendor replans, recovery reroute, CTA's distance scoring). One run of `scripts/closed_loop.py --seeds 30 --steps 500 --alphas 2,4,8 --workers 8 --out-dir results/closed_loop` Medium map, `stuck_aware_cta` + `timeout`, the Sprint 8 floor regime `{"floor": {"cells": 80, "p": [0.3, 0.7]}}`, seeds 0-29, every arm paired per seed. Phase A emits the 30 zones with no map, ingests them and publishes one cost map per zone at the stream end (`results/closed_loop/phaseA/costmap.json`); Phase B replays seed z with zone z's map. Data: `results/closed_loop/summary.json`, the per-arm results under `results/closed_loop/<arm>/`. Lane report: `laptop-scheduler/reports/wr-lane-s8c.md`.
 
 | arm | map | pick-rate (lines/h) | 95% CI | paired delta vs none (95% CI) | share of the floor loss recovered (95% CI) | routes changed by the map / episode | floor skips / episode |
 |---|---|---|---|---|---|---|---|
@@ -589,10 +589,10 @@ The floor loss is undisturbed - none = 6.14 lines/h (11.4%), paired per seed. `n
 
 60% of the top-20 forecasts are still in the top 20 an hour later. Precision, recall and Spearman are unchanged.
 
-**Replay page.** [`docs/replay/index.html`](docs/replay/index.html) (opens from disk, no server needed) replays one zone (seed 0, 500 steps) in three panels on one timeline: the hidden floor, the extractor's counters and the analyst's growing map. You can toggle a re-run of the same seed with the map switched on. Its grades are the pre-S8D count grade. Its with-map layer is in-sample (the final map of that same episode, on from step 0). The page has not yet been checked in a browser.
+**Replay page.** [`docs/replay/index.html`](docs/replay/index.html) (opens from disk, no server needed) replays one zone (seed 0, 500 steps) in three panels on one timeline: the hidden floor, the extractor's counters and the analyst's map (two publishes, at steps 250 and 499). You can toggle a re-run of the same seed with the map switched on. Its grades are the pre-S8D count grade. Its with-map layer is in-sample (the final map of that same episode, on from step 0). The page has not yet been checked in a browser.
 
 **Caveats.**
-- The floor is a uniform draw over the 380 highway cells. Real damage clusters on busy aisles, which would favour a map learned from traffic.
+- The floor is a uniform draw over the 380 highway cells. Real damage clusters on busy aisles. What a traffic-weighted draw would do is untested, and it could move either arm.
 - One context layer (`floor`) only. The other layers are not built.
 - The map is "yesterday's data" from the same seed. Phase A runs seed z with no map, and Phase B runs seed z again with that map, so the floor layout and the demand are identical. That is in-sample and optimistic: a real deployment would face a new day.
 - The oracle is an upper bound on the map's information, not on its penalty. Oracle costs are p_c in [0.3, 0.7], while the analyst map is normalised to 1.0 per zone, so at the same alpha the analyst map penalises its top cells harder. Map <= oracle is not guaranteed.
