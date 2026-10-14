@@ -295,22 +295,30 @@ class TestCostMapFlags(unittest.TestCase):
         self.assertTrue(self._only_doc(d)[0].name.endswith("_timeout_cm-oracle.json"))
 
     def test_seed_base_is_part_of_the_identity(self):  # inject: leave costmap_seed_base out of the header / the check
-        seeds = (1, 2)  # base 0 -> zones 1, 2; base 1 -> zones 0, 1: different routing for the same seeds
-        d, _ = self._run("sb", seeds=seeds, costmap=str(self.cm))
+        # A map whose zones '0'..'6' cover every seed used below under bases 0, 1 and 5, so the missing-zone
+        # ValueError (message says "seed base", with a space) can never fire: every refusal here must come from
+        # _check_same_costmap, whose message names the key costmap_seed_base (underscore).
+        cm7 = self.tmp / "costmap7.json"
+        cm7.write_text(json.dumps({"schema_version": "fleet-costmap/1", "run": "t7", "generated_at": "2026-10-14T10:00:00Z",
+                                   "zones": {str(z): {f"{3 + z},4": 0.5} for z in range(7)}}))
+        seeds = (5, 6)  # base 0 -> zones 5, 6; base 5 -> zones 0, 1; base 1 -> zones 4, 5: all exist
+        d, _ = self._run("sb", seeds=seeds, costmap=str(cm7))
         _, doc = self._only_doc(d)
         self.assertEqual(doc["costmap_seed_base"], 0)
+        rows_before = json.loads(json.dumps(doc["rows"]))
         with mock.patch.object(ev.mp, "Pool", _InProcessPool):
+            # base 5 first, so the mutant (key dropped from the identity check) fails on this line
+            with self.assertRaisesRegex(ValueError, "costmap_seed_base"):
+                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(cm7), costmap_seed_base=5)
+            with self.assertRaisesRegex(ValueError, "costmap_seed_base"):
+                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(cm7), costmap_seed_base=1)
             # an explicit 0 is the same identity as the omitted flag: resumes
-            ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(self.cm), costmap_seed_base=0)
-            with self.assertRaises(ValueError):
-                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(self.cm), costmap_seed_base=5)
-            with self.assertRaises(ValueError):
-                ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(self.cm), costmap_seed_base=1)
-        # base 5 into its own dir records 5 (seeds 5, 6 -> zones 0, 1)
-        d5, _ = self._run("sb5", seeds=(5, 6), costmap=str(self.cm), costmap_seed_base=5)
-        self.assertEqual(self._only_doc(d5)[1]["costmap_seed_base"], 5)
+            ev.evaluate("cta", ENV_ID, 10, list(seeds), 1, d, FLOOR_JSON, None, costmap=str(cm7), costmap_seed_base=0)
         # the stored rows were not touched by the refused runs
-        self.assertEqual([r["seed"] for r in self._only_doc(d)[1]["rows"]], list(seeds))
+        self.assertEqual(self._only_doc(d)[1]["rows"], rows_before)
+        # base 5 into its own dir records 5 (seeds 5, 6 -> zones 0, 1)
+        d5, _ = self._run("sb5", seeds=seeds, costmap=str(cm7), costmap_seed_base=5)
+        self.assertEqual(self._only_doc(d5)[1]["costmap_seed_base"], 5)
 
     def test_undisturbed_rows_unchanged(self):
         d, _ = self._run("u", disturb="none")
