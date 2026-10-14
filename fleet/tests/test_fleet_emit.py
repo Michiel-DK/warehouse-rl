@@ -110,11 +110,11 @@ class TestStream(unittest.TestCase):
         self.assertEqual(len(self.msgs), self.n * STEPS)  # robots x steps: no reset message
         for raw, m in zip(self.sink.lines, self.msgs):
             self.assertEqual(list(m), list(em.TOP_KEYS))
-            self.assertEqual(list(m["agvPosition"]), ["x", "y", "mapId"])
+            self.assertEqual(list(m["agvPosition"]), ["x", "y", "theta", "mapId"])
             self.assertEqual(list(m["custom"]), list(em.CUSTOM_KEYS))
             self.assertTrue(raw.endswith(b"\n") and raw.count(b"\n") == 1)
             self.assertEqual(raw, (json.dumps(m, separators=(",", ":")) + "\n").encode())
-            self.assertEqual(m["schema_version"], "fleet-state/1")
+            self.assertEqual(m["schema_version"], "fleet-state/2")
             self.assertEqual(m["manufacturer"], "sim")
             self.assertRegex(m["serialNumber"], r"^Z0-\d\d$")
             self.assertIs(m["paused"], False)

@@ -7,11 +7,24 @@ READS the env after each step. Per-agent recovery ground truth comes from wrappi
 (instance attribute shadowing the method; decisions are unchanged). src/, scripts/ and vendor/ are imported read-only.
 
 Message contract (key order is fixed; docs/SCOPE.md "S5A" has the field semantics):
-  schema_version, headerId, timestamp, manufacturer, serialNumber, orderId, lastNodeId, agvPosition{x,y,mapId},
-  driving, paused, errors, loads, custom{stuck_count, carrying, recovery_action, stuck_event, clash_event}
+  schema_version, headerId, timestamp, manufacturer, serialNumber, orderId, lastNodeId, nodeStates,
+  agvPosition{x,y,theta,mapId}, driving, paused, errors, loads,
+  custom{stuck_count, carrying, recovery_action, stuck_event, clash_event}
+
+fleet-state/2 adds two standard VDA 5050 fields the robot itself reports (its own plan, never disturbance truth):
+  agvPosition.theta  heading in radians, counter-clockwise from +x with the grid's y axis pointing down, rounded to 4
+                     decimals: RIGHT 0.0, UP pi/2, LEFT pi, DOWN -pi/2.
+  nodeStates         the robot's remaining route TRUNCATED to its first node (byte budget of the S5 benchmark):
+                     [{"nodeId": "x-y", "sequenceId": 0, "released": true, "nodePosition": {"x", "y", "mapId"}}] from
+                     agent.path[0] read after the step, [] when the robot has no route (path empty / None or not busy).
+
+Ground-truth sidecar: run_zone also returns floor_cells ({"x,y": p}) and floor_skips (per-step int list); run_fleet
+writes them to <ledger dir>/truth.json (fleet-truth/1). Only the emitter writes that file; nothing from it enters a
+message, a sink or an analyst module.
 """
 import datetime as _dt
 import json
+import math
 import multiprocessing as mp
 import os
 import queue as _queue
@@ -29,7 +42,9 @@ for _p in (REPO / "src", REPO / "scripts"):
 from . import sinks as _sinks  # noqa: E402
 from .emit_ledger import EmitLedger  # noqa: E402
 
-SCHEMA_VERSION = "fleet-state/1"
+SCHEMA_VERSION = "fleet-state/2"
+TRUTH_SCHEMA_VERSION = "fleet-truth/1"
+TRUTH_FILE = "truth.json"
 DEFAULT_ENV = "tarware-medium-8agvs-4pickers-globalobs-v1"
 DEFAULT_STEPS = 720
 DEFAULT_T0 = "2026-01-01T00:00:00Z"
@@ -38,8 +53,10 @@ DEFAULT_POLICY = "stuck_aware_cta"
 DEFAULT_LEDGER_INTERVAL = 10.0
 MANUFACTURER = "sim"
 TOP_KEYS = ("schema_version", "headerId", "timestamp", "manufacturer", "serialNumber", "orderId", "lastNodeId",
-            "agvPosition", "driving", "paused", "errors", "loads", "custom")
+            "nodeStates", "agvPosition", "driving", "paused", "errors", "loads", "custom")
 CUSTOM_KEYS = ("stuck_count", "carrying", "recovery_action", "stuck_event", "clash_event")
+AGV_POSITION_KEYS = ("x", "y", "theta", "mapId")
+_THETA = {"RIGHT": 0.0, "UP": round(math.pi / 2, 4), "LEFT": round(math.pi, 4), "DOWN": round(-math.pi / 2, 4)}
 ERROR = {"errorType": "BREAKDOWN", "errorLevel": "FATAL"}
 _TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -87,6 +104,21 @@ class OrderTracker:
 
 
 # ------------------------------------------------------------------------------------------------ message
+def theta_of(agent):
+    """Heading in radians (see the module docstring); the vendor Direction enum name picks the value."""
+    return _THETA[agent.dir.name]
+
+
+def node_states(agent, env_id):
+    """The robot's route truncated to its first node: agent.path[0] (an (x, y) cell) or [] when there is no route."""
+    path = agent.path
+    if not agent.busy or not path:
+        return []
+    x, y = int(path[0][0]), int(path[0][1])
+    return [{"nodeId": f"{x}-{y}", "sequenceId": 0, "released": True,
+             "nodePosition": {"x": x, "y": y, "mapId": env_id}}]
+
+
 def build_message(zone, agent, env_id, header_id, timestamp, order_id, driving, frozen, stuck_count, decisions):
     """One state dict in contract key order. decisions = [(is_clash, action), ...] recorded for this agent this step."""
     action = decisions[-1][1] if decisions else None
@@ -98,7 +130,8 @@ def build_message(zone, agent, env_id, header_id, timestamp, order_id, driving, 
         "serialNumber": f"Z{zone}-{agent.id:02d}",
         "orderId": order_id,
         "lastNodeId": f"{int(agent.x)}-{int(agent.y)}",
-        "agvPosition": {"x": int(agent.x), "y": int(agent.y), "mapId": env_id},
+        "nodeStates": node_states(agent, env_id),
+        "agvPosition": {"x": int(agent.x), "y": int(agent.y), "theta": theta_of(agent), "mapId": env_id},
         "driving": bool(driving),
         "paused": False,
         "errors": [dict(ERROR)] if frozen else [],
@@ -160,6 +193,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             return dict(sink.stats(), **robots, **state)
 
         obs, info = env.reset(seed=seed)
+        floor_cells = {f"{x},{y}": float(p) for (x, y), p in hook.floor_cells.items()}  # ground truth: sidecar only
         pol.reset(env)
         agents = hook.agents  # rebuilt by reset
         if len(agents) != n:
@@ -172,6 +206,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         headers = [0] * n
         prev_pos = [(a.x, a.y) for a in agents]
         deliveries = 0
+        floor_skips = []
         start = last_report = clock()
         speed = cfg.get("speed", 0)
         paced = cfg.get("rate", "flat") == "realtime" and speed and speed > 0
@@ -181,6 +216,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             recorded.clear()
             obs, _, _, _, info = env.step(actions)
             deliveries += int(info["shelf_deliveries"])
+            floor_skips.append(int(info.get("floor_skips", 0) or 0))
             if paced:
                 wait = start + step * STEP_SECONDS / speed - clock()
                 if wait > 0:
@@ -211,7 +247,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     if report:
         report(final)
     return dict(zone=zone, seed=seed, steps=steps, deliveries=deliveries,
-                pick_rate=deliveries * 3600 / (STEP_SECONDS * steps), snapshot=final)
+                pick_rate=deliveries * 3600 / (STEP_SECONDS * steps), snapshot=final, floor_cells=floor_cells,
+                floor_skips=floor_skips)
 
 
 def _zone_main(cfg, sink_spec, q):
@@ -227,6 +264,23 @@ def _zone_main(cfg, sink_spec, q):
 
 
 # ------------------------------------------------------------------------------------------------ fleet
+def write_truth(path, run, results):
+    """The ground-truth sidecar, atomically (tmp + os.replace). Returns its exact size in bytes. Completed zones only."""
+    doc = dict(schema_version=TRUTH_SCHEMA_VERSION, env_id=run["env_id"], disturb_tag=run["disturb_tag"],
+               disturb=run["disturb"], steps=run["steps"], seed_base=run["seed_base"],
+               zones={str(z): dict(seed=r["seed"], floor_cells=r["floor_cells"], floor_skips=r["floor_skips"],
+                                   floor_skips_total=sum(r["floor_skips"])) for z, r in sorted(results.items())})
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(doc, f, indent=1)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    return os.path.getsize(path)
+
+
 def run_fleet(run, sink_spec, ledger_path, workers, ledger_interval=DEFAULT_LEDGER_INTERVAL, log=print):
     """Run all zones, at most `workers` at a time, each in a fresh spawned process. Returns (exit_code, summary).
 
@@ -297,6 +351,7 @@ def run_fleet(run, sink_spec, ledger_path, workers, ledger_interval=DEFAULT_LEDG
         ledger.mark_unfinished()
         ledger.write("failed")
         raise
+    ledger.truth = dict(file=TRUTH_FILE, bytes=write_truth(Path(ledger_path).parent / TRUTH_FILE, run, results))
     ok = not failed and len(results) == zones
     if failed:
         ledger.error = {str(z): tb for z, tb in sorted(failed.items())}

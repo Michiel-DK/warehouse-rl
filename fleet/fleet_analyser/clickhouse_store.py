@@ -39,6 +39,8 @@ UPSERT_KEYS = {
     "stuck_episodes": ("run", "episode_id"), "ingest_ledger": ("run", "source", "minute"),
     "ingest_files": ("run", "path"), "ingest_checkpoints": ("run", "path"), "ingest_runs": ("run",),
     "decision_grades": ("id",), "ingest_consumer_lag": ("run", "topic"),
+    "stalls": ("run", "zone", "robot", "start"), "costmap": ("run", "published_at", "zone", "cell"),
+    "forecast_grades": ("id", "grade_source"),
 }
 UPSERT_TABLES = frozenset(UPSERT_KEYS)
 HIDDEN = ("schema_version", "_ver", "_first")

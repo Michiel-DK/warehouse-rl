@@ -94,7 +94,8 @@ class TestParse(unittest.TestCase):
         # inject: add a Message field copied from custom (e.g. stuck_count / carrying) or keep the custom dict on it
         names = {f.name for f in dataclasses.fields(Message)}
         self.assertEqual(names, {"serial", "zone", "header_id", "ts", "order_id", "x", "y", "driving", "faulted",
-                                 "loaded", "raw_len"})
+                                 "loaded", "raw_len", "theta", "next_x", "next_y",
+                                 "nodes_reported"})
         msg, _ = parse_line(raw(custom={"stuck_count": 999, "sentinel": "SENTINEL-VALUE"}))
         values = [getattr(msg, n) for n in names]
         self.assertNotIn(999, [v for v in values if not isinstance(v, bool)])

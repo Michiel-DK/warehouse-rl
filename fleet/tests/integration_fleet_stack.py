@@ -6,6 +6,7 @@ test_fleet_*.py); run it explicitly from the repo root:
 It starts only the clickhouse service (`fleet/compose.sh up clickhouse`, mem_limit 3g), uses a throwaway database,
 and brings the stack down afterwards (`fleet/compose.sh down`; data stays in the fleet_clickhouse volume). Skips with a reason
 when `docker info` fails. Host port: FLEET_CLICKHOUSE_PORT (default 18123)."""
+import json
 import os
 import subprocess
 import sys
@@ -18,11 +19,16 @@ for _p in (ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from fleet.tests.test_fleet_hotspot import checkpoint_at, scenario  # noqa: E402
 from fleet.tests.test_fleet_ingest import emit_real  # noqa: E402
-from fleet_analyser import decisions  # noqa: E402
+from fleet_analyser import decisions, forecast_grade  # noqa: E402
 from fleet_analyser.clickhouse_store import ClickHouseStore  # noqa: E402
 from fleet_analyser.ingest import Ingester  # noqa: E402
 from fleet_analyser.ledger import coverage  # noqa: E402
+from fleet_analyser.store import MemoryStore  # noqa: E402
+
+import costmap  # noqa: E402
+import grade  # noqa: E402
 
 COMPOSE = str(ROOT / "fleet" / "compose.sh")
 PORT = int(os.environ.get("FLEET_CLICKHOUSE_PORT", "18123"))
@@ -87,6 +93,32 @@ class TestRealClickHouse(unittest.TestCase):
         self.assertEqual((d["status"], d["outcome"], d["verdict"], d["graded_at"], d["decided_at"]),
                          ("graded", "o", "v", 4000, 31))
         self.assertNotIn("schema_version", d)
+
+    def test_stalls_costmap_and_forecast_grades_round_trip(self):
+        """The S8B tables written through real ClickHouse equal the same run through MemoryStore."""
+        truth = {"zones": {"0": {"floor_cells": {"6,5": 0.5}}, "1": {"floor_cells": {}}}}
+        mem, ch = MemoryStore(), self.store()
+        for st in (mem, ch):
+            costmap.build_costmap(scenario(), st, "s8b", publish_every=1000)
+            checkpoint_at(st, 3000, run="s8b")
+            forecast_grade.grade_outcomes(st, "s8b", min_horizon_s=600)
+            if st is ch:
+                before = ch.select("decision_grades")
+            grade.grade_truth(st, "s8b", truth)
+            forecast_grade.grade_outcomes(st, "s8b", min_horizon_s=600)  # re-run: no new rows
+
+        def canon(st, table):
+            return sorted(json.dumps(r, sort_keys=True) for r in st.select(table, {"run": "s8b"}))
+
+        for table in ("stalls", "costmap", "forecast_grades"):
+            self.assertGreater(len(mem.select(table, {"run": "s8b"})), 0, table)
+            self.assertEqual(canon(ch, table), canon(mem, table), table)
+        sources = {r["grade_source"] for r in ch.select("forecast_grades", {"run": "s8b"})}
+        self.assertEqual(sources, {"outcome", "truth"})
+        graded = [d for d in ch.select("decisions", {"run": "s8b"}) if d["status"] == "graded"]
+        self.assertGreater(len(graded), 0)
+        self.assertGreater(len(before), 0)  # the outcome stamps wrote decision_grades; truth grading left them alone
+        self.assertEqual(ch.select("decision_grades"), before)
 
     def test_emit_two_zones_ingest_into_clickhouse_twice(self):
         with tempfile.TemporaryDirectory() as d:
