@@ -550,12 +550,192 @@ def stall_row(zone, cell, start, end, robot=None, **kw):
     return row
 
 
-def forecast_row(store, zone, cell, p, horizon, expected=1.0):
+def forecast_row(store, zone, cell, p, horizon, expected=1.0, **claim_extra):
+    """A hand-built hotspot_forecast. Default claim is the v1 shape (no top_k); pass rank=, top_k=, half_life_h=,
+    min_stalls=, exclude_occupied=, window_hours= for a v2 claim (see v2_forecast)."""
+    claim = dict(expected_stalls_next_hour=expected, cost=1.0, rank=1, horizon_s=horizon, window_hours=1.0)
+    claim.update(claim_extra)
     did, _ = decisions.record_decision(
         store, run="r", kind="hotspot_forecast", subject=f"Z{zone}:{cell}", start_iso=f"P{p}", decided_at=p,
-        claim=dict(expected_stalls_next_hour=expected, cost=1.0, rank=1, horizon_s=horizon, window_hours=1.0),
+        claim=claim,
         rationale="t", expected=expected, grade_after=p + horizon)
     return did
+
+
+def v2_forecast(store, zone, cell, p, horizon, rank, top_k=2, window_hours=0.25, half_life_h=1.0, min_stalls=1,
+                exclude_occupied=True):
+    return forecast_row(store, zone, cell, p, horizon, rank=rank, top_k=top_k, window_hours=window_hours,
+                        half_life_h=half_life_h, min_stalls=min_stalls, exclude_occupied=exclude_occupied)
+
+
+class TestRankGrade(unittest.TestCase):
+    """The rank grade: a claim of rank k <= K is graded on the cell's rank in the zone's map recomputed at P + H."""
+
+    P, H, K = 1000, 1000, 2
+
+    def put(self, store, zone, cell, starts, occupied=False, end_of=lambda st: 1900):
+        store.upsert("stalls", ("run", "zone", "robot", "start"),
+                     [stall_row(zone, cell, st, end_of(st), next_occupied=occupied) for st in starts])
+
+    def base_store(self):
+        """Zone 0 at window_end 2000 (window 900 s): ranks a=1 (3 stalls), b=2 (2), c=3 (1); d only stalled long ago."""
+        store = MemoryStore()
+        self.put(store, "0", "1,1", (1800, 1801, 1802))
+        self.put(store, "0", "2,1", (1810, 1811))
+        self.put(store, "0", "3,1", (1820,))
+        self.put(store, "0", "4,1", (100,), end_of=lambda st: 500)
+        checkpoint_at(store, 2000, zones=("0",))
+        return store
+
+    def rows(self, store, did):
+        return {g["grade_source"]: g for g in store.select("forecast_grades", {"id": did})}
+
+    def dec(self, store, did):
+        return next(r for r in store.select("decisions") if r["id"] == did)
+
+    def test_rank_ok_at_exactly_k_off_below_k_and_none_when_the_cell_vanishes(self):
+        # inject: m1 r <= K -> r < K (b sits at exactly rank K); m3 take the rank from the claim instead of recomputing
+        #         (c claims rank 2 but is rank 3 at the end); a cell absent from the map must give outcome None
+        store = self.base_store()
+        ids = {c: v2_forecast(store, "0", c, self.P, self.H, rank=k)
+               for c, k in (("1,1", 1), ("2,1", 2), ("3,1", 2), ("4,1", 1))}
+        res = forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        self.assertEqual(res, dict(graded=4, open=0, rank_graded=4, unranked=0))
+        want = {"1,1": (1, "ok"), "2,1": (2, "ok"), "3,1": (3, "off"), "4,1": (None, "off")}
+        for cell, (rank, verdict) in want.items():
+            r = self.rows(store, ids[cell])["outcome"]
+            self.assertEqual((r["outcome"], r["expected"], r["error"], r["verdict"], r["horizon_s"], r["graded_at"],
+                              r["window_end"]), (rank, self.K, None, verdict, self.H, 2000, self.P + self.H), cell)
+            d = self.dec(store, ids[cell])
+            self.assertEqual((d["status"], d["outcome"], d["error"], d["verdict"], d["graded_at"]),
+                             ("graded", rank, None, verdict, 2000), cell)
+
+    def test_count_grade_is_still_written_for_every_rank_graded_forecast(self):
+        # inject: m7 count grade written under "outcome" again (or not written for rank-graded forecasts)
+        store = self.base_store()
+        did = v2_forecast(store, "0", "1,1", self.P, self.H, rank=1)
+        forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        rows = self.rows(store, did)
+        self.assertEqual(set(rows), {"outcome", "outcome_count"})
+        c = rows["outcome_count"]
+        # observed = stalls of 1,1 starting in [1000, 2000) = 3; expected = 1.0 / h * 1000 s
+        self.assertEqual((c["outcome"], c["horizon_s"], c["graded_at"], c["window_end"]), (3, self.H, 2000, 2000))
+        self.assertAlmostEqual(c["expected"], 1000 / 3600, delta=1e-9)
+        self.assertAlmostEqual(c["error"], 3 - 1000 / 3600, delta=1e-9)
+        self.assertEqual(c["verdict"], "off")  # |3 - 0.28| > 0.5 * max(0.28, 1)
+
+    def test_claim_rank_above_k_is_unranked_terminally_and_has_no_outcome_row(self):
+        # inject: m2 eligibility k <= K -> k < K does not matter here, but k > K must stay graded on truth only;
+        #         m6 unranked decisions left open
+        store = self.base_store()
+        self.put(store, "0", "6,1", (1850,))
+        did = v2_forecast(store, "0", "6,1", self.P, self.H, rank=3)  # 3 > K = 2
+        res = forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        self.assertEqual(res, dict(graded=1, open=0, rank_graded=0, unranked=1))
+        self.assertEqual(set(self.rows(store, did)), {"outcome_count"})
+        d = self.dec(store, did)
+        c = self.rows(store, did)["outcome_count"]
+        self.assertEqual((d["status"], d["verdict"], d["outcome"], d["graded_at"]), ("graded", "unranked", 1, 2000))
+        self.assertAlmostEqual(d["error"], c["error"], delta=1e-9)
+        again = forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)  # terminal: nothing left to do
+        self.assertEqual(again, dict(graded=0, open=0, rank_graded=0, unranked=0))
+
+    def test_v1_claim_is_count_only_and_does_not_raise(self):
+        # inject: read claim["top_k"] without a default (KeyError on old stores)
+        store = self.base_store()
+        did = forecast_row(store, "0", "1,1", self.P, self.H)  # v1: no top_k, no half_life_h
+        res = forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        self.assertEqual(res, dict(graded=1, open=0, rank_graded=0, unranked=1))
+        self.assertEqual(set(self.rows(store, did)), {"outcome_count"})
+        d = self.dec(store, did)
+        self.assertEqual((d["status"], d["verdict"], d["outcome"]), ("graded", "unranked", 3))
+
+    def test_unobserved_horizon_stays_open_with_no_rows(self):
+        # inject: grade a v2 forecast before stream_end >= P + H
+        store2 = MemoryStore()
+        store2.upsert("stalls", ("run", "zone", "robot", "start"), [stall_row("0", "1,1", 1800, 1900)])
+        checkpoint_at(store2, 1999, zones=("0",))
+        did = v2_forecast(store2, "0", "1,1", self.P, self.H, rank=1)
+        res = forecast_grade.grade_outcomes(store2, "r", min_horizon_s=600)
+        self.assertEqual(res, dict(graded=0, open=1, rank_graded=0, unranked=0))
+        self.assertEqual(store2.select("forecast_grades"), [])
+        self.assertEqual(self.dec(store2, did)["status"], "open")
+
+    def occupied_case(self, claim_excludes, grader_excludes):
+        store = self.base_store()
+        self.put(store, "0", "7,1", (1830, 1831, 1832, 1833), occupied=True)  # 4 stalls, all behind a robot
+        did = v2_forecast(store, "0", "7,1", self.P, self.H, rank=1, exclude_occupied=claim_excludes)
+        forecast_grade.grade_outcomes(store, "r", min_horizon_s=600, exclude_occupied=grader_excludes)
+        return self.rows(store, did)["outcome"]
+
+    def test_rank_uses_the_claims_exclude_occupied_not_the_graders(self):
+        # inject: m4 the grader's exclude_occupied instead of the claim's
+        r = self.occupied_case(claim_excludes=True, grader_excludes=False)  # claim drops them: 7,1 not in the map
+        self.assertEqual((r["outcome"], r["verdict"]), (None, "off"))
+        r = self.occupied_case(claim_excludes=False, grader_excludes=True)  # claim counts them: 4 stalls, rank 1
+        self.assertEqual((r["outcome"], r["verdict"]), (1, "ok"))
+
+    def test_rank_uses_the_claims_window_and_min_stalls(self):
+        # inject: recompute with the default window / min_stalls instead of the claim's
+        store = self.base_store()
+        did = v2_forecast(store, "0", "2,1", self.P, self.H, rank=1, min_stalls=3)  # only 1,1 has 3 stalls
+        forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        self.assertEqual(self.rows(store, did)["outcome"]["outcome"], None)
+        store = self.base_store()
+        did = v2_forecast(store, "0", "4,1", self.P, self.H, rank=1, window_hours=1.0)  # the 1 h window reaches 100
+        forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        self.assertEqual(self.rows(store, did)["outcome"]["outcome"], 4)
+
+    def test_ties_in_rounded_cost_break_on_the_cell_string_like_costmap(self):
+        # inject: m5 raw-score order instead of rounded cost then cell
+        store = MemoryStore()
+        # 2,1 has the (microscopically) higher raw score, but both round to cost 1.0: "10,1" < "2,1" wins rank 1
+        self.put(store, "0", "2,1", (1800,), end_of=lambda st: 1900.0)
+        self.put(store, "0", "10,1", (1801,), end_of=lambda st: 1899.999)
+        checkpoint_at(store, 2000, zones=("0",))
+        did = v2_forecast(store, "0", "2,1", self.P, self.H, rank=1, top_k=1)
+        forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        r = self.rows(store, did)["outcome"]
+        self.assertEqual((r["outcome"], r["expected"], r["verdict"]), (2, 1, "off"))
+        maps = hotspot.cost_zones(store.select("stalls"), 2000, 0.25, 1.0, 1, True)
+        self.assertEqual({v["cost"] for v in maps["0"].values()}, {1.0})
+        self.assertEqual([c for c, _ in hotspot.rank_cells(maps["0"])], ["10,1", "2,1"])
+
+    def test_costmap_and_grader_share_one_ranking_function(self):
+        # inject: a second copy of cost_zones / the ranking in costmap.py
+        self.assertIs(costmap.cost_zones, hotspot.cost_zones)
+        self.assertIn("hotspot.rank_cells", (ROOT / "fleet" / "costmap.py").read_text())
+
+    def test_rank_is_per_zone(self):
+        # inject: rank across zones (one map for all cells)
+        store = self.base_store()
+        self.put(store, "1", "1,1", (1800,))
+        checkpoint_at(store, 2000, zones=("0", "1"))
+        did = v2_forecast(store, "1", "1,1", self.P, self.H, rank=1)
+        forecast_grade.grade_outcomes(store, "r", min_horizon_s=600)
+        self.assertEqual(self.rows(store, did)["outcome"]["outcome"], 1)  # zone 1's only cell, not behind zone 0's 3
+
+
+class TestClaimV2FromCostmap(unittest.TestCase):
+    def test_top_k_flag_and_claim_values_reach_the_decisions(self):
+        # inject: --top-k ignored (claim keeps the default), or the map parameters left out of the claim
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            st = JsonlStore(d / "st")
+            costmap.build_costmap(scenario(), st, "r", window_h=2, half_life_h=0.5, min_stalls=1, publish_every=1000,
+                                  exclude_occupied=False, top_k=7)
+            claims = [json.loads(r["claim"]) for r in st.select("decisions")]
+            st.close()
+        self.assertTrue(claims)
+        for c in claims:
+            self.assertEqual((c["top_k"], c["half_life_h"], c["min_stalls"], c["exclude_occupied"], c["window_hours"]),
+                             (7, 0.5, 1, False, 2))
+
+    def test_cli_top_k_default_and_validation(self):
+        # inject: --top-k 0 accepted
+        self.assertEqual(costmap.build_parser().parse_args(["--glob", "x"]).top_k, 20)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            costmap.main(["--glob", "x", "--top-k", "0"])
 
 
 class TestOutcomeWindow(unittest.TestCase):
@@ -835,6 +1015,23 @@ class TestNewTablesSchema(unittest.TestCase):
         self.assertNotIn("decision_grades", self.rec.cols)  # neither grader writes it
 
 
+class TestRankGradingBlock(unittest.TestCase):
+    def test_grading_counts_by_source_and_rank_grading_block(self):
+        # inject: count unranked as rank-graded, or report one fixed K instead of the K values seen
+        def g(i, src, verdict, expected=None):
+            return dict(id=i, grade_source=src, verdict=verdict, expected=expected)
+
+        grades = [g("a", "outcome", "ok", 20), g("b", "outcome", "off", 20), g("c", "outcome", "off", 5),
+                  g("a", "outcome_count", "ok"), g("b", "outcome_count", "off"), g("c", "outcome_count", "off"),
+                  g("d", "outcome_count", "off"), g("e", "outcome_count", "ok"),
+                  g("a", "truth", "hit"), g("d", "truth", "false_alarm")]
+        truth = {"zones": {"0": {"floor_cells": {"1,1": 0.5}}}}
+        res = hotspot_score.score_run(truth, {"zones": {"0": {"1,1": 1.0}}}, [], grades)
+        self.assertEqual(res["grading_counts"], {"outcome": {"ok": 1, "off": 2}, "outcome_count": {"ok": 2, "off": 3},
+                                                 "truth": {"hit": 1, "false_alarm": 1}})
+        self.assertEqual(res["rank_grading"], {"top_k": [5, 20], "rank_graded": 3, "unranked": 2})
+
+
 class TestScore(unittest.TestCase):
     CELLS = [f"{i},{j}" for i in range(19) for j in range(20)]  # 380 candidates
 
@@ -905,6 +1102,7 @@ class TestScore(unittest.TestCase):
         self.assertEqual(res["zones"]["0"]["n_flagged"], 10)
         self.assertEqual(res["mean"]["k"]["20"]["precision"], 10 / 20)
         self.assertEqual(res["grading_counts"], {"truth": {"hit": 1}})
+        self.assertEqual(res["rank_grading"], {"top_k": [], "rank_graded": 0, "unranked": 0})
         self.assertEqual(res["stall_in_episode"]["by_cause"], {"traffic": 1})
         self.assertNotIn("random_reference", res)  # out of scope: the base rate 80 / 380 lives in the PR text
         self.assertEqual(set(res["platform"]), {"platform", "python"})
