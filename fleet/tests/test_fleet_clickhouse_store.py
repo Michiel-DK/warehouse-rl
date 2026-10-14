@@ -121,6 +121,8 @@ class FakeClickHouse:
             t = parse_create(body)
             self.tables.setdefault(t["name"], dict(t, rows=[]))
             return ""
+        if body.startswith("ALTER TABLE") and "ADD COLUMN IF NOT EXISTS" in body:
+            return ""  # the migration for stacks created before a column; fresh CREATEs already have it
         if body.startswith("INSERT INTO"):
             head, _, data = body.partition("\n")
             name = re.match(r"INSERT INTO `(\w+)` FORMAT JSONEachRow$", head).group(1)
@@ -187,7 +189,7 @@ def fake_store(test):
 
 
 def schema_tables():
-    return {t["name"]: t for t in map(parse_create, chs.split_statements(SCHEMA.read_text()))}
+    return {t["name"]: t for t in map(parse_create, (st for st in chs.split_statements(SCHEMA.read_text()) if st.startswith("CREATE TABLE")))}
 
 
 # ------------------------------------------------------------------------------------------------ the contract
@@ -471,7 +473,8 @@ class TestSchema(unittest.TestCase):
             self.assertEqual(self.schema[table]["engine"], "MergeTree", table)
         self.assertEqual(self.schema["decision_grades"]["order"], ["id"])
         self.assertEqual(self.schema["decision_grades"]["engine"], "ReplacingMergeTree")
-        self.assertEqual(set(chs.UPSERT_TABLES), set(self.rec.keys) | {"decision_grades", "ingest_consumer_lag"})
+        self.assertEqual(set(chs.UPSERT_TABLES), set(self.rec.keys) | {"decision_grades", "ingest_consumer_lag", "stalls",
+                                                                    "costmap", "forecast_grades"})
         for table, key in chs.UPSERT_KEYS.items():  # the store's key table is the DDL's ORDER BY
             self.assertEqual(self.schema[table]["order"], list(key), table)
             self.assertIn("_first", self.schema[table]["cols"], table)

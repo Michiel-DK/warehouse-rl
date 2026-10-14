@@ -31,7 +31,7 @@ KEYWORDS = {
 
 def schema():
     """{table: set of column names} from schema.sql."""
-    return {t["name"]: set(t["cols"]) for t in map(parse_create, split_statements(SCHEMA.read_text()))}
+    return {t["name"]: set(t["cols"]) for t in map(parse_create, (st for st in split_statements(SCHEMA.read_text()) if st.startswith("CREATE TABLE")))}
 
 
 def unknown_names(sql, tables):

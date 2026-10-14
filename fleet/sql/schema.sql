@@ -149,12 +149,17 @@ CREATE TABLE IF NOT EXISTS ingest_checkpoints
     ledger_counters Nullable(String),
     cp_seq Int64,
     updated_at Float64,
+    last_message_ts_by_zone Nullable(String),
     schema_version UInt8 DEFAULT 1,
     _ver UInt64,
     _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, path);
+
+-- JSON {zone: event-time ts of the last accepted message of that zone}: the per-zone "observed up to" mark the forecast
+-- grader reads. ensure_schema runs every statement, so a stack created before this column gets it here.
+ALTER TABLE ingest_checkpoints ADD COLUMN IF NOT EXISTS last_message_ts_by_zone Nullable(String) AFTER updated_at;
 
 CREATE TABLE IF NOT EXISTS ingest_files
 (
@@ -251,3 +256,64 @@ CREATE TABLE IF NOT EXISTS results
 )
 ENGINE = MergeTree
 ORDER BY (kind, run, `key`);
+
+-- S8B hotspot tables (written by fleet/costmap.py and fleet/grade.py, never by ingest).
+-- One row per stall: a maximal run of consecutive messages of one robot that kept its cell, heading and order.
+CREATE TABLE IF NOT EXISTS stalls
+(
+    run String,
+    zone String,
+    robot String,
+    cell String,
+    attribution String,
+    `start` Int64,
+    `end` Int64,
+    n_msgs Int64,
+    seconds Int64,
+    next_occupied Bool,
+    in_episode Nullable(String),
+    faulted_episode Bool,
+    schema_version UInt8 DEFAULT 1,
+    _ver UInt64,
+    _first UInt64
+)
+ENGINE = ReplacingMergeTree(_ver)
+ORDER BY (run, zone, robot, start);
+
+-- One row per zone + cell + publish (nonzero cells only); published_at is the publish's event time in epoch seconds.
+CREATE TABLE IF NOT EXISTS costmap
+(
+    run String,
+    zone String,
+    published_at Int64,
+    cell String,
+    cost Float64,
+    score Float64,
+    stalls Int64,
+    schema_version UInt8 DEFAULT 1,
+    _ver UInt64,
+    _first UInt64
+)
+ENGINE = ReplacingMergeTree(_ver)
+ORDER BY (run, published_at, zone, cell);
+
+-- Grades of hotspot_forecast decisions, one row per (decision id, grade_source): "outcome" (later stream, also stamped on
+-- the decision) and "truth" (against the emitter's floor ground truth, never touches the decision).
+CREATE TABLE IF NOT EXISTS forecast_grades
+(
+    id String,
+    run String,
+    grade_source String,
+    outcome Nullable(Float64),
+    expected Nullable(Float64),
+    error Nullable(Float64),
+    verdict String,
+    horizon_s Nullable(Float64),
+    graded_at Nullable(Float64),
+    window_end Nullable(Float64),
+    schema_version UInt8 DEFAULT 1,
+    _ver UInt64,
+    _first UInt64
+)
+ENGINE = ReplacingMergeTree(_ver)
+ORDER BY (id, grade_source);

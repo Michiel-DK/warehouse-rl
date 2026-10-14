@@ -91,6 +91,7 @@ class Pipeline:
         self._tx = []  # transition rows of the chunk in progress
         self._last_ledger_write = clock()
         self._latest_ts = None
+        self._accepted_ts = {}  # zone -> ts of the last ACCEPTED message of that zone (kept apart from _latest_ts: see _behind)
         self._ring = {}  # zone -> OrderedDict seq -> entry [serial, ts, line, minute, kept]
         self._seq_of = {}  # zone -> {(serial, ts): seq}
         self._next_seq = {}  # zone -> next arrival seq
@@ -110,6 +111,10 @@ class Pipeline:
             for serial, h in json.loads(cp["last_header_ids"]).items():
                 if h > self.seq.last.get(serial, -1):
                     self.seq.last[serial] = h
+        for cp in cps:  # per-zone max over the run's rows
+            for zone, ts in json.loads(cp.get("last_message_ts_by_zone") or "{}").items():
+                if ts > self._accepted_ts.get(zone, float("-inf")):
+                    self._accepted_ts[zone] = ts
         newest = max(cps, key=lambda cp: cp.get("cp_seq") or 0)
         self._cp_seq = newest.get("cp_seq") or 0
         if newest.get("ledger_counters"):
@@ -175,6 +180,8 @@ class Pipeline:
         if self._latest_ts is None or msg.ts > self._latest_ts:
             self._latest_ts = msg.ts
         zone = msg.zone
+        if msg.ts > self._accepted_ts.get(zone, float("-inf")):
+            self._accepted_ts[zone] = msg.ts  # only accepted messages get here: rejects and duplicates returned above
         seq = self._next_seq.get(zone, 0)
         self._next_seq[zone] = seq + 1
         entry = [msg.serial, msg.ts, line, minute, False]
@@ -278,7 +285,8 @@ class Pipeline:
         self._cp_seq += 1
         self.store.upsert("ingest_checkpoints", ("run", "path"), [dict(
             run=self.run, path=path, offset_uncompressed=offset, last_header_ids=json.dumps(self.seq.last),
-            ledger_counters=json.dumps(self.ledger.snapshot()), cp_seq=self._cp_seq, updated_at=self.clock())])
+            ledger_counters=json.dumps(self.ledger.snapshot()), cp_seq=self._cp_seq, updated_at=self.clock(),
+            last_message_ts_by_zone=json.dumps(self._accepted_ts))])
 
     def _write_files(self, only=None):
         pass  # file source only

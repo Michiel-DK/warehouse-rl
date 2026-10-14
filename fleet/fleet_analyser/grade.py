@@ -5,7 +5,8 @@ grade_run(store, run, now) -> counts. `now` is event time in batch mode (the run
 in live mode; graded_at is `now`. A decision is due when it is open and its episode has a terminal resolution
 (moved, order_dropped, fault_cleared, unresolved) or has been interrupted, or grade_after <= now. A due decision whose
 episode is missing, left_censored or interrupted grades inconclusive. Verdict rules: docs/SCOPE.md "S5C1".
-Kinds outside decisions.KINDS are left open and counted as skipped_kind.
+Kinds without a grader here (unknown kinds, and hotspot_forecast, which forecast_grade.py grades) are left open and
+counted as skipped_kind.
 """
 import json
 
@@ -102,7 +103,7 @@ def grade_run(store, run, now):
     for d in store.select("decisions"):
         if d["run"] != run or d["status"] != "open":
             continue
-        if d["kind"] not in decisions.KINDS:
+        if d["kind"] not in decisions.KINDS or d["kind"] not in GRADERS:
             counts["skipped_kind"] += 1
             continue
         try:

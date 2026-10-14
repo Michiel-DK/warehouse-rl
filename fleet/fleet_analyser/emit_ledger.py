@@ -2,6 +2,8 @@
 
 One document per run, rewritten atomically (tmp file in the same directory + os.replace). Each zone reports a snapshot
 (see ZONE_FIELDS); totals are computed here as exact sums of the zones, never stored separately.
+The top-level `truth` is null until the ground-truth sidecar truth.json is written, then {file, bytes}; it is in no zone
+or total field.
 Zone states: pending, running, complete, failed, not_started. Run status: running | complete | failed.
 A zone is `complete` only when messages == expected (robots * steps), it did not fail and (kafka) no record failed
 delivery; the run is `complete` only when every configured zone is. Kafka zones also carry integer `delivered` and
@@ -28,6 +30,7 @@ class EmitLedger:
         self.steps = steps
         self.zones = {z: _blank_zone() for z in range(zones)}
         self.error = None
+        self.truth = None  # {file, bytes} once the emitter has written the sidecar; never counted in any zone / total
 
     def update(self, zone, snapshot=None, state=None):
         z = self.zones[zone]
@@ -72,7 +75,7 @@ class EmitLedger:
                      delivery_failed=total_of("delivery_failed"), robots=total_of("robots"),
                      agvs=total_of("agvs"), pickers=total_of("pickers"),
                      steps_done=sum(d["steps_done"] for d in zdocs))
-        doc = dict(status=status, config=self.config, zones=zdocs, total=total)
+        doc = dict(status=status, config=self.config, zones=zdocs, total=total, truth=self.truth)
         if self.error:
             doc["error"] = self.error
         return doc
