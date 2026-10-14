@@ -14,6 +14,15 @@ disturb {} for --disturb none) and writes <policy>_<env>_<steps>[_<disturbtag>]_
 preset, 'rec-<10 hex>' for a JSON spec; call_human_cost is optional, default 60). Doc and rows record the recovery
 config and the episode sums of the recovery info keys. Resuming into a file with a different stored recovery config
 raises. Without --recovery nothing above changes.
+--costmap PATH | --costmap-oracle (S8C, the cost-aware router; needs a disturbance, mutually exclusive; every env built
+for a seed gets cost_map + cost_alpha): the row for seed s uses zone str(s - --costmap-seed-base) of the analyst's
+costmap.json (a missing zone raises ValueError; a zone with no cells is an empty, inactive map), or the oracle (the floor
+layout itself, the only arm that reads it). --costmap-alpha A (default 4.0) and --costmap-seed-base B (default 0) need a
+map flag; the seed base is not allowed with the oracle. The filename is the same command's name without the flags plus
+_cm-oracle or _cm-<10 hex of the costmap file's sha256> before .json; the doc header gains costmap ("oracle" or
+"<tag>:<path>"), costmap_alpha, costmap_generated_at (null for the oracle); resuming into a file whose costmap or alpha
+differs raises. A learned recovery cannot take a map and rejects the flags. Without a map flag the filename and header
+are unchanged; disturbed rows always carry routes_changed_by_map and map_cells_entered (episode sums, 0 without a map).
 The result-doc header records `platform` (platform_tag(), e.g. darwin-arm64); a file without it predates the field and is
 darwin-arm64. Resuming onto a doc measured on another platform raises ValueError (docs/PLATFORM.md).
 Workers: --workers, else SCHED_WORKERS, else os.cpu_count() - 2; capped at the seeds still to run.
@@ -22,6 +31,7 @@ Policies: cta, stuck_aware_cta, random (registry below; an unknown name raises V
 Warm-up W = 0: no steps are discarded (README "Evaluation resolution").
 """
 import argparse
+import hashlib
 import json
 import math
 import multiprocessing as mp
@@ -139,22 +149,28 @@ def paired_delta(rows_a, rows_b, seeds=None):
     return summarise([a[s]["pick_rate"] - b[s]["pick_rate"] for s in common])
 
 
-def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=False, recovery=None):
+def run_seed(policy, env_id, steps, seed, disturb=None, assign_care_for_agents=False, recovery=None, cost_map=None,
+             cost_alpha=4.0):
     """One episode; depends only on (policy, env_id, steps, seed, disturb, assign_care_for_agents). Builds its own env.
 
     disturb=None is the S1 path (row fields unchanged); a dict adds the disturbance episode sums.
-    recovery (a normalised config dict, needs disturb) adds the recovery config and RECOVERY_SUMS to the row."""
+    recovery (a normalised config dict, needs disturb) adds the recovery config and RECOVERY_SUMS to the row.
+    cost_map (None | {(x, y): cost} | "oracle", needs disturb) and cost_alpha go to the env (S8C cost-aware router)."""
     from warehouse_rl.env import WarehouseEnv
 
     t0 = time.time()
     pol = make_policy(policy, seed)
     if recovery is not None and recovery.get("name") == "learned":  # lazy: torch only for a learned policy
+        if cost_map is not None:
+            raise ValueError("a learned recovery cannot take a cost map")
         from warehouse_rl.learned_recovery import make_learned_env, policy_from_config
 
         env = make_learned_env(env_id, steps, disturb, policy_from_config(recovery), recovery["call_human_cost"],
                                assign_care_for_agents)
     else:
         env_kwargs = {} if recovery is None else dict(recovery=recovery)
+        if cost_map is not None:
+            env_kwargs.update(cost_map=cost_map, cost_alpha=cost_alpha)
         env = WarehouseEnv(env_id, max_steps=steps, disturb=disturb, assign_care_for_agents=assign_care_for_agents,
                            **env_kwargs)
     extra = {k: 0 for k in DISTURB_SUMS} if disturb is not None else None
@@ -196,7 +212,8 @@ DISTURB_SUMS = dict(stuck_agent_steps="stuck_agents", stuck_busy_agent_steps="st
                     abandoned_tasks="abandoned_tasks",
                     clash_agent_steps="clash_agents", frozen_agent_steps="frozen_agents",
                     delayed_agent_steps="delayed_agents",
-                    floor_skip_steps="floor_skips")  # floor_skip_steps: agent-steps NOOPed by a floor cell, 0 w/o floor
+                    floor_skip_steps="floor_skips",  # floor_skip_steps: agent-steps NOOPed by a floor cell, 0 w/o floor
+                    routes_changed_by_map="routes_changed_by_map", map_cells_entered="map_cells_entered")  # 0 w/o a map
 
 # recovery rows only (kept apart from DISTURB_SUMS so non-recovery disturbed runs never need these info keys)
 RECOVERY_SUMS = ("recovery_wait", "recovery_back_off", "recovery_reroute", "recovery_abandon", "recovery_call_human",
@@ -215,7 +232,7 @@ def platform_tag():
     return f"{sys.platform.lower()}-{machine}"
 
 
-def _write(path, policy, env_id, steps, rows, tag=None, config=None, rec_tag=None, rec_config=None):
+def _write(path, policy, env_id, steps, rows, tag=None, config=None, rec_tag=None, rec_config=None, cm_header=None):
     rows = sorted(rows, key=lambda r: r["seed"])
     s = summarise([r["pick_rate"] for r in rows])
     doc = dict(platform=platform_tag(), policy=policy, env=env_id, steps=steps, rows=rows, n=s["n"], pick_rate_mean=s["mean"],
@@ -224,6 +241,8 @@ def _write(path, policy, env_id, steps, rows, tag=None, config=None, rec_tag=Non
         doc.update(disturb_tag=tag, disturb=config)
     if rec_config is not None:
         doc.update(recovery_tag=rec_tag, recovery=rec_config)
+    if cm_header is not None:
+        doc.update(cm_header)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(doc, indent=2))
     os.replace(tmp, path)
@@ -239,6 +258,33 @@ def _check_same_config(path, doc, tag, config):
                          f"requested {config!r} (tag {tag!r}); refusing to merge")
 
 
+def _check_same_costmap(path, doc, cm_header):
+    """cm_header = {} without a map flag; a file written without the fields stores None for both."""
+    want = cm_header or {}
+    for k in ("costmap", "costmap_alpha"):
+        if doc.get(k) != want.get(k):
+            raise ValueError(f"{path} stores {k} {doc.get(k)!r}, requested {want.get(k)!r}; refusing to merge")
+
+
+def _load_costmap(path):
+    """-> (tag = 10 hex of the file's sha256, generated_at, zones). Parses the file once; zones are raw JSON dicts."""
+    raw = Path(path).read_bytes()
+    data = json.loads(raw)
+    if not isinstance(data, dict) or not isinstance(data.get("zones"), dict):
+        raise ValueError(f"{path} is not a costmap file (no 'zones' dict)")
+    return hashlib.sha256(raw).hexdigest()[:10], data.get("generated_at"), data["zones"]
+
+
+def _cost_map_for_seed(zones, seed, seed_base):
+    """The normalised {(x, y): cost} of zone str(seed - seed_base); a missing zone is a ValueError, never an empty map."""
+    from warehouse_rl.disturb import normalise_cost_map
+
+    zone = str(seed - seed_base)
+    if zone not in zones:
+        raise ValueError(f"costmap has no zone {zone!r} for seed {seed} (seed base {seed_base}); zones: {sorted(zones)}")
+    return normalise_cost_map(zones[zone])
+
+
 def _check_same_recovery(path, doc, rec_tag, rec_config):
     if doc.get("recovery") != rec_config or doc.get("recovery_tag") != rec_tag:
         raise ValueError(f"{path} stores recovery config {doc.get('recovery')!r} (tag {doc.get('recovery_tag')!r}), "
@@ -252,8 +298,38 @@ def _check_same_platform(path, doc):
         raise ValueError(f"{path} was measured on {stored}, this machine is {platform_tag()}; refusing to merge")
 
 
-def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="none", recovery=None):
+def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="none", recovery=None, costmap=None,
+             costmap_oracle=False, costmap_alpha=None, costmap_seed_base=None):
     from warehouse_rl.disturb import resolve_disturb
+
+    # S8C map flags: --costmap / --costmap-oracle. alpha and seed base are None = not given (a value needs a map flag).
+    if costmap is not None and costmap_oracle:
+        raise ValueError("--costmap and --costmap-oracle are mutually exclusive")
+    has_map = costmap is not None or costmap_oracle
+    if not has_map and (costmap_alpha is not None or costmap_seed_base is not None):
+        raise ValueError("--costmap-alpha / --costmap-seed-base need --costmap or --costmap-oracle")
+    if costmap_oracle and costmap_seed_base is not None:
+        raise ValueError("--costmap-seed-base has no meaning with --costmap-oracle")
+    if has_map and isinstance(recovery, str) and recovery.startswith("learned:"):
+        raise ValueError("a learned recovery cannot take a cost map; drop --costmap/--costmap-oracle")
+    cm_header = {}
+    cm_suffix = ""
+    zones = None
+    cm_alpha = 4.0 if costmap_alpha is None else costmap_alpha
+    cm_base = 0 if costmap_seed_base is None else costmap_seed_base
+    if has_map:
+        if isinstance(cm_alpha, bool) or not isinstance(cm_alpha, (int, float)) or not math.isfinite(cm_alpha) or cm_alpha < 0:
+            raise ValueError(f"--costmap-alpha must be a finite number >= 0, got {cm_alpha!r}")
+        if costmap_oracle:
+            cm_suffix = "_cm-oracle"
+            cm_header = dict(costmap="oracle", costmap_alpha=float(cm_alpha), costmap_generated_at=None)
+        else:
+            cm_tag, generated_at, zones = _load_costmap(costmap)
+            for sd in seeds:  # fail before anything runs
+                _cost_map_for_seed(zones, sd, cm_base)
+            cm_suffix = f"_cm-{cm_tag}"
+            cm_header = dict(costmap=f"{cm_tag}:{costmap}", costmap_alpha=float(cm_alpha),
+                             costmap_generated_at=generated_at)
 
     rec_tag = rec_config = None
     if recovery is not None:
@@ -269,12 +345,14 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
             rec_tag, rec_config = resolve_recovery(recovery)
     tag, config = resolve_disturb(disturb)
     disturbed = tag != "none"  # preset none = the S1 undisturbed path: same filename, no layer
+    if has_map and not disturbed:
+        raise ValueError("--costmap/--costmap-oracle need a disturbance (--disturb none has no cost-aware router)")
     suffix = f"_{tag}" if disturbed else ""
     layer = disturbed or rec_config is not None  # a recovery run always builds the layer ({} = no disturbance)
     results_dir = Path(results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
     rec_suffix = f"_{rec_tag}" if rec_config is not None else ""
-    path = results_dir / f"{policy}_{env_id}_{steps}{suffix}{rec_suffix}.json"
+    path = results_dir / f"{policy}_{env_id}_{steps}{suffix}{rec_suffix}{cm_suffix}.json"
     rows = []
     if path.exists():
         doc = json.loads(path.read_text())
@@ -283,28 +361,35 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
             _check_same_config(path, doc, tag, config)
         if rec_config is not None:
             _check_same_recovery(path, doc, rec_tag, rec_config)
+        _check_same_costmap(path, doc, cm_header)
         rows = doc["rows"]
     have = {r["seed"] for r in rows}
     todo = [s for s in seeds if s not in have]
     if todo:
         workers = resolve_workers(workers_cli, os.environ, len(todo))
         print(f"[{policy} {steps} steps] {len(todo)} seeds to run on {workers} workers ({len(have)} already on disk)")
+        def seed_map(s):  # () = no flag, else the cost_map and cost_alpha every env of this seed is built with
+            if not has_map:
+                return ()
+            return ("oracle" if costmap_oracle else _cost_map_for_seed(zones, s, cm_base), float(cm_alpha))
+
         if rec_config is not None:
-            jobs = [(policy, env_id, steps, s, config, False, rec_config) for s in todo]
+            jobs = [(policy, env_id, steps, s, config, False, rec_config) + seed_map(s) for s in todo]
         else:
-            jobs = [(policy, env_id, steps, s, config if disturbed else None) for s in todo]
+            jobs = [(policy, env_id, steps, s, config if disturbed else None) + (
+                (False, None) + seed_map(s) if has_map else ()) for s in todo]
         with mp.Pool(workers) as pool:
             for row in pool.imap_unordered(_job, jobs):
                 rows.append(row)
                 _write(path, policy, env_id, steps, rows, tag if layer else None, config if layer else None,
-                       rec_tag, rec_config)
+                       rec_tag, rec_config, cm_header or None)
     else:
         print(f"[{policy} {steps} steps] all requested seeds already on disk")
     by_seed = {r["seed"]: r for r in rows}
     req = [by_seed[s] for s in seeds]
     print(f"{policy} {steps} steps pick_rate (lines/h): " + _fmt(summarise([r["pick_rate"] for r in req])))
     if rec_config is not None:
-        base_path = results_dir / f"{policy}_{env_id}_{steps}{suffix}.json"
+        base_path = results_dir / f"{policy}_{env_id}_{steps}{suffix}{cm_suffix}.json"
         if base_path.exists():
             base_doc = json.loads(base_path.read_text())
             if disturbed:
@@ -318,7 +403,7 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
         else:
             print(f"paired delta: no no-recovery file at {base_path}")
     elif policy != "cta":
-        cta_path = results_dir / f"cta_{env_id}_{steps}{suffix}.json"
+        cta_path = results_dir / f"cta_{env_id}_{steps}{suffix}{cm_suffix}.json"
         if cta_path.exists():
             cta_doc = json.loads(cta_path.read_text())
             if disturbed:
@@ -349,10 +434,15 @@ def main():
                         "\"reroute_after\": R, \"abandon_after\": A, \"call_human_after\"?: H|null, "
                         "\"call_human_cost\"?: C} or learned:<checkpoint path> "
                         "(needs --policy stuck_aware_cta)")
+    p.add_argument("--costmap", default=None, help="analyst costmap.json: seed s routes on zone str(s - seed base)")
+    p.add_argument("--costmap-seed-base", type=int, default=None, help="seed of zone 0 (default 0; needs --costmap)")
+    p.add_argument("--costmap-alpha", type=float, default=None, help="weight 1 + alpha * cost (default 4.0)")
+    p.add_argument("--costmap-oracle", action="store_true", help="route on the true floor layout (the ceiling arm)")
     a = p.parse_args()
     seeds, steps_list = parse_seeds(a.seeds), parse_steps(a.steps)
     for st in steps_list:
-        evaluate(a.policy, a.env, st, seeds, a.workers, a.results_dir, a.disturb, a.recovery)
+        evaluate(a.policy, a.env, st, seeds, a.workers, a.results_dir, a.disturb, a.recovery, a.costmap,
+                 a.costmap_oracle, a.costmap_alpha, a.costmap_seed_base)
 
 
 if __name__ == "__main__":

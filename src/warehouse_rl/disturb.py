@@ -176,9 +176,59 @@ def _onsets_to_mask(onsets, durations):
 
 _NO_CELLS = frozenset()
 
+ORACLE = "oracle"
+DEFAULT_COST_ALPHA = 4.0
+
+
+def normalise_cost_map(raw):
+    """JSON costmap zone ({"x,y": cost}) -> {(x, y): cost} with int tuple keys. The ONE place string keys are parsed."""
+    if not isinstance(raw, dict):
+        raise ValueError(f"a cost map zone must be a dict, got {type(raw).__name__}")
+    out = {}
+    for k, v in raw.items():
+        if isinstance(k, tuple):
+            out[k] = v
+            continue
+        try:
+            xs, ys = str(k).split(",")
+            out[(int(xs), int(ys))] = v
+        except ValueError as e:
+            raise ValueError(f"cost map key {k!r} is not 'x,y' with int x and y") from e
+    return out
+
+
+def validate_cost_map(cost_map, grid_size):
+    """None | "oracle" | {(x, y): cost} -> same (dict copied). grid_size = (rows, cols); (x, y) is column, row.
+
+    Anything else raises ValueError: non-int or bool coordinates, cells outside the grid, cost not in (0, 1]."""
+    if cost_map is None or (isinstance(cost_map, str) and cost_map == ORACLE):
+        return cost_map
+    if not isinstance(cost_map, dict):
+        raise ValueError(f"cost_map must be None, {ORACLE!r} or a dict, got {cost_map!r}")
+    rows, cols = grid_size
+    out = {}
+    for k, v in cost_map.items():
+        if not (isinstance(k, tuple) and len(k) == 2 and all(_is_int(c) for c in k)):
+            raise ValueError(f"cost_map key {k!r} must be an (int, int) tuple")
+        if not (0 <= k[0] < cols and 0 <= k[1] < rows):
+            raise ValueError(f"cost_map cell {k!r} is outside the {cols}x{rows} grid")
+        if not _is_real(v) or not 0 < v <= 1:
+            raise ValueError(f"cost_map cost for {k!r} must be a real number in (0, 1], got {v!r}")
+        out[(int(k[0]), int(k[1]))] = float(v)
+    return out
+
 
 class DisturbedWarehouse(Warehouse):
-    def __init__(self, *args, disturb, assign_care_for_agents=False, **kwargs):
+    def __init__(self, *args, disturb, assign_care_for_agents=False, cost_map=None, cost_alpha=DEFAULT_COST_ALPHA,
+                 **kwargs):
+        # cost_map (S8C, the analyst's per-zone cost map; NOT part of the disturb config, so the schedules and the floor
+        # layout never depend on it): None | {(x, y): cost in (0, 1]} | "oracle". With an active (non-empty) map and
+        # cost_alpha > 0 EVERY find_path of this env (macro-action assignment, vendor replans, recovery reroute, policy
+        # distance scoring) is an A* on the grid with weight 1 + cost_alpha * cost on the finite map cells. This also
+        # changes the distances CTA's assignment scores (it calls find_path): expected, not a side effect.
+        if not _is_real(cost_alpha) or cost_alpha < 0:
+            raise ValueError(f"cost_alpha must be a finite real >= 0, got {cost_alpha!r}")
+        self.cost_alpha = float(cost_alpha)
         # assign_care_for_agents (router-side toggle, sweep d): True forces care_for_agents=True on the one find_path
         # call the env makes when it accepts a macro action (W:366). False (default) is the vendor behaviour.
         self.disturb_config = validate_config(disturb)
@@ -193,6 +243,24 @@ class DisturbedWarehouse(Warehouse):
             (int(x), int(y)) for y, x in np.argwhere(self.highways > 0) if (int(x), int(y)) not in goals
         )
         self._clear_schedule()
+        self._cost_map_arg = validate_cost_map(cost_map, self.grid_size)
+        self._active_map = None  # the non-empty {(x, y): cost} in force, else None
+        self._set_active_map()
+        self._clear_map_counters()
+
+    # ---------------------------------------------------------------- cost map
+    def _set_active_map(self):
+        m = self._cost_map_arg
+        if isinstance(m, str):
+            # ORACLE ARM ONLY (the one new read of floor_cells): the simulator's ground truth, re-read after each reset.
+            m = dict(self.floor_cells)
+        self._active_map = dict(m) if m else None
+        self._weights = self._active_map if self.cost_alpha > 0 else None
+
+    def _clear_map_counters(self):
+        self._routes_changed = 0
+        self._map_entered = 0
+        self._prev_pos = [(a.x, a.y) for a in getattr(self, "agents", ())]
 
     # ---------------------------------------------------------------- schedule
     def _clear_schedule(self):
@@ -278,6 +346,8 @@ class DisturbedWarehouse(Warehouse):
     def reset(self, seed=None, options=None):
         obs = super().reset(seed=seed, options=options)
         self._generate_schedule(seed)
+        self._set_active_map()
+        self._clear_map_counters()
         return obs
 
     # ---------------------------------------------------------------- queries
@@ -310,11 +380,22 @@ class DisturbedWarehouse(Warehouse):
         if self.assign_care_for_agents and self._in_macro_actions:
             care_for_agents = True  # only the path the env computes on accepting a macro action
         obstacles = self._obstacles_now()
+        if self._weights is None:  # no active map or alpha 0: the unchanged search, no second search
+            if not obstacles:
+                return super().find_path(start, goal, agent, care_for_agents)
+            return self._find_path_with_obstacles(start, goal, agent, care_for_agents, obstacles)
+        # Active map: the weighted path is the answer. The unweighted search runs ONLY here, to count
+        # routes_changed_by_map (every query of every caller, policy scoring included, not only executed routes).
+        weighted = self._find_path_with_obstacles(start, goal, agent, care_for_agents, obstacles, self._weights)
         if not obstacles:
-            return super().find_path(start, goal, agent, care_for_agents)
-        return self._find_path_with_obstacles(start, goal, agent, care_for_agents, obstacles)
+            plain = super().find_path(start, goal, agent, care_for_agents)
+        else:
+            plain = self._find_path_with_obstacles(start, goal, agent, care_for_agents, obstacles)
+        if weighted != plain:
+            self._routes_changed += 1
+        return weighted
 
-    def _find_path_with_obstacles(self, start, goal, agent, care_for_agents, obstacles):
+    def _find_path_with_obstacles(self, start, goal, agent, care_for_agents, obstacles, weights=None):
         # Port of Warehouse.find_path (W:256-312). Only change: active blocked cells / out goals become obstacles
         # AFTER the start-cell fix, then the (effective) start is freed again; a blocked target yields [].
         # With obstacles == frozenset() it must equal the vendor method (tested in tests/test_disturb.py).
@@ -343,10 +424,16 @@ class DisturbedWarehouse(Warehouse):
         grid = np.array(grid, dtype=np.float32)
         grid[np.where(grid == 1)] = np.inf
         grid[np.where(grid == 0)] = 1
+        # the start-cell trim reads the BINARY grid (inf = the start was blocked); weights below must not change it
+        trim = 1 - int(grid[start[0], start[1]] > 1)
+        if weights:  # binary grid first, then weight only the cells that are still finite; vendor (x, y) -> grid[y, x]
+            for (wx, wy), cost in weights.items():
+                if grid[wy, wx] == 1:
+                    grid[wy, wx] = np.float32(1 + self.cost_alpha * cost)
         astar_path = pyastar2d.astar_path(grid, np.add(start, start_fix), goal, allow_diagonal=False)
         if astar_path is not None:
             astar_path = [tuple(x) for x in list(astar_path)]
-            astar_path = astar_path[1 - int(grid[start[0], start[1]] > 1):]
+            astar_path = astar_path[trim:]
         if astar_path:
             return [(x, y) for y, x in astar_path]
         return []
@@ -460,5 +547,16 @@ class DisturbedWarehouse(Warehouse):
         info["blocked_cells"] = len(self._blocked_by_step[t]) if t < self.max_steps else 0
         info["outage_goals"] = len(self._out_goals_by_step[t]) if t < self.max_steps else 0
         info["request_queue_len"] = len(self.request_queue)
+        # S8C counters. routes_changed_by_map: find_path queries since the previous step (all callers) whose weighted
+        # path differs from the unweighted one. map_cells_entered: agent-steps whose cell changed and whose new cell is in
+        # the active map (a floor skip is no entry: the agent did not move).
+        pos = [(a.x, a.y) for a in self.agents]
+        if self._active_map:
+            self._map_entered += sum(1 for p, q in zip(self._prev_pos, pos) if p != q and q in self._active_map)
+        self._prev_pos = pos
+        info["routes_changed_by_map"] = self._routes_changed
+        info["map_cells_entered"] = self._map_entered
+        self._routes_changed = 0
+        self._map_entered = 0
         self._t += 1  # step t is done; the layer now describes step t + 1
         return info
