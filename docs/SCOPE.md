@@ -245,6 +245,7 @@ the core is parameterised on that.
 | RL beats CTA on the medium map within ~5M env steps | Paper: IAC +24% after 10k episodes (~5M steps if 500 each). Plausible but UNVERIFIED for IPPO. Not tested: S4 deprioritised 2026-10-13 | Stop at end of S4, write up as negative result |
 | Disturbances produce a regime where stuck time matters | Measured 2026-10-10: half true. Stuck-busy time is >= 10% of robot-time at every rate including 0 (10.7% undisturbed, medium 8 AGV), but disturbances do not raise it; breakdowns add frozen time and stuck-timeout abandonments (2.87 to 9.90 per episode). Not failure: a 7.9% floor already at 3 robots (source UNVERIFIED, likely includes handoff waits) plus 6.4 points from density at 16 AGVs (README "Sprint 2 results") | Recovery is moot; S3 becomes the dispatcher under disturbance |
 | Learned recovery beats the hand-written rule | FALSE, kill criterion applied 2026-10-13: three attempts, none near `RuleRecovery` or `timeout` (best greedy eval of the own-credit pilot 35.14 once, 0.0 at its abort at episode 1600, vs timeout reference 50.11; README "Sprint 3 close-out") | Applied: the client takes the rule (`timeout`, the env default, since no rule beats it); written up in README "Sprint 3 close-out" |
+| The analyser's hotspot map recovers the floor-imperfection loss when the planner routes on it | NOT SHOWN 2026-10-14: 30 seeds paired, medium map, 80 cells p 0.3-0.7, loss 6.14 lines/h. The map at alpha 4 recovers 15.6% (CI -11% to 45%) and the oracle 22.7% (CI -4% to 50%). Neither CI excludes zero (README "Sprint 8: the closed loop", `results/closed_loop/summary.json`) | Operator's call. Candidates: more seeds, or a traffic-weighted floor draw. The map's information is not shown to be the bottleneck, since the oracle does not clear zero either |
 | Realistic demand dataset is usable | Footwear dataset is CC BY 4.0 but randomised; KIT instances better | Use a Zipf prior and say so |
 
 Known env facts (from source, `vendor/tarware/tarware/`): map sizes tiny (1x3), small (2x3), medium (2x5), large
@@ -807,6 +808,43 @@ re-reads the topic.
 macOS host `.venv`, never in a container; only Redpanda, ClickHouse and Grafana run in Docker. The benchmark records
 `platform.platform()` and `platform.machine()` and refuses to run inside a Linux container. Its numbers are macOS-arm64
 numbers.
+
+### Sprint 8: the closed loop. CLOSED 2026-10-14 (claim: "it does not", at 30 seeds)
+
+Brief: laptop-scheduler `jobs/wr-s5-stuck-analyser.md` "Sprint 8". The analyst finds the bad floor, the planner
+avoids it, and reality grades both. Results are in README "Sprint 8, analyst half" and "Sprint 8: the closed loop".
+
+- [x] S8A `floor` disturbance preset (PR #12, f694d49). Severity curve, 30 seeds. The Sprint 8 regime is 80 cells,
+      p 0.3-0.7, an 11% loss.
+- [x] S8B hotspot -> cost map (`fleet/costmap.py`, PR #16, 56dc46c). `hotspot_forecast` decisions go to the
+      ledger, which grades them against outcome and truth. Precision@20 is 0.965 and recall plateaus at 0.56.
+- [x] S8D rank grading (PR #18, 274e20f). Rank grade 120 ok / 80 off. The count grade is kept as `outcome_count`
+      (136 / 306).
+- [x] S8C cost-aware router (PR #19, 99d526e) and `wr-s8c-closed-loop-measure`, 30 seeds paired, alphas 2/4/8,
+      headline alpha 4 fixed in advance. The map at alpha 4 gives +0.96 lines/h (CI -0.72 to +2.64), share 15.6%
+      (CI -11% to 45%). The oracle gives +1.39 (CI -0.36 to +3.15), share 22.7% (CI -4% to 50%). Neither is
+      distinguishable from no map.
+- [x] S8-REPLAY offline replay page (PR #20, 998cb21), `docs/replay/index.html`. Not yet checked in a browser.
+- [ ] NOT BUILT: `reroute_recommendation` decisions. No code writes the kind, and it stays outside
+      `decisions.KINDS`. The router changes paths, but the ledger does not see it.
+- [ ] NOT BUILT: the context-layer registry (`fleet/context/<layer>.py`, one contract per layer). `floor` is
+      wired directly into `disturb.py`, `costmap.py` and the router.
+- Open:
+  - The ingest -> costmap -> grade order is unenforced.
+  - The comment at `fleet/sql/schema.sql:300` still calls `outcome` the count grade.
+  - The oracle and the analyst map are on different cost scales (oracle p_c in [0.3, 0.7], analyst max 1.0 per zone).
+
+Next layers, listed with no claims. Each would be a later one-lane addition with the four-part contract (ground
+truth preset, blind analyst feature, planner input, graded decision kind):
+- aisle congestion by time of day
+- human traffic zones (pickers' walking lanes)
+- charging-station queues
+- dock/door events
+- shift changes
+- Wi-Fi dead zones (observable as gaps in the ledger)
+
+The learned planner (Sprint 4, parked) comes after this loop shows a gain with the rule-based router. It has not
+shown one yet.
 
 ## Compute and timing
 

@@ -518,7 +518,7 @@ Low precision is mostly a definition gap, not noise. The detector flags every ro
 
 ## Sprint 8, analyst half: floor imperfections and the hotspot map (2026-10-14)
 
-The closed loop of Sprint 8 is "the analyst finds the bad floor, the planner avoids it, reality grades both". This section is the first half, measured; the planner half (cost-aware routing, S8C) is not built yet. Lane reports: `laptop-scheduler/reports/wr-lane-s8a.md`, `wr-lane-s8b.md`. Figures: `scripts/plot_sprint8.py` (reads results files only).
+The closed loop of Sprint 8 is "the analyst finds the bad floor, the planner avoids it, reality grades both". This section is the first half, measured; the planner half (cost-aware routing, S8C) is measured in "Sprint 8: the closed loop" below. Lane reports: `laptop-scheduler/reports/wr-lane-s8a.md`, `wr-lane-s8b.md`. Figures: `scripts/plot_sprint8.py` (reads results files only).
 
 ### Ground truth: the `floor` disturbance type (S8A)
 
@@ -553,8 +553,49 @@ The analyser never sees `floor_cells`. From the stream alone it counts, per robo
 
 ![hotspot precision recall](results/fleet/hotspot_precision_recall.png)
 
-Random flagging would give precision 80/380 = 0.21. Recall plateaus at 0.56 because 44% of the true bad cells never see a stall in 500 steps (no robot drives into them), which is a traffic ceiling, not a detector limit. Spearman between cost and true p over flagged cells: 0.37. Grading: outcome 136 ok / 306 off (the stall-count forecasts are weak), truth 796 hits / 280 false alarms. Of 2028 stalls, 115 fell inside detector stuck episodes. One zone, cost map against the true cells:
+Random flagging would give precision 80/380 = 0.21. Recall plateaus at 0.56 because 44% of the true bad cells never see a stall in 500 steps (no robot drives into them), which is a traffic ceiling, not a detector limit. Spearman between cost and true p over flagged cells: 0.37. Grading (before S8D): outcome 136 ok / 306 off (the stall-count forecasts are weak; since S8D this count grade is the `outcome_count` key, see below), truth 796 hits / 280 false alarms. Of 2028 stalls, 115 fell inside detector stuck episodes. One zone, cost map against the true cells:
 
 ![cost map zone 0](results/fleet/hotspot_costmap_zone0.png)
 
 What this earns: "the stream alone finds the worst floor cells with high precision; it cannot see the ones nobody drives over". What it does not earn yet: any pick-rate recovered, which is S8C's measurement.
+
+## Sprint 8: the closed loop (2026-10-14)
+
+The analyst's cost map goes back to the central planner: `DisturbedWarehouse.find_path` puts weight `1 + alpha * cost` on every mapped cell for every path search (macro-action assignment, vendor replans, recovery reroute, CTA's distance scoring). One run of `scripts/closed_loop.py --seeds 30 --steps 500 --alphas 2,4,8 --workers 8 --out-dir results/closed_loop` (88 s wall). Medium map, `stuck_aware_cta` + `timeout`, the Sprint 8 floor regime `{"floor": {"cells": 80, "p": [0.3, 0.7]}}`, seeds 0-29, every arm paired per seed. Phase A emits the 30 zones with no map, ingests them and publishes one cost map per zone at the stream end (`results/closed_loop/phaseA/costmap.json`); Phase B replays seed z with zone z's map. Data: `results/closed_loop/summary.json`, the per-arm results under `results/closed_loop/<arm>/`. Lane report: `laptop-scheduler/reports/wr-lane-s8c.md`.
+
+| arm | map | pick-rate (lines/h) | 95% CI | paired delta vs none (95% CI) | share of the floor loss recovered (95% CI) | routes changed by the map / episode | floor skips / episode |
+|---|---|---|---|---|---|---|---|
+| none | floor on, no map | 47.52 | 45.85-49.19 | - | - | 0 | 305 |
+| map (alpha 4, headline) | analyst map from Phase A | 48.48 | 46.84-50.12 | +0.96 (-0.72 to +2.64) | 15.6% (-11.3% to 45.0%) | 382 | 226 |
+| oracle (alpha 4) | the true floor cells, cost = p_c | 48.91 | 46.79-51.04 | +1.39 (-0.36 to +3.15) | 22.7% (-3.8% to 50.0%) | 407 | 192 |
+| undisturbed | `--disturb none` | 53.66 | 51.24-56.09 | - | - | 0 | 0 |
+
+The floor loss is undisturbed - none = 6.14 lines/h (11.4%), paired per seed. `none` reproduces the 80-cell row of the severity table above (47.52). Share = mean(arm - none) / mean(undisturbed - none); its CI is a 1000-resample seed bootstrap (seed 0). "Routes changed" counts every `find_path` query whose weighted path differs from the unweighted one, CTA's assignment scoring included, so it is not the number of robots rerouted.
+
+**Alpha sensitivity** (alpha 4 was fixed in `scripts/closed_loop.py` before any result was seen; the other two are a check, not a tuning): floor skips fall monotonically with alpha (305 / 257 / 226 / 179 for none / 2 / 4 / 8) but pick-rate does not follow: +0.34 (-1.72 to +2.39) at alpha 2, +0.96 at alpha 4, -0.82 (-3.16 to +1.53) at alpha 8. At alpha 8 the detours cost more than the skips they save.
+
+![closed loop](results/closed_loop/closed_loop.png)
+
+**The claim this earns: it does not.** At 30 seeds the analyser's map does not recover a measurable share of the floor loss: point estimate 15.6% (CI -11% to 45%). The oracle does not clear zero either: 22.7% (CI -4% to 50%). The map cuts floor skips by 26% and the oracle by 37%, but at this sample size the rig cannot separate map from oracle, or either from no map. So the analyst's information is not shown to be the bottleneck. A map-vs-oracle ratio would be a ratio of two noise-level numbers; there is no paired map-vs-oracle CI, so none is claimed.
+
+**Grading the hotspot forecasts (S8D).** S8B graded each `hotspot_forecast` on whether the cell's stall count next hour came out near the claim. S8D grades it on rank (is the cell still in the zone's top 20 at the horizon end) and keeps the count grade as `outcome_count`. Same data, `results/fleet/hotspot_s8b-medium-80-p03-07.json` (re-scored in 274e20f):
+
+| grade | before S8D (56dc46c) | after S8D (274e20f) |
+|---|---|---|
+| count grade | `outcome`: 136 ok / 306 off (442) | `outcome_count`: 136 ok / 306 off (442), identical |
+| rank grade, top 20 at the horizon end | - | `outcome`: 120 ok / 80 off (200 rank-graded) |
+| not rank-graded (claim rank > 20) | - | 242 `unranked` (truth-graded only) |
+| truth | 796 hit / 280 false alarm | 796 hit / 280 false alarm |
+
+60% of the top-20 forecasts are still in the top 20 an hour later. Precision, recall and Spearman are unchanged.
+
+**Replay page.** [`docs/replay/index.html`](docs/replay/index.html) (opens from disk, no server needed) replays one zone (seed 0, 500 steps) in three panels on one timeline: the hidden floor, the extractor's counters and the analyst's growing map. You can toggle a re-run of the same seed with the map switched on. Its grades are the pre-S8D count grade. Its with-map layer is in-sample (the final map of that same episode, on from step 0). The page has not yet been checked in a browser.
+
+**Caveats.**
+- The floor is a uniform draw over the 380 highway cells. Real damage clusters on busy aisles, which would favour a map learned from traffic.
+- One context layer (`floor`) only. The other layers are not built.
+- The map is "yesterday's data" from the same seed. Phase A runs seed z with no map, and Phase B runs seed z again with that map, so the floor layout and the demand are identical. That is in-sample and optimistic: a real deployment would face a new day.
+- The oracle is an upper bound on the map's information, not on its penalty. Oracle costs are p_c in [0.3, 0.7], while the analyst map is normalised to 1.0 per zone, so at the same alpha the analyst map penalises its top cells harder. Map <= oracle is not guaranteed.
+- The logs are synthetic: VDA 5050-shaped messages emitted by this simulator, not a client fleet.
+- The numbers are macOS arm64 only (pyastar2d tie-break, `docs/PLATFORM.md`). At alpha 4 with an analyst cost of 1.0, an open-grid sidestep is an exact tie (alpha * cost = 4 = the extra steps and turns), and darwin breaks it toward going straight.
+- The figure is drawn from `summary.json` by `scripts/closed_loop.py`.
