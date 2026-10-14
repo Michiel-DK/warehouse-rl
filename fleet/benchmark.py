@@ -131,7 +131,7 @@ class Runner:
                 f.result(30)
             except Exception as e:  # noqa: BLE001  (an existing topic is fine; anything else is a leg failure)
                 if "EXISTS" not in str(e).upper():
-                    raise LegError(f"could not create topic {topic}: {str(e)[:LOG_TAIL]}") from e
+                    raise LegError(f"could not create topic {topic}: {bench.exc_reason(e)[:LOG_TAIL]}") from e
 
     def live(self, zones, seconds):
         run = self.name("live")

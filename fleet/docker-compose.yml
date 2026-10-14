@@ -2,7 +2,9 @@
 #
 # Host ports (override with env vars): Kafka API 19092 (FLEET_KAFKA_PORT), ClickHouse HTTP 18123
 # (FLEET_CLICKHOUSE_PORT), Grafana 13000 (FLEET_GRAFANA_PORT). Memory caps: redpanda 1.5g, clickhouse 3g, grafana 512m.
-# Data lives in bind mounts under fleet/data/volumes/ (gitignored via fleet/data/; counts toward the 8 GB cap).
+# Data lives in Docker named volumes fleet_redpanda, fleet_clickhouse, fleet_grafana (not bind mounts: writes through
+# Docker Desktop file sharing wedged the VM twice, 14 Oct). Sizes: `fleet/compose.sh status`; they count toward the
+# 8 GB data cap. The Grafana provisioning files stay read-only bind mounts (config, not data).
 name: fleet
 
 services:
@@ -22,7 +24,7 @@ services:
     ports:
       - "${FLEET_KAFKA_PORT:-19092}:${FLEET_KAFKA_PORT:-19092}"
     volumes:
-      - ./data/volumes/redpanda:/var/lib/redpanda/data
+      - fleet_redpanda:/var/lib/redpanda/data
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster info >/dev/null 2>&1"]
       interval: 5s
@@ -40,7 +42,7 @@ services:
     ports:
       - "${FLEET_CLICKHOUSE_PORT:-18123}:8123"
     volumes:
-      - ./data/volumes/clickhouse:/var/lib/clickhouse
+      - fleet_clickhouse:/var/lib/clickhouse
     ulimits:
       nofile:
         soft: 262144
@@ -68,7 +70,7 @@ services:
     ports:
       - "${FLEET_GRAFANA_PORT:-13000}:3000"
     volumes:
-      - ./data/volumes/grafana:/var/lib/grafana
+      - fleet_grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboard.json:/etc/grafana/dashboards/dashboard.json:ro
     healthcheck:
@@ -77,3 +79,12 @@ services:
       timeout: 5s
       retries: 36
       start_period: 20s
+
+# Explicit names, so they are fleet_* regardless of the compose project name.
+volumes:
+  fleet_redpanda:
+    name: fleet_redpanda
+  fleet_clickhouse:
+    name: fleet_clickhouse
+  fleet_grafana:
+    name: fleet_grafana

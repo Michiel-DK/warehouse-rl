@@ -317,6 +317,25 @@ class TestOutput(unittest.TestCase):
         self.assertEqual(doc["live"], {"not_run": "kafka went away"})
         self.assertEqual(set(doc["batch"]), set(bench.BATCH_KEYS))
 
+    def test_an_empty_topic_creation_timeout_names_its_type_in_the_leg_reason(self):
+        # inject: format the LegError with str(e) instead of bench.exc_reason(e)
+        import concurrent.futures
+        import types
+
+        class Future:
+            def result(self, timeout):
+                raise concurrent.futures.TimeoutError()  # str() is "" on a real confluent timeout too
+
+        admin = types.ModuleType("confluent_kafka.admin")
+        admin.AdminClient = lambda conf: types.SimpleNamespace(create_topics=lambda topics: {"t": Future()})
+        admin.NewTopic = lambda *a, **k: None
+        with mock.patch.dict(sys.modules, {"confluent_kafka": types.ModuleType("confluent_kafka"),
+                                           "confluent_kafka.admin": admin}):
+            with self.assertRaises(cli.LegError) as ctx:
+                cli.Runner(2, True).ensure_topic("fleet.t")
+        self.assertEqual(str(ctx.exception), "could not create topic fleet.t: TimeoutError: timed out")
+        self.assertEqual(bench.exc_reason(ValueError("boom")), "boom")
+
     def test_killed_between_legs_the_finished_leg_is_on_disk(self):
         # inject: write the document once at the end, or write it non-atomically
         with tempfile.TemporaryDirectory() as tmp:

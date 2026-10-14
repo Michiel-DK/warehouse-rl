@@ -634,8 +634,9 @@ sequence -> detector -> store + ledgers) that the file `Ingester` and the `Kafka
 **Stack** (`fleet/compose.sh up [service...] | down | reset | status`): Redpanda (Kafka API on host 19092, mem_limit
 1.5g), ClickHouse (HTTP on host 18123, 3g), Grafana (host 13000, 512m, `grafana-clickhouse-datasource`, datasource
 provisioned from `fleet/grafana/provisioning`; the dashboard is S5C). Host ports: `FLEET_KAFKA_PORT`,
-`FLEET_CLICKHOUSE_PORT`, `FLEET_GRAFANA_PORT`. Data lives in bind mounts under `fleet/data/volumes/` (gitignored with
-`fleet/data/`, counts toward the 8 GB cap; this resolves the sprint text's "named volumes under fleet/data"). Measured
+`FLEET_CLICKHOUSE_PORT`, `FLEET_GRAFANA_PORT`. Data lives in Docker named volumes `fleet_redpanda`, `fleet_clickhouse`,
+`fleet_grafana` (S5C2 pass 3, 14 Oct: the earlier bind mounts under `fleet/data/volumes/` wedged Docker Desktop twice
+on writes; `fleet/compose.sh status` prints the volume sizes, which count toward the 8 GB cap; `reset` removes them). Measured
 idle memory of the three containers on 13 Oct: grafana 67 MiB, clickhouse 341 MiB, redpanda 238 MiB.
 
 **ClickHouseStore** (`--store clickhouse://host[:port]/db`, default port 18123; stdlib `urllib`, no client library).
