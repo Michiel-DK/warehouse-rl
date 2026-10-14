@@ -235,3 +235,19 @@ CREATE TABLE IF NOT EXISTS ingest_consumer_lag
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, topic);
+
+-- Written by fleet_analyser.bench.load_results from benchmark.json and score.json: one row per numeric leaf, `key` is the
+-- dotted path. Insert-only (a reload appends; readers take argMax(value, loaded_at) per (kind, run, key)).
+CREATE TABLE IF NOT EXISTS results
+(
+    kind String,
+    run String,
+    `key` String,
+    value Float64,
+    `text` Nullable(String),
+    loaded_at Float64,
+    schema_version UInt8 DEFAULT 1,
+    _ver UInt64
+)
+ENGINE = MergeTree
+ORDER BY (kind, run, `key`);

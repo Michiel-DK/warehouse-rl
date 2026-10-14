@@ -634,8 +634,9 @@ sequence -> detector -> store + ledgers) that the file `Ingester` and the `Kafka
 **Stack** (`fleet/compose.sh up [service...] | down | reset | status`): Redpanda (Kafka API on host 19092, mem_limit
 1.5g), ClickHouse (HTTP on host 18123, 3g), Grafana (host 13000, 512m, `grafana-clickhouse-datasource`, datasource
 provisioned from `fleet/grafana/provisioning`; the dashboard is S5C). Host ports: `FLEET_KAFKA_PORT`,
-`FLEET_CLICKHOUSE_PORT`, `FLEET_GRAFANA_PORT`. Data lives in bind mounts under `fleet/data/volumes/` (gitignored with
-`fleet/data/`, counts toward the 8 GB cap; this resolves the sprint text's "named volumes under fleet/data"). Measured
+`FLEET_CLICKHOUSE_PORT`, `FLEET_GRAFANA_PORT`. Data lives in Docker named volumes `fleet_redpanda`, `fleet_clickhouse`,
+`fleet_grafana` (S5C2 pass 3, 14 Oct: the earlier bind mounts under `fleet/data/volumes/` wedged Docker Desktop twice
+on writes; `fleet/compose.sh status` prints the volume sizes, which count toward the 8 GB cap; `reset` removes them). Measured
 idle memory of the three containers on 13 Oct: grafana 67 MiB, clickhouse 341 MiB, redpanda 238 MiB.
 
 **ClickHouseStore** (`--store clickhouse://host[:port]/db`, default port 18123; stdlib `urllib`, no client library).
@@ -745,6 +746,67 @@ lines whose latencies mean something only when the emit config is now / realtime
 countable episodes, prints `episodes excluded: ...`, and adds `grades last day [<kind>]` lines: verdict counts of graded
 decisions with `decided_at >= (latest decided_at of the run) - 86400`, accuracy = confirmed / (confirmed + refuted), `null`
 when that is 0. This grade-verdict accuracy is unrelated to the cause figure above.
+
+### Sprint 5 / S5C2: report SQL, provisioned dashboard, results table, benchmark script
+
+Code: `fleet/sql/reports/*.sql`, `fleet/grafana/dashboard.json` + `provisioning/dashboards/fleet.yaml`, `fleet/benchmark.py`,
+`fleet/fleet_analyser/bench.py`, `score.py --source kafka`, the `results` table in `fleet/sql/schema.sql`.
+
+**Report SQL.** One ClickHouse query per report section (hotspots, episodes per hour, duration, cause mix, resolution mix,
+avoidable, repeat robots, time to resolution, decision grades), parameterised by `{run:String}`, reading upsert tables with
+`FINAL` and applying the S5C1 countable filter (`NOT left_censored AND resolution NOT IN ('open', 'interrupted')`) wherever
+they count episodes. Percentiles are nearest-rank like `report.py` (`arraySort` and the `ceil(q * n)`-th element, not a
+`quantile*` function). `fleet/tests/integration_fleet_reports.py` (explicit run, skipped when `docker info` fails) emits 2
+zones x 300 steps on the host, ingests them into a throwaway ClickHouse database, adds one censored, one open and one
+interrupted episode, and asserts that each SQL file gives the numbers of its `report.py` section; it fails on a SQL file
+without a comparator and runs every dashboard panel query once.
+
+**Dashboard.** Provisioned, not clicked: `dashboard.json` is mounted by `docker-compose.yml` at `/etc/grafana/dashboards` and
+`provisioning/dashboards/fleet.yaml` reads that path. Rows `INTEGRATION` (coverage, consumer lag, sequence accounting, ingest
+rate, messages per minute, lag p50 / p99), `SIMULATION` (the report SQL files verbatim, `{run:String}` replaced by the
+dashboard variable) and `RESULTS` (the `results` table). `test_fleet_dashboard.py` checks the three row titles, that every
+panel query names only tables and columns of `schema.sql` (parsed), the datasource uid against `clickhouse.yaml`, and the
+compose mount against the provider path.
+
+**`results` table** `(kind, run, key, value Float64, text Nullable(String), loaded_at, schema_version, _ver)`, insert-only.
+`bench.load_results(store, benchmark_json, score_json)` writes one row per numeric leaf (booleans, nulls and strings are not
+numeric leaves; `key` is the dotted path, list indices included). Kind `benchmark` has run = the commit sha of the benchmark
+document, kind `score` has run = the score's run. A reload appends; readers take `argMax(value, loaded_at)`.
+
+**Scorer from Kafka.** `fleet/score.py --source kafka --bootstrap B [--topic fleet.state] [--group fleet-scorer]
+[--until-idle 10]` reads the topic from the earliest offset until `--until-idle` seconds pass without a message and scores
+exactly as the file source (a unit test compares the two `score.json` byte for byte). It never commits, so every scoring
+re-reads the topic.
+
+**Benchmark definitions** (`fleet/benchmark.py [--smoke] [--workers N] [--out PATH] [--force]`; workers: `--workers`, else
+`SCHED_WORKERS`, else `os.cpu_count() - 2`).
+- *Batch:* 8 zones x 72000 steps x 12 robots on `tarware-medium-8agvs-4pickers-globalobs-v1` = 6,912,000 messages = 100
+  simulated hours per zone, about one hour of 5 s state traffic of a ~9,600-robot fleet. Emitted flat out with `--t0 now`
+  (the `state_sample` TTL is on event time), then ingested from cold into ClickHouse. The estimate comes from a 1-zone
+  200-step probe (bytes per message times the message count); the run aborts before emitting when it exceeds 6 GB
+  uncompressed. `gb_per_min_*` and `msgs_per_s` are the ingest's (bytes read and messages parsed from the ingest ledger over
+  the ingest wall time); `coverage` is accepted over the emit ledger's expected total.
+- *Live:* emitter `--sink kafka --t0 now --rate realtime --speed 1`, 8 zones, 600 s, with the kafka ingester and the alert
+  (`--latency-out`) running alongside on a fresh topic per run. It is a latency test (about 19 messages/s), not a throughput
+  test. `lag_p50_s` is the nearest-rank median of the per-minute ingest-ledger p50, `lag_p99_s` the largest per-minute p99;
+  the alert latencies are nearest-rank percentiles over the latency-file lines flagged meaningful. Then the score is taken
+  from the topic with the `fleet-scorer` group. A live leg that fails after the preflight is recorded as `{not_run: reason}`
+  and the exit code is 1. The live leg paces one process per zone, so it needs `--workers >= zones` (exit 2 otherwise).
+- *Preflight* (one stderr line, exit 2, nothing emitted): inside a Linux container, `docker info`, `confluent_kafka`
+  importable, ClickHouse and Redpanda reachable, the 6 GB estimate, free disk at least 3x the estimate, `fleet/data` (what is
+  there plus the compressed batch) under 8 GB.
+- *Output:* `platform`, `machine` (cores, ram_gb, disk_free_gb, docker_version), `git_sha`, `batch`, `live`; written atomically
+  after each leg. A leg already finished for the same commit and definition is skipped on a re-run (`--force` reruns). Every
+  number is read from the emit ledger, the ingest ledger rows, the alert latency file or `score.json`; only the wall times are
+  timers. The scorer runs before cleanup; a finished run directory keeps `emit_ledger.json`, `ingest_ledger.json`,
+  `decision_ledger.json`, `score.json`, `report.md` and `*.png` (the rest of `fleet/data/<run>/` is deleted).
+- *Smoke:* `--smoke` runs 2 zones x 300 steps and a 60 s live leg on 2 zones, writes to a tmp path by default and refuses an
+  `--out` under `results/`. The real benchmark is the queue item `wr-s5-benchmark`; no lane writes `results/fleet/`.
+
+**Platform rule.** The vendored A* breaks ties differently on Linux, so the emitter and every simulator episode run on the
+macOS host `.venv`, never in a container; only Redpanda, ClickHouse and Grafana run in Docker. The benchmark records
+`platform.platform()` and `platform.machine()` and refuses to run inside a Linux container. Its numbers are macOS-arm64
+numbers.
 
 ## Compute and timing
 

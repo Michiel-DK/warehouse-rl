@@ -10,9 +10,10 @@ truth episode is a maximal run of consecutive truth stuck steps of one robot wit
 message, end = ts of the message after its last; it counts when end - start >= stuck_after.
 """
 import json
+import time
 
 from .ledger import exclusion
-from .parse import epoch_of
+from .parse import epoch_of, zone_of
 
 TRUTH_DEFINITION = ("truth stuck step = robot message t (not the last) with driving false, orderId non-empty and errors "
                     "empty whose next message has the simulator stuck flag; truth episode = maximal run of such steps "
@@ -198,3 +199,31 @@ def gz_lines(paths):
         with gzip.open(p, "rb") as f:
             yield from f
 
+
+
+def kafka_lines(consumer, until_idle, clock=time.monotonic, poll_timeout=1.0, batch_size=1000, log=None):
+    """{zone: [raw line bytes]} read from a consumer (earliest offset, see kafka_source.make_consumer) until `until_idle`
+    seconds pass without a message. Never commits: the group `fleet-scorer` re-reads the topic from the start on every
+    scoring. Each robot's records are keyed by serial, so one partition holds a robot in order; score_run sorts by ts
+    anyway, so the partition interleaving does not matter. Zones are the string digits of the serial ("Z3-01" -> "3"),
+    the same keys zone_files gives, so the scored result is identical to the file source on the same lines."""
+    out = {}
+    idle_since = clock()
+    while True:
+        got = False
+        for m in consumer.consume(num_messages=batch_size, timeout=poll_timeout):
+            err = m.error()
+            if err is not None:
+                if log:
+                    log(f"kafka error: {err}")
+                continue
+            raw = m.value()
+            if not raw:
+                continue
+            serial = json.loads(raw)["serialNumber"]
+            out.setdefault(zone_of(serial), []).append(raw)
+            got = True
+        if got:
+            idle_since = clock()
+        elif clock() - idle_since >= until_idle:
+            return out

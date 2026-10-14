@@ -4,7 +4,7 @@ test_fleet_*.py); run it explicitly from the repo root:
     .venv/bin/python -m unittest -v fleet.tests.integration_fleet_stack
 
 It starts only the clickhouse service (`fleet/compose.sh up clickhouse`, mem_limit 3g), uses a throwaway database,
-and brings the stack down afterwards (`fleet/compose.sh down`; data stays in fleet/data/volumes/). Skips with a reason
+and brings the stack down afterwards (`fleet/compose.sh down`; data stays in the fleet_clickhouse volume). Skips with a reason
 when `docker info` fails. Host port: FLEET_CLICKHOUSE_PORT (default 18123)."""
 import os
 import subprocess
