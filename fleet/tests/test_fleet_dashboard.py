@@ -153,6 +153,16 @@ class TestDashboard(unittest.TestCase):
         res = [p for p in self.query_panels if "FROM results" in p["targets"][0]["rawSql"]]
         self.assertGreaterEqual(len(res), 3)
 
+    def test_results_reads_take_the_latest_load_of_each_key(self):
+        # inject: replace one argMax(value, loaded_at) with value (results is insert-only: a reload adds a second row)
+        sqls = [t["rawSql"] for p in self.query_panels for t in p["targets"] if "FROM results" in t["rawSql"]]
+        self.assertGreaterEqual(len(sqls), 3)
+        for sql in sqls:
+            with self.subTest(sql=sql):
+                self.assertIn("argMax(value, loaded_at)", sql)
+                rest = re.sub(r"\bAS\s+value\b", "", sql.replace("argMax(value, loaded_at)", ""), flags=re.I)
+                self.assertNotRegex(rest, r"\bvalue\b")
+
 
 class TestProvisioning(unittest.TestCase):
     def compose_mounts(self):
