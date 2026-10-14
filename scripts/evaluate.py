@@ -14,6 +14,8 @@ disturb {} for --disturb none) and writes <policy>_<env>_<steps>[_<disturbtag>]_
 preset, 'rec-<10 hex>' for a JSON spec; call_human_cost is optional, default 60). Doc and rows record the recovery
 config and the episode sums of the recovery info keys. Resuming into a file with a different stored recovery config
 raises. Without --recovery nothing above changes.
+The result-doc header records `platform` (platform_tag(), e.g. darwin-arm64); a file without it predates the field and is
+darwin-arm64. Resuming onto a doc measured on another platform raises ValueError (docs/PLATFORM.md).
 Workers: --workers, else SCHED_WORKERS, else os.cpu_count() - 2; capped at the seeds still to run.
 pick-rate = deliveries * 3600 / (5 * steps), deliveries from info["shelf_deliveries"].
 Policies: cta, stuck_aware_cta, random (registry below; an unknown name raises ValueError).
@@ -24,6 +26,7 @@ import json
 import math
 import multiprocessing as mp
 import os
+import platform
 import sys
 import time
 from pathlib import Path
@@ -205,10 +208,17 @@ def _job(args):
     return run_seed(*args)
 
 
+def platform_tag():
+    """Platform the numbers were measured on, e.g. darwin-arm64 or linux-x86_64 (see docs/PLATFORM.md)."""
+    machine = platform.machine().lower()
+    machine = {"aarch64": "arm64", "amd64": "x86_64"}.get(machine, machine)
+    return f"{sys.platform.lower()}-{machine}"
+
+
 def _write(path, policy, env_id, steps, rows, tag=None, config=None, rec_tag=None, rec_config=None):
     rows = sorted(rows, key=lambda r: r["seed"])
     s = summarise([r["pick_rate"] for r in rows])
-    doc = dict(policy=policy, env=env_id, steps=steps, rows=rows, n=s["n"], pick_rate_mean=s["mean"],
+    doc = dict(platform=platform_tag(), policy=policy, env=env_id, steps=steps, rows=rows, n=s["n"], pick_rate_mean=s["mean"],
                pick_rate_sd=s["sd"], ci95_low=s["ci95_low"], ci95_high=s["ci95_high"])
     if config is not None:
         doc.update(disturb_tag=tag, disturb=config)
@@ -233,6 +243,13 @@ def _check_same_recovery(path, doc, rec_tag, rec_config):
     if doc.get("recovery") != rec_config or doc.get("recovery_tag") != rec_tag:
         raise ValueError(f"{path} stores recovery config {doc.get('recovery')!r} (tag {doc.get('recovery_tag')!r}), "
                          f"requested {rec_config!r} (tag {rec_tag!r}); refusing to merge")
+
+
+def _check_same_platform(path, doc):
+    """Files without the field predate it and were all measured on darwin-arm64."""
+    stored = doc.get("platform", "darwin-arm64")
+    if stored != platform_tag():
+        raise ValueError(f"{path} was measured on {stored}, this machine is {platform_tag()}; refusing to merge")
 
 
 def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="none", recovery=None):
@@ -261,6 +278,7 @@ def evaluate(policy, env_id, steps, seeds, workers_cli, results_dir, disturb="no
     rows = []
     if path.exists():
         doc = json.loads(path.read_text())
+        _check_same_platform(path, doc)
         if layer:
             _check_same_config(path, doc, tag, config)
         if rec_config is not None:

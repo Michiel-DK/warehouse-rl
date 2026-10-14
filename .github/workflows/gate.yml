@@ -33,4 +33,18 @@ jobs:
       - name: Set up environment
         run: ./scripts/setup.sh
       - name: Unit tests
-        run: .venv/bin/python -m unittest discover -s tests
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/python -m unittest discover -s tests -v 2>&1 | tee gate.log
+      - name: Gate summary (skips and result)
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Unit gate'
+            echo '```'
+            grep -E ' \.\.\. skipped' gate.log || echo 'no skipped tests'
+            grep -E '^(Ran [0-9]+ tests?|OK|FAILED)' gate.log || echo 'no result line (the run did not finish)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

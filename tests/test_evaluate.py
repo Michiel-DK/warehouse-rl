@@ -9,7 +9,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests"))
 
+import _platform
 from warehouse_rl.env import WarehouseEnv
 from warehouse_rl.policy import CtaPolicy, RandomPolicy
 
@@ -138,13 +140,15 @@ class TestCli(unittest.TestCase):
 
     def test_multi_steps_known_numbers(self):  # inject: pass steps_list[0] to every run / reuse one file
         # Seed 0 CTA on small: 24 deliveries at 500 steps (= heuristic_episode, see test_regression_cta), 86 at 2000
-        # (probed 2026-10-10 through WarehouseEnv + CtaPolicy).
+        # (probed 2026-10-10 through WarehouseEnv + CtaPolicy; darwin-arm64, other platforms in platform_expected.json).
+        d500 = _platform.expected("test_multi_steps_known_numbers", "deliveries_500")
+        d2000 = _platform.expected("test_multi_steps_known_numbers", "deliveries_2000")
         with tempfile.TemporaryDirectory() as d:
             run_cli("cta", "0", "500,2000", d, workers=1)
             r500 = json.loads((Path(d) / f"cta_{ENV_ID}_500.json").read_text())["rows"]
             r2000 = json.loads((Path(d) / f"cta_{ENV_ID}_2000.json").read_text())["rows"]
-        self.assertEqual([(r["seed"], r["steps"], r["deliveries"]) for r in r500], [(0, 500, 24)])
-        self.assertEqual([(r["seed"], r["steps"], r["deliveries"]) for r in r2000], [(0, 2000, 86)])
+        self.assertEqual([(r["seed"], r["steps"], r["deliveries"]) for r in r500], [(0, 500, d500)])
+        self.assertEqual([(r["seed"], r["steps"], r["deliveries"]) for r in r2000], [(0, 2000, d2000)])
 
 
 class TestThroughput(unittest.TestCase):

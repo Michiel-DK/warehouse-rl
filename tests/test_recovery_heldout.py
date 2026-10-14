@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
+import _platform
 import evaluate as ev
 from test_learned_recovery import make_ckpt
 
@@ -150,6 +151,11 @@ class TestSmokeAndResume(unittest.TestCase):
         new = {"decisions_while_blocker_frozen", "reroutes_while_blocker_frozen", "floor_skip_steps"}
         self.assertEqual(mine["floor_skip_steps"], 0)
         self.assertEqual(set(mine) - set(theirs), new)
+        # everything above is portable; the values are only comparable on the platform the committed file was measured on
+        file_platform = _platform.results_platform(json.loads((ROOT / "results" / "recovery" / "timeout.json").read_text()))
+        if _platform.tag() != file_platform:
+            self.skipTest(f"results/recovery/timeout.json measured on {file_platform}, running on {_platform.tag()}: "
+                          "value comparison skipped")
         self.assertEqual({k: v for k, v in mine.items() if k not in new}, theirs)
 
     # inject: rewrite or re-run rows already on disk

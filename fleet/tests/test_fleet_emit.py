@@ -14,17 +14,19 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
+for _p in (ROOT / "fleet", ROOT / "src", ROOT / "scripts", ROOT / "tests"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import _platform  # noqa: E402
 from fleet_analyser import emitter as em  # noqa: E402
 from warehouse_rl.disturb import resolve_disturb  # noqa: E402
 from warehouse_rl.recovery import ACTIONS  # noqa: E402
 
 EMIT = str(ROOT / "fleet" / "emit.py")
 STEPS = 300
-SEED = 3  # at 300 steps this seed has AGV and picker abandons (probed), breakdowns and stuck events
+SEED = 3  # at 300 steps this seed has AGV and picker abandons (probed), breakdowns and stuck events; darwin-arm64.
+# TestStream reads its seed per platform from tests/platform_expected.json (fleet_stream), the other classes keep SEED.
 
 
 class ListSink:
@@ -62,10 +64,12 @@ def read_gz_lines(path):
 
 
 class TestStream(unittest.TestCase):
-    """One real run (seed 3, 300 steps, breakdown-heavy) observed from outside through the env state."""
+    """One real run (seed 3 on darwin-arm64, per-platform seed from platform_expected.json; 300 steps, breakdown-heavy)
+    observed from outside through the env state."""
 
     @classmethod
     def setUpClass(cls):
+        seed = _platform.expected("fleet_stream", "seed")  # SkipTest here skips the class visibly
         cls.sink = ListSink()
         cls.abandons = []  # (step, agent id) from the env's own _abandon, not from the emitted stream
         cls.frozen = []  # applied_frozen[-1] per step
@@ -91,7 +95,7 @@ class TestStream(unittest.TestCase):
             cls.busy.append([a.busy for a in env.env.agents])
             cls.delivered.append(list(info["delivered_per_agent"]))
 
-        cls.result = em.run_zone(zone_cfg(), cls.sink, on_step=on_step, on_ready=on_ready)
+        cls.result = em.run_zone(zone_cfg(seed=seed), cls.sink, on_step=on_step, on_ready=on_ready)
         cls.msgs = [json.loads(line) for line in cls.sink.lines]
         cls.n = cls.result["snapshot"]["robots"]
 
