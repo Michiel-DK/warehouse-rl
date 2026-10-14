@@ -451,6 +451,8 @@ After an ingest, `fleet/grade.py --run NAME --once` grades the analyser's decisi
 
 The report sections also exist as ClickHouse queries under `fleet/sql/reports/` (one file per section, parameterised by the run) and as a provisioned Grafana dashboard (`fleet/grafana/dashboard.json`, loaded when the stack starts, with rows for the integration, the simulation and the results). `fleet/fleet_analyser/bench.py` loads a benchmark JSON and a score JSON into the `results` table. `fleet/score.py --source kafka` scores straight from the topic. `fleet/benchmark.py` runs the batch and live benchmark on the host (the simulator never runs in a container); `--smoke` is the quick version and writes to a temporary file. The definitions are in the "Sprint 5 / S5C2" note of [docs/SCOPE.md](docs/SCOPE.md); the real run is a scheduler queue item and its numbers come from the results JSON it writes.
 
+Demo v0, a walkthrough of about 4 minutes with every command and output from one run: [docs/DEMO.md](docs/DEMO.md).
+
 ### Sprint 5 results: benchmark (2026-10-14)
 
 Every number below comes from `results/fleet/benchmark.json` (git sha 56dc46c, written by `fleet/benchmark.py`) or the run files copied next to it under `results/fleet/s5_benchmark/{batch,live}/` (`score.json`, `report.md`, `ingest_ledger.json`, `emit_ledger.json`, `hotspots.png`). The two `score.json` files are identical to the `score` blocks inside `benchmark.json`. Platform: `macOS-14.3.1-arm64`. The simulator ran on the Mac host and only Redpanda, ClickHouse and Grafana ran in Docker, because the vendored A* breaks ties differently on Linux ([docs/PLATFORM.md](docs/PLATFORM.md)).
