@@ -171,8 +171,11 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
 
     zone, steps, seed, env_id = cfg["zone"], cfg["steps"], cfg["seed"], cfg["env_id"]
     pol = ev.make_policy(cfg["policy"], seed)
+    # optional cost-aware router (S8-REPLAY re-simulation): passed to the env only when present, so a cfg without
+    # cost_map builds exactly the env it always did
+    router = {k: cfg[k] for k in ("cost_map", "cost_alpha") if k in cfg}
     env = WarehouseEnv(env_id, max_steps=steps, disturb=cfg["disturb"], assign_care_for_agents=False,
-                       recovery=cfg["recovery"])
+                       recovery=cfg["recovery"], **router)
     try:
         hook = env.env
         recorded = {}
