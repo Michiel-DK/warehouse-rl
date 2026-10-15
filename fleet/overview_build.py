@@ -395,7 +395,7 @@ a{color:var(--accent)}
       <h2>Reads it live. Loses nothing.</h2>
       <p class="one">Files or a live feed, read while they are still being written. Every line counted, the useful part kept.</p>
       <div class="big">{lag_median}<span>seconds behind the robots, measured on a live feed</span></div>
-      <div class="st ok"><i></i><span><b>Tested in simulation.</b> The log carried {noise} deliberately broken or repeated lines and every one was counted. The kept share is measured on the store.</span></div>
+      <div class="st ok"><i></i><span><b>Tested in simulation.</b> The log carried {noise} deliberately broken lines, some malformed and some repeated, and every one was counted. The kept share is measured on the store.</span></div>
     </div>
     <div class="card"><div class="lbl">One shift, one test area</div>
       <div class="funnel">
@@ -432,7 +432,7 @@ a{color:var(--accent)}
       <h2>Draws the map from the stops nobody could explain.</h2>
       <p class="one">Unexplained hold-ups are counted per floor cell. The worst cells become the map. Blue rings are the analyser's top 20; brown is what we planted.</p>
       <div class="big">{hits_top}<span>of 20 right on the latest map of this test area; {map_precision} on average over all test areas</span></div>
-      <div class="st ok"><i></i><span><b>Tested in simulation</b>, over a batch of test areas, scored against the planted cells.</span></div>
+      <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
     </div>
     <div class="pic"><svg id="m3" class="map" role="img" aria-label="Floor plan with the analyser's top 20 cells ringed over the planted bad cells"></svg>
       <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--accent);background:transparent"></i>analyser's top 20</span><span><i style="border:2.5px solid var(--stuck);background:transparent"></i>flagged, not planted</span><span>it can only find cells robots drive over: {map_ceiling} of them in one shift</span></div></div>

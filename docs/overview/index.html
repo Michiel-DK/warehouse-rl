@@ -155,7 +155,7 @@ a{color:var(--accent)}
       <h2>Reads it live. Loses nothing.</h2>
       <p class="one">Files or a live feed, read while they are still being written. Every line counted, the useful part kept.</p>
       <div class="big"><b class="num" data-src="results/fleet/benchmark.json:live.lag_p50_s">2.6</b><span>seconds behind the robots, measured on a live feed</span></div>
-      <div class="st ok"><i></i><span><b>Tested in simulation.</b> The log carried <b class="num" data-src="docs/replay/data.js:run_constants.header.noise">90</b> deliberately broken or repeated lines and every one was counted. The kept share is measured on the store.</span></div>
+      <div class="st ok"><i></i><span><b>Tested in simulation.</b> The log carried <b class="num" data-src="docs/replay/data.js:run_constants.header.noise">90</b> deliberately broken lines, some malformed and some repeated, and every one was counted. The kept share is measured on the store.</span></div>
     </div>
     <div class="card"><div class="lbl">One shift, one test area</div>
       <div class="funnel">
@@ -194,7 +194,7 @@ a{color:var(--accent)}
       <h2>Draws the map from the stops nobody could explain.</h2>
       <p class="one">Unexplained hold-ups are counted per floor cell. The worst cells become the map. Blue rings are the analyser's top 20; brown is what we planted.</p>
       <div class="big"><b class="num" data-src="docs/replay/data.js:hits(publishes.-1.cells,obstacles,20)">20</b><span>of 20 right on the latest map of this test area; <b class="num" data-src="results/fleet/hotspot_s8b-medium-80-p03-07.json:mean.k.20.precision">97%</b> on average over all test areas</span></div>
-      <div class="st ok"><i></i><span><b>Tested in simulation</b>, over a batch of test areas, scored against the planted cells.</span></div>
+      <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
     </div>
     <div class="pic"><svg id="m3" class="map" role="img" aria-label="Floor plan with the analyser's top 20 cells ringed over the planted bad cells"></svg>
       <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--accent);background:transparent"></i>analyser's top 20</span><span><i style="border:2.5px solid var(--stuck);background:transparent"></i>flagged, not planted</span><span>it can only find cells robots drive over: <b class="num" data-src="results/fleet/hotspot_s8b-medium-80-p03-07.json:1-mean.zero_stall_share">56%</b> of them in one shift</span></div></div>
