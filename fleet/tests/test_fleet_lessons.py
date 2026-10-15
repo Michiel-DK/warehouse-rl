@@ -791,6 +791,14 @@ class TestCauseMixAllZones(unittest.TestCase):
         (d, c) = one(st, "cause_mix")
         self.assertEqual((c["zone"], c["window_end"], d["decided_at"]), ("0", BASE + W, BASE + W))
 
+    def test_a_zone_known_only_from_a_checkpoint_also_gates(self):
+        # inject: the gate's zone set taken from the episode/stall/transition rows only
+        st = scripted(eps=traffic_eps(BASE, 10), stalls=cell_stalls(5, 5))
+        checkpoint(st, BASE + 100, zones=("1",))  # zone 1: no rows, its stream is behind window_end
+        self.assertEqual(self.kinds(st), ["hot_cell"])
+        checkpoint(st, BASE + W, zones=("1",))
+        self.assertEqual(self.kinds(st), ["cause_mix", "hot_cell"])
+
     def test_the_other_kinds_gate_on_their_own_zone_only(self):
         other = [ep(1, "Z1-01", zone="1")]  # zone 1 has a row and no stream_end
         for kind, st in (("hot_cell", scripted(eps=other, stalls=cell_stalls(5, 5))),

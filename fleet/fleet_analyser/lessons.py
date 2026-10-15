@@ -322,7 +322,11 @@ def extract(store, run, window_h=DEFAULT_WINDOW_H, recorded_at=None):
     by_kind = {lesson_kind: lessons created}, windows = windows evaluated). Idempotent (dedup_key)."""
     span = window_span(window_h)
     data = Data(store, run)
-    ends = {z: forecast_grade.stream_end(store, run, z) for z in data.zones}
+    # the cause_mix gate covers every zone the ingester has seen, including one with a checkpoint but no rows yet
+    seen = set(data.zones)
+    for r in store.select("ingest_checkpoints", {"run": run}):
+        seen |= set(json.loads(r.get("last_message_ts_by_zone") or "{}"))
+    ends = {z: forecast_grade.stream_end(store, run, z) for z in seen}
     out = dict(created=0, existing=0, by_kind={k: 0 for k in KINDS}, windows=0)
     for zone in sorted(data.zones):
         end = ends[zone]
