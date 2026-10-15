@@ -51,7 +51,9 @@ class TestRunConstants(tre.Fixture):
         self.assertEqual(self.payload["meta"]["schema"], "replay/3")
         old = "replay" + "/2"  # spelled in two parts so this very search does not match itself
         for f in (ROOT / "fleet" / "tests").glob("test_*.py"):
-            self.assertNotIn(f'"{old}"', f.read_text(encoding="utf-8"), f.name)
+            text = f.read_text(encoding="utf-8")
+            self.assertNotIn(f'"{old}"', text, f.name)
+            self.assertNotIn(f"'{old}'", text, f.name)
 
     def test_without_the_optional_args_the_file_entries_are_null_and_the_export_succeeds(self):
         rc = self.payload["run_constants"]

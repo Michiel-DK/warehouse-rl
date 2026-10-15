@@ -28,6 +28,7 @@
       summaryNoMap: 'No map yet.',
       announce: 'Step {step} of {last}, fleet time {time}. Robots: {robots}.',
       scrub: 'step {step} of {last}, fleet time {time}',
+      clock: 'step {step} / {last}  {time}',
       withMapNote: 'With map: {note} Alpha {alpha}, {deliveries} deliveries (pick rate {rate} per hour) in this second run.'
     },
     log: {
@@ -56,10 +57,18 @@
       recurring_pair: "Two robots keep getting in each other's way.",
       fallback: "A pattern in the robots' waiting times.",
       support: 'support {c}',
+      tickOk: ' ✓',
+      tickOff: ' ✗',
       held: 'held up',
       failed: 'did not hold',
       none: 'Nothing to report yet.',
       noData: 'Lesson data is not included in this file.'
+    },
+    controls: {
+      theme: 'Theme: {name}',
+      themeAuto: 'auto ({name})',
+      play: 'Play',
+      pause: 'Pause'
     },
     footer: {
       payoff: 'Routing payoff measured separately: {map} of the sticky-floor loss recovered, {oracle} with perfect knowledge ({source}).'
@@ -102,6 +111,13 @@
   // HOVER_COPY: text that appears only on hover, focus or tap (technical wording allowed). Written by showHover/setHover into
   // the small tip box, never into a visible element.
   const HOVER_COPY = {
+    kind: { agv: 'AGV', picker: 'picker' },
+    tip: { state: 'State: {disp} ({raw})', noDetail: 'no further detail', job: 'Job: {job}', noJob: 'none',
+           waiting: 'Waiting: {s} s', notMoving: 'Not moving: {s} s' },
+    rateOf: '{rate} msgs/s',
+    rateUnknown: 'unknown',
+    mapItem: '{time} {p} ({hits}/20)',
+    reasons: ' ({list})',
     raw: { moving: 'changed cell', loading: 'at a shelf or station', stalled: 'tried to move and did not',
            stuck: 'inside a stuck call', frozen: 'reported an error', idle: 'no job, not moving' },
     arrived: 'Lines read from the robots\' files so far: {lines}, {bytes} B uncompressed. Ingest speed {rate} (store:ingest_ledger).{bench}',
@@ -139,6 +155,7 @@
     counterRows: ['bytes read (uncompressed)', 'messages (lines)', 'parsed', 'rejected', 'duplicates', 'sequence gaps', 'accepted',
                   'coverage'],
     noneRejected: 'none rejected',
+    starting: 'starting',
     topReason: ' ({r})',
     gaps: '{n} ({m} messages missing)',
     coverageUnknown: 'unknown (no message count from the run)',
@@ -179,7 +196,7 @@
     liveCalls: 'Cost-map calls',
     liveLessons: 'Lessons',
     liveGradedOn: 'Graded on what the robots report next (the stream), not on the hidden roadblocks.',
-    sources: { runDir: 'run files: {v}', store: 'store: {v}', closedLoop: 'closed-loop layer: {v}', costmap: 'map file: {v}',
+    sources: { rundir: 'run files: {v}', store: 'store: {v}', closedloop: 'closed-loop layer: {v}', costmap: 'map file: {v}',
                carry: 'lessons carried from: {v} (written on run {run})', constant: '{k}: {v}' }
   };
 
@@ -339,7 +356,7 @@
       li.appendChild(el('span', 'ltxt', text));
       var conf = el('span', 'conf', fill(VISIBLE_COPY.lesson.support, { c: it.conf.toFixed(2) }));
       if (it.mark) {
-        var mark = el('span', 'mark', it.mark === 'ok' ? ' ✓' : ' ✗');
+        var mark = el('span', 'mark', it.mark === 'ok' ? VISIBLE_COPY.lesson.tickOk : VISIBLE_COPY.lesson.tickOff);
         mark.setAttribute('role', 'img');
         mark.setAttribute('aria-label', it.mark === 'ok' ? VISIBLE_COPY.lesson.held : VISIBLE_COPY.lesson.failed);
         conf.appendChild(mark);
@@ -362,7 +379,7 @@
     if (!ul) return;
     ul.textContent = '';
     var D = DETAILS_COPY.sources;
-    [['runDir', src.run_dir], ['store', src.store], ['closedLoop', src.closed_loop], ['costmap', src.costmap]].forEach(function (p) {
+    [['rundir', src.run_dir], ['store', src.store], ['closedloop', src.closed_loop], ['costmap', src.costmap]].forEach(function (p) {
       if (p[1]) ul.appendChild(el('li', null, fill(D[p[0]], { v: p[1] })));
     });
     if (src.carry_lessons) ul.appendChild(el('li', null, fill(D.carry, { v: src.carry_lessons, run: src.carry_lessons_run })));
@@ -397,7 +414,7 @@
   function applyTheme() {
     var t = userTheme || (mq && mq.matches ? 'dark' : 'light');
     root.setAttribute('data-theme', t);
-    themeBtn.textContent = 'Theme: ' + (userTheme ? t : 'auto (' + t + ')');
+    themeBtn.textContent = fill(VISIBLE_COPY.controls.theme, { name: userTheme ? t : fill(VISIBLE_COPY.controls.themeAuto, { name: t }) });
     drawLegends();
     if (R && ready) draw();
   }
@@ -514,8 +531,10 @@
 
   // tooltip: hover (mouse) or tap (touch) on a robot. provider(cx, cy) -> [{id, kind, raw, disp, job, waitS}].
   function tipLines(i) {
-    return [i.id + ', ' + (i.kind === 'agv' ? 'AGV' : 'picker'), 'State: ' + i.disp + ' (' + (RAW_TEXT[i.raw] || 'no further detail') + ')',
-            'Job: ' + (i.job || 'none'), (i.job ? 'Waiting: ' : 'Not moving: ') + i.waitS + ' s'];
+    var T = HOVER_COPY.tip;
+    return [i.id + ', ' + HOVER_COPY.kind[i.kind === 'agv' ? 'agv' : 'picker'],
+            fill(T.state, { disp: i.disp, raw: RAW_TEXT[i.raw] || T.noDetail }),
+            fill(T.job, { job: i.job || T.noJob }), fill(i.job ? T.waiting : T.notMoving, { s: i.waitS })];
   }
   function refreshTip() {
     var tip = $('tip');
@@ -753,9 +772,9 @@
     var kept = RC.kept;
     var noise = SRC.injected_noise;
     var arrived = fill(HOVER_COPY.arrived, { lines: fmt(S.messages[i]), bytes: fmt(S.bytes[i]),
-      rate: rate === null ? 'unknown' : fmt(Math.round(rate)) + ' msgs/s',
+      rate: rate === null ? HOVER_COPY.rateUnknown : fill(HOVER_COPY.rateOf, { rate: fmt(Math.round(rate)) }),
       bench: bench ? fill(HOVER_COPY.arrivedBench, { rate: fmt(Math.round(bench.value)), source: bench.source }) : '' });
-    var usable = fill(HOVER_COPY.usable, { accepted: fmt(S.accepted[i]), rejected: fmt(S.rejected[i]), reasons: reasonList(i) ? ' (' + reasonList(i) + ')' : '',
+    var usable = fill(HOVER_COPY.usable, { accepted: fmt(S.accepted[i]), rejected: fmt(S.rejected[i]), reasons: reasonList(i) ? fill(HOVER_COPY.reasons, { list: reasonList(i) }) : '',
       dups: fmt(S.duplicates[i]), gaps: fmt(S.sequence_gaps[i]), missing: fmt(S.missing_messages[i]),
       gapnote: noise && noise.gap_ids && S.sequence_gaps[i] ? fill(HOVER_COPY.gapNote, { ids: noise.gap_ids }) : '' });
     var keptHover = kept ? fill(HOVER_COPY.kept, { kept: fmt(kept.bytes_kept), arrived: fmt(kept.bytes_arrived), pct: kept.kept_pct.toFixed(2),
@@ -785,7 +804,7 @@
     var lp = latestPublish(step), idx = pubs.indexOf(lp), g = lp ? GRADES[idx] : null;
     var shown = pubs.filter(function (p) { return p.step <= step; });
     var hot = RC.hotspot;
-    var list = shown.map(function (p) { return clock(p.step) + ' ' + pct(p.precision_at_20) + ' (' + p.hits_at_20 + '/20)'; }).join('; ');
+    var list = shown.map(function (p) { return fill(HOVER_COPY.mapItem, { time: clock(p.step), p: pct(p.precision_at_20), hits: p.hits_at_20 }); }).join('; ');
     var outcome = '';
     if (g && g.window_end_step !== null && g.window_end_step <= step) {
       [[g.outcome_kind, g.outcome], ['count', g.outcome_count]].forEach(function (pair, k) {
@@ -967,7 +986,7 @@
   function draw() {
     var step = curStep();
     drawFloor(step); drawLog(step); paintAnalyser(replayAnalyser(step)); drawGrades(step); drawTop(step); drawLessons(step); mapState(step);
-    $('clock').textContent = 'step ' + step + ' / ' + (STEPS - 1) + '  ' + clock(step);
+    $('clock').textContent = fill(VISIBLE_COPY.floor.clock, { step: step, last: STEPS - 1, time: clock(step) });
     var sc = $('scrub');
     sc.value = step;
     sc.setAttribute('aria-valuetext', fill(VISIBLE_COPY.floor.scrub, { step: step, last: STEPS - 1, time: clock(step) }));
@@ -1004,7 +1023,7 @@
     var was = playing;
     playing = p;
     if (p && pos >= STEPS - 1) pos = 0;
-    $('play').textContent = p ? 'Pause' : 'Play';
+    $('play').textContent = p ? VISIBLE_COPY.controls.pause : VISIBLE_COPY.controls.play;
     lastTs = 0;
     if (was && !p) announce();
   }
@@ -1076,6 +1095,7 @@
     document.body.classList.add('live');
     var LV = VISIBLE_COPY.live;
     paintHeader(fill(VISIBLE_COPY.header.live, { messages: 0, placed: 0, planted: '' }));
+    setHover('lessoncap', HOVER_COPY.lessonCapOwn); // live lessons are written on this run, not carried
     ['.controls', '.hint', '#mapnote'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
     $('routerBox').hidden = true;
     $('grades').parentNode.hidden = true; // the per-map graded bars need the recorded run; live shows the counts instead
@@ -1376,7 +1396,7 @@
       counterDd[6].textContent = fmt(L.bytes_read) + ' B';
       counterDd[7].textContent = fmt(L.messages_per_s);
       counterDd[8].textContent = fmt(L.injections_posted) + ' / ' + fmt(L.injections_applied);
-      counterDd[9].textContent = L.emit_status || 'starting';
+      counterDd[9].textContent = L.emit_status || DETAILS_COPY.starting;
       $('match').textContent = DETAILS_COPY.liveMatch;
       var ol = $('top');
       ol.textContent = '';

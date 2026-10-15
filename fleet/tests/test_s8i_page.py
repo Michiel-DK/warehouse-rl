@@ -28,6 +28,15 @@ STRINGS = ["Arrived", "Usable", "Kept", "state changes + every decision + a 2% r
            "gets better as it watches", "Synthetic data from a simulator.",
            "Lessons are checked against the planted truth; their persistence check needs longer shifts."]
 LESSON_KEYS = ["hot_cell", "hot_robot", "recurring_pair", "fallback"]
+# Literals that may stand outside VISIBLE_COPY / HOVER_COPY / DETAILS_COPY although they contain whitespace or an uppercase
+# letter: units and separators, key names, CSS classes and ids, canvas fonts, media queries, HTTP plumbing. None is a sentence.
+ALLOWED_OUTSIDE_COPY = {
+    "use strict", " B", " KB", " MB", " s", " %", "\n", ", ", "; ", ". ", " ", " / ", " (", "  ", "Escape", "Enter", "ArrowLeft",
+    "ArrowRight", "ArrowUp", "ArrowDown", "INPUT", "SELECT", "TEXTAREA", "BUTTON", "lineTo", "moveTo", "les ", "livebar bad",
+    "cap small", "btn primary", "routerBox", "#lrow-planted ul", "600 13px system-ui, sans-serif", "bold 11px system-ui, sans-serif",
+    "bold 13px system-ui, sans-serif", "bold ", "px system-ui, sans-serif", "(prefers-color-scheme: dark)",
+    "(prefers-reduced-motion: reduce)", "en-US", "POST", "Content-Type", "HTTP ",
+}
 
 
 # ------------------------------------------------------------------------------------------------ html
@@ -173,6 +182,12 @@ def visible_literals(js):
             if not any(s <= a <= e for s, e in hidden) and (re.search(r"\s", v) or re.search(r"[A-Z]", v))]
 
 
+def VISIBLE_TABLE_TEXT(js):
+    """The literals inside the VISIBLE_COPY initialiser (visible text belongs there)."""
+    a, b = const_span(js, "VISIBLE_COPY")
+    return {v for s, e, v in scan_js(js)[0] if a <= s <= b}
+
+
 def banned_in_js(js):
     return sorted({m.group(0) for v in visible_literals(js) for m in BANNED.finditer(v)})
 
@@ -243,6 +258,13 @@ class TestBannedWords(unittest.TestCase):
         visible_literals(self.js)  # raises when VISIBLE_COPY is missing or lacks a lesson-kind key
         self.assertIsNotNone(const_span(self.js, "HOVER_COPY"))
         self.assertIsNotNone(const_span(self.js, "DETAILS_COPY"))
+
+    def test_no_readable_text_outside_the_copy_tables(self):
+        """Every literal with whitespace or an uppercase letter outside the three copy tables is on the short allowlist of units,
+        separators and code tokens. A new sentence added next to the code fails here, which keeps C6(b) honest."""
+        extra = sorted({v for v in visible_literals(self.js)} - ALLOWED_OUTSIDE_COPY)
+        extra = [v for v in extra if v not in VISIBLE_TABLE_TEXT(self.js)]
+        self.assertEqual(extra, [])
 
     def test_the_checkers_are_red_on_what_they_should_catch(self):
         self.assertEqual(banned_in_html("<p>Robots stalled in zone 3</p>"), ["stalled", "zone"])
