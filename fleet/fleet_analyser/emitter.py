@@ -21,6 +21,18 @@ fleet-state/2 adds two standard VDA 5050 fields the robot itself reports (its ow
 Ground-truth sidecar: run_zone also returns floor_cells ({"x,y": p}) and floor_skips (per-step int list); run_fleet
 writes them to <ledger dir>/truth.json (fleet-truth/1). Only the emitter writes that file; nothing from it enters a
 message, a sink or an analyst module.
+
+Demo mode (S8F, `cfg["demo_mode"]`, emit.py --demo --control-file PATH): NOT a measurement mode. Before every step each
+zone reads the complete lines appended to the control file since its own byte offset (initial offset 0: lines already in
+the file are applied; a missing file = no commands yet; a partial trailing line waits). One JSON object per line:
+  {"t": <int|null>, "floor": {"x,y": p, ...}}  or  {"t": <int|null>, "breakdown": {"agent": id, "duration": n}}
+plus an optional "zone": int (absent = every zone). "t" is required (null = now); t <= the step about to run = apply
+before it, t > it = held and applied before step t, t >= steps = never applied (unapplied_commands). Malformed lines
+(not JSON / not an object / missing, extra or both keys / bad types / out-of-range cell, agent, p or duration / the seam
+raising ValueError) are counted in malformed_commands (also when their zone is another zone: structure is checked
+first, the zone filter second), logged to stderr and skipped. Blank lines are ignored. "Step index" = the run_zone loop
+variable = hook._t before the step, not info["step_count"]. Injections never enter a message or a sink; they show only
+through robot behaviour (an injected breakdown shows the usual BREAKDOWN error, since messages read applied_frozen).
 """
 import datetime as _dt
 import json
@@ -28,6 +40,7 @@ import math
 import multiprocessing as mp
 import os
 import queue as _queue
+import re
 import sys
 import time
 import traceback
@@ -151,6 +164,137 @@ def encode(msg):
     return (json.dumps(msg, separators=(",", ":"), sort_keys=False, allow_nan=False) + "\n").encode()
 
 
+# ------------------------------------------------------------------------------------------------ demo control file
+_CELL_KEY = re.compile(r"^-?\d+,-?\d+$")
+
+
+def _is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _is_real(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def parse_command(line, grid_size, num_agents):
+    """One control line -> (zone|None, t|None, kind, payload) with the payload normalised; ValueError if malformed.
+
+    grid_size = (rows, cols) as in the env; cell keys are "x,y" (x = column)."""
+    try:
+        obj = json.loads(line)
+    except ValueError as e:
+        raise ValueError(f"not JSON: {e}") from e
+    if not isinstance(obj, dict):
+        raise ValueError("not a JSON object")
+    kinds = [k for k in ("floor", "breakdown") if k in obj]
+    if len(kinds) != 1:
+        raise ValueError("needs exactly one of floor / breakdown")
+    kind = kinds[0]
+    extra = set(obj) - {"t", "zone", kind}
+    if extra:
+        raise ValueError(f"unknown keys {sorted(extra)}")
+    if "t" not in obj:
+        raise ValueError("missing key t")
+    t, zone = obj["t"], obj.get("zone")
+    if t is not None and not _is_int(t):
+        raise ValueError(f"t must be an int or null, got {t!r}")
+    if "zone" in obj and not _is_int(zone):
+        raise ValueError(f"zone must be an int, got {zone!r}")
+    body = obj[kind]
+    rows, cols = grid_size
+    if kind == "floor":
+        if not isinstance(body, dict) or not body:
+            raise ValueError("floor must be a non-empty object")
+        payload = {}
+        for k, p in body.items():
+            if not _CELL_KEY.match(k):
+                raise ValueError(f"floor key {k!r} must look like 'x,y'")
+            x, y = (int(c) for c in k.split(","))
+            if not (0 <= x < cols and 0 <= y < rows):
+                raise ValueError(f"floor cell {k!r} is outside the {cols}x{rows} grid")
+            if not _is_real(p) or not 0 <= p <= 1:
+                raise ValueError(f"floor p for {k!r} must be a real in [0, 1], got {p!r}")
+            payload[f"{x},{y}"] = float(p)
+    else:
+        if not isinstance(body, dict) or set(body) != {"agent", "duration"}:
+            raise ValueError("breakdown must be an object with exactly agent and duration")
+        a, d = body["agent"], body["duration"]
+        if not _is_int(a) or not 1 <= a <= num_agents:
+            raise ValueError(f"breakdown.agent must be an int in 1..{num_agents}, got {a!r}")
+        if not _is_int(d) or d < 1:
+            raise ValueError(f"breakdown.duration must be an int >= 1, got {d!r}")
+        payload = dict(agent=a, duration=d)
+    return zone, t, kind, payload
+
+
+class ControlReader:
+    """Per-zone reader of the demo control file (see the module docstring). poll(step) applies what is due."""
+
+    def __init__(self, path, zone, steps, hook, log=None):
+        self.path, self.zone, self.steps, self.hook = Path(path), zone, steps, hook
+        self.log = log or (lambda m: print(m, file=sys.stderr))
+        self.offset = 0
+        self.held = []  # (t|None, kind, payload) in file order
+        self.injections = []
+        self.malformed = 0
+        self.unapplied = 0
+
+    def _bad(self, step, why, line):
+        self.malformed += 1
+        self.log(f"zone {self.zone} step {step}: malformed control line ({why}): {line[:120]!r}")
+
+    def _read_new_lines(self):
+        try:
+            with open(self.path, "rb") as f:
+                f.seek(self.offset)
+                data = f.read()
+        except FileNotFoundError:
+            return []
+        end = data.rfind(b"\n")
+        if end < 0:
+            return []  # only a partial line so far: wait for its newline
+        self.offset += end + 1
+        return data[:end].split(b"\n")
+
+    def poll(self, step):
+        """Read new lines, then apply every due command before `step` executes. Returns the number applied."""
+        hook = self.hook
+        for raw in self._read_new_lines():
+            try:
+                line = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                self._bad(step, "not UTF-8", repr(raw))
+                continue
+            if not line.strip():
+                continue
+            try:
+                zone, t, kind, payload = parse_command(line, hook.grid_size, hook.num_agents)
+            except ValueError as e:
+                self._bad(step, str(e), line)
+                continue
+            if zone is not None and zone != self.zone:
+                continue
+            if t is not None and t >= self.steps:
+                self.unapplied += 1
+                continue
+            self.held.append((t, kind, payload))
+        due = [c for c in self.held if c[0] is None or c[0] <= step]
+        self.held = [c for c in self.held if not (c[0] is None or c[0] <= step)]
+        applied = 0
+        for _, kind, payload in due:
+            try:
+                if kind == "floor":
+                    hook.inject_floor({tuple(int(c) for c in k.split(",")): p for k, p in payload.items()})
+                else:
+                    hook.inject_breakdown(payload["agent"], payload["duration"])
+            except ValueError as e:
+                self._bad(step, f"seam: {e}", json.dumps({kind: payload}))
+                continue
+            self.injections.append(dict(step=step, kind=kind, payload=payload))
+            applied += 1
+        return applied
+
+
 # ------------------------------------------------------------------------------------------------ zone runner
 def zone_config(run, zone):
     """The picklable per-zone config from the run config dict."""
@@ -174,8 +318,9 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     # optional cost-aware router (S8-REPLAY re-simulation): passed to the env only when present, so a cfg without
     # cost_map builds exactly the env it always did
     router = {k: cfg[k] for k in ("cost_map", "cost_alpha") if k in cfg}
+    demo = bool(cfg.get("demo_mode"))
     env = WarehouseEnv(env_id, max_steps=steps, disturb=cfg["disturb"], assign_care_for_agents=False,
-                       recovery=cfg["recovery"], **router)
+                       recovery=cfg["recovery"], **router, **(dict(demo_mode=True) if demo else {}))
     try:
         hook = env.env
         recorded = {}
@@ -191,6 +336,9 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         n_agv = hook.num_agvs
         robots = dict(robots=n, agvs=n_agv, pickers=n - n_agv)
         state = dict(steps_done=0, first_timestamp=None, last_timestamp=None)
+        control = ControlReader(cfg["control_file"], zone, steps, hook) if demo else None
+        if demo:
+            state["injections"] = 0  # reaches the ledger through the snapshot, live
 
         def snapshot():
             return dict(sink.stats(), **robots, **state)
@@ -215,6 +363,9 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         paced = cfg.get("rate", "flat") == "realtime" and speed and speed > 0
         interval = cfg.get("report_interval", DEFAULT_LEDGER_INTERVAL)
         for step in range(steps):
+            if control is not None:
+                control.poll(step)  # before pol.act, every step, whatever the pacing
+                state["injections"] = len(control.injections)
             actions = pol.act(obs, info["action_mask"], info)
             recorded.clear()
             obs, _, _, _, info = env.step(actions)
@@ -249,9 +400,13 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     final = snapshot()
     if report:
         report(final)
-    return dict(zone=zone, seed=seed, steps=steps, deliveries=deliveries,
-                pick_rate=deliveries * 3600 / (STEP_SECONDS * steps), snapshot=final, floor_cells=floor_cells,
-                floor_skips=floor_skips)
+    result = dict(zone=zone, seed=seed, steps=steps, deliveries=deliveries,
+                  pick_rate=deliveries * 3600 / (STEP_SECONDS * steps), snapshot=final, floor_cells=floor_cells,
+                  floor_skips=floor_skips)
+    if demo:
+        result.update(injections=control.injections, malformed_commands=control.malformed,
+                      unapplied_commands=control.unapplied)
+    return result
 
 
 def _zone_main(cfg, sink_spec, q):
@@ -269,10 +424,12 @@ def _zone_main(cfg, sink_spec, q):
 # ------------------------------------------------------------------------------------------------ fleet
 def write_truth(path, run, results):
     """The ground-truth sidecar, atomically (tmp + os.replace). Returns its exact size in bytes. Completed zones only."""
+    demo_keys = ("injections", "malformed_commands", "unapplied_commands") if run.get("demo_mode") else ()
     doc = dict(schema_version=TRUTH_SCHEMA_VERSION, env_id=run["env_id"], disturb_tag=run["disturb_tag"],
                disturb=run["disturb"], steps=run["steps"], seed_base=run["seed_base"],
                zones={str(z): dict(seed=r["seed"], floor_cells=r["floor_cells"], floor_skips=r["floor_skips"],
-                                   floor_skips_total=sum(r["floor_skips"])) for z, r in sorted(results.items())})
+                                   floor_skips_total=sum(r["floor_skips"]), **{k: r[k] for k in demo_keys})
+                      for z, r in sorted(results.items())})
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -294,7 +451,7 @@ def run_fleet(run, sink_spec, ledger_path, workers, ledger_interval=DEFAULT_LEDG
     config = {k: v for k, v in run.items() if k not in ("report_interval",)}
     config.update(sink=sink_spec["kind"], rotate_bytes=sink_spec.get("rotate_bytes"), workers=workers,
                   schema_version=SCHEMA_VERSION)
-    ledger = EmitLedger(ledger_path, config, zones, run["steps"])
+    ledger = EmitLedger(ledger_path, config, zones, run["steps"], demo_mode=bool(run.get("demo_mode")))
     ctx = mp.get_context("spawn")
     q = ctx.Queue()
     pending = deque(range(zones))
