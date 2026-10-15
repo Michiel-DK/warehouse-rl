@@ -6,6 +6,9 @@ else os.cpu_count() - 2. Pacing (--rate) is about wall-clock emission speed and 
 rates: 'flat' (default) emits as fast as the sim runs, 'realtime' paces to simulated time / --speed (--speed 0 = flat
 out) and needs zones <= workers. Output: <dir>/zone<z>-<nnn>.jsonl.gz and <dir>/emit_ledger.json (atomic rewrites).
 Message contract and field semantics: docs/SCOPE.md "S5A".
+Demo (NOT a measurement; roadblocks appended while it runs; --demo and --control-file go together):
+  python fleet/emit.py --demo --control-file /tmp/ctl.jsonl --rate realtime --speed 5 --dir /tmp/fleet-demo &
+  echo '{"t": null, "floor": {"5,3": 0.9}}' >> /tmp/ctl.jsonl     # or {"t": 40, "breakdown": {"agent": 2, "duration": 30}}
 """
 import argparse
 import os
@@ -45,6 +48,9 @@ def build_parser():
     p.add_argument("--ledger-dir", default=None, help="ledger directory for the kafka sink")
     p.add_argument("--ledger-interval", type=float, default=emitter.DEFAULT_LEDGER_INTERVAL,
                    help="seconds between ledger rewrites")
+    p.add_argument("--demo", action="store_true",
+                   help="demo mode (not a measurement): inject floor patches / breakdowns from --control-file")
+    p.add_argument("--control-file", default=None, help="demo control file, one JSON command per line (needs --demo)")
     return p
 
 
@@ -53,6 +59,8 @@ def main(argv=None):
     a = p.parse_args(argv)
     if a.zones < 1 or a.steps < 1 or a.seed_base < 0:
         p.error("--zones and --steps must be >= 1 and --seed-base >= 0")
+    if a.demo != (a.control_file is not None):
+        p.error("--demo and --control-file must be given together")
     if a.speed < 0 or a.ledger_interval <= 0 or a.rotate_bytes < 1:
         p.error("--speed must be >= 0, --ledger-interval > 0 and --rotate-bytes >= 1")
     try:
@@ -85,6 +93,8 @@ def main(argv=None):
     run = dict(env_id=a.env, steps=a.steps, seed_base=a.seed_base, zones=a.zones, disturb_tag=disturb_tag,
                disturb=disturb, recovery=recovery, policy=a.policy, t0=t0, t0_mode="now" if a.t0 == "now" else "fixed",
                rate=a.rate, speed=a.speed, report_interval=a.ledger_interval)
+    if a.demo:
+        run.update(demo_mode=True, control_file=str(a.control_file))
     code, summary = emitter.run_fleet(run, sink_spec, ledger_dir / "emit_ledger.json", min(workers, a.zones),
                                       a.ledger_interval)
     doc, wall = summary["ledger"], summary["wall_s"]

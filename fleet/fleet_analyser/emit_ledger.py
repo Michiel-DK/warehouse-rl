@@ -24,11 +24,15 @@ def _blank_zone():
 
 
 class EmitLedger:
-    def __init__(self, path, config, zones, steps):
+    def __init__(self, path, config, zones, steps, demo_mode=False):
         self.path = Path(path)
         self.config = dict(config)
         self.steps = steps
         self.zones = {z: _blank_zone() for z in range(zones)}
+        # S8F demo runs only: applied injections per zone (an int), kept OUT of ZONE_FIELDS / _blank_zone so a non-demo
+        # document has exactly the old keys
+        self.demo_mode = bool(demo_mode)
+        self.injections = {z: 0 for z in range(zones)}
         self.error = None
         self.truth = None  # {file, bytes} once the emitter has written the sidecar; never counted in any zone / total
 
@@ -40,6 +44,8 @@ class EmitLedger:
                     z[k] = snapshot[k]
         if state is not None:
             z["state"] = state
+        if self.demo_mode and snapshot and "injections" in snapshot:
+            self.injections[zone] = snapshot["injections"]
 
     def mark_unfinished(self):
         """After a failure: zones that never started are not_started; running ones stay as they were reported."""
@@ -51,12 +57,15 @@ class EmitLedger:
         expected = z["robots"] * self.steps if z["robots"] is not None else None
         complete = expected is not None and z["messages"] == expected and z["state"] != "failed" \
             and not (z["delivery_failed"] or 0) > 0  # kafka: a record that was not delivered is not emitted
-        return dict(zone=zone, status=z["state"], seed=self.config["seed_base"] + zone, messages=z["messages"],
+        doc = dict(zone=zone, status=z["state"], seed=self.config["seed_base"] + zone, messages=z["messages"],
                     expected_messages=expected, complete=complete, bytes_uncompressed=z["bytes_uncompressed"],
                     bytes_compressed=z["bytes_compressed"], delivered=z["delivered"],
                     delivery_failed=z["delivery_failed"], robots=z["robots"], agvs=z["agvs"], pickers=z["pickers"],
                     steps=self.steps, steps_done=z["steps_done"], first_timestamp=z["first_timestamp"],
                     last_timestamp=z["last_timestamp"], files=z["files"])
+        if self.demo_mode:
+            doc["injections"] = self.injections[zone]
+        return doc
 
     def document(self, status):
         zdocs = [self._zone_doc(z, self.zones[z]) for z in sorted(self.zones)]
@@ -76,6 +85,9 @@ class EmitLedger:
                      agvs=total_of("agvs"), pickers=total_of("pickers"),
                      steps_done=sum(d["steps_done"] for d in zdocs))
         doc = dict(status=status, config=self.config, zones=zdocs, total=total, truth=self.truth)
+        if self.demo_mode:
+            doc["demo_mode"] = True
+            doc["injections"] = sum(self.injections.values())
         if self.error:
             doc["error"] = self.error
         return doc

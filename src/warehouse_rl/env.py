@@ -30,6 +30,7 @@ class WarehouseEnv(gym.Env):
         recovery=None,
         cost_map=None,
         cost_alpha=4.0,
+        demo_mode=False,
     ):
         # disturb=None: the S1 path, untouched. disturb=dict: DisturbedWarehouse (see disturb.py); {} = no disturbance.
         # Preset names / JSON strings are resolved by the caller (disturb.resolve_disturb), not here.
@@ -41,7 +42,12 @@ class WarehouseEnv(gym.Env):
         # cost_map (None | {(x, y): cost} | "oracle") and cost_alpha: the cost-aware router, see DisturbedWarehouse.
         if cost_map is not None and disturb is None:
             raise ValueError("cost_map needs a disturb dict (the cost-aware router lives in the disturbance layer)")
+        # demo_mode (S8F): demo-only injection seam, NOT a measurement mode; lives in the disturbance layer.
+        if demo_mode and disturb is None:
+            raise ValueError("demo_mode needs a disturb dict (the injection seam lives in the disturbance layer)")
         map_kwargs = dict(cost_map=cost_map, cost_alpha=cost_alpha)
+        if demo_mode:
+            map_kwargs["demo_mode"] = True  # absent when off, so the non-demo construction call is unchanged
         if disturb is None:
             self.env = gym.make(env_id, max_steps=max_steps).unwrapped
         elif isinstance(disturb, dict):
