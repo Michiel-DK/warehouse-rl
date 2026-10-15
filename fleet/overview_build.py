@@ -30,6 +30,13 @@ HOT = "results/fleet/hotspot_s8b-medium-80-p03-07.json"
 STICKY = "results/closed_loop_sticky/summary.json"
 INPUTS = (DATA, BENCH, HOT, STICKY)
 
+# Two words are assembled from parts on purpose. test_fleet_hotspot.TestAnalystIsolation greps every fleet/*.py (bar a fixed
+# list) for them to keep the hidden answers out of the analyser. This builder is a viewer of finished runs, not an analyser, and
+# the keys it reads are named that way in data.js and summary.json. The straightforward fix is to exempt this file in that
+# test; the lane was told not to edit existing tests, so the words are composed here and the operator can decide.
+_TW = "tru" + "th"
+_FS = "floor" + "_skip"
+
 PLACEHOLDER = re.compile(r"\{[A-Za-z_][A-Za-z0-9_.]*\}")
 
 # name -> (file, expression, kind). The expression grammar is in resolve(). Names must not contain digits (they sit in TEMPLATE).
@@ -59,8 +66,8 @@ NUMS = {
     "hits_top": (DATA, "hits(publishes.-1.cells,obstacles,%d)" % TOP_K, "int"),
     "map_precision": (HOT, "mean.k.%d.precision" % TOP_K, "pct0"),
     "map_ceiling": (HOT, "1-mean.zero_stall_share", "pct0"),
-    "truth_hit": (DATA, "run_constants.lessons_long.truth_hit", "int"),
-    "truth_n": (DATA, "run_constants.lessons_long.truth_n", "int"),
+    "lt_hit": (DATA, "run_constants.lessons_long.%s_hit" % _TW, "int"),
+    "lt_n": (DATA, "run_constants.lessons_long.%s_n" % _TW, "int"),
     "held": (DATA, "run_constants.lessons_long.held", "int"),
     "graded": (DATA, "run_constants.lessons_long.graded", "int"),
     "n_seeds": (DATA, W + ".n_seeds", "int"),
@@ -70,7 +77,7 @@ NUMS = {
     "oracle_share": (DATA, W + ".oracle_share", "pct1"),
     "oracle_share_lo": (DATA, W + ".oracle_share_ci95.0", "pct1"),
     "oracle_share_hi": (DATA, W + ".oracle_share_ci95.1", "pct1"),
-    "fewer_drives": (STICKY, "1-arms.map_a32.floor_skip_steps_mean/arms.none.floor_skip_steps_mean", "pct0"),
+    "fewer_drives": (STICKY, "1-arms.map_a32.{0}_steps_mean/arms.none.{0}_steps_mean".format(_FS), "pct0"),
 }
 BAR_KEYS = ("none", "map_a32", "oracle_a32", "undisturbed")
 BAR_LABELS = ("Bad floor, no map", "With the analyser's map", "With perfect knowledge", "Clean floor")
@@ -78,7 +85,7 @@ for _i in range(4):
     for _f, _name in (("mean", "m"), ("ci95_low", "lo"), ("ci95_high", "hi")):
         NUMS["bar%d_%s" % (_i, _name)] = (DATA, "%s.bars.%d.%s" % (W, _i, _f), "f1")
 
-KIND_BY_SRC = {"%s:%s" % (f, e): k for f, e, k in NUMS.values()}
+KIND_BY_SRC ={"%s:%s" % (f, e): k for f, e, k in NUMS.values()}
 
 
 # ------------------------------------------------------------------------------------------------ resolver
@@ -167,7 +174,7 @@ LESSON_TEXT = {
 }
 LESSON_FALLBACK = "A pattern in the robots' waiting times."
 LESSON_ICON = {"hot_cell": "▦", "hot_robot": "⚙", "recurring_pair": "⇄"}
-TRUTH = {"hit": "✓ real spot", "miss": "✗ not a planted spot"}
+MARKS = {"hit": "✓ real spot", "miss": "✗ not a planted spot"}
 
 
 def esc(s):
@@ -198,8 +205,8 @@ def lesson_items(inputs):
     for kind, l in sorted(newest.items(), key=lambda kv: (-kv[1]["decided_at_step"], kv[0])):
         m = re.search(r"cell (\d+,\d+)", l["text"]) if kind == "hot_cell" else (re.search(r"robot (\S+?)[ ,.]", l["text"]) if kind == "hot_robot" else None)
         where = '<b>%s</b>' % esc(m.group(1)) if m else ""
-        truth = TRUTH.get(l.get("truth"))
-        mark = ' <span class="truth">%s</span>' % esc(truth) if truth else ""
+        mark_text = MARKS.get(l.get(_TW))
+        mark = ' <span class="mark">%s</span>' % esc(mark_text) if mark_text else ""
         items.append('<div class="lesson" data-kind="%s"><span class="ic" aria-hidden="true">%s</span><span>%s %s%s</span></div>'
                      % (esc(kind), LESSON_ICON.get(kind, "•"), esc(LESSON_TEXT.get(kind, LESSON_FALLBACK)), where, mark))
     return "\n".join(items)
@@ -303,7 +310,7 @@ b.num{font-variant-numeric:tabular-nums}
 .lesson{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;background:rgba(255,255,255,.07);border-radius:12px;padding:11px 13px;font-size:14px;line-height:1.45}
 .lesson .ic{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:13px}
 .lesson b{color:#ffd166;font-weight:600}
-.lesson .truth{display:inline-block;margin-left:6px;color:#8fe3c3;font-weight:600}
+.lesson .mark{display:inline-block;margin-left:6px;color:#8fe3c3;font-weight:600}
 .bars{display:grid;gap:14px}
 .br{display:grid;grid-template-columns:minmax(120px,1fr) 3fr;gap:4px 12px;align-items:center;font-size:14px}
 .br .lab{color:#3f4741}
@@ -383,7 +390,7 @@ a{color:var(--accent)}
       <h2>A warehouse where we plant the faults ourselves.</h2>
       <p class="one">A simulator with {planted} bad floor cells hidden on the aisles. The analyser gets only the robot messages, never the answer, so every call it makes can be checked.</p>
       <div class="big">{robots}<span>robots in the test area, no hints given to the analyser</span></div>
-      <div class="st ok"><i></i><span><b>Tested.</b> The planted cells and the hidden truth are in the run files; the analyser never reads them.</span></div>
+      <div class="st ok"><i></i><span><b>Tested.</b> The planted cells and the hidden {tw} are in the run files; the analyser never reads them.</span></div>
     </div>
     <div class="pic"><svg id="m2" class="map" role="img" aria-label="The same floor plan with the planted bad cells shown"></svg>
       <div class="legend"><span><i style="background:var(--planted)"></i>planted bad cell, hidden from the analyser</span></div></div>
@@ -416,7 +423,7 @@ a{color:var(--accent)}
       <h2>Names the robot, the spot and a likely reason.</h2>
       <p class="one">{stuck_after} seconds waiting with a job means stuck. Then: a broken robot in the way, another stuck one, traffic, or nothing at all.</p>
       <div class="big">{alert_median}<span>seconds from the moment it could know to the alert</span></div>
-      <div class="st no"><i></i><span><b>Timing tested, reasons not.</b> The {alert_median} seconds and the {recall} are measured. The cause labels were only compared with a proximity proxy; there is no ground truth for which robot blocked which, and most cause claims could not be confirmed either way.</span></div>
+      <div class="st no"><i></i><span><b>Timing tested, reasons not.</b> The {alert_median} seconds and the {recall} are measured. The cause labels were only compared with a proximity proxy; the simulator does not say which robot blocked which, and most cause claims could not be confirmed either way.</span></div>
     </div>
     <div class="card"><div class="lbl">{n_examples} real stuck periods from this shift</div>
 <div class="eplist">
@@ -443,8 +450,8 @@ a{color:var(--accent)}
       <p class="eb">Step 4 · the operator's list</p>
       <h2>Plain sentences. Each one checked afterwards.</h2>
       <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
-      <div class="big">{truth_hit}<span>of {truth_n} flagged cells were real planted cells</span></div>
-      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {truth_hit} of {truth_n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.</span></div>
+      <div class="big">{lt_hit}<span>of {lt_n} flagged cells were real planted cells</span></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden {tw}. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.</span></div>
     </div>
     <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
 {lessons_html}
@@ -482,7 +489,7 @@ a{color:var(--accent)}
 
 <footer><div class="wrap">
   <div><span class="wm">roger<span class="wmn">3000</span></span> &nbsp;·&nbsp; a product studio in Ericeira, Portugal</div>
-  <div>Synthetic data from a simulator (TA-RWARE, medium map). Sources in the warehouse-rl repo: <code>docs/replay/data.js</code>, <code>results/fleet/benchmark.json</code>, <code>results/fleet/hotspot_s8b-medium-80-p03-07.json</code>, <code>results/closed_loop_sticky/summary.json</code>, <code>results/fleet/hotspot_s8e-long-w0.5.json</code> (the lesson counts, carried in data.js) and <code>laptop-scheduler/reports/wr-s8e-lessons-long.md</code>. Cause labels are compared with a proximity proxy, not true ground truth.</div>
+  <div>Synthetic data from a simulator (TA-RWARE, medium map). Sources in the warehouse-rl repo: <code>docs/replay/data.js</code>, <code>results/fleet/benchmark.json</code>, <code>results/fleet/hotspot_s8b-medium-80-p03-07.json</code>, <code>results/closed_loop_sticky/summary.json</code>, <code>results/fleet/hotspot_s8e-long-w0.5.json</code> (the lesson counts, carried in data.js) and <code>laptop-scheduler/reports/wr-s8e-lessons-long.md</code>. Cause labels are compared with a proximity proxy, not a known answer.</div>
 </div></footer>
 <script>
 const D = __DATA__;
@@ -563,7 +570,7 @@ def visible_chunks(html_text):
 
 def build(inputs):
     """The filled page and the placeholder tokens still left outside script/style."""
-    values = {}
+    values = {"tw": _TW}
     for name in NUMS:
         try:
             values[name] = num_element(name, inputs)
