@@ -313,6 +313,7 @@ class LiveState:
         self.lock = threading.RLock()
         self.latest = {}  # serial -> latest Message
         self.step = -1
+        self._first_ts = None
         self.sim_ts = None
         self._cache = None
         self._cache_at = -1e9
@@ -334,8 +335,11 @@ class LiveState:
                     self._wait.pop(m.serial, None)
                 else:
                     self._wait.setdefault(m.serial, m.ts)
-            if m.header_id > self.step:
-                self.step = m.header_id
+            # the step is the message's time, not its headerId: a demo-noise run skips ids at one point (S8I), and the
+            # ids of that robot would then run ahead of the clock for the rest of the shift
+            if self._first_ts is None or m.ts < self._first_ts:
+                self._first_ts = m.ts
+            self.step = max(self.step, (m.ts - self._first_ts) // STEP_SECONDS)
             if self.sim_ts is None or m.ts > self.sim_ts:
                 self.sim_ts = m.ts
 

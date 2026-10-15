@@ -2,9 +2,12 @@
 
 Usage: python fleet/live.py [--env ID] [--seed 0] [--disturb PRESET|JSON] [--speed 5] [--steps N] [--dir DIR]
        [--store jsonl:DIR] [--port 8765] [--router none|map] [--alpha 32] [--reveal] [--lesson-window-h 0.1] [--t0 ISO]
+       [--no-demo-noise]
 Starts five children in ONE new process group (live.py itself stays outside it), prints "pgid N" and the URL, serves
 GET /state, GET /grid and POST /inject on 127.0.0.1, and stops everything on Ctrl-C / SIGTERM:
-  emitter    fleet/emit.py --demo --control-file <dir>/control.jsonl --rate realtime [--cost-map-file <dir>/costmap.json]
+  emitter    fleet/emit.py --demo --control-file <dir>/control.jsonl --rate realtime [--demo-noise] [--cost-map-file <dir>/costmap.json]
+             (demo noise is ON by default, --no-demo-noise switches it off: extra malformed / duplicate lines and one jump in
+             message numbers, nothing real dropped)
   ingester   fleet/ingest.py --source file (polls every min(2, 5 / speed) s)
   publisher  every 60 simulated s, forward only: stalls from the stream -> <dir>/costmap.json + the store
   lessons    every 120 simulated s: fleet/lessons.py cycle with --lesson-window-h (default 0.1 h = 72 steps, so a 500-step
@@ -254,6 +257,9 @@ def build_parser():
     p.add_argument("--alpha", type=float, default=32.0, help="cost-aware router weight 1 + alpha * cost (--router map)")
     p.add_argument("--reveal", action="store_true", help="put the hidden floor layout under the reveal key of /state (demo)")
     p.add_argument("--lesson-window-h", type=float, default=DEFAULT_WINDOW_H)
+    p.add_argument("--demo-noise", action=argparse.BooleanOptionalAction, default=True,
+                   help="demo log noise (default ON; --no-demo-noise turns it off): ~0.5%% malformed lines, ~1%% exact "
+                        "duplicates and one jump in message numbers, as extra lines, so the log panel has something to show")
     return p
 
 
@@ -265,6 +271,8 @@ def child_commands(a, d, store):
     emit = [py, str(FLEET / "emit.py"), "--demo", "--control-file", str(d / "control.jsonl"), "--rate", "realtime",
             "--speed", str(a.speed), "--zones", "1", "--seed-base", str(a.seed), "--dir", str(d), "--env", a.env,
             "--disturb", a.disturb, "--steps", str(a.steps), "--t0", a.t0, "--workers", "1", "--ledger-interval", "0.5"]
+    if a.demo_noise:
+        emit += ["--demo-noise"]
     if a.router == "map":
         emit += ["--cost-map-file", str(d / "costmap.json"), "--cost-alpha", str(a.alpha)]
     common = ["--dir", str(d), "--run", run, "--store", store, "--speed", str(a.speed)]

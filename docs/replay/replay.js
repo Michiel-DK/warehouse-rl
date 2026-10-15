@@ -3,6 +3,436 @@
   var R = window.REPLAY;
   var $ = function (id) { return document.getElementById(id); };
 
+  // ---- the words of the page ----
+  // VISIBLE_COPY: every sentence the page writes into a visible element outside a closed details block (header strip, log
+  // panel, the three sentences and the sparkline caption, the lines for the operators, the footer, live-mode messages). No
+  // jargon: the banned-words test (fleet/tests/test_s8i_page.py) reads this table. {name} marks a value filled from data.js
+  // or the live /state document; no number is typed here.
+  const VISIBLE_COPY = {
+    header: {
+      replay: 'Simulated warehouse, {agvs} AGVs and {pickers} pickers, one {minutes}-minute shift, {messages} robot messages. We planted {floor} bad floor cells and {breakdowns}. The analyser was told none of it.',
+      breakdownsNone: 'no breakdowns',
+      breakdownsSome: '{n} breakdowns',
+      breakdownsOne: '1 breakdown',
+      live: 'Live: a fleet is running right now. Click an aisle cell to put a roadblock there and watch the analyser find it. So far {messages} robot messages read. Roadblocks placed by you: {placed}{planted}.',
+      livePlanted: ', planted by us: {n}'
+    },
+    floor: {
+      noMap: 'The analyser drew no map in this run.',
+      mapLater: 'No map yet (the first one appears at {time}).',
+      withMap: 'The red shading belongs to the first run and is hidden here; the rings show robots held up in this second run.',
+      calls: 'Robots held up so far: {n}; still waiting: {open}.',
+      drawError: 'The page hit an error while drawing: {why}',
+      summary: 'Step {step} of {last}, fleet time {time}. Robots: {robots}. Log: {usable} usable, {rejected} rejected, {dups} duplicates. {map}',
+      summaryMap: 'Latest map at {time}, right {p} of the time.',
+      summaryNoMap: 'No map yet.',
+      announce: 'Step {step} of {last}, fleet time {time}. Robots: {robots}.',
+      scrub: 'step {step} of {last}, fleet time {time}',
+      clock: 'step {step} / {last}  {time}',
+      withMapNote: 'Second run, steering robots around the suspect spots: {deliveries} deliveries ({rate} per hour).'
+    },
+    log: {
+      arrivedUnit: 'messages, {size}',
+      rate: '{rate} msgs/s',
+      replayed: 'replayed from file',
+      lag: '{lag} s behind the robots',
+      usableUnit: 'messages parsed and valid',
+      setAside: 'set aside: rejected {r} (malformed), duplicates {d}; nothing is dropped silently, every rejected line is stored with its reason',
+      keptUnit: 'of bytes, 100% of the events that matter',
+      keptLater: 'measured on a finished shift',
+      nothingLost: 'nothing lost: {c} of what the robots sent is accounted for',
+      caughtUp: 'caught up: {c} of what the robots have sent so far is read',
+      unknown: 'Not known: this run has no message count of its own.'
+    },
+    analyser: {
+      none: '—',
+      noMap: 'no map yet',
+      needTruth: 'not scored: the planted spots are hidden in this live run',
+      spark: 'Right-rate after each new map: {list}',
+      sparkNone: 'No map yet.',
+      sparkBetter: 'gets better as it watches',
+      sparkFlat: 'right-rate after each new map'
+    },
+    lesson: {
+      hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
+      hot_robot: 'One robot gets stuck far more often than the others.',
+      recurring_pair: "Two robots keep getting in each other's way.",
+      fallback: "A pattern in the robots' waiting times.",
+      support: 'support {c}',
+      tickOk: ' ✓',
+      tickOff: ' ✗',
+      held: 'held up',
+      failed: 'did not hold',
+      notChecked: ' not checked yet',
+      none: 'Nothing to report yet.',
+      noData: 'Lesson data is not included in this file.'
+    },
+    controls: {
+      theme: 'Theme: {name}',
+      themeAuto: 'auto ({name})',
+      play: 'Play',
+      pause: 'Pause'
+    },
+    footer: {
+      payoff: 'Routing payoff measured separately: {map} of the sticky-floor loss recovered, {oracle} with perfect knowledge ({source}).'
+    },
+    live: {
+      ignored: 'The live parameter was ignored: it must be an http URL on localhost or 127.0.0.1 (the page sends injections to it). Showing the offline replay.',
+      connecting: 'Connecting to {base} ...',
+      over: 'Run {status} at step {step}. Nothing is advancing; the numbers below are final.',
+      stuck: 'Connected to {base}, but the run has not advanced past step {step} for {secs} s.',
+      ok: 'Live from {base}, updated every {every} s.',
+      lost: 'Disconnected from {base}, retrying every {every} s. {age}{err}',
+      lostNever: 'No data received yet.',
+      lostAge: 'The numbers below are from {s} s ago and are not live.',
+      aria: 'Warehouse floor. Click or press Enter on an aisle cell to place a roadblock; arrow keys move the cursor.',
+      ariaNow: 'Warehouse floor, step {step}, {robots} robots, {cells} cells flagged. Press Enter on an aisle cell to place a roadblock.',
+      placedBy: 'placed by you (outlined roadblocks)',
+      reveal: ' Reveal the hidden roadblocks',
+      promptLabel: 'Chance a robot is stopped at this roadblock: ',
+      promptRange: 'Chance that a robot is stopped when it tries to enter the cell',
+      promptDialog: 'Place a roadblock',
+      place: 'Place',
+      cancel: 'Cancel',
+      placed: 'Roadblock placed. It starts at step {step}. The spot turns red when the analyser flags it.',
+      notPlaced: 'Not placed: {why}.',
+      serverNo: 'the server said no',
+      unreachable: 'Not placed: the live server is not reachable.',
+      cannot: 'Cannot place a roadblock there: {why}.',
+      outside: 'outside the floor',
+      shelf: 'a shelf cell: roadblocks go on aisle cells only',
+      goal: 'a goal cell: roadblocks go on plain aisle cells only',
+      noGrid: 'floor layout not available yet',
+      noLessons: 'No lessons yet. Rules need a few events in a closed time window.',
+      notStarted: 'not started'
+    }
+  };
+
+  // HOVER_COPY: text that appears only on hover, focus or tap (technical wording allowed). Written by showHover/setHover into
+  // the small tip box, never into a visible element. The cell* entries also go to the floor's title and, for the keyboard
+  // cursor in live mode, to the screen-reader-only live region (the cell coordinates tell a keyboard user where the cursor is).
+  const HOVER_COPY = {
+    kind: { agv: 'AGV', picker: 'picker' },
+    tip: { state: 'State: {disp} ({raw})', noDetail: 'no further detail', job: 'Job: {job}', noJob: 'none',
+           waiting: 'Waiting: {s} s', notMoving: 'Not moving: {s} s' },
+    rateOf: '{rate} msgs/s',
+    rateUnknown: 'unknown',
+    mapItem: '{time} {p} ({hits}/20)',
+    reasons: ' ({list})',
+    raw: { moving: 'changed cell', loading: 'at a shelf or station', stalled: 'tried to move and did not',
+           stuck: 'inside a stuck call', frozen: 'reported an error', idle: 'no job, not moving' },
+    arrived: 'Lines read from the robots\' files so far: {lines}, {bytes} B uncompressed. Ingest speed {rate} (store:ingest_ledger).{bench}',
+    arrivedBench: ' Pipeline benchmark: {rate} msgs/s ({source}).',
+    arrivedLive: 'Lines read from the robots\' files so far: {lines}, {bytes} B uncompressed. Speed measured from the last polls of /state (ledger.messages_per_s). Behind the robots: ledger.steps_done minus the newest step read, times 5 s.',
+    usable: 'Parsed and valid: {accepted}. Rejected {rejected}{reasons}. Duplicates {dups}. Sequence gaps {gaps}, {missing} message numbers not seen.{gapnote}',
+    usableLive: 'Parsed and valid: {accepted}. Rejected {rejected}. Duplicates {dups}. Counted from the files as they grow.',
+    gapNote: ' A jump in message numbers, nothing missing: the emitter skipped {ids} ids on purpose (demo noise), every message is still counted.',
+    kept: 'Kept {kept} B of {arrived} B that arrived = {pct}%. Scope: the whole run (zones in the run: {zones}), not only the shift shown. By table: {tables}. Formula: {formula} Source: {source}.',
+    keptNone: 'No kept figure: the store has no ingest ledger for this run.',
+    right: 'Of the 20 cells flagged most strongly, how many sit on a planted bad cell. Per map: {list}.',
+    rightLive: 'Of the 20 cells flagged most strongly, how many sit on a revealed roadblock. Scored only while the hidden layout is revealed.',
+    found: '{share} of the planted cells saw no stall at all in this shift (run_constants.hotspot.zero_stall_share, {source}). Recall at k = {k}: {recall}.',
+    foundLive: 'Revealed roadblocks that are among the most strongly flagged cells (as many cells as there are roadblocks).',
+    checks: '{calls} calls were made by this map. {hits} sit on a planted bad cell (truth grade), {wrong} do not.{outcome}',
+    checksOutcome: ' {label}: {ok} {okText}, {off} {offText}.',
+    checksLive: 'Map calls graded on what the robots report next, not on the hidden roadblocks: {ok} held, {off} did not hold, {pending} pending, {na} not gradable.',
+    lessonCap: 'Lessons come from fixed rules over stall and stuck counts, no model and no learning. They were written on run {run} (same seed and floor, without log noise) and carried into this file.',
+    lessonCapOwn: 'Lessons come from fixed rules over stall and stuck counts, no model and no learning, written on this run.',
+    lessonLine: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.{origin}',
+    lessonLineLive: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.',
+    keptLive: 'The kept share is measured on a finished shift: bytes stored divided by bytes that arrived.',
+    liveVerdict: { ok: 'verdict: held', off: 'verdict: did not hold', pending: 'not graded yet', not_gradable: 'not gradable (the shift ends before the next window)' },
+    verdictOpen: 'not graded yet',
+    verdictNa: 'not gradable (the shift ends before the next window)',
+    verdictOk: 'verdict: held, graded at {t}',
+    verdictOff: 'verdict: did not hold, graded at {t}',
+    origin: ' Written on run {run}.',
+    calls: 'A robot is held up when it waits 30 s with a job (a stuck call). So far {n}, still open {open}. Of the ended ones: judged right {right}, wrong {wrong}, no verdict {none}.',
+    withMapNote: '{note} Router weight alpha {alpha}.',
+    cellHere: 'Cell {cell}: {why}',
+    cellClick: 'Click to place a roadblock at {cell}',
+    cellKey: 'Cell {cell}: aisle, press Enter to place a roadblock',
+    close: 'Press Escape to close.'
+  };
+
+  // DETAILS_COPY: text inside the closed details blocks (panel 2 counters, panel 3 details, footer sources). Technical wording
+  // is fine here; the blocks carry data-details and are closed until the reader opens them.
+  const DETAILS_COPY = {
+    counterRows: ['bytes read (uncompressed)', 'messages (lines)', 'parsed', 'rejected', 'duplicates', 'sequence gaps', 'accepted',
+                  'coverage'],
+    noneRejected: 'none rejected',
+    starting: 'starting',
+    topReason: ' ({r})',
+    gaps: '{n} ({m} messages missing)',
+    coverageUnknown: 'unknown (no message count from the run)',
+    matchYes: 'The replay matches the import step\'s checkpoint: {bytes} bytes, {parsed} parsed, {accepted} accepted, {rejected} rejected, {dups} duplicates, {gaps} sequence gaps.',
+    matchNo: 'The store has no import checkpoint for this file, so the replay could not be compared with it.',
+    liveRows: ['step', 'fleet time', 'messages emitted', 'messages read (parsed)', 'rejected', 'duplicates', 'bytes read', 'messages per second',
+               'roadblocks placed / applied', 'emitter'],
+    liveMatch: 'Read straight from the run\'s files as they grow; nothing here is replayed.',
+    liveExpected: ' of {n}',
+    wording: {
+      rank: { lab: 'rank grade', ok: 'still in top 20 after the horizon', off: 'dropped out' },
+      count: { lab: 'count grade', ok: 'stall count about as claimed', off: 'stall count off' },
+      other: { lab: 'outcome grade', ok: 'outcome as claimed', off: 'outcome not as claimed' }
+    },
+    truthLab: 'truth grade',
+    onHidden: 'on a hidden problem',
+    notOnHidden: 'not on one',
+    openPending: 'open or pending',
+    noMapGrade: 'No map published yet, so nothing to grade.',
+    noPublish: 'No publishes, so nothing to grade.',
+    noMapTop: 'no map published yet',
+    noFlag: 'the latest map flags no cell',
+    pubName: 'Publish at {time}: {calls} calls, top-20 hit rate {p} ({hits}/20)',
+    outcomeLine: '{ok} {okText}, {off} {offText}',
+    openLine: '{n} open: the horizon ends after the stream',
+    knownAt: 'outcome known at {time}',
+    truthLine: '{hit} on a hidden problem, {fa} not on one',
+    topLine: '{cell}  cost {cost}  stalls {stalls}{flag}',
+    topFlagYes: '  [on a hidden problem]',
+    topFlagNo: '  [not on one]',
+    topLive: '{cell}  cost {cost}{flag}',
+    topLiveMine: '  [placed by you]',
+    notes: ['Top-20 hit rate: of the 20 most-flagged cells, how many sit on a hidden floor problem.',
+            'The map is rules plus a decayed count of stalls per cell, and nothing is trained.',
+            'Every call is graded afterwards, the count and rank grades against what happened next and the truth grade against the hidden layout, which the analyser never reads.',
+            'Cells nobody drives over cannot be found, because a stall needs a robot to try to enter the cell.'],
+    liveLine: '{label}: {ok} held, {off} did not hold, {pending} pending, {na} not gradable',
+    liveCalls: 'Cost-map calls',
+    liveLessons: 'Lessons',
+    liveGradedOn: 'Graded on what the robots report next (the stream), not on the hidden roadblocks.',
+    sources: { rundir: 'run files: {v}', store: 'store: {v}', closedloop: 'closed-loop layer: {v}', costmap: 'map file: {v}',
+               carry: 'lessons carried from: {v} (written on run {run})', constant: '{k}: {v}' }
+  };
+
+  function fill(tpl, vars) {
+    var out = tpl;
+    Object.keys(vars).forEach(function (k) { out = out.split('{' + k + '}').join(String(vars[k])); });
+    return out;
+  }
+  function pct(x) {
+    var v = x * 100;
+    return (v === 0 || v >= 10 ? String(Math.round(v)) : v.toFixed(1)) + '%';
+  }
+  function human(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  // ---- hover: a tip box for focus, hover and tap (the title attribute is only the native fallback) ----
+  var hoverText = {}, hoverFor = null;
+  function placeTip(tip, anchor) {
+    var r = anchor.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    var below = r.bottom + 6 + h <= window.innerHeight;
+    tip.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, r.left)) + 'px';
+    tip.style.top = Math.max(4, below ? r.bottom + 6 : r.top - h - 6) + 'px';
+  }
+  function showHover(node) {
+    var text = hoverText[node.id];
+    var tip = $('htip');
+    if (!text) { tip.hidden = true; hoverFor = null; return; }
+    tip.textContent = text + '\n' + HOVER_COPY.close;
+    tip.hidden = false;
+    hoverFor = node.id;
+    placeTip(tip, node);
+  }
+  function hideHover() { $('htip').hidden = true; hoverFor = null; }
+  function setHover(id, text) {
+    if (hoverText[id] === text && $(id + '-d')) return; // unchanged: replay redraws every frame
+    hoverText[id] = text;
+    var node = $(id);
+    if (!node) return;
+    var d = $(id + '-d');
+    if (!d) {
+      d = document.createElement('span');
+      d.id = id + '-d'; d.className = 'sr';
+      node.appendChild(d);
+      node.setAttribute('aria-describedby', d.id);
+    }
+    d.textContent = text;
+    if (hoverFor === id) showHover(node);
+  }
+  function wireOne(n) {
+    n.addEventListener('pointerenter', function (ev) { if (ev.pointerType !== 'touch') showHover(n); });
+    n.addEventListener('pointerleave', function (ev) { if (ev.pointerType !== 'touch') hideHover(); });
+    n.addEventListener('focus', function () { showHover(n); });
+    n.addEventListener('blur', hideHover);
+    n.addEventListener('click', function () { if (hoverFor === n.id && !$('htip').hidden) hideHover(); else showHover(n); });
+    n.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') hideHover(); });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-hover]'), wireOne);
+  document.addEventListener('pointerdown', function (ev) {
+    if (!ev.target.closest || !ev.target.closest('[data-hover]')) hideHover();
+  });
+  window.addEventListener('scroll', hideHover, { passive: true });
+
+
+  // ---- shared painters (replay and live): header strip, panel 2, panel 3, panel 4, footer ----
+  // The replay adapters (replayLog, replayAnalyser, replayLessons) and the live adapters (liveLog, liveAnalyser, liveLessons)
+  // build the view objects these take, so both modes write exactly the same elements with exactly the same words.
+  function setText(id, text) { var n = $(id); if (n) n.textContent = text; }
+  var DASH = VISIBLE_COPY.analyser.none;
+  var LESSON_KINDS = ['hot_cell', 'hot_robot', 'recurring_pair'];
+
+  function paintHeader(text) { setText('subtitle', text); }
+
+  // v = { lines, bytes, rate|null, lag|null, live, usable, rejected, dups, kept (percent 0-100)|null, cov (0-1)|null,
+  //       hover: { arrived, usable, kept } }
+  function paintLog(v) {
+    setText('big-arrived', fmt(v.lines));
+    setText('arrived-unit', fill(VISIBLE_COPY.log.arrivedUnit, { size: human(v.bytes) }));
+    var parts = [];
+    if (v.rate !== null) parts.push(fill(VISIBLE_COPY.log.rate, { rate: fmt(Math.round(v.rate)) }));
+    if (!v.live) parts.push(VISIBLE_COPY.log.replayed);
+    else if (v.lag !== null) parts.push(fill(VISIBLE_COPY.log.lag, { lag: fmt(v.lag) }));
+    setText('arrived-rate', parts.join(', '));
+    setText('big-usable', fmt(v.usable));
+    setText('usable-unit', VISIBLE_COPY.log.usableUnit);
+    setText('usable-aside', fill(VISIBLE_COPY.log.setAside, { r: pct(v.lines ? v.rejected / v.lines : 0), d: pct(v.lines ? v.dups / v.lines : 0) }));
+    setText('big-kept', v.kept === null ? DASH : pct(v.kept / 100));
+    setText('kept-unit', v.kept === null ? VISIBLE_COPY.log.keptLater : VISIBLE_COPY.log.keptUnit);
+    var cov = $('covbar');
+    if (cov) cov.style.width = (v.cov === null ? 0 : Math.min(1, v.cov) * 100) + '%';
+    setText('covlabel', v.cov === null ? VISIBLE_COPY.log.unknown
+      : fill(v.live ? VISIBLE_COPY.log.caughtUp : VISIBLE_COPY.log.nothingLost, { c: (Math.floor(Math.min(1, v.cov) * 1000) / 10) + '%' }));
+    setHover('f-arrived', v.hover.arrived);
+    setHover('f-usable', v.hover.usable);
+    setHover('f-kept', v.hover.kept);
+  }
+
+  // v = { right|null, found|null, calls|null, hits|null, wrong|null, series: [{x (0-1), p}], hover: { right, found, checks } }
+  function paintAnalyser(v) {
+    function put(id, x, fmtFn) { setText(id, x === null ? DASH : fmtFn(x)); }
+    put('big-right', v.right, pct);
+    put('big-found', v.found, pct);
+    put('big-calls', v.calls, fmt);
+    put('big-hits', v.hits, fmt);
+    put('big-wrong', v.wrong, fmt);
+    setText('nomap', v.note || '');
+    setHover('s-right', v.hover.right);
+    setHover('s-found', v.hover.found);
+    setHover('s-checks', v.hover.checks);
+    drawSpark(v.series);
+    // the caption follows the data: "gets better" only when the right-rate of the latest map is above the first one
+    var cap = $('sparkcap'), sv = v.series;
+    if (cap) {
+      cap.hidden = !sv.length;
+      cap.textContent = sv.length >= 2 && sv[sv.length - 1].p > sv[0].p ? VISIBLE_COPY.analyser.sparkBetter : VISIBLE_COPY.analyser.sparkFlat;
+    }
+  }
+
+  var sparkSig = null;
+  function drawSpark(series) {
+    var cv = $('spark');
+    if (!cv) return;
+    var d = Math.max(1, window.devicePixelRatio || 1), W = 300, H = 70;
+    var sig = JSON.stringify([series, d, css('--accent'), css('--ink')]);
+    if (sig === sparkSig) return;
+    sparkSig = sig;
+    cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px';
+    var c = cv.getContext('2d');
+    c.setTransform(d, 0, 0, d, 0, 0);
+    c.clearRect(0, 0, W, H);
+    var padL = 40, padR = 44, padT = 8, padB = 8, w = W - padL - padR, h = H - padT - padB;
+    function px(x) { return padL + x * w; }
+    function py(p) { return padT + (1 - p) * h; }
+    c.strokeStyle = css('--line'); c.lineWidth = 1;
+    c.fillStyle = css('--muted'); c.font = 11 + 'px system-ui, sans-serif'; c.textAlign = 'right'; c.textBaseline = 'middle';
+    [0, 1].forEach(function (g) {
+      c.beginPath(); c.moveTo(padL, py(g)); c.lineTo(padL + w, py(g)); c.stroke();
+      c.fillText(pct(g), padL - 6, py(g));
+    });
+    cv.setAttribute('aria-label', series.length ? fill(VISIBLE_COPY.analyser.spark, { list: series.map(function (s) { return pct(s.p); }).join(', ') })
+      : VISIBLE_COPY.analyser.sparkNone);
+    if (!series.length) return;
+    c.strokeStyle = css('--accent'); c.lineWidth = 2.5;
+    c.beginPath();
+    series.forEach(function (s, i) { c[i ? 'lineTo' : 'moveTo'](px(s.x), py(s.p)); });
+    c.stroke();
+    series.forEach(function (s) { c.beginPath(); c.arc(px(s.x), py(s.p), 4, 0, 6.2832); c.fillStyle = css('--accent'); c.fill(); c.lineWidth = 1.5; c.strokeStyle = css('--panel'); c.stroke(); });
+    var last = series[series.length - 1];
+    c.fillStyle = css('--ink'); c.font = '600 13px system-ui, sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillText(pct(last.p), px(last.x) + 9, py(last.p));
+  }
+
+  var lessonSig = null;
+  // items = [{ key, kind, conf, mark: 'ok' | 'off' | null, hover }] newest first, already cut to five; key = a stable identity of
+  // the lesson, so keyboard focus stays on the same line when the list is rebuilt
+  function paintLessons(items, emptyText) {
+    var sig = JSON.stringify([items, emptyText]);
+    if (sig === lessonSig) return;
+    lessonSig = sig;
+    var ul = $('lessons');
+    var act = document.activeElement;
+    var focusKey = act && act.parentNode === ul ? act.getAttribute('data-key') : null;
+    ul.textContent = '';
+    setText('lessonstate', items.length ? '' : emptyText);
+    items.forEach(function (it, i) {
+      var li = el('li', 'les ' + (it.mark || 'pending'));
+      var text = LESSON_KINDS.indexOf(it.kind) >= 0 ? VISIBLE_COPY.lesson[it.kind] : VISIBLE_COPY.lesson.fallback;
+      li.appendChild(el('span', 'ltxt', text));
+      var conf = el('span', 'conf', fill(VISIBLE_COPY.lesson.support, { c: it.conf.toFixed(2) }));
+      if (it.mark) {
+        var mark = el('span', 'mark', it.mark === 'ok' ? VISIBLE_COPY.lesson.tickOk : VISIBLE_COPY.lesson.tickOff);
+        mark.setAttribute('role', 'img');
+        mark.setAttribute('aria-label', it.mark === 'ok' ? VISIBLE_COPY.lesson.held : VISIBLE_COPY.lesson.failed);
+        conf.appendChild(mark);
+      } else {
+        conf.appendChild(el('span', 'pend', VISIBLE_COPY.lesson.notChecked)); // small and muted, like the support figure
+      }
+      li.appendChild(conf);
+      li.id = 'les-' + i;
+      li.tabIndex = 0;
+      li.setAttribute('data-hover', '');
+      li.setAttribute('data-key', it.key);
+      wireOne(li);
+      ul.appendChild(li);
+      setHover(li.id, it.hover);
+    });
+    if (focusKey !== null) {
+      var again = null;
+      Array.prototype.forEach.call(ul.children, function (n) { if (n.getAttribute('data-key') === focusKey) again = n; });
+      if (again) again.focus(); else hideHover();
+    }
+  }
+
+  function paintFooter() {
+    var rc = (R && R.run_constants) || {}, src = (R && R.meta && R.meta.source) || {};
+    var cl = rc.closed_loop;
+    setText('payoff', cl ? fill(VISIBLE_COPY.footer.payoff, { map: pct(cl.map_share), oracle: pct(cl.oracle_share), source: cl.source }) : '');
+    var ul = $('sources');
+    if (!ul) return;
+    ul.textContent = '';
+    var D = DETAILS_COPY.sources;
+    [['rundir', src.run_dir], ['store', src.store], ['closedloop', src.closed_loop], ['costmap', src.costmap]].forEach(function (p) {
+      if (p[1]) ul.appendChild(el('li', null, fill(D[p[0]], { v: p[1] })));
+    });
+    if (src.carry_lessons) ul.appendChild(el('li', null, fill(D.carry, { v: src.carry_lessons, run: src.carry_lessons_run })));
+    Object.keys(rc).forEach(function (k) {
+      if (rc[k] && rc[k].source) ul.appendChild(el('li', null, fill(D.constant, { k: k, v: rc[k].source })));
+    });
+  }
+  paintFooter();
+  (function lessonCaption() {
+    var run = R && R.meta && R.meta.source && R.meta.source.carry_lessons_run;
+    setHover('lessoncap', run ? fill(HOVER_COPY.lessonCap, { run: run }) : HOVER_COPY.lessonCapOwn);
+  })();
+
+  // the ten most suspected cells, numbered 1 to 10 in the top-left corner of the cell (floor canvas, replay and live)
+  function drawTopLabels(c, cells, size) {
+    c.save();
+    c.font = 'bold 11px system-ui, sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    cells.forEach(function (key, i) {
+      var xy = key.split(','), x = +xy[0] * size + 2, y = +xy[1] * size + 1;
+      c.lineWidth = 3; c.strokeStyle = css('--bg'); c.strokeText(String(i + 1), x, y);
+      c.fillStyle = css('--ink'); c.fillText(String(i + 1), x, y);
+    });
+    c.restore();
+  }
+
+
   // ---- theme (works without data) ----
   var root = document.documentElement;
   var themeBtn = $('theme');
@@ -11,7 +441,7 @@
   function applyTheme() {
     var t = userTheme || (mq && mq.matches ? 'dark' : 'light');
     root.setAttribute('data-theme', t);
-    themeBtn.textContent = 'Theme: ' + (userTheme ? t : 'auto (' + t + ')');
+    themeBtn.textContent = fill(VISIBLE_COPY.controls.theme, { name: userTheme ? t : fill(VISIBLE_COPY.controls.themeAuto, { name: t }) });
     drawLegends();
     if (R && ready) draw();
   }
@@ -25,8 +455,7 @@
   // ---- shared drawing (replay and live): display states, robots, marks, legend icons, tooltip ----
   // Four display states (live_state.DISPLAY_STATES). The raw state is kept only for the tooltip.
   var DISPLAY = ['moving', 'working', 'waiting', 'down'];
-  var RAW_TEXT = { moving: 'changed cell', loading: 'at a shelf or station', stalled: 'tried to move and did not',
-                   stuck: 'inside a stuck call', frozen: 'reported an error', idle: 'no job, not moving' };
+  var RAW_TEXT = HOVER_COPY.raw;
   var showPickers = false, redrawHook = null, tipProvider = null, tipAt = null;
 
   function robotPath(c, kind, cx, cy, r) {
@@ -101,6 +530,11 @@
     } else if (ico === 'shade') {
       c.fillStyle = 'rgba(' + css('--cost') + ',.6)'; c.fillRect(4, 4, 16, 16);
       c.strokeStyle = css('--line'); c.lineWidth = 1; c.strokeRect(4.5, 4.5, 15, 15);
+    } else if (ico === 'top') {
+      c.fillStyle = css('--hw'); c.fillRect(2, 2, 20, 20);
+      c.font = 'bold 13px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineWidth = 3; c.strokeStyle = css('--bg'); c.strokeText('1', 12, 12);
+      c.fillStyle = css('--ink'); c.fillText('1', 12, 12);
     } else if (ico === 'call') {
       drawRing(c, 12, 12, 8, 1);
     } else if (ico === 'marks') {
@@ -124,8 +558,10 @@
 
   // tooltip: hover (mouse) or tap (touch) on a robot. provider(cx, cy) -> [{id, kind, raw, disp, job, waitS}].
   function tipLines(i) {
-    return [i.id + ', ' + (i.kind === 'agv' ? 'AGV' : 'picker'), 'State: ' + i.disp + ' (' + (RAW_TEXT[i.raw] || 'no further detail') + ')',
-            'Job: ' + (i.job || 'none'), (i.job ? 'Waiting: ' : 'Not moving: ') + i.waitS + ' s'];
+    var T = HOVER_COPY.tip;
+    return [i.id + ', ' + HOVER_COPY.kind[i.kind === 'agv' ? 'agv' : 'picker'],
+            fill(T.state, { disp: i.disp, raw: RAW_TEXT[i.raw] || T.noDetail }),
+            fill(T.job, { job: i.job || T.noJob }), fill(i.job ? T.waiting : T.notMoving, { s: i.waitS })];
   }
   function refreshTip() {
     var tip = $('tip');
@@ -182,7 +618,7 @@
     var bad = document.createElement('p');
     bad.className = 'livebar bad';
     bad.setAttribute('role', 'alert');
-    bad.textContent = 'The live parameter was ignored: it must be an http URL on localhost or 127.0.0.1 (the page sends injections to it). Showing the offline replay.';
+    bad.textContent = VISIBLE_COPY.live.ignored;
     document.querySelector('.head').insertAdjacentElement('afterend', bad);
   }
 
@@ -243,9 +679,7 @@
   }
   // ---- canvases ----
   var floor = $('floor'), fctx = floor.getContext('2d');
-  var prec = $('prec'), pctx = prec.getContext('2d');
   var dpr = Math.max(1, window.devicePixelRatio || 1);
-  var PW = 460, PH = 220;
   // Only the CSS width is set; height:auto keeps the aspect ratio of the width/height attributes.
   function size(canvas, ctx, w, h) {
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
@@ -255,7 +689,6 @@
   function sizeAll() {
     dpr = Math.max(1, window.devicePixelRatio || 1);
     size(floor, fctx, G.width * CELL, G.height * CELL);
-    size(prec, pctx, PW, PH);
   }
   sizeAll();
   window.addEventListener('resize', function () { sizeAll(); if (ready) draw(); });
@@ -290,6 +723,8 @@
     c.strokeStyle = css('--line'); c.lineWidth = 0.5;
     for (var gx = 0; gx <= G.width; gx++) { c.beginPath(); c.moveTo(gx * CELL, 0); c.lineTo(gx * CELL, G.height * CELL); c.stroke(); }
     for (var gy = 0; gy <= G.height; gy++) { c.beginPath(); c.moveTo(0, gy * CELL); c.lineTo(G.width * CELL, gy * CELL); c.stroke(); }
+    // the ten most suspected cells of the latest map, numbered 1 to 10 in the top-left corner of the cell
+    if (pub) drawTopLabels(c, pub.cells.slice(0, 10).map(function (r) { return r[0]; }), CELL);
     // hidden floor problems: dashed outlined boxes
     c.strokeStyle = css('--obst'); c.lineWidth = 2; c.setLineDash([4, 3]);
     R.obstacles.forEach(function (o) {
@@ -322,84 +757,103 @@
     });
   }
 
-  // ---- panel 2: extractor ----
+  // ---- the header strip (replay) ----
   var X = R.extractor, S = X.series, T = X.totals;
-  var counterRows = [
-    ['bytes read (uncompressed)', function (i) { return fmt(S.bytes[i]) + ' B'; }],
-    ['messages (lines)', function (i) { return fmt(S.messages[i]); }],
-    ['parsed', function (i) { return fmt(S.parsed[i]); }],
-    ['rejected', function (i) {
-      if (!S.rejected[i]) return 'none rejected';
-      var top = null, best = 0;
-      Object.keys(S.rejected_by_reason).forEach(function (k) { var v = S.rejected_by_reason[k][i]; if (v > best) { best = v; top = k; } });
-      return fmt(S.rejected[i]) + (top ? ' (top reason: ' + top + ')' : '');
-    }],
-    ['duplicates', function (i) { return fmt(S.duplicates[i]); }],
-    ['sequence gaps', function (i) { return fmt(S.sequence_gaps[i]) + ' (' + fmt(S.missing_messages[i]) + ' messages missing)'; }],
-    ['accepted', function (i) { return fmt(S.accepted[i]); }],
-    ['coverage', function (i) { return S.coverage[i] === null ? 'unknown (no message count from the run)' : (S.coverage[i] * 100).toFixed(1) + ' %'; }]
-  ];
-  var counterEls = counterRows.map(function (r) {
-    var dt = el('dt', null, r[0]), dd = el('dd', null, '');
+  var RC = R.run_constants || {}, SRC = M.source || {};
+  function replayHeaderText() {
+    var floorN = R.obstacles.filter(function (o) { return o.kind === 'floor'; }).length;
+    var brk = R.obstacles.filter(function (o) { return o.kind === 'breakdown'; }).length;
+    var H = VISIBLE_COPY.header;
+    var agvs = R.robots.filter(function (r) { return r.kind === 'agv'; }).length;
+    return fill(H.replay, { agvs: agvs, pickers: R.robots.length - agvs, minutes: Math.round(STEPS * SEC / 60),
+      messages: fmt(T.expected_messages || T.messages), floor: floorN,
+      breakdowns: brk === 0 ? H.breakdownsNone : (brk === 1 ? H.breakdownsOne : fill(H.breakdownsSome, { n: brk })) });
+  }
+
+  // ---- panel 2: the log (replay adapter) ----
+  var counterEls = DETAILS_COPY.counterRows.map(function (label) {
+    var dt = el('dt', null, label), dd = el('dd', null, '');
     $('counters').appendChild(dt); $('counters').appendChild(dd);
     return dd;
   });
   (function () {
     var chk = X.check;
     $('match').textContent = chk
-      ? 'The replay matches the import step\'s checkpoint: ' + fmt(T.bytes) + ' bytes, ' + fmt(chk.messages_parsed) + ' parsed, ' +
-        fmt(chk.messages_accepted) + ' accepted, ' + fmt(chk.messages_rejected) + ' rejected, ' + fmt(chk.duplicates) +
-        ' duplicates, ' + fmt(chk.sequence_gaps) + ' sequence gaps.'
-      : 'The store has no import checkpoint for this file, so the replay could not be compared with it.';
+      ? fill(DETAILS_COPY.matchYes, { bytes: fmt(T.bytes), parsed: fmt(chk.messages_parsed), accepted: fmt(chk.messages_accepted),
+          rejected: fmt(chk.messages_rejected), dups: fmt(chk.duplicates), gaps: fmt(chk.sequence_gaps) })
+      : DETAILS_COPY.matchNo;
   })();
-  function drawExtractor(step) {
-    counterRows.forEach(function (r, k) { counterEls[k].textContent = r[1](step); });
-    var cov = S.coverage[step];
-    $('covbar').style.width = (cov === null ? 0 : Math.min(1, cov) * 100) + '%';
-    $('covlabel').textContent = cov === null ? 'Coverage is unknown because the run has no message count of its own.'
-      : 'Coverage ' + (cov * 100).toFixed(1) + ' % of the ' + fmt(T.expected_messages) + ' messages the run itself counted (full bar = 100 %).';
+  function reasonList(i) {
+    var parts = [];
+    Object.keys(S.rejected_by_reason).forEach(function (k) { var v = S.rejected_by_reason[k][i]; if (v) parts.push(k + ' ' + v); });
+    return parts.join(', ');
+  }
+  // accounted for = accepted / sent so far, the share of the run's expected messages that the clock has reached by step i
+  function sentSoFar(i) {
+    if (!T.expected_messages) return null;
+    return S.accepted[i] / (T.expected_messages * (i + 1) / STEPS);
+  }
+  function replayLog(i) {
+    var rate = RC.ingest_msgs_per_s ? RC.ingest_msgs_per_s.value : null;
+    var bench = RC.benchmark_msgs_per_s;
+    var kept = RC.kept;
+    var noise = SRC.injected_noise;
+    var arrived = fill(HOVER_COPY.arrived, { lines: fmt(S.messages[i]), bytes: fmt(S.bytes[i]),
+      rate: rate === null ? HOVER_COPY.rateUnknown : fill(HOVER_COPY.rateOf, { rate: fmt(Math.round(rate)) }),
+      bench: bench ? fill(HOVER_COPY.arrivedBench, { rate: fmt(Math.round(bench.value)), source: bench.source }) : '' });
+    var usable = fill(HOVER_COPY.usable, { accepted: fmt(S.accepted[i]), rejected: fmt(S.rejected[i]), reasons: reasonList(i) ? fill(HOVER_COPY.reasons, { list: reasonList(i) }) : '',
+      dups: fmt(S.duplicates[i]), gaps: fmt(S.sequence_gaps[i]), missing: fmt(S.missing_messages[i]),
+      gapnote: noise && noise.gap_ids && S.sequence_gaps[i] ? fill(HOVER_COPY.gapNote, { ids: noise.gap_ids }) : '' });
+    var keptHover = kept ? fill(HOVER_COPY.kept, { kept: fmt(kept.bytes_kept), arrived: fmt(kept.bytes_arrived), pct: kept.kept_pct.toFixed(2),
+      zones: kept.n_zones, tables: Object.keys(kept.bytes_by_table).map(function (k) { return k + ' ' + fmt(kept.bytes_by_table[k]); }).join(', '),
+      formula: kept.formula, source: kept.source }) : HOVER_COPY.keptNone;
+    return { lines: S.messages[i], bytes: S.bytes[i], rate: rate, lag: null, live: false, usable: S.accepted[i], rejected: S.rejected[i],
+      dups: S.duplicates[i], kept: kept ? kept.kept_pct : null, cov: sentSoFar(i), hover: { arrived: arrived, usable: usable, kept: keptHover } };
+  }
+  function drawLog(step) {
+    paintLog(replayLog(step));
+    var rows = [
+      fmt(S.bytes[step]) + ' B', fmt(S.messages[step]), fmt(S.parsed[step]),
+      S.rejected[step] ? fmt(S.rejected[step]) + fill(DETAILS_COPY.topReason, { r: reasonList(step) }) : DETAILS_COPY.noneRejected,
+      fmt(S.duplicates[step]), fill(DETAILS_COPY.gaps, { n: fmt(S.sequence_gaps[step]), m: fmt(S.missing_messages[step]) }), fmt(S.accepted[step]),
+      S.coverage[step] === null ? DETAILS_COPY.coverageUnknown : (S.coverage[step] * 100).toFixed(1) + ' %'
+    ];
+    rows.forEach(function (t, k) { counterEls[k].textContent = t; });
   }
 
-  // ---- panel 3: analyser ----
-  var PAD = { l: 40, r: 14, t: 12, b: 26 };
-  function drawPrecision(step) {
-    var c = pctx;
-    c.clearRect(0, 0, PW, PH);
-    var ink = css('--ink'), muted = css('--muted'), line = css('--line'), acc = css('--accent');
-    var w = PW - PAD.l - PAD.r, h = PH - PAD.t - PAD.b;
-    function px(s) { return PAD.l + (s / Math.max(1, STEPS - 1)) * w; }
-    function py(v) { return PAD.t + (1 - v) * h; }
-    c.font = '12px system-ui, sans-serif'; c.fillStyle = muted; c.strokeStyle = line; c.lineWidth = 1;
-    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
-      c.beginPath(); c.moveTo(PAD.l, py(v)); c.lineTo(PW - PAD.r, py(v)); c.stroke();
-      c.textAlign = 'right'; c.fillText(v.toFixed(2), PAD.l - 5, py(v) + 4);
-    });
-    c.textAlign = 'center';
-    [0, 0.25, 0.5, 0.75, 1].forEach(function (f) {
-      var s = Math.round(f * Math.max(1, STEPS - 1));
-      c.fillText(clock(s), px(s), PH - 8);
-    });
-    c.strokeStyle = muted; c.setLineDash([2, 3]);
-    c.beginPath(); c.moveTo(px(step), PAD.t); c.lineTo(px(step), PAD.t + h); c.stroke(); c.setLineDash([]);
-    var shown = pubs.filter(function (p) { return p.step <= step; });
-    shown.forEach(function (p) {
-      c.fillStyle = acc; c.beginPath(); c.arc(px(p.step), py(p.precision_at_20), 5, 0, 6.2832); c.fill();
-      c.fillStyle = ink; c.textAlign = p.step > STEPS * 0.8 ? 'right' : 'left';
-      c.fillText(p.precision_at_20.toFixed(2) + ' (' + p.hits_at_20 + '/20)', px(p.step) + (p.step > STEPS * 0.8 ? -9 : 9), py(p.precision_at_20) - 8);
-    });
-    var st = $('precstate');
-    if (!pubs.length) st.textContent = 'The analyser published no cost map in this run.';
-    else if (!shown.length) st.textContent = 'No map published yet (the first publish is at ' + clock(pubs[0].step) + ').';
-    else st.textContent = '';
-  }
-
-  var gradeKey = null;
-  // The words of the "outcome" grade depend on what it measured: rank wording only for a rank grade.
+  // ---- panel 3: the analyser (replay adapter) ----
+  var GRADES = R.grades.per_publish;
   function wording(kind) {
-    if (kind === 'rank') return { lab: 'rank grade', ok: 'still in top 20 after the horizon', off: 'dropped out' };
-    if (kind === 'count') return { lab: 'count grade', ok: 'stall count about as claimed', off: 'stall count off' };
-    return { lab: 'outcome grade', ok: 'outcome as claimed', off: 'outcome not as claimed' };
+    var w = DETAILS_COPY.wording;
+    return kind === 'rank' ? w.rank : (kind === 'count' ? w.count : w.other);
   }
+  function replayAnalyser(step) {
+    var lp = latestPublish(step), idx = pubs.indexOf(lp), g = lp ? GRADES[idx] : null;
+    var shown = pubs.filter(function (p) { return p.step <= step; });
+    var hot = RC.hotspot;
+    var list = shown.map(function (p) { return fill(HOVER_COPY.mapItem, { time: clock(p.step), p: pct(p.precision_at_20), hits: p.hits_at_20 }); }).join('; ');
+    var outcome = '';
+    if (g && g.window_end_step !== null && g.window_end_step <= step) {
+      [[g.outcome_kind, g.outcome], ['count', g.outcome_count]].forEach(function (pair, k) {
+        if (k && g.outcome_kind === 'count') return;
+        var w = wording(pair[0]);
+        if (pair[1].ok + pair[1].off > 0) outcome += fill(HOVER_COPY.checksOutcome, { label: w.lab, ok: pair[1].ok, okText: w.ok, off: pair[1].off, offText: w.off });
+      });
+    }
+    return {
+      right: lp ? lp.precision_at_20 : null,
+      found: lp && typeof lp.recall_at_k === 'number' ? lp.recall_at_k : null,
+      calls: g ? g.forecasts : null, hits: g ? g.truth.hit : null, wrong: g ? g.truth.false_alarm : null,
+      note: lp ? '' : (pubs.length ? fill(VISIBLE_COPY.floor.mapLater, { time: clock(pubs[0].step) }) : VISIBLE_COPY.analyser.noMap),
+      series: shown.map(function (p) { return { x: p.step / Math.max(1, STEPS - 1), p: p.precision_at_20 }; }),
+      hover: {
+        right: lp ? fill(HOVER_COPY.right, { list: list }) : '',
+        found: lp && hot ? fill(HOVER_COPY.found, { share: pct(hot.zero_stall_share), source: hot.source, k: hot.k, recall: pct(hot.recall_at_k) }) : '',
+        checks: g ? fill(HOVER_COPY.checks, { calls: g.forecasts, hits: g.truth.hit, wrong: g.truth.false_alarm, outcome: outcome }) : ''
+      }
+    };
+  }
+  var gradeKey = null;
   function seg(parent, n, total, color) {
     if (!n) return;
     var s = el('span', null, String(n));
@@ -413,14 +867,14 @@
     ['rank', 'count', 'mixed'].forEach(function (k) {
       if (kinds[k]) { oks.push(wording(k).ok); offs.push(wording(k).off); }
     });
-    oks.push('on a hidden problem'); offs.push('not on one');
+    oks.push(DETAILS_COPY.onHidden); offs.push(DETAILS_COPY.notOnHidden);
     legendItem(g, 'var(--ok)', oks.join(' / '));
     legendItem(g, 'var(--off)', offs.join(' / '));
-    legendItem(g, 'var(--open)', 'open or pending');
+    legendItem(g, 'var(--open)', DETAILS_COPY.openPending);
   }
   function drawGrades(step) {
     var shown = pubs.filter(function (p) { return p.step <= step; });
-    var graded = shown.map(function (p) { return R.grades.per_publish[pubs.indexOf(p)]; });
+    var graded = shown.map(function (p) { return GRADES[pubs.indexOf(p)]; });
     var key = graded.map(function (g) {
       return g.t + ':' + (g.window_end_step !== null && g.window_end_step <= step ? 1 : 0);
     }).join('|');
@@ -431,13 +885,12 @@
     var kinds = {};
     graded.forEach(function (g) { if (g.outcome_kind) kinds[g.outcome_kind] = true; });
     drawGradeLegend(kinds);
-    if (!pubs.length) { host.appendChild(el('p', 'state', 'No publishes, so nothing to grade.')); return; }
-    if (!shown.length) { host.appendChild(el('p', 'state', 'No map published yet, so nothing to grade.')); return; }
+    if (!pubs.length) { host.appendChild(el('p', 'state', DETAILS_COPY.noPublish)); return; }
+    if (!shown.length) { host.appendChild(el('p', 'state', DETAILS_COPY.noMapGrade)); return; }
     graded.forEach(function (g) {
       var box = el('div', 'pub');
-      var pr = pubs[R.grades.per_publish.indexOf(g)];
-      box.appendChild(el('div', 'name', 'Publish at ' + clockAt(g.t) + ': ' + g.forecasts + ' calls, top-20 hit rate ' +
-        pr.precision_at_20.toFixed(2) + ' (' + pr.hits_at_20 + '/20)'));
+      var pr = pubs[GRADES.indexOf(g)];
+      box.appendChild(el('div', 'name', fill(DETAILS_COPY.pubName, { time: clockAt(g.t), calls: g.forecasts, p: pr.precision_at_20.toFixed(2), hits: pr.hits_at_20 })));
       var outcomeKnown = g.window_end_step !== null && g.window_end_step <= step;
       var w = wording(g.outcome_kind);
       var r1 = el('div', 'row');
@@ -455,7 +908,7 @@
       }
       r1.appendChild(b1); box.appendChild(r1);
       var r2 = el('div', 'row');
-      r2.appendChild(el('span', 'lab', 'truth grade'));
+      r2.appendChild(el('span', 'lab', DETAILS_COPY.truthLab));
       var b2 = el('div', 'bar');
       b2.setAttribute('aria-hidden', 'true');
       seg(b2, g.truth.hit, g.forecasts, 'var(--ok)');
@@ -464,13 +917,13 @@
       var t = el('div', 'cap small');
       var parts = [];
       if (outcomeKnown) {
-        parts.push(g.outcome.ok + ' ' + w.ok + ', ' + g.outcome.off + ' ' + w.off);
+        parts.push(fill(DETAILS_COPY.outcomeLine, { ok: g.outcome.ok, okText: w.ok, off: g.outcome.off, offText: w.off }));
       } else if (g.window_end_step === null) {
-        parts.push(g.open + ' open: the horizon ends after the stream');
+        parts.push(fill(DETAILS_COPY.openLine, { n: g.open }));
       } else {
-        parts.push('outcome known at ' + clock(g.window_end_step));
+        parts.push(fill(DETAILS_COPY.knownAt, { time: clock(g.window_end_step) }));
       }
-      parts.push(g.truth.hit + ' on a hidden problem, ' + g.truth.false_alarm + ' not on one');
+      parts.push(fill(DETAILS_COPY.truthLine, { hit: g.truth.hit, fa: g.truth.false_alarm }));
       t.textContent = parts.join('; ');
       box.appendChild(t);
       host.appendChild(box);
@@ -485,50 +938,34 @@
     topKey = key;
     var ol = $('top');
     ol.textContent = '';
-    if (!p) { var li = el('li', null, 'no map published yet'); li.style.listStyle = 'none'; ol.appendChild(li); return; }
+    if (!p) { var li = el('li', null, DETAILS_COPY.noMapTop); li.style.listStyle = 'none'; ol.appendChild(li); return; }
     p.cells.slice(0, 10).forEach(function (r) {
-      ol.appendChild(el('li', null, r[0] + '  cost ' + r[1].toFixed(2) + '  stalls ' + r[2] + (obstacleSet[r[0]] ? '  [on a hidden problem]' : '  [not on one]')));
+      ol.appendChild(el('li', null, fill(DETAILS_COPY.topLine, { cell: r[0], cost: r[1].toFixed(2), stalls: r[2],
+        flag: obstacleSet[r[0]] ? DETAILS_COPY.topFlagYes : DETAILS_COPY.topFlagNo })));
     });
   }
+  $('detail-notes').textContent = DETAILS_COPY.notes.join(' ');
 
-  // ---- panel 4: lessons ----
+  // ---- panel 4: lines for the operators (replay adapter) ----
   var HAS_LESSONS = R.lessons !== undefined;
   var LESSONS = R.lessons || [];
-  var lessonKey = null;
-  function drawLessons(step) {
-    var shown = LESSONS.filter(function (l) { return l.decided_at_step <= step; });
-    var key = shown.map(function (l) {
-      return (l.graded_at_step !== null && l.graded_at_step <= step) ? l.verdict : '-';
-    }).join('|') + '#' + shown.length;
-    if (key === lessonKey) return;
-    lessonKey = key;
-    var ul = $('lessons');
-    ul.textContent = '';
-    var state = $('lessonstate');
-    if (!HAS_LESSONS) { state.textContent = 'Lesson data is not included in this file.'; return; }
-    if (!LESSONS.length) { state.textContent = 'No lessons in this run, in any zone: no rule reached its threshold.'; return; }
-    if (!shown.length) { state.textContent = 'No lessons yet. The first one is drawn at ' + clock(LESSONS[0].decided_at_step) + '.'; return; }
-    var held = 0, failed = 0, waiting = 0, never = 0;
-    shown.forEach(function (l) {
-      if (l.graded_at_step === null) never++;
-      else if (l.graded_at_step > step) waiting++;
-      else if (l.verdict === 'ok') held++;
-      else failed++;
-    });
-    state.textContent = 'Graded so far: ' + held + ' held, ' + failed + ' did not hold, ' + waiting + ' pending' +
-      (never ? ', ' + never + ' not gradable (the shift ends before the next window).' : '.');
-    shown.slice().reverse().forEach(function (l) {
+  function replayLessons(step) {
+    if (!HAS_LESSONS) return { items: [], empty: VISIBLE_COPY.lesson.noData };
+    var shown = LESSONS.filter(function (l) { return l.decided_at_step <= step; }).slice().reverse().slice(0, 5);
+    var items = shown.map(function (l) {
+      var key = l.decided_at_step + ':' + LESSONS.indexOf(l);
       var known = l.graded_at_step !== null && l.graded_at_step <= step;
-      var never = l.graded_at_step === null;
-      var status = !known ? 'pending' : (l.verdict === 'ok' ? 'ok' : 'off');
-      var li = el('li', 'les ' + status);
-      var mark = el('span', 'mark', never ? 'not gradable' : !known ? 'pending' : (status === 'ok' ? '✓ held' : '✗ did not hold'));
-      li.appendChild(mark);
-      li.appendChild(el('span', 'ltxt', l.text));
-      li.appendChild(el('span', 'conf', 'zone ' + l.zone + (String(l.zone) === String(R.meta.zone) ? ' (the zone shown above)' : '') +
-        ', rule ' + l.lesson_kind + ', support ' + l.confidence.toFixed(2) + ', drawn at ' + clock(l.decided_at_step)));
-      ul.appendChild(li);
+      var verdict = known ? fill(l.verdict === 'ok' ? HOVER_COPY.verdictOk : HOVER_COPY.verdictOff, { t: clock(l.graded_at_step) })
+        : (l.graded_at_step === null ? HOVER_COPY.verdictNa : HOVER_COPY.verdictOpen);
+      return { key: key, kind: l.lesson_kind, conf: l.confidence, mark: known ? (l.verdict === 'ok' ? 'ok' : 'off') : null,
+        hover: fill(HOVER_COPY.lessonLine, { text: l.text, kind: l.lesson_kind, zone: l.zone, c: l.confidence.toFixed(2), drawn: clock(l.decided_at_step),
+          verdict: verdict, origin: SRC.carry_lessons_run ? fill(HOVER_COPY.origin, { run: SRC.carry_lessons_run }) : '' }) };
     });
+    return { items: items, empty: VISIBLE_COPY.lesson.none };
+  }
+  function drawLessons(step) {
+    var v = replayLessons(step);
+    paintLessons(v.items, v.empty);
   }
 
   function callCounts(step) {
@@ -542,16 +979,22 @@
       else if (e.verdict === 'confirmed') right++;
       else if (e.verdict === 'refuted') wrong++;
     });
-    return 'Stuck calls so far: ' + n + '; still open ' + open + '; graded right ' + right + ', wrong ' + wrong +
-      '; no verdict ' + (n - open - right - wrong) + '.';
+    var v = { n: n, open: open, right: right, wrong: wrong, none: n - open - right - wrong };
+    return { text: fill(VISIBLE_COPY.floor.calls, v), hover: fill(HOVER_COPY.calls, v) };
   }
+  var callsText = null;
   function mapState(step) {
-    var st = $('mapstate'), t;
-    if (layer === 'with') t = 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the stuck-call rings come from the analyser on this run.';
-    else if (!pubs.length) t = 'The analyser published no cost map in this run.';
-    else if (!latestPublish(step)) t = 'No map published yet (the first publish is at ' + clock(pubs[0].step) + ').';
+    var t;
+    if (layer === 'with') t = VISIBLE_COPY.floor.withMap;
+    else if (!pubs.length) t = VISIBLE_COPY.floor.noMap;
+    else if (!latestPublish(step)) t = fill(VISIBLE_COPY.floor.mapLater, { time: clock(pubs[0].step) });
     else t = '';
-    st.textContent = (t ? t + ' ' : '') + callCounts(step);
+    $('mapstate').textContent = t;
+    // the visible line counts held-up robots only; how the calls were judged is in its tip (hover, tap or focus)
+    var cc = callCounts(step);
+    if (cc.text !== callsText) { callsText = cc.text; setText('callsline', cc.text); } // a rewrite drops the tip's sr span
+    setHover('callsline', cc.hover);
+    $('mapnote').hidden = layer !== 'with';
   }
 
   // ---- text for screen readers ----
@@ -562,32 +1005,32 @@
   }
   function summary(step) {
     var pub = latestPublish(step);
-    return 'Step ' + step + ' of ' + (STEPS - 1) + ', fleet time ' + clock(step) + '. Robots: ' + counts(step) + '. Extractor: ' +
-      fmt(S.parsed[step]) + ' parsed, ' + fmt(S.rejected[step]) + ' rejected, ' + fmt(S.duplicates[step]) + ' duplicates. ' +
-      (pub ? 'Latest cost map at ' + clock(pub.step) + ' with top-20 hit rate ' + pub.precision_at_20.toFixed(2) + '.' : 'No cost map published yet.');
+    return fill(VISIBLE_COPY.floor.summary, { step: step, last: STEPS - 1, time: clock(step), robots: counts(step), usable: fmt(S.accepted[step]),
+      rejected: fmt(S.rejected[step]), dups: fmt(S.duplicates[step]),
+      map: pub ? fill(VISIBLE_COPY.floor.summaryMap, { time: clock(pub.step), p: pct(pub.precision_at_20) }) : VISIBLE_COPY.floor.summaryNoMap });
   }
   function curStep() { return Math.min(STEPS - 1, Math.max(0, Math.floor(pos))); }
   // The live region is written only when playback is not running: on pause, on a step, after a scrub settles.
   function announce() {
     if (playing) return;
     var step = curStep();
-    $('live').textContent = 'Step ' + step + ' of ' + (STEPS - 1) + ', fleet time ' + clock(step) + '. Robots: ' + counts(step) + '.';
+    $('live').textContent = fill(VISIBLE_COPY.floor.announce, { step: step, last: STEPS - 1, time: clock(step), robots: counts(step) });
   }
 
   // ---- main draw ----
   function draw() {
     var step = curStep();
-    drawFloor(step); drawExtractor(step); drawPrecision(step); drawGrades(step); drawTop(step); drawLessons(step); mapState(step);
-    $('clock').textContent = 'step ' + step + ' / ' + (STEPS - 1) + '  ' + clock(step);
+    drawFloor(step); drawLog(step); paintAnalyser(replayAnalyser(step)); drawGrades(step); drawTop(step); drawLessons(step); mapState(step);
+    $('clock').textContent = fill(VISIBLE_COPY.floor.clock, { step: step, last: STEPS - 1, time: clock(step) });
     var sc = $('scrub');
     sc.value = step;
-    sc.setAttribute('aria-valuetext', 'step ' + step + ' of ' + (STEPS - 1) + ', fleet time ' + clock(step));
+    sc.setAttribute('aria-valuetext', fill(VISIBLE_COPY.floor.scrub, { step: step, last: STEPS - 1, time: clock(step) }));
     var now = performance.now();
     if (now - lastLive > 2000 || !playing) {
       var txt = summary(step);
       if (txt !== lastTxt) {
         lastTxt = txt;
-        floor.setAttribute('aria-label', 'Warehouse floor. ' + txt);
+        floor.setAttribute('aria-label', txt);
       }
       lastLive = now;
     }
@@ -615,7 +1058,7 @@
     var was = playing;
     playing = p;
     if (p && pos >= STEPS - 1) pos = 0;
-    $('play').textContent = p ? 'Pause' : 'Play';
+    $('play').textContent = p ? VISIBLE_COPY.controls.pause : VISIBLE_COPY.controls.play;
     lastTs = 0;
     if (was && !p) announce();
   }
@@ -629,7 +1072,7 @@
       }
       draw();
     } catch (err) {
-      var msg = 'The page hit an error while drawing: ' + (err && err.message ? err.message : err);
+      var msg = fill(VISIBLE_COPY.floor.drawError, { why: err && err.message ? err.message : err });
       if (msg !== lastErr) {
         lastErr = msg;
         $('live').textContent = msg;
@@ -650,6 +1093,9 @@
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     var t = e.target && e.target.tagName;
     if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'BUTTON') return;
+    // Space and the arrows belong to an open-able summary or a focused number with a tip, not to playback
+    var own = e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowLeft';
+    if (own && e.target && e.target.closest && e.target.closest('summary,[data-hover]')) return;
     if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -660,16 +1106,16 @@
 
   if (hasMap) {
     $('routerBox').hidden = false;
-    var note = $('mapnote');
-    note.hidden = false;
-    note.textContent = 'With map: ' + R.with_map.note + ' Alpha ' + R.with_map.alpha + ', ' + R.with_map.deliveries + ' deliveries (pick rate ' +
-      R.with_map.pick_rate + ' per hour) in this second run.';
+    // shown only while the second run is selected (mapState toggles it); the run's own note and alpha go to the tip
+    setText('mapnote', fill(VISIBLE_COPY.floor.withMapNote, { deliveries: fmt(R.with_map.deliveries), rate: R.with_map.pick_rate }));
+    setHover('mapnote', fill(HOVER_COPY.withMapNote, { note: R.with_map.note, alpha: R.with_map.alpha }));
     Array.prototype.forEach.call(document.getElementsByName('router'), function (r) {
       r.addEventListener('change', function () { if (r.checked) { layer = r.value; draw(); announce(); } });
     });
   }
 
   ready = true;
+  paintHeader(replayHeaderText());
   applyTheme();
   requestAnimationFrame(tick);
   // ---- live mode functions (hoisted; only called when ?live= is valid) ----
@@ -684,18 +1130,16 @@
     var app = $('app');
     app.hidden = false;
     document.body.classList.add('live');
-    $('subtitle').textContent = 'Live: a fleet is running right now. Click a highway cell to put a roadblock there and watch the analyser find it.';
-    ['.controls', '.hint', '#mapnote'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
-    ['prec', 'precstate', 'grades', 'glegend', 'routerBox'].forEach(function (id) { var n = $(id); if (n) n.hidden = true; });
-    Array.prototype.forEach.call(document.querySelectorAll('[aria-labelledby="h-ana"] .cap, [aria-labelledby="h-ana"] h3'), function (n) { n.hidden = true; });
-    $('h-ana').textContent = '3. The analyser: what it flags now';
-    $('h-les').textContent = '4. Lessons';
-    $('lessonscope').textContent = 'Lessons appear when a time window of the run is over, and get a verdict when the next window is over.';
+    var LV = VISIBLE_COPY.live;
+    paintHeader(fill(VISIBLE_COPY.header.live, { messages: 0, placed: 0, planted: '' }));
+    setHover('lessoncap', HOVER_COPY.lessonCapOwn); // live lessons are written on this run, not carried
+    ['.controls', '.hint', '#howto', '#mapnote', '#callsline'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
+    $('routerBox').hidden = true;
+    $('grades').parentNode.hidden = true; // the per-map graded bars need the recorded run; live shows the counts instead
+    $('detail-notes').hidden = true;
     var liveGrades = el('p', 'cap', '');
-    $('grades').insertAdjacentElement('afterend', liveGrades);
-    var topHead = document.querySelectorAll('[aria-labelledby="h-ana"] h3')[1];
-    if (topHead) topHead.hidden = false;
-    var bar = el('p', 'livebar', 'Connecting to ' + base + ' ...');
+    $('top').insertAdjacentElement('afterend', liveGrades);
+    var bar = el('p', 'livebar', fill(LV.connecting, { base: base }));
     bar.setAttribute('role', 'status');
     document.querySelector('.head').insertAdjacentElement('afterend', bar);
 
@@ -704,32 +1148,31 @@
     var placed = {}; // "x,y" -> p, from this page's own successful POSTs
     var prevDisp = {}, flashUntil = {}, marked = {}, marks = []; // breakdown flashes (per robot) and grade marks, wall clock
     var cursor = null, reveal = false, promptCell = null;
+    var series = [], seriesAt = null; // right-rate after each new map, live
     var floorEl = $('floor'), ctx = floorEl.getContext('2d');
     floorEl.tabIndex = 0;
     floorEl.setAttribute('role', 'application'); // operable in live mode (offline it stays role="img")
-    floorEl.setAttribute('aria-label', 'Warehouse floor. Click or press Enter on a highway cell to place a roadblock; arrow keys move the cursor.');
+    floorEl.setAttribute('aria-label', LV.aria);
 
     // legend for the live floor: the static legend plus the operator's own roadblocks
     var planted = document.querySelector('#lrow-planted ul');
     var li = el('li');
     var ic = el('canvas', 'icon');
     ic.setAttribute('data-ico', 'placed'); ic.setAttribute('aria-hidden', 'true');
-    li.appendChild(ic); li.appendChild(el('span', null, 'placed by you (outlined roadblocks)'));
+    li.appendChild(ic); li.appendChild(el('span', null, LV.placedBy));
     planted.appendChild(li);
     drawLegends();
     var revealBox = el('label', 'revealbox', '');
     var revealIn = document.createElement('input');
     revealIn.type = 'checkbox';
     revealBox.appendChild(revealIn);
-    revealBox.appendChild(document.createTextNode(' Reveal the hidden roadblocks'));
+    revealBox.appendChild(document.createTextNode(LV.reveal));
     revealBox.hidden = true;
     $('floorlegend').insertAdjacentElement('afterend', revealBox);
     revealIn.addEventListener('change', function () { reveal = revealIn.checked; drawLive(); });
 
-    // counters
-    var rows = ['step', 'fleet time', 'messages emitted', 'messages read (parsed)', 'rejected', 'duplicates', 'bytes read', 'messages per second',
-                'roadblocks placed / applied', 'emitter'];
-    var counterDd = rows.map(function (r) {
+    // counters (inside the closed details block of panel 2)
+    var counterDd = DETAILS_COPY.liveRows.map(function (r) {
       var dt = el('dt', null, r), dd = el('dd', null, '');
       $('counters').appendChild(dt); $('counters').appendChild(dd);
       return dd;
@@ -738,15 +1181,15 @@
     var prompt = el('form', 'prompt', '');
     prompt.hidden = true;
     prompt.setAttribute('role', 'dialog');
-    prompt.setAttribute('aria-label', 'Place a roadblock');
+    prompt.setAttribute('aria-label', LV.promptDialog);
     var plabel = el('span', 'plabel', '');
     var pr = document.createElement('input');
     pr.type = 'range'; pr.min = '0.5'; pr.max = '1'; pr.step = '0.01'; pr.value = '0.95';
-    pr.setAttribute('aria-label', 'Chance that a robot is stopped when it tries to enter the cell');
+    pr.setAttribute('aria-label', LV.promptRange);
     var pval = el('output', 'pval', '0.95');
-    var ok = el('button', 'btn primary', 'Place');
+    var ok = el('button', 'btn primary', LV.place);
     ok.type = 'submit';
-    var cancel = el('button', 'btn', 'Cancel');
+    var cancel = el('button', 'btn', LV.cancel);
     cancel.type = 'button';
     [plabel, pr, pval, ok, cancel].forEach(function (n) { prompt.appendChild(n); });
     floorEl.insertAdjacentElement('afterend', prompt);
@@ -766,27 +1209,27 @@
           ok.disabled = false;
           if (res.ok) {
             placed[key] = p;
-            say('Roadblock placed at ' + key + ' (p ' + p.toFixed(2) + '). It starts at step ' + res.j.applies_at_step + '. The cell turns red when the analyser flags it.');
+            say(fill(LV.placed, { step: res.j.applies_at_step }));
             closePrompt(true);
-          } else say('Not placed: ' + (res.j && res.j.error ? res.j.error : 'the server said no') + '.');
+          } else say(fill(LV.notPlaced, { why: res.j && res.j.error ? res.j.error : LV.serverNo }));
         })
-        .catch(function () { ok.disabled = false; say('Not placed: the live server is not reachable.'); });
+        .catch(function () { ok.disabled = false; say(LV.unreachable); });
     });
 
     function say(t) { $('mapstate').textContent = t; $('live').textContent = t; }
     function isHighway(x, y) { return G && G.highway[y] && G.highway[y].charAt(x) === '1'; }
     function isGoal(x, y) { return G.goals.some(function (g) { return g[0] === x && g[1] === y; }); }
     function whyNot(x, y) {
-      if (!G || x < 0 || y < 0 || x >= G.width || y >= G.height) return 'outside the floor';
-      if (!isHighway(x, y)) return 'a shelf cell: roadblocks go on highway cells only';
-      if (isGoal(x, y)) return 'a goal cell: roadblocks go on plain highway cells only';
+      if (!G || x < 0 || y < 0 || x >= G.width || y >= G.height) return LV.outside;
+      if (!isHighway(x, y)) return LV.shelf;
+      if (isGoal(x, y)) return LV.goal;
       return null;
     }
     function openPrompt(x, y) {
       var why = whyNot(x, y);
-      if (why) { say('Cannot place at ' + x + ',' + y + ': ' + why + '.'); return; }
+      if (why) { say(fill(LV.cannot, { why: why })); return; }
       promptCell = x + ',' + y;
-      plabel.textContent = 'Roadblock at ' + promptCell + ', chance a robot is stopped: ';
+      plabel.textContent = LV.promptLabel;
       prompt.hidden = false;
       pr.focus();
       drawLive();
@@ -806,8 +1249,8 @@
     });
     floorEl.addEventListener('mousemove', function (ev) {
       if (!G) return;
-      var c = cellAt(ev), why = whyNot(c[0], c[1]);
-      floorEl.title = why ? 'Cell ' + c[0] + ',' + c[1] + ': ' + why : 'Click to place a roadblock at ' + c[0] + ',' + c[1];
+      var c = cellAt(ev), why = whyNot(c[0], c[1]), cell = c[0] + ',' + c[1];
+      floorEl.title = why ? fill(HOVER_COPY.cellHere, { cell: cell, why: why }) : fill(HOVER_COPY.cellClick, { cell: cell });
     });
     floorEl.addEventListener('keydown', function (e) {
       if (!G) return;
@@ -816,9 +1259,9 @@
       if (d) {
         e.preventDefault();
         cursor = [Math.max(0, Math.min(G.width - 1, cursor[0] + d[0])), Math.max(0, Math.min(G.height - 1, cursor[1] + d[1]))];
-        var why = whyNot(cursor[0], cursor[1]);
+        var why = whyNot(cursor[0], cursor[1]), cell = cursor[0] + ',' + cursor[1];
         var here = tipProvider(cursor[0], cursor[1]).map(function (i) { return tipLines(i).join(', '); }).join('; ');
-        $('live').textContent = 'Cell ' + cursor[0] + ',' + cursor[1] + (why ? ': ' + why : ': highway, press Enter to place a roadblock') + (here ? '. ' + here : '');
+        $('live').textContent = (why ? fill(HOVER_COPY.cellHere, { cell: cell, why: why }) : fill(HOVER_COPY.cellKey, { cell: cell })) + (here ? '. ' + here : '');
         drawLive();
       } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPrompt(cursor[0], cursor[1]); }
     });
@@ -827,6 +1270,12 @@
 
     // ---- drawing ----
     function robotKind(id) { return (parseInt(String(id).split('-')[1], 10) || 0) <= G.agvs ? 'agv' : 'picker'; }
+    function mineCells() {
+      var mine = {};
+      Object.keys(placed).forEach(function (k) { mine[k] = true; });
+      if (state) state.injections.forEach(function (i) { if (i.kind === 'floor') Object.keys(i.payload).forEach(function (k) { mine[k] = true; }); });
+      return mine;
+    }
     function drawLive() {
       if (!G) return;
       var c = ctx, W = G.width * CELLV, H = G.height * CELLV;
@@ -852,6 +1301,7 @@
       c.strokeStyle = css('--line'); c.lineWidth = 0.5;
       for (var gx = 0; gx <= G.width; gx++) { c.beginPath(); c.moveTo(gx * CELLV, 0); c.lineTo(gx * CELLV, H); c.stroke(); }
       for (var gy = 0; gy <= G.height; gy++) { c.beginPath(); c.moveTo(0, gy * CELLV); c.lineTo(W, gy * CELLV); c.stroke(); }
+      if (state) drawTopLabels(c, state.top10.slice(0, 10).map(function (r) { return r.cell; }), CELLV);
       if (reveal && state && state.truth) {
         c.strokeStyle = css('--obst'); c.lineWidth = 2; c.setLineDash([4, 3]);
         [state.truth.scheduled, state.truth.injected].forEach(function (m) {
@@ -860,9 +1310,7 @@
         c.setLineDash([]);
       }
       // placed by you: a solid accent outline with a corner mark, never filled (the fill is the analyser's)
-      var mine = {};
-      Object.keys(placed).forEach(function (k) { mine[k] = true; });
-      if (state) state.injections.forEach(function (i) { if (i.kind === 'floor') Object.keys(i.payload).forEach(function (k) { mine[k] = true; }); });
+      var mine = mineCells();
       c.strokeStyle = css('--accent'); c.lineWidth = 3;
       Object.keys(mine).forEach(function (k) {
         var xy = k.split(',');
@@ -925,44 +1373,80 @@
       marks = marks.filter(function (m) { return m.until > now; });
     }
 
+    // ---- live adapters: /state -> the same view objects the replay builds ----
+    // panel 2: ledger.messages_parsed / _rejected / duplicates / bytes_read / messages_per_s, and the lag = (ledger.steps_done - 1 -
+    // step) * 5 s, the emitter's newest step against the newest step the analyser has read
+    function liveLog(s) {
+      var L = s.ledger, lines = L.messages_parsed + L.messages_rejected + L.duplicates;
+      var lag = L.steps_done ? Math.max(0, L.steps_done - 1 - s.step) * 5 : null;
+      return { lines: lines, bytes: L.bytes_read, rate: L.messages_per_s, lag: lag, live: true, usable: L.messages_parsed,
+        rejected: L.messages_rejected, dups: L.duplicates, kept: null, cov: L.messages_emitted ? L.messages_parsed / L.messages_emitted : null,
+        hover: { arrived: fill(HOVER_COPY.arrivedLive, { lines: fmt(lines), bytes: fmt(L.bytes_read) }),
+                 usable: fill(HOVER_COPY.usableLive, { accepted: fmt(L.messages_parsed), rejected: fmt(L.messages_rejected), dups: fmt(L.duplicates) }),
+                 kept: HOVER_COPY.keptLive } };
+    }
+    // panel 3: precision and recall need the revealed hidden layout (state.truth, a demo switch); the call counts are grades.forecasts
+    function liveAnalyser(s) {
+      var cells = s.costmap ? s.costmap.cells : {};
+      var ranked = Object.keys(cells).sort(function (a, b) { return cells[b] - cells[a] || (a < b ? -1 : 1); });
+      var right = null, found = null;
+      if (s.truth) {
+        var planted = {};
+        [s.truth.scheduled, s.truth.injected].forEach(function (m) { Object.keys(m || {}).forEach(function (k) { planted[k] = true; }); });
+        var n = Object.keys(planted).length;
+        right = ranked.slice(0, 20).filter(function (k) { return planted[k]; }).length / 20;
+        found = n ? ranked.slice(0, n).filter(function (k) { return planted[k]; }).length / n : null;
+      }
+      var at = s.costmap ? s.costmap.generated_at : null;
+      if (right !== null && at !== seriesAt) { seriesAt = at; series.push(right); }
+      var g = s.grades.forecasts, total = g.ok + g.off + g.pending + g.not_gradable;
+      return { right: right, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
+        note: !s.costmap ? VISIBLE_COPY.analyser.noMap : (s.truth === null ? VISIBLE_COPY.analyser.needTruth : ''),
+        series: series.map(function (p, i) { return { x: series.length > 1 ? i / (series.length - 1) : 0, p: p }; }),
+        hover: { right: s.truth ? HOVER_COPY.rightLive : '', found: s.truth ? HOVER_COPY.foundLive : '',
+                 checks: fill(HOVER_COPY.checksLive, { ok: g.ok, off: g.off, pending: g.pending, na: g.not_gradable }) } };
+    }
+    // panel 4: state.lessons, newest first (the server sorts them)
+    function liveLessons(s) {
+      var V = HOVER_COPY.liveVerdict;
+      return s.lessons.slice(0, 5).map(function (l) {
+        return { key: [l.decided_at, l.lesson_kind, l.zone, l.text].join('|'), kind: l.lesson_kind, conf: l.confidence, mark: l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : null),
+          hover: fill(HOVER_COPY.lessonLineLive, { text: l.text, kind: l.lesson_kind, zone: l.zone, c: l.confidence.toFixed(2),
+            drawn: l.decided_at, verdict: V[l.state] || V.pending }) };
+      });
+    }
+
     function render() {
-      var s = state;
+      var s = state, L = s.ledger;
+      var planted = s.truth ? Object.keys(s.truth.scheduled || {}).length : null;
+      paintHeader(fill(VISIBLE_COPY.header.live, { messages: fmt(L.messages_parsed), placed: Object.keys(mineCells()).length,
+        planted: planted === null ? '' : fill(VISIBLE_COPY.header.livePlanted, { n: planted }) }));
+      paintLog(liveLog(s));
+      paintAnalyser(liveAnalyser(s));
+      paintLessons(liveLessons(s), LV.noLessons);
       counterDd[0].textContent = fmt(s.step);
-      counterDd[1].textContent = s.sim_time || 'not started';
-      counterDd[2].textContent = fmt(s.ledger.messages_emitted) + (s.ledger.expected_messages ? ' of ' + fmt(s.ledger.expected_messages) : '');
-      counterDd[3].textContent = fmt(s.ledger.messages_parsed);
-      counterDd[4].textContent = s.ledger.messages_rejected ? fmt(s.ledger.messages_rejected) : 'none rejected';
-      counterDd[5].textContent = fmt(s.ledger.duplicates);
-      counterDd[6].textContent = fmt(s.ledger.bytes_read) + ' B';
-      counterDd[7].textContent = fmt(s.ledger.messages_per_s);
-      counterDd[8].textContent = fmt(s.ledger.injections_posted) + ' / ' + fmt(s.ledger.injections_applied);
-      counterDd[9].textContent = s.ledger.emit_status || 'starting';
-      var exp = s.ledger.expected_messages;
-      $('covbar').style.width = (exp ? Math.min(1, s.ledger.messages_emitted / exp) * 100 : 0) + '%';
-      $('covlabel').textContent = exp ? 'Run progress ' + (100 * s.ledger.messages_emitted / exp).toFixed(0) + ' % of the messages this run will emit.' : '';
-      $('match').textContent = 'Read straight from the run\'s files as they grow; nothing here is replayed.';
+      counterDd[1].textContent = s.sim_time || LV.notStarted;
+      counterDd[2].textContent = fmt(L.messages_emitted) + (L.expected_messages ? fill(DETAILS_COPY.liveExpected, { n: fmt(L.expected_messages) }) : '');
+      counterDd[3].textContent = fmt(L.messages_parsed);
+      counterDd[4].textContent = L.messages_rejected ? fmt(L.messages_rejected) : DETAILS_COPY.noneRejected;
+      counterDd[5].textContent = fmt(L.duplicates);
+      counterDd[6].textContent = fmt(L.bytes_read) + ' B';
+      counterDd[7].textContent = fmt(L.messages_per_s);
+      counterDd[8].textContent = fmt(L.injections_posted) + ' / ' + fmt(L.injections_applied);
+      counterDd[9].textContent = L.emit_status || DETAILS_COPY.starting;
+      $('match').textContent = DETAILS_COPY.liveMatch;
       var ol = $('top');
       ol.textContent = '';
-      if (!s.top10.length) { var li0 = el('li', null, s.costmap ? 'the latest map flags no cell' : 'no map published yet'); li0.style.listStyle = 'none'; ol.appendChild(li0); }
-      s.top10.forEach(function (r) { ol.appendChild(el('li', null, r.cell + '  cost ' + r.cost.toFixed(2) + (placed[r.cell] !== undefined ? '  [placed by you]' : ''))); });
-      var g = s.grades;
-      function line(label, o) { return label + ': ' + o.ok + ' held, ' + o.off + ' did not hold, ' + o.pending + ' pending, ' + o.not_gradable + ' not gradable'; }
-      liveGrades.textContent = line('Cost-map calls', g.forecasts) + '. ' + line('Lessons', g.lessons) +
-        '. Graded on what the robots report next (the stream), not on the hidden roadblocks.';
-      $('lessonstate').textContent = s.lessons.length ? line('Graded so far', g.lessons) + '.' : 'No lessons yet. Rules need a few events in a closed time window.';
-      var ul = $('lessons');
-      ul.textContent = '';
-      s.lessons.forEach(function (l) {
-        var st = l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : 'pending');
-        var li = el('li', 'les ' + st);
-        li.appendChild(el('span', 'mark', l.state === 'ok' ? '✓ held' : l.state === 'off' ? '✗ did not hold' : l.state === 'not_gradable' ? 'not gradable' : 'pending'));
-        li.appendChild(el('span', 'ltxt', l.text));
-        li.appendChild(el('span', 'conf', 'zone ' + l.zone + ', rule ' + l.lesson_kind + ', support ' + l.confidence.toFixed(2) + ', drawn at ' + l.decided_at));
-        ul.appendChild(li);
+      if (!s.top10.length) { var li0 = el('li', null, s.costmap ? DETAILS_COPY.noFlag : DETAILS_COPY.noMapTop); li0.style.listStyle = 'none'; ol.appendChild(li0); }
+      s.top10.forEach(function (r) {
+        ol.appendChild(el('li', null, fill(DETAILS_COPY.topLive, { cell: r.cell, cost: r.cost.toFixed(2), flag: placed[r.cell] !== undefined ? DETAILS_COPY.topLiveMine : '' })));
       });
+      var g = s.grades;
+      function line(label, o) { return fill(DETAILS_COPY.liveLine, { label: label, ok: o.ok, off: o.off, pending: o.pending, na: o.not_gradable }); }
+      liveGrades.textContent = line(DETAILS_COPY.liveCalls, g.forecasts) + '. ' + line(DETAILS_COPY.liveLessons, g.lessons) + '. ' + DETAILS_COPY.liveGradedOn;
       revealBox.hidden = s.truth === null;
       if (s.truth === null) { reveal = false; revealIn.checked = false; }
-      floorEl.setAttribute('aria-label', 'Warehouse floor, step ' + s.step + ', ' + s.robots.length + ' robots, ' + Object.keys(s.costmap ? s.costmap.cells : {}).length + ' cells flagged. Press Enter on a highway cell to place a roadblock.');
+      floorEl.setAttribute('aria-label', fill(LV.ariaNow, { step: s.step, robots: s.robots.length, cells: Object.keys(s.costmap ? s.costmap.cells : {}).length }));
       drawLive();
     }
 
@@ -973,19 +1457,19 @@
         var status = state && state.ledger ? state.ledger.emit_status : null;
         if (status && status !== 'running') {
           key = 'over:' + status; cls = 'livebar bad'; stale = false;
-          text = 'Run ' + status + ' at step ' + state.step + '. Nothing is advancing; the numbers below are final.';
+          text = fill(LV.over, { status: status, step: state.step });
         } else if (sameSteps >= 6) {
           key = 'stuck:' + state.step; cls = 'livebar bad'; stale = true;
-          text = 'Connected to ' + base + ', but the run has not advanced past step ' + state.step + ' for ' + Math.round(sameSteps * POLL_MS / 1000) + ' s.';
+          text = fill(LV.stuck, { base: base, step: state.step, secs: Math.round(sameSteps * POLL_MS / 1000) });
         } else {
           key = 'ok'; cls = 'livebar'; stale = false;
-          text = 'Live from ' + base + ', updated every ' + (POLL_MS / 1000) + ' s.';
+          text = fill(LV.ok, { base: base, every: POLL_MS / 1000 });
         }
       } else {
         var age = lastOk ? Math.round((Date.now() - lastOk) / 1000) : null;
         key = 'bad:' + err + ':' + (age === null ? '' : Math.floor(age / 5)); cls = 'livebar bad'; stale = true;
-        text = 'Disconnected from ' + base + ', retrying every ' + (POLL_MS / 1000) + ' s. ' +
-          (age === null ? 'No data received yet.' : 'The numbers below are from ' + age + ' s ago and are not live.') + (err ? ' (' + err + ')' : '');
+        text = fill(LV.lost, { base: base, every: POLL_MS / 1000, age: age === null ? LV.lostNever : fill(LV.lostAge, { s: age }),
+          err: err ? ' (' + err + ')' : '' });
       }
       if (key === barKey) return; // do not rewrite the status region on every poll (screen readers re-announce it)
       barKey = key;
@@ -1016,7 +1500,7 @@
     function loadGrid() {
       httpGet(base + '/grid').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (g) { G = g; drawLive(); })
-        .catch(function () { setConnected(false, 'floor layout not available yet'); setTimeout(loadGrid, 1000); });
+        .catch(function () { setConnected(false, LV.noGrid); setTimeout(loadGrid, 1000); });
     }
     loadGrid();
     poll();

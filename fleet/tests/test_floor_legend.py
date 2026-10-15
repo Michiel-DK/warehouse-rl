@@ -1,4 +1,4 @@
-"""S8H-FLOOR-LEGEND: the display-state mapping, replay/2 export fields, the live robots[] entry, the page text, the demo
+"""S8H-FLOOR-LEGEND: the display-state mapping, replay/3 export fields, the live robots[] entry, the page text, the demo
 config. The page itself is checked on its files only (no browser, no DOM)."""
 import html as htmllib
 import json
@@ -206,9 +206,9 @@ class TestExportV2(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_schema_and_state_display(self):
-        self.assertEqual(rx.SCHEMA, "replay/2")
+        self.assertEqual(rx.SCHEMA, "replay/3")
         m = self.payload["meta"]
-        self.assertEqual(m["schema"], "replay/2")
+        self.assertEqual(m["schema"], "replay/3")
         self.assertEqual(m["state_display"], {s: live_state.display_state(s) for s in rx.STATES})
 
     def test_frames_are_x_y_raw_job_and_the_job_is_the_source_messages(self):
@@ -262,7 +262,7 @@ class TestCommittedDataV2(unittest.TestCase):
         path = DOCS / "data.js"
         self.assertLessEqual(path.stat().st_size, 2097152)
         d = rx.read_data_js(path)
-        self.assertEqual(d["meta"]["schema"], "replay/2")
+        self.assertEqual(d["meta"]["schema"], "replay/3")
         self.assertEqual(d["meta"]["state_display"], {s: live_state.display_state(s) for s in rx.STATES})
         for frames in (d["frames"], d["with_map"]["frames"]):
             self.assertEqual(len(frames), 500)
@@ -277,9 +277,9 @@ class TestCommittedDataV2(unittest.TestCase):
 LABELS = ["Robots", "Planted by us, hidden from the analyser", "Concluded by the analyser from the log alone",
           "circle = AGV, carries shelves", "square = picker, loads and unloads, drawn grey", "moving", "working", "waiting",
           "down, the robot reported an error", "bad floor cell", "breakdown moment",
-          "suspected bad floor, darker = more evidence", "stuck call, raised after 30 s of waiting with a job",
-          "the call was later graded right or wrong", "show pickers in colour", "The analyser never sees the planted items.",
-          "Everything in the third row it worked out from the robots' messages."]
+          "suspected bad floor, darker = more evidence", "the ten most suspected cells, numbered 1 to 10", "stuck call, raised after 30 s of waiting with a job",
+          "the call was later marked right or wrong", "show pickers in colour", "The analyser never sees the planted items.",
+          "Everything under \u201cConcluded by the analyser from the log alone\u201d it worked out from the robots' messages."]
 BANNED = re.compile(r"stalled|frozen|detector episode", re.I)
 
 

@@ -9,6 +9,8 @@ Message contract and field semantics: docs/SCOPE.md "S5A".
 Demo (NOT a measurement; roadblocks appended while it runs; --demo and --control-file go together):
   python fleet/emit.py --demo --control-file /tmp/ctl.jsonl --rate realtime --speed 5 --dir /tmp/fleet-demo &
   echo '{"t": null, "floor": {"5,3": 0.9}}' >> /tmp/ctl.jsonl     # or {"t": 40, "breakdown": {"agent": 2, "duration": 30}}
+Demo noise (S8I, needs --demo): --demo-noise adds malformed and duplicate lines and one headerId jump per zone (extra lines
+only, see fleet_analyser/emitter.py), for the replay page's log panel.
 Live mode (S8G, fleet/live.py; demo only): --cost-map-file PATH [--cost-alpha A] re-reads a published costmap.json before
 every step, and the file sink sync-flushes after every step so a reader sees the stream live.
 """
@@ -53,6 +55,9 @@ def build_parser():
     p.add_argument("--demo", action="store_true",
                    help="demo mode (not a measurement): inject floor patches / breakdowns from --control-file")
     p.add_argument("--control-file", default=None, help="demo control file, one JSON command per line (needs --demo)")
+    p.add_argument("--demo-noise", action="store_true",
+                   help="demo only (needs --demo, default off): add ~0.5%% malformed lines, ~1%% exact duplicates and one "
+                        "headerId jump per zone, as extra lines; nothing real is dropped")
     p.add_argument("--cost-map-file", default=None, metavar="PATH",
                    help="demo only: costmap.json re-read before every step; the router uses it with --cost-alpha")
     p.add_argument("--cost-alpha", type=float, default=None,
@@ -67,6 +72,8 @@ def main(argv=None):
         p.error("--zones and --steps must be >= 1 and --seed-base >= 0")
     if a.demo != (a.control_file is not None):
         p.error("--demo and --control-file must be given together")
+    if a.demo_noise and not a.demo:
+        p.error("--demo-noise is a demo-mode option (it needs --demo)")
     if (a.cost_map_file is not None or a.cost_alpha is not None) and not a.demo:
         p.error("--cost-map-file and --cost-alpha are demo-mode options (they need --demo)")
     if a.cost_alpha is not None and a.cost_map_file is None:
@@ -107,6 +114,8 @@ def main(argv=None):
                rate=a.rate, speed=a.speed, report_interval=a.ledger_interval)
     if a.demo:
         run.update(demo_mode=True, control_file=str(a.control_file))
+        if a.demo_noise:
+            run.update(demo_noise=True)
         if a.cost_map_file is not None:
             from warehouse_rl.disturb import DEFAULT_COST_ALPHA
 
