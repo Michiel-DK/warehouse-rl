@@ -107,13 +107,14 @@
           <p class="big" id="big-kept">—</p>
           <p class="small" id="kept-unit"></p>
         </div>
-        <div class="farrow" aria-hidden="true"><span class="glyph">&rarr;</span></div>
+        <div class="farrow fplus" aria-hidden="true"><span class="glyph">+</span></div>
         <div class="fbox" id="f-dropped" tabindex="0" data-hover>
           <h3>Dropped</h3>
           <p class="big" id="big-dropped">—</p>
           <p class="small" id="dropped-unit"></p>
         </div>
       </div>
+      <p class="cap" id="splitsentence">Usable splits into Kept and Dropped. The analyser reads every usable message as it arrives, before anything is dropped.</p>
       <p class="cap" id="rebuildsentence"></p>
       <p class="cap" id="auditline" tabindex="0" data-hover hidden></p>
       <p class="cap" id="speed-robots" hidden></p>
@@ -134,7 +135,7 @@
       </div>
       <p class="state" id="nomap"></p>
       <figure class="spark">
-        <canvas id="spark" role="img" aria-label="Right-rate after each new map"></canvas>
+        <canvas id="spark" role="img" aria-label="How many of its 20 strongest picks were real, after each new map"></canvas>
         <figcaption id="sparkcap" hidden></figcaption>
       </figure>
       <details data-details id="details-ana">

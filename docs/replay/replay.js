@@ -52,10 +52,10 @@
       none: '—',
       noMap: 'no map yet',
       needTruth: 'not scored: the planted spots are hidden in this live run',
-      spark: 'Right-rate after each new map: {list}',
+      spark: 'How many of its 20 strongest picks were real, after each new map: {list}',
       sparkNone: 'No map yet.',
       sparkBetter: 'gets better as it watches',
-      sparkFlat: 'right-rate after each new map'
+      sparkFlat: 'how many of its 20 strongest picks were real, after each new map'
     },
     lesson: {
       hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
@@ -67,10 +67,10 @@
       truthMiss: '✗ not a planted spot',
       short: 'Short shift, few events. On a full day the list is longer and more varied.',
       long: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times, but only {held} of {total} calls repeated in the next half hour; the repeat test is being reworked.',
-      tickOk: ' ✓',
-      tickOff: ' ✗',
-      held: 'held up',
-      failed: 'did not hold',
+      tickOk: ' ✓ repeated',
+      tickOff: ' ✗ did not repeat',
+      held: 'repeated in the next half hour',
+      failed: 'did not repeat in the next half hour',
       notChecked: ' not checked yet',
       none: 'Nothing to report yet.',
       noData: 'Lesson data is not included in this file.'
@@ -184,7 +184,7 @@
     noneRejected: 'none rejected',
     starting: 'starting',
     topReason: ' ({r})',
-    gaps: '{n} ({m} messages missing)',
+    gaps: '{n} ({m} message numbers not seen; whether a message is lost is checked against the sender\'s own count, see the audit line)',
     coverageUnknown: 'unknown (no message count from the run)',
     matchYes: 'The replay matches the import step\'s checkpoint: {bytes} bytes, {parsed} parsed, {accepted} accepted, {rejected} rejected, {dups} duplicates, {gaps} sequence gaps.',
     matchNo: 'The store has no import checkpoint for this file, so the replay could not be compared with it.',
