@@ -253,6 +253,35 @@ class TestFloorInjection(unittest.TestCase):
         finally:
             env.close()
 
+    def test_second_injection_adds_not_replaces(self):  # a second roadblock keeps the first one in force
+        env = make(SMALL, {}, 120, True)
+        try:
+            h = env.env
+            cells = list(h._blockable_cells)
+            first, second = set(cells[0::2]), set(cells[1::2])
+            entered_first = []
+            state = {}
+
+            def before(s, e):
+                if s == 10:
+                    h.inject_floor({c: 1.0 for c in first})
+                if s == 20:
+                    h.inject_floor({c: 1.0 for c in second})
+                    state["pre"] = {a.id: (a.x, a.y) for a in h.agents}
+
+            def after(s, e, info):
+                if s >= 20:
+                    pos = {a.id: (a.x, a.y) for a in h.agents}
+                    entered_first.extend((s, i, p) for i, p in pos.items() if p != state["pre"][i] and p in first)
+                    state["pre"] = pos
+
+            infos = drive(env, 1, 120, before, after)
+            self.assertEqual(h.injected_floor, {c: 1.0 for c in cells})
+            self.assertEqual(entered_first, [])  # p = 1.0 cells of the FIRST injection still hold after the second
+            self.assertGreater(sum(i["floor_skips"] for i in infos[20:]), 0)
+        finally:
+            env.close()
+
     def test_override_uses_injected_p_and_demo_coin(self):  # kills M6, M1 (indexing), M5
         env = make(SMALL, FULL_CFG_FLOOR_ONLY, 150, True)
         try:
