@@ -1,7 +1,7 @@
 """Lessons: one plain sentence a person would say about a zone, backed by counts, stored as a graded decision.
 
 Reads the store tables only (stuck_episodes, stalls, transitions, ingest_checkpoints, decisions) through store.select();
-it never reads truth.json (fleet/grade.py does, for the lesson_truth rows).
+nothing the emitter knows enters here (fleet/grade.py checks hot cells against the floor, in its own code).
 
 Windows. Per zone, tumbling windows of W = window_h * 3600 s aligned on epoch multiples: [k*W, (k+1)*W). A window is
 evaluated only when it is fully observed: forecast_grade.stream_end(zone) >= window_end. Episodes are counted by `start`
