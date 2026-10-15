@@ -182,7 +182,7 @@ class TestSchema(Fixture):
     def test_top_level_keys_and_types(self):
         p = self.payload
         self.assertEqual(list(p), ["meta", "grid", "robots", "frames", "obstacles", "extractor", "publishes", "grades",
-                                   "episodes", "stalls"])  # no with_map without --closed-loop
+                                   "lessons", "episodes", "stalls"])  # no with_map without --closed-loop
         m = p["meta"]
         for key, typ in (("run", str), ("zone", str), ("env_id", str), ("steps", int), ("step_seconds", int),
                          ("t0_ts", int), ("seed", int), ("disturb", dict), ("policy", str), ("recovery", dict),

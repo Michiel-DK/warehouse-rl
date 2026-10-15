@@ -370,6 +370,34 @@
     });
   }
 
+  // ---- panel 4: lessons ----
+  var LESSONS = R.lessons || [];
+  var lessonKey = null;
+  function drawLessons(step) {
+    var shown = LESSONS.filter(function (l) { return l.decided_at_step <= step; });
+    var key = shown.map(function (l) {
+      return (l.graded_at_step !== null && l.graded_at_step <= step) ? l.verdict : '-';
+    }).join('|') + '#' + shown.length;
+    if (key === lessonKey) return;
+    lessonKey = key;
+    var ul = $('lessons');
+    ul.textContent = '';
+    var state = $('lessonstate');
+    if (!LESSONS.length) { state.textContent = 'No lessons in this run: no rule reached its threshold.'; return; }
+    if (!shown.length) { state.textContent = 'No lessons yet. The first one is drawn at ' + clock(LESSONS[0].decided_at_step) + '.'; return; }
+    state.textContent = '';
+    shown.slice().reverse().forEach(function (l) {
+      var known = l.graded_at_step !== null && l.graded_at_step <= step;
+      var status = !known ? 'pending' : (l.verdict === 'ok' ? 'ok' : 'off');
+      var li = el('li', 'les ' + status);
+      var mark = el('span', 'mark', !known ? 'pending: next window not over' : (status === 'ok' ? '✓ held next window' : '✗ did not hold'));
+      li.appendChild(mark);
+      li.appendChild(el('span', 'ltxt', l.text));
+      li.appendChild(el('span', 'conf', 'confidence ' + l.confidence.toFixed(2) + ', drawn at ' + clock(l.decided_at_step)));
+      ul.appendChild(li);
+    });
+  }
+
   function mapState(step) {
     var st = $('mapstate');
     if (layer === 'with') st.textContent = 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the rings come from the detector on this run.';
@@ -401,7 +429,7 @@
   // ---- main draw ----
   function draw() {
     var step = curStep();
-    drawFloor(step); drawExtractor(step); drawPrecision(step); drawGrades(step); drawTop(step); mapState(step);
+    drawFloor(step); drawExtractor(step); drawPrecision(step); drawGrades(step); drawTop(step); drawLessons(step); mapState(step);
     $('clock').textContent = 'step ' + step + ' / ' + (STEPS - 1) + '  ' + clock(step);
     var sc = $('scrub');
     sc.value = step;
