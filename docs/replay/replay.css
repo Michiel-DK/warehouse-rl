@@ -57,9 +57,7 @@ canvas.icon { border: 0; background: transparent; border-radius: 0; }
 .counters { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
 .counters dt { color: var(--muted); }
 .counters dd { margin: 0; font: var(--fs-md) ui-monospace, Menlo, monospace; }
-.cov { height: 14px; background: var(--hw); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-top: 12px; }
-.covbar { height: 100%; width: 0; background: var(--ok); }
-.covlabel, .match { margin: 6px 0 0; font-size: var(--fs-md); }
+.match { margin: 6px 0 0; font-size: var(--fs-md); }
 .match { color: var(--muted); }
 .ana { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 20px; }
 ol.toplist { margin: 0; padding-left: 1.6em; font: var(--fs-sm) ui-monospace, Menlo, monospace; }
@@ -111,7 +109,7 @@ canvas.icon { flex: none; }
 
 /* one-pager (S8I): funnel, big sentences, sparkline, lesson lines, footer, hover tips */
 .question { margin: 0 0 8px; color: var(--muted); font-size: var(--fs-lg); }
-.funnel { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 8px; align-items: stretch; }
+.funnel { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; gap: 6px; align-items: stretch; }
 .fbox { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; background: var(--panel); }
 .fbox h3 { margin: 0 0 2px; color: var(--ink); }
 .fbox .small { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--muted); overflow-wrap: anywhere; }
@@ -136,12 +134,15 @@ details[data-details] > summary { cursor: pointer; color: var(--accent); font-we
 .les .ltxt { font-size: var(--fs-lg); }
 .les .conf { grid-column: auto; text-align: right; white-space: nowrap; }
 .les .mark { font-size: var(--fs-lg); }
+.les .truth { font-weight: 600; white-space: nowrap; margin-right: 8px; }
+.les .truth[data-truth="hit"] { color: var(--ok); }
+.les .truth[data-truth="false_alarm"] { color: var(--off); }
 .foot { margin: 0 20px 28px; color: var(--muted); font-size: var(--fs-sm); }
 .foot p { margin: 4px 0; max-width: 110ch; }
 .foot ul { margin: 4px 0; padding-left: 1.2em; overflow-wrap: anywhere; }
 #htip { white-space: pre-line; max-width: min(340px, calc(100vw - 16px)); }
 /* the funnel stacks while panel 2 is half the page or narrower, so a long Arrived number never overflows its box */
-@media (max-width: 1100px) {
+@media (max-width: 1400px) {
   .funnel { grid-template-columns: 1fr; }
   .farrow { flex-direction: row; gap: 8px; max-width: none; justify-content: flex-start; }
   .farrow .glyph { transform: rotate(90deg); }
@@ -159,3 +160,18 @@ details[data-details] > summary { cursor: pointer; color: var(--accent); font-we
 }
 .counters dd { overflow-wrap: anywhere; }
 .head > div { min-width: 0; }
+
+/* what is it worth (S8J): four bars with a range whisker, one shared scale */
+.worthbars { display: grid; gap: 10px; margin: 12px 0 4px; }
+.wbar { display: grid; grid-template-columns: minmax(12em, 16em) 1fr minmax(14em, 20em); gap: 4px 12px; align-items: center; }
+.wlab { font-size: var(--fs-md); }
+.wtrack { position: relative; height: 22px; background: var(--hw); border: 1px solid var(--line); border-radius: 4px; }
+.wfill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); opacity: .75; border-radius: 3px 0 0 3px; }
+.wbar[data-key="undisturbed"] .wfill { background: var(--ok); }
+.wbar[data-key="none"] .wfill { background: var(--open); }
+.wwhisk { position: absolute; top: 50%; height: 0; border-top: 2px solid var(--ink); }
+.wwhisk::before, .wwhisk::after { content: ""; position: absolute; top: -6px; height: 10px; border-left: 2px solid var(--ink); }
+.wwhisk::before { left: 0; }
+.wwhisk::after { right: 0; }
+.wval { font-size: var(--fs-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 800px) { .wbar { grid-template-columns: 1fr; } }

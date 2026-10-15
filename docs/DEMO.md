@@ -376,3 +376,21 @@ costs (undisturbed reference 53.66). Measured config: `stuck_aware_cta` with `ti
 The live demo refreshes the cost map from its own stream every 60 simulated seconds. That was NOT what was measured: the
 measurement used one fixed map built in a separate phase-A run (`phaseA/costmap.json`). The live demo shows the
 mechanism, not the number.
+
+## 9. The replay page: five panels and the demo log noise
+
+`docs/replay/index.html` is the one-pager for this demo (open it from `file://`, or serve the folder as in section 8). It has five
+panels: 1. The floor, 2. The log, 3. What the analyser figured out, 4. What it would tell your operators, and a **fifth panel,
+5. What is it worth?**. Panel 2 is a four-box funnel (Arrived, Usable, Kept, Dropped) with one audit line ("Every message
+accounted for: ... sent, ... read, ... missing, checked against the sender's own count") and two speed lines. Panel 5 shows four
+bars (bad floor with no map, with the analyser's map, with perfect knowledge, clean floor) and the share of the lost throughput
+recovered. Those bars come from the 30-seed sticky-floor test in `results/closed_loop_sticky` (arms `none`, `map_a32`,
+`oracle_a32`, `undisturbed`), not from the one shift in panel 1; the page says so under the bars.
+
+The shift in panel 1 is made with **`--demo-noise`** (`fleet/emit.py ... --demo --demo-noise`): a few malformed lines, exact
+duplicate lines and one jump in message numbers are mixed into the robot log, so the log panel has something to show. The page
+header says how many of the arrived messages were deliberately broken (read from the emit ledger). The jump in message numbers
+is not a missing message, and the audit line does not count it as one. `fleet/live.py` turns the same noise on by default
+(`--no-demo-noise` turns it off). In live mode the page hides the audit line, the speed lines and panel 5, because their numbers
+belong to the recorded shift. The full command chain that rebuilds `docs/replay/data.js` (lessons drawn on the same run with
+`fleet/lessons.py --window-h 0.5`) is in `docs/replay/README.md`.

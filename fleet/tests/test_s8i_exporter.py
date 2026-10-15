@@ -1,5 +1,6 @@
-"""S8I-ONE-PAGER, exporter side (criterion C1-C3): schema replay/3, run_constants with their sources, the kept formula
-checked independently on a tiny hand-written store, publishes with recall_at_k and k, and --carry-lessons. The committed
+"""S8I-ONE-PAGER, exporter side (criterion C1-C3): schema replay/4 (S8J), run_constants with their sources, the kept formula
+checked independently on a tiny hand-written store, publishes with recall_at_k and k. (The --carry-lessons tests are gone: S8J
+removed the flag, fleet/tests/test_s8j_exporter.py has the replacements.) The committed
 docs/replay/data.js is checked against the documented numbers. Unit tests: no Docker, no fleet/data, no env run."""
 import copy
 import json
@@ -16,7 +17,6 @@ for _p in (ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
 import hotspot_score  # noqa: E402
 import replay_export as rx  # noqa: E402
 from fleet.tests import test_replay_export as tre  # noqa: E402
-from fleet_analyser import decisions, hotspot, lessons as lessons_mod  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
 DOCS = ROOT / "docs" / "replay"
@@ -46,9 +46,9 @@ def fixture_files(directory, run=tre.RUN, n_floor=2, zone="0"):
 
 
 class TestRunConstants(tre.Fixture):
-    def test_schema_is_replay_3_and_no_test_asserts_replay_2(self):
-        self.assertEqual(rx.SCHEMA, "replay/3")
-        self.assertEqual(self.payload["meta"]["schema"], "replay/3")
+    def test_schema_is_replay_4_and_no_test_asserts_replay_2(self):
+        self.assertEqual(rx.SCHEMA, "replay/4")
+        self.assertEqual(self.payload["meta"]["schema"], "replay/4")
         old = "replay" + "/2"  # spelled in two parts so this very search does not match itself
         for f in (ROOT / "fleet" / "tests").glob("test_*.py"):
             text = f.read_text(encoding="utf-8")
@@ -57,8 +57,9 @@ class TestRunConstants(tre.Fixture):
 
     def test_without_the_optional_args_the_file_entries_are_null_and_the_export_succeeds(self):
         rc = self.payload["run_constants"]
-        self.assertEqual(set(rc), {"ingest_msgs_per_s", "benchmark_msgs_per_s", "kept", "hotspot", "closed_loop"})
-        for key in ("benchmark_msgs_per_s", "hotspot", "closed_loop"):
+        self.assertEqual(set(rc), {"ingest_msgs_per_s", "benchmark_msgs_per_s", "kept", "hotspot", "closed_loop", "audit", "header",
+                                   "speed", "lessons_long", "worth"})  # S8J: five more entries
+        for key in ("benchmark_msgs_per_s", "hotspot", "closed_loop", "speed", "lessons_long", "worth"):
             self.assertIsNone(rc[key], key)
 
     def test_file_entries_copy_the_files_and_name_the_path_as_given(self):
@@ -168,53 +169,13 @@ class TestPublishRecall(tre.Fixture):
         st.close()
 
 
-class TestCarryLessons(tre.Fixture):
-    LESSONS = [dict(decided_at_step=3, zone="1", text="In zone 1, x", lesson_kind="hot_cell", confidence=0.5, verdict="off",
-                    graded_at_step=9)]
-
-    def carry_file(self, tmp, **meta):
-        payload = dict(meta=dict(run="s8b-score", source={}, **meta), lessons=self.LESSONS)
-        out = Path(tmp) / "carry.js"
-        rx.write_data_js(payload, out)
-        return str(out)
-
-    def test_lessons_are_copied_verbatim_and_the_origin_is_recorded(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = self.carry_file(tmp)
-            p = rx.build_payload(self.dir, self.spec, "0", env_runner=tre.fake_env, carry_lessons=path)
-        self.assertEqual(p["lessons"], self.LESSONS)
-        self.assertEqual((p["meta"]["source"]["carry_lessons"], p["meta"]["source"]["carry_lessons_run"]), (path, "s8b-score"))
-
-    def test_the_origin_survives_exporting_from_an_exported_file(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = self.carry_file(tmp)
-            first = rx.build_payload(self.dir, self.spec, "0", env_runner=tre.fake_env, carry_lessons=path)
-            rx.write_data_js(first, path)  # the chain reads and writes the same data.js
-            again = rx.build_payload(self.dir, self.spec, "0", env_runner=tre.fake_env, carry_lessons=path)
-        self.assertEqual(again["meta"]["source"]["carry_lessons_run"], "s8b-score")
-        self.assertEqual(again["lessons"], self.LESSONS)
-
-    def test_a_store_with_lesson_decisions_rejects_the_flag(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = self.carry_file(tmp)
-            run_dir = new_run(Path(tmp))
-            st = JsonlStore(run_dir / "store")
-            decisions.record_decision(st, run=tre.RUN, kind="lesson", subject="Z0:cell 1,1", start_iso="2026-01-01T00:00:00Z",
-                                      decided_at=tre.BASE + 100, claim=dict(zone="0", subject="Z0:cell 1,1", text="T", lesson_kind="hot_cell",
-                                                                              confidence=0.5),
-                                      rationale="r", expected=None, grade_after=tre.BASE + 200, recorded_at=1.0)
-            st.close()
-            with self.assertRaisesRegex(ValueError, "carry-lessons"):
-                rx.build_payload(run_dir, f"jsonl:{run_dir / 'store'}", "0", env_runner=tre.fake_env, carry_lessons=path)
-
-
 class TestCommittedData(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.d = rx.read_data_js(DOCS / "data.js")
 
     def test_header_and_size(self):
-        self.assertEqual(self.d["meta"]["schema"], "replay/3")
+        self.assertEqual(self.d["meta"]["schema"], "replay/4")
         self.assertLessEqual((DOCS / "data.js").stat().st_size, 2097152)
         self.assertNotEqual(self.d["meta"]["run"], "s8b-score")
 
@@ -226,15 +187,15 @@ class TestCommittedData(unittest.TestCase):
             self.assertIsInstance(p["recall_at_k"], float)
 
     def test_lessons_and_noise_and_sources(self):
-        self.assertEqual(len(self.d["lessons"]), 15)
+        self.assertEqual(len(self.d["lessons"]), 1)  # S8J: this run's own lessons, no longer 15 carried over
         ex = self.d["extractor"]
         self.assertGreater(ex["totals"]["rejected"], 0)
         self.assertGreater(ex["totals"]["duplicates"], 0)
         self.assertEqual(ex["check"]["coverage"], 1.0)
         src = self.d["meta"]["source"]
         self.assertIs(src["demo_noise"], True)
-        self.assertEqual(src["carry_lessons_run"], "s8b-score")
-        self.assertTrue(src["carry_lessons"])
+        self.assertNotIn("carry_lessons", src)
+        self.assertNotIn("carry_lessons_run", src)
         rc = self.d["run_constants"]
         self.assertTrue(0 < rc["kept"]["kept_pct"] <= 100)
         self.assertEqual(rc["closed_loop"]["source"], "results/closed_loop_sticky/summary.json")

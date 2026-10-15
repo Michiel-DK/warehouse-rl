@@ -10,7 +10,8 @@
   // or the live /state document; no number is typed here.
   const VISIBLE_COPY = {
     header: {
-      replay: 'Simulated warehouse, {agvs} AGVs and {pickers} pickers, one {minutes}-minute shift, {messages} robot messages. We planted {floor} bad floor cells and {breakdowns}. The analyser was told none of it.',
+      replay: 'Simulated warehouse, {agvs} AGVs and {pickers} pickers, one {minutes}-minute shift. We planted {floor} bad floor cells and {breakdowns}. The analyser was told none of it.',
+      noise: '{msgs} messages, {noise} of them deliberately broken so you can see what the extractor does with bad lines.',
       breakdownsNone: 'no breakdowns',
       breakdownsSome: '{n} breakdowns',
       breakdownsOne: '1 breakdown',
@@ -24,7 +25,7 @@
       calls: 'Robots held up so far: {n}; still waiting: {open}.',
       drawError: 'The page hit an error while drawing: {why}',
       summary: 'Step {step} of {last}, fleet time {time}. Robots: {robots}. Log: {usable} usable, {rejected} rejected, {dups} duplicates. {map}',
-      summaryMap: 'Latest map at {time}, right {p} of the time.',
+      summaryMap: 'Latest map at {time}, {hits} of its 20 strongest picks real.',
       summaryNoMap: 'No map yet.',
       announce: 'Step {step} of {last}, fleet time {time}. Robots: {robots}.',
       scrub: 'step {step} of {last}, fleet time {time}',
@@ -38,20 +39,23 @@
       lag: '{lag} s behind the robots',
       usableUnit: 'messages parsed and valid',
       setAside: 'set aside: rejected {r} (malformed), duplicates {d}; nothing is dropped silently, every rejected line is stored with its reason',
-      keptUnit: 'of bytes, 100% of the events that matter',
+      keptUnit: 'every change of state and where it happened, {n} of them, plus every decision; {pct}% of the bytes',
       keptLater: 'measured on a finished shift',
-      nothingLost: 'nothing lost: {c} of what the robots sent is accounted for',
-      caughtUp: 'caught up: {c} of what the robots have sent so far is read',
-      unknown: 'Not known: this run has no message count of its own.'
+      droppedUnit: '{n} in-between positions and repeats',
+      droppedLater: 'counted on a finished shift',
+      rebuild: "Rebuilding the shift from what we kept gives every robot's state at every step, and its position at every change.",
+      audit: "Every message accounted for: {sent} sent, {read} read, {missing} missing, checked against the sender's own count.",
+      speedRobots: 'Robots send {rate} messages a second.',
+      speedRead: 'We can read {rate} a second, so a fleet {ratio}x larger would still keep up.'
     },
     analyser: {
       none: '—',
       noMap: 'no map yet',
       needTruth: 'not scored: the planted spots are hidden in this live run',
-      spark: 'Right-rate after each new map: {list}',
+      spark: 'How many of its 20 strongest picks were real, after each new map: {list}',
       sparkNone: 'No map yet.',
       sparkBetter: 'gets better as it watches',
-      sparkFlat: 'right-rate after each new map'
+      sparkFlat: 'how many of its 20 strongest picks were real, after each new map'
     },
     lesson: {
       hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
@@ -59,10 +63,14 @@
       recurring_pair: "Two robots keep getting in each other's way.",
       fallback: "A pattern in the robots' waiting times.",
       support: 'support {c}',
-      tickOk: ' ✓',
-      tickOff: ' ✗',
-      held: 'held up',
-      failed: 'did not hold',
+      truthHit: '✓ real spot',
+      truthMiss: '✗ not a planted spot',
+      short: 'Short shift, few events. On a full day the list is longer and more varied.',
+      long: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times, but only {held} of {total} calls repeated in the next half hour; the repeat test is being reworked.',
+      tickOk: ' ✓ repeated',
+      tickOff: ' ✗ did not repeat',
+      held: 'repeated in the next half hour',
+      failed: 'did not repeat in the next half hour',
       notChecked: ' not checked yet',
       none: 'Nothing to report yet.',
       noData: 'Lesson data is not included in this file.'
@@ -73,8 +81,13 @@
       play: 'Play',
       pause: 'Pause'
     },
-    footer: {
-      payoff: 'Routing payoff measured separately: {map} of the sticky-floor loss recovered, {oracle} with perfect knowledge ({source}).'
+    worth: {
+      none: 'Bad floor, no map',
+      map_a32: "Bad floor, the analyser's map",
+      oracle_a32: 'Bad floor, perfect knowledge',
+      undisturbed: 'Clean floor',
+      value: '{mean} lines an hour, likely range {lo} to {hi}',
+      label: 'The bars come from a {n}-seed simulator test on a harder floor, one that traps robots, not from the shift in panel 1.'
     },
     live: {
       ignored: 'The live parameter was ignored: it must be an http URL on localhost or 127.0.0.1 (the page sends injections to it). Showing the offline replay.',
@@ -127,7 +140,14 @@
     usable: 'Parsed and valid: {accepted}. Rejected {rejected}{reasons}. Duplicates {dups}. Sequence gaps {gaps}, {missing} message numbers not seen.{gapnote}',
     usableLive: 'Parsed and valid: {accepted}. Rejected {rejected}. Duplicates {dups}. Counted from the files as they grow.',
     gapNote: ' A jump in message numbers, nothing missing: the emitter skipped {ids} ids on purpose (demo noise), every message is still counted.',
-    kept: 'Kept {kept} B of {arrived} B that arrived = {pct}%. Scope: the whole run (zones in the run: {zones}), not only the shift shown. By table: {tables}. Formula: {formula} Source: {source}.',
+    kept: 'Kept {kept} B of {arrived} B that arrived = {pct}%. Four tables make up the kept share: every change of state (transitions), every decision, a 2% raw sample of the messages (state_sample) and every rejected line with its reason (rejects). By table: {tables}. Scope: the whole run (zones in the run: {zones}), not only the shift shown. Formula: {formula} Source: {source}.',
+    dropped: 'Accepted messages that are not a change of state: the robot said the same thing again or only moved between two changes. {n} of {accepted}. A 2% raw sample of them is also kept, so this is not a claim that they were deleted; the sender\'s own files stay where they were produced.',
+    droppedLive: 'Known once the shift has finished.',
+    audit: 'Sent is the emitter\'s own count of robot messages for this shift (the emitter\'s own ledger: {source}). Read is what the extractor accepted: parsed, valid, first copy of each message. Missing = sent - read.{gapnote}',
+    headerNoise: 'Lines that arrived: {msgs}. Deliberately broken: {noise}, malformed lines plus exact duplicates added by the emitter\'s demo noise ({source}).',
+    speed: 'Robot rate = messages the sender counted / (steps x 5 s) = {robot}. Read rate = end-to-end pipeline speed over a large benchmark run (batch.msgs_per_s, {source}), not the speed of this small replay.',
+    worth: 'Share of the lost throughput recovered = mean over seeds of (arm - bad floor) / mean over seeds of (clean floor - bad floor), paired on seed. Analyser map {mlo} to {mhi}%, perfect knowledge {olo} to {ohi}% (95% range, seed bootstrap). Source: {source}.',
+    worthBar: '{label}: mean {mean} lines an hour over {n} seeds, 95% range {lo} to {hi}. Router weight alpha 32 for the two map bars. Source: {source}.',
     keptNone: 'No kept figure: the store has no ingest ledger for this run.',
     right: 'Of the 20 cells flagged most strongly, how many sit on a planted bad cell. Per map: {list}.',
     rightLive: 'Of the 20 cells flagged most strongly, how many sit on a revealed roadblock. Scored only while the hidden layout is revealed.',
@@ -136,9 +156,11 @@
     checks: '{calls} calls were made by this map. {hits} sit on a planted bad cell (truth grade), {wrong} do not.{outcome}',
     checksOutcome: ' {label}: {ok} {okText}, {off} {offText}.',
     checksLive: 'Map calls graded on what the robots report next, not on the hidden roadblocks: {ok} held, {off} did not hold, {pending} pending, {na} not gradable.',
-    lessonCap: 'Lessons come from fixed rules over stall and stuck counts, no model and no learning. They were written on run {run} (same seed and floor, without log noise) and carried into this file.',
     lessonCapOwn: 'Lessons come from fixed rules over stall and stuck counts, no model and no learning, written on this run.',
-    lessonLine: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.{origin}',
+    lessonLine: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.{truth}',
+    truthOf: ' Checked against the hidden truth: {t}.',
+    truthWords: { hit: 'the spot is a planted bad cell', false_alarm: 'the spot is not a planted bad cell' },
+    longHover: 'From {source}: a longer independent test run, not this shift.',
     lessonLineLive: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.',
     keptLive: 'The kept share is measured on a finished shift: bytes stored divided by bytes that arrived.',
     liveVerdict: { ok: 'verdict: held', off: 'verdict: did not hold', pending: 'not graded yet', not_gradable: 'not gradable (the shift ends before the next window)' },
@@ -146,7 +168,6 @@
     verdictNa: 'not gradable (the shift ends before the next window)',
     verdictOk: 'verdict: held, graded at {t}',
     verdictOff: 'verdict: did not hold, graded at {t}',
-    origin: ' Written on run {run}.',
     calls: 'A robot is held up when it waits 30 s with a job (a stuck call). So far {n}, still open {open}. Of the ended ones: judged right {right}, wrong {wrong}, no verdict {none}.',
     withMapNote: '{note} Router weight alpha {alpha}.',
     cellHere: 'Cell {cell}: {why}',
@@ -163,7 +184,7 @@
     noneRejected: 'none rejected',
     starting: 'starting',
     topReason: ' ({r})',
-    gaps: '{n} ({m} messages missing)',
+    gaps: '{n} ({m} message numbers not seen; whether a message is lost is checked against the sender\'s own count, see the audit line)',
     coverageUnknown: 'unknown (no message count from the run)',
     matchYes: 'The replay matches the import step\'s checkpoint: {bytes} bytes, {parsed} parsed, {accepted} accepted, {rejected} rejected, {dups} duplicates, {gaps} sequence gaps.',
     matchNo: 'The store has no import checkpoint for this file, so the replay could not be compared with it.',
@@ -203,7 +224,7 @@
     liveLessons: 'Lessons',
     liveGradedOn: 'Graded on what the robots report next (the stream), not on the hidden roadblocks.',
     sources: { rundir: 'run files: {v}', store: 'store: {v}', closedloop: 'closed-loop layer: {v}', costmap: 'map file: {v}',
-               carry: 'lessons carried from: {v} (written on run {run})', constant: '{k}: {v}' }
+               constant: '{k}: {v}' }
   };
 
   function fill(tpl, vars) {
@@ -214,6 +235,13 @@
   function pct(x) {
     var v = x * 100;
     return (v === 0 || v >= 10 ? String(Math.round(v)) : v.toFixed(1)) + '%';
+  }
+  function pctNum(x) {
+    var v = x * 100;
+    return v === 0 || v >= 10 ? String(Math.round(v)) : v.toFixed(1);
+  }
+  function rateNum(x) {
+    return x < 10 ? x.toFixed(1) : Number(Math.round(x)).toLocaleString('en-US');
   }
   function human(n) {
     if (n < 1024) return n + ' B';
@@ -277,9 +305,16 @@
   var LESSON_KINDS = ['hot_cell', 'hot_robot', 'recurring_pair'];
 
   function paintHeader(text) { setText('subtitle', text); }
+  // the line about the deliberate log noise (replay only): text null hides it
+  function paintNoise(text, hover) {
+    var n = $('noiseline');
+    if (!n) return;
+    n.hidden = text === null;
+    if (text !== null) { setText('noiseline', text); setHover('noiseline', hover); }
+  }
 
-  // v = { lines, bytes, rate|null, lag|null, live, usable, rejected, dups, kept (percent 0-100)|null, cov (0-1)|null,
-  //       hover: { arrived, usable, kept } }
+  // v = { lines, bytes, rate|null, lag|null, live, usable, rejected, dups, keptN|null, keptPct (percent 0-100)|null, droppedN|null,
+  //       hover: { arrived, usable, kept, dropped } }
   function paintLog(v) {
     setText('big-arrived', fmt(v.lines));
     setText('arrived-unit', fill(VISIBLE_COPY.log.arrivedUnit, { size: human(v.bytes) }));
@@ -291,21 +326,22 @@
     setText('big-usable', fmt(v.usable));
     setText('usable-unit', VISIBLE_COPY.log.usableUnit);
     setText('usable-aside', fill(VISIBLE_COPY.log.setAside, { r: pct(v.lines ? v.rejected / v.lines : 0), d: pct(v.lines ? v.dups / v.lines : 0) }));
-    setText('big-kept', v.kept === null ? DASH : pct(v.kept / 100));
-    setText('kept-unit', v.kept === null ? VISIBLE_COPY.log.keptLater : VISIBLE_COPY.log.keptUnit);
-    var cov = $('covbar');
-    if (cov) cov.style.width = (v.cov === null ? 0 : Math.min(1, v.cov) * 100) + '%';
-    setText('covlabel', v.cov === null ? VISIBLE_COPY.log.unknown
-      : fill(v.live ? VISIBLE_COPY.log.caughtUp : VISIBLE_COPY.log.nothingLost, { c: (Math.floor(Math.min(1, v.cov) * 1000) / 10) + '%' }));
+    setText('big-kept', v.keptN === null ? DASH : fmt(v.keptN));
+    setText('kept-unit', v.keptN === null ? VISIBLE_COPY.log.keptLater
+      : fill(VISIBLE_COPY.log.keptUnit, { n: fmt(v.keptN), pct: v.keptPct.toFixed(1) }));
+    setText('big-dropped', v.droppedN === null ? DASH : fmt(v.droppedN));
+    setText('dropped-unit', v.droppedN === null ? VISIBLE_COPY.log.droppedLater : fill(VISIBLE_COPY.log.droppedUnit, { n: fmt(v.droppedN) }));
     setHover('f-arrived', v.hover.arrived);
     setHover('f-usable', v.hover.usable);
     setHover('f-kept', v.hover.kept);
+    setHover('f-dropped', v.hover.dropped);
   }
 
-  // v = { right|null, found|null, calls|null, hits|null, wrong|null, series: [{x (0-1), p}], hover: { right, found, checks } }
+  // v = { top|null (of the 20 strongest picks, how many are real), found|null, calls|null, hits|null, wrong|null,
+  //       series: [{x (0-1), p}], hover: { right, found, checks } }
   function paintAnalyser(v) {
     function put(id, x, fmtFn) { setText(id, x === null ? DASH : fmtFn(x)); }
-    put('big-right', v.right, pct);
+    put('big-right', v.top, fmt);
     put('big-found', v.found, pct);
     put('big-calls', v.calls, fmt);
     put('big-hits', v.hits, fmt);
@@ -358,7 +394,7 @@
   }
 
   var lessonSig = null;
-  // items = [{ key, kind, conf, mark: 'ok' | 'off' | null, hover }] newest first, already cut to five; key = a stable identity of
+  // items = [{ key, kind, conf, mark: 'ok' | 'off' | null, truth: 'hit' | 'false_alarm' | null, hover }] newest first, already cut to five; key = a stable identity of
   // the lesson, so keyboard focus stays on the same line when the list is rebuilt
   function paintLessons(items, emptyText) {
     var sig = JSON.stringify([items, emptyText]);
@@ -373,7 +409,13 @@
       var li = el('li', 'les ' + (it.mark || 'pending'));
       var text = LESSON_KINDS.indexOf(it.kind) >= 0 ? VISIBLE_COPY.lesson[it.kind] : VISIBLE_COPY.lesson.fallback;
       li.appendChild(el('span', 'ltxt', text));
-      var conf = el('span', 'conf', fill(VISIBLE_COPY.lesson.support, { c: it.conf.toFixed(2) }));
+      var conf = el('span', 'conf', '');
+      if (it.truth) {
+        var tm = el('span', 'truth', it.truth === 'hit' ? VISIBLE_COPY.lesson.truthHit : VISIBLE_COPY.lesson.truthMiss);
+        tm.setAttribute('data-truth', it.truth);
+        conf.appendChild(tm);
+      }
+      conf.appendChild(el('span', 'sup', fill(VISIBLE_COPY.lesson.support, { c: it.conf.toFixed(2) })));
       if (it.mark) {
         var mark = el('span', 'mark', it.mark === 'ok' ? VISIBLE_COPY.lesson.tickOk : VISIBLE_COPY.lesson.tickOff);
         mark.setAttribute('role', 'img');
@@ -400,8 +442,6 @@
 
   function paintFooter() {
     var rc = (R && R.run_constants) || {}, src = (R && R.meta && R.meta.source) || {};
-    var cl = rc.closed_loop;
-    setText('payoff', cl ? fill(VISIBLE_COPY.footer.payoff, { map: pct(cl.map_share), oracle: pct(cl.oracle_share), source: cl.source }) : '');
     var ul = $('sources');
     if (!ul) return;
     ul.textContent = '';
@@ -409,15 +449,13 @@
     [['rundir', src.run_dir], ['store', src.store], ['closedloop', src.closed_loop], ['costmap', src.costmap]].forEach(function (p) {
       if (p[1]) ul.appendChild(el('li', null, fill(D[p[0]], { v: p[1] })));
     });
-    if (src.carry_lessons) ul.appendChild(el('li', null, fill(D.carry, { v: src.carry_lessons, run: src.carry_lessons_run })));
     Object.keys(rc).forEach(function (k) {
       if (rc[k] && rc[k].source) ul.appendChild(el('li', null, fill(D.constant, { k: k, v: rc[k].source })));
     });
   }
   paintFooter();
   (function lessonCaption() {
-    var run = R && R.meta && R.meta.source && R.meta.source.carry_lessons_run;
-    setHover('lessoncap', run ? fill(HOVER_COPY.lessonCap, { run: run }) : HOVER_COPY.lessonCapOwn);
+    setHover('lessoncap', HOVER_COPY.lessonCapOwn);
   })();
 
   // the ten most suspected cells, numbered 1 to 10 in the top-left corner of the cell (floor canvas, replay and live)
@@ -766,7 +804,7 @@
     var H = VISIBLE_COPY.header;
     var agvs = R.robots.filter(function (r) { return r.kind === 'agv'; }).length;
     return fill(H.replay, { agvs: agvs, pickers: R.robots.length - agvs, minutes: Math.round(STEPS * SEC / 60),
-      messages: fmt(T.expected_messages || T.messages), floor: floorN,
+      floor: floorN,
       breakdowns: brk === 0 ? H.breakdownsNone : (brk === 1 ? H.breakdownsOne : fill(H.breakdownsSome, { n: brk })) });
   }
 
@@ -788,30 +826,48 @@
     Object.keys(S.rejected_by_reason).forEach(function (k) { var v = S.rejected_by_reason[k][i]; if (v) parts.push(k + ' ' + v); });
     return parts.join(', ');
   }
-  // accounted for = accepted / sent so far, the share of the run's expected messages that the clock has reached by step i
-  function sentSoFar(i) {
-    if (!T.expected_messages) return null;
-    return S.accepted[i] / (T.expected_messages * (i + 1) / STEPS);
+  // The run's totals (run_constants) are shown at the last step; before it the running series, so the two agree by construction.
+  function changesAt(i) {
+    var k = RC.kept;
+    return k && k.changes_by_step ? (i === STEPS - 1 ? k.n_changes : k.changes_by_step[i]) : null;
   }
   function replayLog(i) {
-    var rate = RC.ingest_msgs_per_s ? RC.ingest_msgs_per_s.value : null;
+    var last = i === STEPS - 1;
     var bench = RC.benchmark_msgs_per_s;
     var kept = RC.kept;
     var noise = SRC.injected_noise;
+    var lines = last && RC.header ? RC.header.msgs : S.messages[i];
+    var usable = last && RC.audit ? RC.audit.read : S.accepted[i];
     var arrived = fill(HOVER_COPY.arrived, { lines: fmt(S.messages[i]), bytes: fmt(S.bytes[i]),
-      rate: rate === null ? HOVER_COPY.rateUnknown : fill(HOVER_COPY.rateOf, { rate: fmt(Math.round(rate)) }),
+      rate: RC.ingest_msgs_per_s ? fill(HOVER_COPY.rateOf, { rate: fmt(Math.round(RC.ingest_msgs_per_s.value)) }) : HOVER_COPY.rateUnknown,
       bench: bench ? fill(HOVER_COPY.arrivedBench, { rate: fmt(Math.round(bench.value)), source: bench.source }) : '' });
-    var usable = fill(HOVER_COPY.usable, { accepted: fmt(S.accepted[i]), rejected: fmt(S.rejected[i]), reasons: reasonList(i) ? fill(HOVER_COPY.reasons, { list: reasonList(i) }) : '',
+    var usableTip = fill(HOVER_COPY.usable, { accepted: fmt(S.accepted[i]), rejected: fmt(S.rejected[i]), reasons: reasonList(i) ? fill(HOVER_COPY.reasons, { list: reasonList(i) }) : '',
       dups: fmt(S.duplicates[i]), gaps: fmt(S.sequence_gaps[i]), missing: fmt(S.missing_messages[i]),
       gapnote: noise && noise.gap_ids && S.sequence_gaps[i] ? fill(HOVER_COPY.gapNote, { ids: noise.gap_ids }) : '' });
     var keptHover = kept ? fill(HOVER_COPY.kept, { kept: fmt(kept.bytes_kept), arrived: fmt(kept.bytes_arrived), pct: kept.kept_pct.toFixed(2),
       zones: kept.n_zones, tables: Object.keys(kept.bytes_by_table).map(function (k) { return k + ' ' + fmt(kept.bytes_by_table[k]); }).join(', '),
       formula: kept.formula, source: kept.source }) : HOVER_COPY.keptNone;
-    return { lines: S.messages[i], bytes: S.bytes[i], rate: rate, lag: null, live: false, usable: S.accepted[i], rejected: S.rejected[i],
-      dups: S.duplicates[i], kept: kept ? kept.kept_pct : null, cov: sentSoFar(i), hover: { arrived: arrived, usable: usable, kept: keptHover } };
+    var ch = changesAt(i);
+    var dropped = ch === null ? null : (last ? kept.n_repeats : S.accepted[i] - ch);
+    return { lines: lines, bytes: S.bytes[i], rate: null, lag: null, live: false, usable: usable, rejected: S.rejected[i],
+      dups: S.duplicates[i], keptN: ch, keptPct: kept ? kept.kept_pct : null, droppedN: dropped,
+      hover: { arrived: arrived, usable: usableTip, kept: keptHover,
+               dropped: dropped === null ? HOVER_COPY.keptNone : fill(HOVER_COPY.dropped, { n: fmt(dropped), accepted: fmt(S.accepted[i]) }) } };
+  }
+  // one line under the funnel: the sender's own count against what was read (run totals at the last step)
+  function paintAudit(i) {
+    var A = RC.audit, n = $('auditline');
+    if (!A) { n.hidden = true; return; }
+    var last = i === STEPS - 1;
+    var sent = last ? A.sent : Math.round(A.sent * (i + 1) / STEPS), read = last ? A.read : S.accepted[i];
+    n.hidden = false;
+    setText('auditline', fill(VISIBLE_COPY.log.audit, { sent: fmt(sent), read: fmt(read), missing: fmt(last ? A.missing : Math.max(0, sent - read)) }));
+    var gaps = SRC.injected_noise && SRC.injected_noise.gap_ids ? fill(HOVER_COPY.gapNote, { ids: SRC.injected_noise.gap_ids }) : '';
+    setHover('auditline', fill(HOVER_COPY.audit, { source: A.source, gapnote: gaps }));
   }
   function drawLog(step) {
     paintLog(replayLog(step));
+    paintAudit(step);
     var rows = [
       fmt(S.bytes[step]) + ' B', fmt(S.messages[step]), fmt(S.parsed[step]),
       S.rejected[step] ? fmt(S.rejected[step]) + fill(DETAILS_COPY.topReason, { r: reasonList(step) }) : DETAILS_COPY.noneRejected,
@@ -827,6 +883,10 @@
     var w = DETAILS_COPY.wording;
     return kind === 'rank' ? w.rank : (kind === 'count' ? w.count : w.other);
   }
+  // of the 20 most strongly flagged cells of a map, how many sit on a planted bad cell
+  function topHits(pub) {
+    return pub.cells.slice(0, 20).filter(function (r) { return obstacleSet[r[0]]; }).length;
+  }
   function replayAnalyser(step) {
     var lp = latestPublish(step), idx = pubs.indexOf(lp), g = lp ? GRADES[idx] : null;
     var shown = pubs.filter(function (p) { return p.step <= step; });
@@ -841,7 +901,7 @@
       });
     }
     return {
-      right: lp ? lp.precision_at_20 : null,
+      top: lp ? topHits(lp) : null,
       found: lp && typeof lp.recall_at_k === 'number' ? lp.recall_at_k : null,
       calls: g ? g.forecasts : null, hits: g ? g.truth.hit : null, wrong: g ? g.truth.false_alarm : null,
       note: lp ? '' : (pubs.length ? fill(VISIBLE_COPY.floor.mapLater, { time: clock(pubs[0].step) }) : VISIBLE_COPY.analyser.noMap),
@@ -949,23 +1009,98 @@
   // ---- panel 4: lines for the operators (replay adapter) ----
   var HAS_LESSONS = R.lessons !== undefined;
   var LESSONS = R.lessons || [];
+  // At most one lesson per kind: the newest decided at or before the step (a tie goes to the later one in the file). The kinds are
+  // then listed newest first, a tie again going to the later one in the file.
   function replayLessons(step) {
     if (!HAS_LESSONS) return { items: [], empty: VISIBLE_COPY.lesson.noData };
-    var shown = LESSONS.filter(function (l) { return l.decided_at_step <= step; }).slice().reverse().slice(0, 5);
-    var items = shown.map(function (l) {
-      var key = l.decided_at_step + ':' + LESSONS.indexOf(l);
+    var newest = {};
+    LESSONS.forEach(function (l, idx) {
+      if (l.decided_at_step > step) return;
+      var cur = newest[l.lesson_kind];
+      if (cur === undefined || l.decided_at_step >= LESSONS[cur].decided_at_step) newest[l.lesson_kind] = idx;
+    });
+    var order = Object.keys(newest).map(function (k) { return newest[k]; }).sort(function (a, b) {
+      return LESSONS[b].decided_at_step - LESSONS[a].decided_at_step || b - a;
+    });
+    var items = order.map(function (idx) {
+      var l = LESSONS[idx];
+      var key = l.decided_at_step + ':' + idx;
       var known = l.graded_at_step !== null && l.graded_at_step <= step;
       var verdict = known ? fill(l.verdict === 'ok' ? HOVER_COPY.verdictOk : HOVER_COPY.verdictOff, { t: clock(l.graded_at_step) })
         : (l.graded_at_step === null ? HOVER_COPY.verdictNa : HOVER_COPY.verdictOpen);
-      return { key: key, kind: l.lesson_kind, conf: l.confidence, mark: known ? (l.verdict === 'ok' ? 'ok' : 'off') : null,
+      var truth = l.truth || null;
+      return { key: key, kind: l.lesson_kind, conf: l.confidence, mark: known ? (l.verdict === 'ok' ? 'ok' : 'off') : null, truth: truth,
         hover: fill(HOVER_COPY.lessonLine, { text: l.text, kind: l.lesson_kind, zone: l.zone, c: l.confidence.toFixed(2), drawn: clock(l.decided_at_step),
-          verdict: verdict, origin: SRC.carry_lessons_run ? fill(HOVER_COPY.origin, { run: SRC.carry_lessons_run }) : '' }) };
+          verdict: verdict, truth: truth ? fill(HOVER_COPY.truthOf, { t: HOVER_COPY.truthWords[truth] || truth }) : '' }) };
     });
     return { items: items, empty: VISIBLE_COPY.lesson.none };
   }
   function drawLessons(step) {
     var v = replayLessons(step);
     paintLessons(v.items, v.empty);
+  }
+
+  // ---- the header noise line, the speed lines, the rebuild sentence, the lesson footnotes and panel 5 (replay only, painted once) ----
+  function paintReplayExtras() {
+    var H = RC.header, sp = RC.speed, LL = RC.lessons_long;
+    paintNoise(H ? fill(VISIBLE_COPY.header.noise, { msgs: fmt(H.msgs), noise: fmt(H.noise) }) : null,
+      H ? fill(HOVER_COPY.headerNoise, { msgs: fmt(H.msgs), noise: fmt(H.noise), source: H.source }) : '');
+    setText('rebuildsentence', VISIBLE_COPY.log.rebuild);
+    $('speed-robots').hidden = !sp;
+    $('speed-read').hidden = !sp;
+    if (sp) {
+      setText('speed-robots', fill(VISIBLE_COPY.log.speedRobots, { rate: rateNum(sp.robot_rate) }));
+      setText('speed-read', fill(VISIBLE_COPY.log.speedRead, { rate: rateNum(sp.ingest_rate), ratio: fmt(sp.ratio) }));
+      setHover('speed-read', fill(HOVER_COPY.speed, { robot: sp.robot_rate_source, source: sp.source }));
+    }
+    setText('lessonshort', VISIBLE_COPY.lesson.short);
+    $('lessonlong').hidden = !LL;
+    if (LL) {
+      setText('lessonlong', fill(VISIBLE_COPY.lesson.long, { hit: fmt(LL.truth_hit), n: fmt(LL.truth_n), held: fmt(LL.held), total: fmt(LL.graded) }));
+      setHover('lessonlong', fill(HOVER_COPY.longHover, { source: LL.source }));
+    }
+    paintWorth(RC.worth);
+  }
+  // panel 5: four bars on one scale with a whisker for the likely range, and the two shares
+  function paintWorth(W) {
+    $('panel-worth').hidden = !W;
+    if (!W) return;
+    setText('big-mapshare', pctNum(W.map_share));
+    setText('big-oracleshare', pctNum(W.oracle_share));
+    setHover('s-worth', fill(HOVER_COPY.worth, { mlo: pctNum(W.map_share_ci95[0]), mhi: pctNum(W.map_share_ci95[1]),
+      olo: pctNum(W.oracle_share_ci95[0]), ohi: pctNum(W.oracle_share_ci95[1]), source: W.source }));
+    var top = 0;
+    W.bars.forEach(function (b) { top = Math.max(top, b.mean, b.ci95_high); });
+    top = top * 1.05;
+    function at(v) { return (100 * Math.max(0, v) / top) + '%'; }
+    var host = $('worthbars');
+    host.textContent = '';
+    W.bars.forEach(function (b) {
+      var row = el('div', 'wbar');
+      row.id = 'wbar-' + b.key;
+      row.tabIndex = 0;
+      row.setAttribute('data-key', b.key);
+      row.setAttribute('data-hover', '');
+      var lab = el('span', 'wlab', VISIBLE_COPY.worth[b.key]);
+      lab.id = 'wlab-' + b.key;
+      var track = el('div', 'wtrack');
+      track.setAttribute('aria-hidden', 'true');
+      var fillBar = el('div', 'wfill');
+      fillBar.style.width = at(b.mean);
+      var whisk = el('div', 'wwhisk');
+      whisk.style.left = at(b.ci95_low);
+      whisk.style.width = (100 * (b.ci95_high - b.ci95_low) / top) + '%';
+      track.appendChild(fillBar);
+      track.appendChild(whisk);
+      var val = el('span', 'wval', fill(VISIBLE_COPY.worth.value, { mean: b.mean.toFixed(1), lo: b.ci95_low.toFixed(1), hi: b.ci95_high.toFixed(1) }));
+      val.id = 'wval-' + b.key;
+      row.appendChild(lab); row.appendChild(track); row.appendChild(val);
+      host.appendChild(row);
+      wireOne(row);
+      setHover(row.id, fill(HOVER_COPY.worthBar, { label: VISIBLE_COPY.worth[b.key], mean: b.mean.toFixed(1), n: W.n_seeds,
+        lo: b.ci95_low.toFixed(1), hi: b.ci95_high.toFixed(1), source: b.source }));
+    });
+    setText('worthlabel', fill(VISIBLE_COPY.worth.label, { n: W.n_seeds }));
   }
 
   function callCounts(step) {
@@ -1007,7 +1142,7 @@
     var pub = latestPublish(step);
     return fill(VISIBLE_COPY.floor.summary, { step: step, last: STEPS - 1, time: clock(step), robots: counts(step), usable: fmt(S.accepted[step]),
       rejected: fmt(S.rejected[step]), dups: fmt(S.duplicates[step]),
-      map: pub ? fill(VISIBLE_COPY.floor.summaryMap, { time: clock(pub.step), p: pct(pub.precision_at_20) }) : VISIBLE_COPY.floor.summaryNoMap });
+      map: pub ? fill(VISIBLE_COPY.floor.summaryMap, { time: clock(pub.step), hits: topHits(pub) }) : VISIBLE_COPY.floor.summaryNoMap });
   }
   function curStep() { return Math.min(STEPS - 1, Math.max(0, Math.floor(pos))); }
   // The live region is written only when playback is not running: on pause, on a step, after a scrub settles.
@@ -1116,6 +1251,7 @@
 
   ready = true;
   paintHeader(replayHeaderText());
+  paintReplayExtras();
   applyTheme();
   requestAnimationFrame(tick);
   // ---- live mode functions (hoisted; only called when ?live= is valid) ----
@@ -1133,7 +1269,7 @@
     var LV = VISIBLE_COPY.live;
     paintHeader(fill(VISIBLE_COPY.header.live, { messages: 0, placed: 0, planted: '' }));
     setHover('lessoncap', HOVER_COPY.lessonCapOwn); // live lessons are written on this run, not carried
-    ['.controls', '.hint', '#howto', '#mapnote', '#callsline'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
+    ['.controls', '.hint', '#howto', '#mapnote', '#callsline', '#panel-worth', '#rebuildsentence', '#lessonshort'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
     $('routerBox').hidden = true;
     $('grades').parentNode.hidden = true; // the per-map graded bars need the recorded run; live shows the counts instead
     $('detail-notes').hidden = true;
@@ -1380,27 +1516,28 @@
       var L = s.ledger, lines = L.messages_parsed + L.messages_rejected + L.duplicates;
       var lag = L.steps_done ? Math.max(0, L.steps_done - 1 - s.step) * 5 : null;
       return { lines: lines, bytes: L.bytes_read, rate: L.messages_per_s, lag: lag, live: true, usable: L.messages_parsed,
-        rejected: L.messages_rejected, dups: L.duplicates, kept: null, cov: L.messages_emitted ? L.messages_parsed / L.messages_emitted : null,
+        rejected: L.messages_rejected, dups: L.duplicates, keptN: null, keptPct: null, droppedN: null,
         hover: { arrived: fill(HOVER_COPY.arrivedLive, { lines: fmt(lines), bytes: fmt(L.bytes_read) }),
                  usable: fill(HOVER_COPY.usableLive, { accepted: fmt(L.messages_parsed), rejected: fmt(L.messages_rejected), dups: fmt(L.duplicates) }),
-                 kept: HOVER_COPY.keptLive } };
+                 kept: HOVER_COPY.keptLive, dropped: HOVER_COPY.droppedLive } };
     }
     // panel 3: precision and recall need the revealed hidden layout (state.truth, a demo switch); the call counts are grades.forecasts
     function liveAnalyser(s) {
       var cells = s.costmap ? s.costmap.cells : {};
       var ranked = Object.keys(cells).sort(function (a, b) { return cells[b] - cells[a] || (a < b ? -1 : 1); });
-      var right = null, found = null;
+      var right = null, found = null, topN = null;
       if (s.truth) {
         var planted = {};
         [s.truth.scheduled, s.truth.injected].forEach(function (m) { Object.keys(m || {}).forEach(function (k) { planted[k] = true; }); });
         var n = Object.keys(planted).length;
-        right = ranked.slice(0, 20).filter(function (k) { return planted[k]; }).length / 20;
+        topN = ranked.slice(0, 20).filter(function (k) { return planted[k]; }).length;
+        right = topN / 20;
         found = n ? ranked.slice(0, n).filter(function (k) { return planted[k]; }).length / n : null;
       }
       var at = s.costmap ? s.costmap.generated_at : null;
       if (right !== null && at !== seriesAt) { seriesAt = at; series.push(right); }
       var g = s.grades.forecasts, total = g.ok + g.off + g.pending + g.not_gradable;
-      return { right: right, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
+      return { top: topN, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
         note: !s.costmap ? VISIBLE_COPY.analyser.noMap : (s.truth === null ? VISIBLE_COPY.analyser.needTruth : ''),
         series: series.map(function (p, i) { return { x: series.length > 1 ? i / (series.length - 1) : 0, p: p }; }),
         hover: { right: s.truth ? HOVER_COPY.rightLive : '', found: s.truth ? HOVER_COPY.foundLive : '',
@@ -1410,7 +1547,7 @@
     function liveLessons(s) {
       var V = HOVER_COPY.liveVerdict;
       return s.lessons.slice(0, 5).map(function (l) {
-        return { key: [l.decided_at, l.lesson_kind, l.zone, l.text].join('|'), kind: l.lesson_kind, conf: l.confidence, mark: l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : null),
+        return { key: [l.decided_at, l.lesson_kind, l.zone, l.text].join('|'), kind: l.lesson_kind, conf: l.confidence, truth: null, mark: l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : null),
           hover: fill(HOVER_COPY.lessonLineLive, { text: l.text, kind: l.lesson_kind, zone: l.zone, c: l.confidence.toFixed(2),
             drawn: l.decided_at, verdict: V[l.state] || V.pending }) };
       });

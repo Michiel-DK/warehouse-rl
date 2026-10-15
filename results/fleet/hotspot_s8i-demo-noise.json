@@ -64,6 +64,9 @@
   "truth": {
    "hit": 74,
    "false_alarm": 26
+  },
+  "lesson_truth": {
+   "hit": 1
   }
  },
  "rank_grading": {
