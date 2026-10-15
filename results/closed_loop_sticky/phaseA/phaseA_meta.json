@@ -1,0 +1,6 @@
+{
+ "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+ "seeds": 30,
+ "steps": 500,
+ "disturb": "{\"floor\": {\"cells\": 80, \"p\": [0.9, 0.99]}}"
+}
