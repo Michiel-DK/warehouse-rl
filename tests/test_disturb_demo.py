@@ -349,6 +349,51 @@ class TestBreakdownInjection(unittest.TestCase):
             env.close()
 
 
+class TestInjectedFloorPrecedence(unittest.TestCase):
+    def test_frozen_and_delayed_beat_injected_floor(self):
+        # frozen > delayed > floor holds for injected cells too: a suppressed agent whose FORWARD targets an injected
+        # cell is NOT a floor skip (kills "injected floor checked before the frozen/delayed suppression").
+        env = make(SMALL, {"delay": {"p_skip": 0.3}}, 80, True)
+        try:
+            h = env.env
+            injected = set(h._blockable_cells)
+            reqs = {}
+            orig = h.resolve_move_conflict
+
+            def wrapped(agent_list):
+                reqs[h._t] = {a.id: (a.req_action == Action.FORWARD, a.req_location(h.grid_size), (a.x, a.y))
+                              for a in agent_list}
+                return orig(agent_list)
+
+            h.resolve_move_conflict = wrapped
+
+            def before(s, e):
+                if s == 15:
+                    h.inject_floor({c: 1.0 for c in injected})
+                    h.inject_breakdown(1, 20)
+                    h.inject_breakdown(2, 20)
+
+            drive(env, 1, 80, before)
+            seen = {"frozen": 0, "delayed": 0}
+            for t in range(15, 80):
+                fz, dl, fl = h.applied_frozen[t], h.applied_delayed[t], h.applied_floor[t]
+                for aid, (forward, target, cur) in reqs[t].items():
+                    if not (forward and target != cur and target in injected):
+                        continue
+                    if fz[aid - 1]:
+                        seen["frozen"] += 1
+                        self.assertFalse(fl[aid - 1], (t, aid))
+                    elif dl[aid - 1]:
+                        seen["delayed"] += 1
+                        self.assertFalse(fl[aid - 1], (t, aid))
+                    else:
+                        self.assertTrue(fl[aid - 1], (t, aid))  # p = 1.0: an unsuppressed entry always skips
+            self.assertGreater(seen["frozen"], 0)  # not vacuous: the case actually occurs
+            self.assertGreater(seen["delayed"], 0)
+        finally:
+            env.close()
+
+
 class TestInertAndIsolated(unittest.TestCase):
     def _run(self, env_id, cfg, seed, steps, demo, before=None):
         env = make(env_id, cfg, steps, demo, normalise_recovery(TIMEOUT))

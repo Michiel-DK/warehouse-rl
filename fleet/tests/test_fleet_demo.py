@@ -261,6 +261,56 @@ class TestRealtimeSmoke(unittest.TestCase):
             self.assertEqual(list(m), list(em.TOP_KEYS))
 
 
+class TestPollBeforeAct(unittest.TestCase):
+    def test_injection_is_visible_to_the_policy_at_its_step(self):
+        # (B): the control file is polled BEFORE pol.act, so the policy of step t already sees a breakdown injected for
+        # step t (StuckAwareCta reads frozen_now() at act time). Kills "poll moved after pol.act".
+        import evaluate as ev
+        from unittest import mock
+
+        seen = {}
+        real = ev.make_policy
+
+        def recording_make_policy(name, seed):
+            pol = real(name, seed)
+            act, reset = pol.act, pol.reset
+            box = {}
+
+            def rec_reset(env):
+                box["env"] = env
+                return reset(env)
+
+            def rec_act(obs, mask, info):
+                seen[len(seen)] = bool(box["env"].env.frozen_now()[0])
+                return act(obs, mask, info)
+
+            pol.reset, pol.act = rec_reset, rec_act
+            return pol
+
+        class Sink:
+            def write(self, *a, **k):
+                pass
+
+            def stats(self):
+                return dict(messages=0, bytes_uncompressed=0, bytes_compressed=0, files=[], delivered=None,
+                            delivery_failed=None)
+
+            def close(self):
+                pass
+
+        _, disturb = resolve_disturb("none")
+        with tempfile.TemporaryDirectory() as d:
+            ctl = Path(d) / "ctl.jsonl"
+            ctl.write_text(j(t=5, breakdown={"agent": 1, "duration": 3}) + "\n")
+            cfg = dict(zone=0, seed=0, steps=12, env_id=SMALL, policy="stuck_aware_cta", disturb=disturb,
+                       recovery={"name": "timeout", "call_human_cost": 60}, t0=em.DEFAULT_T0, demo_mode=True,
+                       control_file=str(ctl))
+            with mock.patch.object(ev, "make_policy", recording_make_policy):
+                res = em.run_zone(cfg, Sink())
+        self.assertEqual([i["step"] for i in res["injections"]], [5])
+        self.assertEqual([s for s in sorted(seen) if seen[s]], [5, 6, 7])
+
+
 def cli(*args):
     return subprocess.run([sys.executable, EMIT, *map(str, args)], capture_output=True, text=True, timeout=300)
 
