@@ -1,7 +1,9 @@
 """Export ONE zone of a real fleet run as a static `window.REPLAY = {...};` file for the offline replay page (docs/replay/).
 
 Usage: python fleet/replay_export.py --run-dir DIR --store jsonl:DIR/store --zone 0 --out docs/replay/data.js
-       [--closed-loop results/closed_loop]
+       [--closed-loop results/closed_loop] [--benchmark results/fleet/benchmark.json]
+       [--hotspot results/fleet/hotspot_<tag>.json] [--closed-loop-summary results/closed_loop_sticky/summary.json]
+       [--carry-lessons docs/replay/data.js]
 DIR holds the zone files zone<Z>-<nnn>.jsonl.gz, truth.json, emit_ledger.json and costmap.json (the run name is
 costmap.json["run"], as fleet/hotspot_score.py reads it). The store is only READ (every table through
 store.select(table, {"run": run}); the raw .jsonl store files are never read and nothing is upserted). The export reuses
@@ -10,9 +12,14 @@ atomically (tmp + os.replace) and the writer raises, without writing, when it is
 
 Payload (every key is always present unless marked optional):
   meta        run, zone (str), env_id, steps, step_seconds (5), t0_ts (epoch s of step 0), seed, disturb, policy, recovery,
-              schema "replay/2", state_display {raw state: display state} = live_state.display_state over STATES (moving,
-              working, waiting, down; the page draws this and falls back to waiting for a raw value missing from it), source {run_dir, store, closed_loop} = the paths exactly as given on the command line
-              (never resolved to absolute paths). Step s covers event time t0_ts + s * step_seconds.
+              schema "replay/3", state_display {raw state: display state} = live_state.display_state over STATES (moving,
+              working, waiting, down; the page draws this and falls back to waiting for a raw value missing from it), source {run_dir, store, closed_loop, costmap, demo_noise, injected_noise, carry_lessons, carry_lessons_run} = the
+              paths exactly as given on the command line (never resolved to absolute paths); costmap = "<run_dir>/costmap.json"
+              as given; demo_noise = the emit ledger's config.demo_noise (bool) and injected_noise its total.injected_noise
+              (null without); carry_lessons = the --carry-lessons path (null without) and carry_lessons_run = the run the
+              carried lessons were written on (the carry file's meta.source.carry_lessons_run when it has one, else its
+              meta.run, so a second export from an exported file keeps the origin). Step s covers event time
+              t0_ts + s * step_seconds.
   grid        {width, height, highway, goals, shelves}: shape is width (columns, x) by height (rows, y), the same (x, y)
               system as agvPosition. highway = height strings of width chars, "1" = highway cell, "0" = not;
               goals = [[x, y]]; shelves = [[x, y]] shelf positions right after the reset. Built from the vendored env of
@@ -45,13 +52,16 @@ Payload (every key is always present unless marked optional):
               series at the last step plus expected_messages and bytes_compressed (the emit ledger's total for the zone
               file(s); compressed bytes are not split per line, so there is no series for it). check: the ingest
               checkpoint counters of the zone's file(s) (messages_parsed, messages_rejected, duplicates, sequence_gaps,
-              missing_messages, messages_accepted, bytes_read_uncompressed). The ingester's counters are cumulative over
+              missing_messages, messages_accepted, bytes_read_uncompressed) plus coverage = messages_accepted /
+              expected_messages (null without an expected count). The ingester's counters are cumulative over
               the run, so check is the difference to the previous checkpoint row by cp_seq, which is exact when the files
               are ingested one after another (a file is consumed before the next starts). The export raises when the
               replayed totals disagree with check; check is null when the store has no checkpoint for the file.
   publishes   every costmap publish of the zone in the store, ascending by t: {t, step, cells [[cell, cost (4 decimals),
-              stalls]] sorted by (-cost, cell), precision_at_20, hits_at_20, n_flagged}; precision comes from
-              hotspot_score.precision_recall(zone map, floor cells, ks=(20,))[20] on the unrounded costs.
+              stalls]] sorted by (-cost, cell), precision_at_20, hits_at_20, n_flagged, recall_at_k, k}; precision comes
+              from hotspot_score.precision_recall(zone map, floor cells, ks=(20, k)) on the unrounded costs, k = the number
+              of floor obstacles of the zone and recall_at_k = the recall at k (hits in the top k / floor cells; null
+              without floor cells).
   grades      {per_publish, timeline}. per_publish[i] belongs to publishes[i]: counts over the forecast_grades rows whose id
               joins to a decisions row of kind hotspot_forecast, subject prefix "Z<zone>:" and decided_at == t. Keys:
               t, forecasts, outcome {ok, off} (grade_source "outcome"), outcome_count {ok, off} (grade_source "outcome_count"),
@@ -64,11 +74,34 @@ Payload (every key is always present unless marked optional):
               The page must only call a rank grade "still in top 20 after the horizon" when outcome_kind is "rank".
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
+  run_constants  {ingest_msgs_per_s, benchmark_msgs_per_s, kept, hotspot, closed_loop}: the numbers the page shows that
+              are not per-step, each an object with a `source` (the path exactly as given, or a "store:..." name for
+              store-derived ones) or null when its source is absent. The page types none of them.
+                ingest_msgs_per_s  {value, source "store:ingest_ledger", formula}: over the run's ingest_ledger rows with a
+                                   rate, sum(messages_parsed) / sum(messages_parsed / msgs_per_s) (one row: its msgs_per_s).
+                benchmark_msgs_per_s  {value = batch.msgs_per_s of --benchmark, source}.
+                kept               {kept_pct, bytes_kept, bytes_arrived, bytes_by_table, scope "run", n_zones, source,
+                                   formula}. KEPT FORMULA: kept_pct = 100 * sum over T in (transitions, decisions,
+                                   state_sample, rejects) of B(T) / sum(ingest_ledger.bytes_read_uncompressed), each table
+                                   read as store.select(T, {"run": run}) and B(T) = sum over its rows of
+                                   len(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()) with every key
+                                   starting "__" (the bookkeeping the store adds, e.g. __key) removed and every other key,
+                                   run included, kept. Run level (all zones), not only the exported zone. Null without
+                                   ingest_ledger rows.
+                hotspot            {precision_at_20, recall_at_k, k (= n_floor), zero_stall_share, n_floor, source} from
+                                   --hotspot zones[zone]; the export raises when the file's run != meta.run or its n_floor
+                                   != the number of obstacles.
+                closed_loop        {arm (= headline_arm), map_share, map_share_ci95, oracle_share, oracle_share_ci95,
+                                   source} from --closed-loop-summary: arms[arm] and arms["oracle"]
+                                   .share_of_floor_loss_recovered.
   lessons     EVERY lesson decision of the run (S8E, kind "lesson", all zones, not only the exported one) sorted by
               (decided_at, int(zone), claim subject, lesson_kind): [{decided_at_step, zone, text, lesson_kind,
               confidence, verdict, graded_at_step}], zone = the claim's zone string. verdict "ok" / "off"
               and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
               the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key.
+              --carry-lessons PATH: when the store has NO lesson decision for the run, `lessons` is copied verbatim from the
+              `lessons` array of PATH (read before the output is written, so PATH may be the output file); when the store
+              has lesson decisions the flag is an error.
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
               [{start_step, end_step (null = open), robot, cell [x, y], cause, resolution, left_censored, episode_id,
               verdict}]. verdict is the verdict of the graded stuck_cause decision whose claim names the episode_id
@@ -107,7 +140,7 @@ from fleet_analyser import detector, emitter, hotspot, ledger, store as store_mo
 from fleet_analyser import live_state  # noqa: E402
 from fleet_analyser.parse import epoch_of, parse_line  # noqa: E402
 
-SCHEMA = "replay/2"
+SCHEMA = "replay/3"
 STATES = ("moving", "loading", "stalled", "stuck", "frozen", "idle")
 MAX_BYTES = 2 * 1024 * 1024
 PREFIX = "window.REPLAY = "
@@ -287,11 +320,14 @@ def build_publishes(st, run, zone, floor_cells, t0_ts, step_seconds=STEP_SECONDS
     for t in sorted(by_t):
         rows = by_t[t]
         zmap = {r["cell"]: r["cost"] for r in rows}
-        pr = hotspot_score.precision_recall(zmap, floor_cells, ks=(20,))[20]
+        k = len(floor_cells)
+        both = hotspot_score.precision_recall(zmap, floor_cells, ks=(20, k) if k > 0 else (20,))
+        pr = both[20]
         cells = [[r["cell"], round(r["cost"], 4), r["stalls"]] for r in sorted(rows, key=lambda r: (-r["cost"], r["cell"]))
                  if r["cost"] > 0]
         out.append(dict(t=t, step=(t - t0_ts) // step_seconds, cells=cells, precision_at_20=pr["precision"],
-                        hits_at_20=pr["hits"], n_flagged=len(hotspot_score.ranked_cells(zmap))))
+                        hits_at_20=pr["hits"], n_flagged=len(hotspot_score.ranked_cells(zmap)),
+                        recall_at_k=both[k]["recall"] if k > 0 else None, k=k))
     return out
 
 
@@ -513,9 +549,102 @@ def derive_layer(messages, robots, t0_ts, steps, grid, run, stuck_after=detector
     return build_frames(messages, robots, t0_ts, steps, episode_rows, stalls, grid), episode_rows, stalls
 
 
+# ------------------------------------------------------------------------------------------------ run constants
+KEPT_TABLES = ("transitions", "decisions", "state_sample", "rejects")
+KEPT_FORMULA = ("kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) / "
+                "sum(ingest_ledger.bytes_read_uncompressed); B(T) = sum over the rows of store.select(T, {run}) of "
+                "len(json.dumps(row, sort_keys=True, separators=(',', ':')).encode()) with keys starting '__' removed")
+INGEST_RATE_FORMULA = "sum(messages_parsed) / sum(messages_parsed / msgs_per_s) over the run's ingest_ledger rows with a rate"
+
+
+def row_bytes(row):
+    """Bytes of one store row as the kept formula counts them (see the module docstring)."""
+    clean = {k: v for k, v in row.items() if not str(k).startswith("__")}
+    return len(json.dumps(clean, sort_keys=True, separators=(",", ":")).encode())
+
+
+def ingest_rate(ledger_rows):
+    rows = [r for r in ledger_rows if (r.get("msgs_per_s") or 0) > 0 and (r.get("messages_parsed") or 0) > 0]
+    if not rows:
+        return None
+    seconds = sum(r["messages_parsed"] / r["msgs_per_s"] for r in rows)
+    return sum(r["messages_parsed"] for r in rows) / seconds
+
+
+def kept_constant(st, run, ledger_rows, n_zones):
+    """run_constants.kept (see the module docstring); None without ingest_ledger rows or without arrived bytes."""
+    arrived = sum(r.get("bytes_read_uncompressed") or 0 for r in ledger_rows)
+    if not ledger_rows or arrived <= 0:
+        return None
+    by_table = {t: sum(row_bytes(r) for r in st.select(t, {"run": run})) for t in KEPT_TABLES}
+    kept = sum(by_table.values())
+    return dict(kept_pct=100 * kept / arrived, bytes_kept=kept, bytes_arrived=arrived, bytes_by_table=by_table,
+                scope="run", n_zones=n_zones, source="store:transitions+decisions+state_sample+rejects / store:ingest_ledger",
+                formula=KEPT_FORMULA)
+
+
+def _load_json(path, what):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"cannot read the {what} file {path}: {e}") from e
+
+
+def benchmark_constant(path):
+    if path is None:
+        return None
+    try:
+        value = _load_json(path, "benchmark")["batch"]["msgs_per_s"]
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"{path} has no batch.msgs_per_s") from e
+    return dict(value=value, source=path)
+
+
+def hotspot_constant(path, run, zone, n_obstacles):
+    if path is None:
+        return None
+    doc = _load_json(path, "hotspot")
+    if doc.get("run") != run:
+        raise ValueError(f"{path} scores run {doc.get('run')!r}, the export is run {run!r}")
+    z = (doc.get("zones") or {}).get(zone)
+    if z is None:
+        raise ValueError(f"{path} has no zone {zone}")
+    if z.get("n_floor") != n_obstacles:
+        raise ValueError(f"{path} has n_floor {z.get('n_floor')} for zone {zone}, the export has {n_obstacles} obstacles")
+    try:
+        return dict(precision_at_20=z["k"]["20"]["precision"], recall_at_k=z["k"][str(n_obstacles)]["recall"], k=n_obstacles,
+                    zero_stall_share=z["zero_stall_share"], n_floor=z["n_floor"], source=path)
+    except KeyError as e:
+        raise ValueError(f"{path} lacks {e} for zone {zone}") from e
+
+
+def closed_loop_constant(path):
+    if path is None:
+        return None
+    doc = _load_json(path, "closed-loop summary")
+    arm = doc.get("headline_arm")
+    try:
+        mine = doc["arms"][arm]["share_of_floor_loss_recovered"]
+        oracle = doc["arms"]["oracle"]["share_of_floor_loss_recovered"]
+        return dict(arm=arm, map_share=mine["share"], map_share_ci95=mine["ci95"], oracle_share=oracle["share"],
+                    oracle_share_ci95=oracle["ci95"], source=path)
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"{path} lacks arms[headline_arm / oracle].share_of_floor_loss_recovered ({e})") from e
+
+
+def carried_lessons(path):
+    """(lessons, origin run) of an existing data.js: the origin is its meta.source.carry_lessons_run, else its meta.run."""
+    data = read_data_js(path)
+    if "lessons" not in data:
+        raise ValueError(f"{path} has no lessons to carry")
+    meta = data.get("meta") or {}
+    return data["lessons"], (meta.get("source") or {}).get("carry_lessons_run") or meta.get("run")
+
+
 # ------------------------------------------------------------------------------------------------ assembly
 def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, log=print,
-                  run_dir_arg=None, closed_loop_arg=None):
+                  run_dir_arg=None, closed_loop_arg=None, benchmark=None, hotspot_file=None, closed_loop_summary=None,
+                  carry_lessons=None):
     zone = str(zone)
     run_dir = Path(run_dir)
     truth = json.loads((run_dir / "truth.json").read_text())
@@ -536,6 +665,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
     if not files:
         raise ValueError(f"no zone{zone}-*.jsonl.gz files under {run_dir}")
     messages = hotspot.read_messages(str(run_dir / f"zone{zone}-*.jsonl.gz"))
+    carry = carried_lessons(carry_lessons) if carry_lessons is not None else None  # read before anything is written
     st = store_mod.open_store(store_spec, run)
     try:
         episode_rows = st.select("stuck_episodes", {"run": run, "zone": zone})
@@ -546,8 +676,23 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         grades = build_grades(st, run, zone, publishes, t0_ts)
         lessons = build_lessons(st, run, t0_ts)
         verdicts = stuck_verdicts(st, run)
+        ledger_rows = st.select("ingest_ledger", {"run": run})
+        kept = kept_constant(st, run, ledger_rows, len(truth["zones"]))
     finally:
         st.close()
+
+    if carry is not None:
+        if lessons:
+            raise ValueError("--carry-lessons is only for a store without lesson decisions, but this store has "
+                             f"{len(lessons)} for run {run}")
+        lessons = carry[0]
+    rate = ingest_rate(ledger_rows)
+    run_constants = dict(
+        ingest_msgs_per_s=None if rate is None else dict(value=rate, source="store:ingest_ledger", formula=INGEST_RATE_FORMULA),
+        benchmark_msgs_per_s=benchmark_constant(benchmark),
+        kept=kept,
+        hotspot=hotspot_constant(hotspot_file, run, zone, len(floor)),
+        closed_loop=closed_loop_constant(closed_loop_summary))
 
     wm = with_map_job(closed_loop, zone, dict(seed_base=truth["seed_base"], steps=steps, env_id=truth["env_id"],
                                               policy=cfg.get("policy", emitter.DEFAULT_POLICY),
@@ -562,6 +707,9 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
 
     series, totals = replay_extractor(files, t0_ts, steps, expected, zrow.get("bytes_compressed"))
     verify_check(totals, check)
+    if check is not None:
+        cov = ledger.coverage(check["messages_accepted"], expected)
+        check = dict(check, coverage=None if cov is None else round(cov, 6))
     frames = build_frames(messages, robots, t0_ts, steps, episode_rows, stalls, grid)
 
     payload = dict(
@@ -570,11 +718,16 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
                   schema=SCHEMA, state_display={raw: live_state.display_state(raw) for raw in STATES},
                   source=dict(run_dir=run_dir_arg if run_dir_arg is not None else str(run_dir),
                               store=store_spec if store_spec is not None else None,
-                              closed_loop=closed_loop_arg if closed_loop_arg is not None else closed_loop)),
+                              closed_loop=closed_loop_arg if closed_loop_arg is not None else closed_loop,
+                              costmap=posixpath.join((run_dir_arg if run_dir_arg is not None else str(run_dir)).replace(os.sep, "/"),
+                                                     "costmap.json"),
+                              demo_noise=bool(cfg.get("demo_noise")),
+                              injected_noise=(emit.get("total") or {}).get("injected_noise"),
+                              carry_lessons=carry_lessons, carry_lessons_run=None if carry is None else carry[1])),
         grid=grid, robots=robots, frames=frames,
         obstacles=[dict(kind="floor", cell=c, p=floor[c], hidden_from_analyser=True) for c in sorted(floor)],
         extractor=dict(series=series, totals=totals, check=check),
-        publishes=publishes, grades=grades, lessons=lessons,
+        publishes=publishes, grades=grades, lessons=lessons, run_constants=run_constants,
         episodes=build_episodes(episode_rows, zone, t0_ts, verdicts=verdicts),
         stalls=[[s["robot"], s["cell"], (s["start"] - t0_ts) // STEP_SECONDS, (s["end"] - t0_ts) // STEP_SECONDS,
                  bool(hotspot.counted(s))] for s in stalls if s["zone"] == zone])
@@ -625,10 +778,17 @@ def main(argv=None):
     p.add_argument("--zone", default="0")
     p.add_argument("--out", required=True)
     p.add_argument("--closed-loop", default=None, metavar="DIR", help="results/closed_loop: adds the with_map layer")
+    p.add_argument("--benchmark", default=None, metavar="PATH", help="results/fleet/benchmark.json: run_constants.benchmark_msgs_per_s")
+    p.add_argument("--hotspot", default=None, metavar="PATH", help="results/fleet/hotspot_<tag>.json of this run: run_constants.hotspot")
+    p.add_argument("--closed-loop-summary", default=None, metavar="PATH",
+                   help="results/closed_loop_sticky/summary.json: run_constants.closed_loop")
+    p.add_argument("--carry-lessons", default=None, metavar="PATH",
+                   help="an existing data.js whose lessons are copied when the store has none (error if it has some)")
     a = p.parse_args(argv)
     try:
         payload = build_payload(a.run_dir, a.store, a.zone, a.closed_loop, run_dir_arg=a.run_dir,
-                                closed_loop_arg=a.closed_loop)
+                                closed_loop_arg=a.closed_loop, benchmark=a.benchmark, hotspot_file=a.hotspot,
+                                closed_loop_summary=a.closed_loop_summary, carry_lessons=a.carry_lessons)
         n = write_data_js(payload, a.out)
     except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
