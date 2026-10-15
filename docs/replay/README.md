@@ -24,7 +24,7 @@ zone of the medium map, 500 steps, seed 0, 80 planted floor cells, with demo noi
 
 ```sh
 R=fleet/data/s8i-demo-noise && rm -rf $R && mkdir -p $R
-.venv/bin/python fleet/emit.py --zones 1 --steps 500 --seed-base 0 --env tarware-medium-8agvs-4pickers-globalobs-v1 --disturb '{"floor": {"cells": 80, "p": [0.3, 0.7]}}' --demo --control-file $R/control.jsonl --demo-noise --dir $R --workers 1
+.venv/bin/python fleet/emit.py --zones 1 --steps 500 --seed-base 0 --env tarware-medium-8agvs-4pickers-globalobs-v1 --disturb '{"floor": {"cells": 80, "p": [0.3, 0.7]}}' --demo --demo-noise --control-file $R/control.jsonl --dir $R --workers 1
 .venv/bin/python fleet/ingest.py --glob "$R/*.jsonl.gz" --store jsonl:$R/store --once
 .venv/bin/python fleet/costmap.py --glob "$R/*.jsonl.gz" --store jsonl:$R/store --publish-every 1250 --horizon-s 1245 --out $R/costmap.json
 .venv/bin/python fleet/grade.py --run s8i-demo-noise --store jsonl:$R/store --once --truth $R/truth.json
