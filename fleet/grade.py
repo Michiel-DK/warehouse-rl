@@ -13,6 +13,10 @@ rank grade, or verdict "unranked" when there is no rank claim to grade). --truth
 forecast against that run's truth.json: forecast_grades rows with grade_source "truth", verdict "hit" iff the cell is
 one of the zone's floor_cells else "false_alarm"; the decision and decision_grades are never touched, and a forecast
 in a zone truth.json does not list raises. This file is the only place the grading path reads truth.json.
+Lesson decisions (fleet/lessons.py) are graded in every cycle too (fleet_analyser/lessons.py grade_lessons): an open
+lesson whose zone stream reached window_end + W gets a forecast_grades row "lesson" (ok / off against the next window of
+the same length) and then its stamp. --truth also writes a "lesson_truth" row (hit / false_alarm) for every hot_cell
+lesson; the lesson decision is never stamped by truth. counts["lesson"] = dict(graded, open[, truth]).
 """
 import argparse
 import json
@@ -26,7 +30,7 @@ FLEET = Path(__file__).resolve().parent
 if str(FLEET) not in sys.path:
     sys.path.insert(0, str(FLEET))
 
-from fleet_analyser import forecast_grade, grade, store as store_mod  # noqa: E402
+from fleet_analyser import forecast_grade, grade, lessons, store as store_mod  # noqa: E402
 from fleet_analyser.forecast_grade import split_subject, write_once  # noqa: E402
 
 
@@ -47,17 +51,39 @@ def grade_truth(store, run, truth):
     return dict(graded=n)
 
 
+def grade_lesson_truth(store, run, truth):
+    """lesson_truth rows for every hot_cell lesson: verdict "hit" iff the cell is one of the lesson zone's floor_cells,
+    else "false_alarm". The decision is never stamped by truth. A lesson in a zone truth.json does not list raises
+    ValueError before any row is written. Returns dict(graded) = new rows."""
+    hot = [(d, lessons.claim_of(d)) for d in lessons.lessons(store, run)]
+    hot = [(d, c) for d, c in hot if c["lesson_kind"] == "hot_cell"]
+    missing = sorted({c["zone"] for _, c in hot} - set(truth.get("zones", {})))
+    if missing:
+        raise ValueError(f"truth.json has no zone {', '.join(missing)} (hot_cell lessons exist for it)")
+    n = 0
+    for d, c in hot:
+        cell = split_subject(c["subject"])[1].removeprefix("cell ")
+        verdict = "hit" if cell in truth["zones"][c["zone"]].get("floor_cells", {}) else "false_alarm"
+        n += write_once(store, dict(id=d["id"], run=run, grade_source="lesson_truth", outcome=None, expected=None,
+                                    error=None, verdict=verdict, horizon_s=None, graded_at=None, window_end=None))
+    return dict(graded=n)
+
+
 def cycle(spec, run, now=None, min_horizon_s=forecast_grade.DEFAULT_MIN_HORIZON_S,
           tolerance=forecast_grade.DEFAULT_TOLERANCE, exclude_occupied=True, truth_path=None):
     """Open the store, grade, close it. now=None means the run's event-time end (batch mode). The returned counts carry
-    the forecast results under "forecast" (outcome, and truth when truth_path is given)."""
+    the forecast results under "forecast" (outcome, and truth when truth_path is given) and the lesson results under
+    "lesson" (graded, open, and truth when truth_path is given)."""
     st = store_mod.open_store(spec, run)
     try:
         counts = grade.grade_run(st, run, grade.batch_now(st, run) if now is None else now)
         fc = dict(outcome=forecast_grade.grade_outcomes(st, run, min_horizon_s, tolerance, exclude_occupied))
+        counts["lesson"] = lessons.grade_lessons(st, run)
         if truth_path is not None:
             with open(truth_path) as f:  # the only read of the emitter's ground truth on the grading path
-                fc["truth"] = grade_truth(st, run, json.load(f))
+                truth = json.load(f)
+            fc["truth"] = grade_truth(st, run, truth)
+            counts["lesson"]["truth"] = grade_lesson_truth(st, run, truth)
         counts["forecast"] = fc
         return counts
     finally:
@@ -71,6 +97,8 @@ def show(run, counts):
             f"{counts['skipped_kind']}, verdicts {verdicts}")
     if "forecast" in counts:
         line += f"; forecasts {counts['forecast']}"
+    if "lesson" in counts:
+        line += f"; lessons {counts['lesson']}"
     return line
 
 

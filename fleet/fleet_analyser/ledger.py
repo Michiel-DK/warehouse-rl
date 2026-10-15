@@ -202,6 +202,7 @@ def excluded_counts(episodes):
 
 GRADE_WINDOW_S = 86400
 VERDICT_ORDER = ("confirmed", "refuted", "inconclusive")
+KIND_VERDICT_ORDER = {"lesson": ("ok", "off")}  # a kind with its own verdict words; accuracy = ok / (ok + off)
 
 
 def grade_lines(store, run):
@@ -217,8 +218,9 @@ def grade_lines(store, run):
         for d in decs:
             if d["kind"] == kind and d["status"] == "graded" and d["decided_at"] >= anchor - GRADE_WINDOW_S:
                 counts[d["verdict"]] = counts.get(d["verdict"], 0) + 1
-        verdicts = list(VERDICT_ORDER) + sorted(v for v in counts if v not in VERDICT_ORDER and v is not None)
-        a, b = counts.get("confirmed", 0), counts.get("refuted", 0)
+        order = KIND_VERDICT_ORDER.get(kind, VERDICT_ORDER)
+        verdicts = list(order) + sorted(v for v in counts if v not in order and v is not None)
+        a, b = counts.get(order[0], 0), counts.get(order[1], 0)
         out.append(f"grades last day [{kind}]: " + ", ".join(f"{v} {counts.get(v, 0)}" for v in verdicts)
                    + f", accuracy {a / (a + b) if a + b else 'null'}")
     return out

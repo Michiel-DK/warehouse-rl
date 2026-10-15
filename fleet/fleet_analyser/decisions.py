@@ -8,9 +8,9 @@ import hashlib
 import json
 import time
 
-KINDS = ("stuck_cause", "avoidable_reset", "hotspot_forecast")
+KINDS = ("stuck_cause", "avoidable_reset", "hotspot_forecast", "lesson")
 GRADE_FIELDS = ("status", "outcome", "error", "verdict", "graded_at")
-CLAIM_VERSIONS = {"stuck_cause": 1, "avoidable_reset": 1, "hotspot_forecast": 2}
+CLAIM_VERSIONS = {"stuck_cause": 1, "avoidable_reset": 1, "hotspot_forecast": 2, "lesson": 1}
 GRADE_AFTER_S = 3600
 
 
