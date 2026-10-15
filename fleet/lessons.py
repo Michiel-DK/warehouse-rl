@@ -6,6 +6,8 @@ Usage: python fleet/lessons.py --run NAME [--store jsonl:DIR | clickhouse://HOST
 that every S wall seconds until SIGINT/SIGTERM, opening the store afresh each cycle. A lesson already decided is a no-op
 (dedup key lesson:<lesson_kind>|<subject>:<window_end ISO>). Grading is fleet/grade.py's (every cycle). Rules,
 thresholds and the confidence formula: fleet_analyser/lessons.py.
+Pipeline order: ingest -> costmap -> lessons -> grade. hot_cell reads the stalls table, which costmap.py writes; a run
+that has transitions but no stalls rows has not been through costmap yet, and this CLI exits non-zero saying so.
 """
 import argparse
 import signal
@@ -20,9 +22,19 @@ if str(FLEET) not in sys.path:
 from fleet_analyser import lessons, store as store_mod  # noqa: E402
 
 
+ORDER = "ingest -> costmap -> lessons -> grade"
+
+
+def check_order(st, run):
+    """Raise ValueError when the run has transitions (ingest ran) but no stalls rows (costmap did not)."""
+    if st.select("transitions", {"run": run}) and not st.select("stalls", {"run": run}):
+        raise ValueError(f"run {run} has transitions but no stalls rows: costmap has not run. Order: {ORDER}")
+
+
 def cycle(spec, run, window_h):
     st = store_mod.open_store(spec, run)
     try:
+        check_order(st, run)
         return lessons.extract(st, run, window_h)
     finally:
         st.close()
@@ -41,7 +53,8 @@ def live(spec, run, window_h, every, wait, stop, out=print):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0], epilog=f"Pipeline order: {ORDER}",
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--run", required=True)
     p.add_argument("--store", default=None,
                    help="jsonl:<dir> (default fleet/data/<run>/store) or clickhouse://host[:port]/db")

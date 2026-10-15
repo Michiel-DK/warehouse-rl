@@ -383,7 +383,7 @@
     var ul = $('lessons');
     ul.textContent = '';
     var state = $('lessonstate');
-    if (!LESSONS.length) { state.textContent = 'No lessons in this run: no rule reached its threshold.'; return; }
+    if (!LESSONS.length) { state.textContent = 'No lessons in this run, in any zone: no rule reached its threshold.'; return; }
     if (!shown.length) { state.textContent = 'No lessons yet. The first one is drawn at ' + clock(LESSONS[0].decided_at_step) + '.'; return; }
     state.textContent = '';
     shown.slice().reverse().forEach(function (l) {
@@ -393,7 +393,8 @@
       var mark = el('span', 'mark', !known ? 'pending: next window not over' : (status === 'ok' ? '✓ held next window' : '✗ did not hold'));
       li.appendChild(mark);
       li.appendChild(el('span', 'ltxt', l.text));
-      li.appendChild(el('span', 'conf', 'confidence ' + l.confidence.toFixed(2) + ', drawn at ' + clock(l.decided_at_step)));
+      li.appendChild(el('span', 'conf', 'zone ' + l.zone + (String(l.zone) === String(R.meta.zone) ? ' (the zone shown above)' : '') +
+        ', confidence ' + l.confidence.toFixed(2) + ', drawn at ' + clock(l.decided_at_step)));
       ul.appendChild(li);
     });
   }

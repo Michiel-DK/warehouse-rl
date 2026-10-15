@@ -1,5 +1,9 @@
 """Lessons: one plain sentence a person would say about a zone, backed by counts, stored as a graded decision.
 
+Order of the pipeline: ingest -> costmap -> lessons -> grade. hot_cell reads the stalls table, which costmap.py writes
+(not ingest), so lessons run on a store without costmap output would silently find no hot cells; fleet/lessons.py refuses
+to run when the run has transitions but no stalls rows.
+
 Reads the store tables only (stuck_episodes, stalls, transitions, ingest_checkpoints, decisions) through store.select();
 nothing the emitter knows enters here (fleet/grade.py checks hot cells against the floor, in its own code).
 
@@ -12,16 +16,18 @@ cause_mix is the exception, its baseline is the fleet-wide share of the same cau
 Kinds (RULES holds each support minimum n_min and threshold; every rule is `support and threshold`, >= comparisons):
   hot_cell         k = stalls at a cell, n = zone stalls, C = distinct stall cells; ratio = k / (n / C)
                    fires iff k >= 5 and ratio >= 3.0
-  hot_robot        k = episodes of a robot, n = zone episodes, R = distinct robots in the zone's transitions;
-                   ratio = k / (n / R); fires iff k >= 5 and ratio >= 2.0
+  hot_robot        k = episodes of a robot, n = zone episodes, R = distinct robots with a transition OR an episode in
+                   the zone window; ratio = k / (n / R); fires iff k >= 5 and ratio >= 2.0
   hot_hour         k = episodes starting in a UTC clock hour, n = zone episodes, H = whole clock hours inside the window;
                    ratio = k / (n / H); fires iff k >= 10 and ratio >= 1.5. Never fires when W < 2 h (H <= 1 makes
-                   the ratio <= 1). Next-window grading looks for the same hour of day inside the next window, which
-                   is a different clock hour unless W is a multiple of 24 h, so an hour lesson grades "off" by
-                   construction.
+                   the ratio <= 1). Next-window grading looks at the SAME clock hours one day later,
+                   [window_start + 86400, window_end + 86400) (horizon_s 86400), see Grading.
   cause_mix        k = episodes of the dominant KNOWN cause, n = episodes with cause != "unknown"; value = k / n; the
                    dominant cause is never "unknown" (not a lesson a person acts on); ties break on the cause name;
                    fires iff n >= 10 and value >= 0.6. The cause is carried in claim["metric"] as "cause_share:<cause>".
+                   It is recorded only when EVERY zone with any row in the run's store has stream_end >= window_end
+                   (its baseline is fleet-wide; a zone with no stream_end counts as not observed). Otherwise it waits
+                   and a later run records it. The other five kinds gate on their own zone only.
   avoidable_share  per cell and per robot: k = avoidable episodes, n = the subject's episodes; value = k / n;
                    fires iff n >= 5 and value >= 0.5
   recurring_pair   k = episodes with that (blocker, robot), n = zone episodes that have a blocker; fires iff k >= 3
@@ -33,14 +39,21 @@ over s* = the share the rule needs (hot_cell threshold / C, hot_robot threshold 
 cause_mix 0.6, avoidable_share 0.5, recurring_pair 3 / n):  confidence = round(min(1, L(k, n) / s*), 3).
 1.0 means the threshold still holds at the 95 % lower bound. At fixed k / n it is non-decreasing in n.
 
+Baselines. hot_cell and hot_robot divide by the number of subjects that HAVE an event (C stalled cells, R robots seen),
+so the text says "the average stalled cell in the zone" / "the average robot in the zone" and prints that count. The claim
+stores baseline = n / C (n / R, n / H) unrounded, so round(n / baseline) is exactly the count; the claim has no extra key.
+
 Decision. kind "lesson", subject "<lesson_kind>|<subject>", dedup_key "lesson:<lesson_kind>|<subject>:<window_end ISO>",
 so a re-run is a no-op. The claim has exactly the keys in CLAIM_KEYS; claim["text"] is rendered from the claim alone
 (render()), nothing else feeds it.
 
-Grading (grade_lessons): an open lesson with window [s, e), W = e - s, is graded iff stream_end(zone) >= e + W. The same
-lesson_kind and subject is recomputed over [e, e + W) with the same rule WITHOUT the support minimum (a subject with no
-events has value 0); verdict "ok" iff the threshold still holds, else "off". The forecast_grades row (grade_source
-"lesson") is written first, then the decision is stamped. Not eligible: nothing is written, the lesson stays open.
+Grading (grade_lessons): an open lesson with window [s, e), W = e - s, is graded over the next window [e, e + W) and
+only when stream_end(zone) >= e + W. hot_hour is the exception: its next window is the same clock hours one day later,
+[s + 86400, e + 86400), eligible iff stream_end(zone) >= e + 86400, row horizon_s 86400, and its decision's grade_after
+is e + 86400 as well. The same lesson_kind and subject is recomputed over that window with the same rule WITHOUT the
+support minimum (a subject with no events has value 0); verdict "ok" iff the threshold still holds, else "off". The
+forecast_grades row (grade_source "lesson") is written first, then the decision is stamped. Not eligible: nothing is
+written, the lesson stays open.
 """
 import datetime
 import json
@@ -52,6 +65,7 @@ from .parse import iso
 KIND = "lesson"
 Z = 1.96
 DEFAULT_WINDOW_H = 2.0
+DAY = 86400
 
 RULES = {
     "hot_cell": dict(n_min=5, threshold=3.0),
@@ -88,7 +102,9 @@ def cell_of(c):
 
 
 class Data:
-    """The run's rows, read once through store.select and indexed by zone (zone is always a string)."""
+    """The run's rows, read once through store.select and indexed by zone (zone is always a string). Rows are bucketed by
+    (table, zone, window index) once per window span; every window lookup is a bucket read, never a rescan."""
+    TIME = {"eps": "start", "stalls": "start", "trans": "ts"}
 
     def __init__(self, store, run):
         self.eps, self.stalls, self.trans = {}, {}, {}
@@ -96,25 +112,41 @@ class Data:
             for r in store.select(name, {"run": run}):
                 into.setdefault(str(r["zone"]), []).append(r)
         self.zones = set(self.eps) | set(self.stalls) | set(self.trans)
+        self._buckets = {}
 
     def first_ts(self, zone):
         ts = [e["start"] for e in self.eps.get(zone, ())] + [s["start"] for s in self.stalls.get(zone, ())] + \
              [t["ts"] for t in self.trans.get(zone, ())]
         return min(ts) if ts else None
 
+    def _bucket(self, table, span):
+        key = (table, span)
+        if key not in self._buckets:
+            field, out = self.TIME[table], {}
+            for zone, rows in getattr(self, table).items():
+                for r in rows:
+                    out.setdefault((zone, int(r[field] // span)), []).append(r)
+            self._buckets[key] = out
+        return self._buckets[key]
+
+    def _rows(self, table, zone, ws, we):
+        """Rows of the table with ws <= time < we (a window of any alignment: at most two buckets of its own span)."""
+        span, field = we - ws, self.TIME[table]
+        b = self._bucket(table, span)
+        idx = {int(ws // span), int((we - 1) // span)}
+        return [r for i in sorted(idx) for r in b.get((zone, i), ()) if ws <= r[field] < we]
+
     def window(self, zone, ws, we):
-        return dict(
-            zone=zone, ws=ws, we=we,
-            eps=sorted((e for e in self.eps.get(zone, ()) if ws <= e["start"] < we), key=lambda e: e["episode_id"]),
-            stalls=[s for s in self.stalls.get(zone, ()) if ws <= s["start"] < we],
-            robots={t["robot"] for t in self.trans.get(zone, ()) if ws <= t["ts"] < we})
+        eps = sorted(self._rows("eps", zone, ws, we), key=lambda e: e["episode_id"])
+        return dict(zone=zone, ws=ws, we=we, eps=eps, stalls=self._rows("stalls", zone, ws, we),
+                    robots={t["robot"] for t in self._rows("trans", zone, ws, we)} | {e["robot"] for e in eps})
 
     def fleet_known(self, ws, we):
         """{cause: episodes} over ALL zones' episodes in [ws, we) whose cause is known."""
         out = {}
-        for rows in self.eps.values():
-            for e in rows:
-                if ws <= e["start"] < we and e["cause"] != UNKNOWN:
+        for zone in self.zones:
+            for e in self._rows("eps", zone, ws, we):
+                if e["cause"] != UNKNOWN:
                     out[e["cause"]] = out.get(e["cause"], 0) + 1
         return out
 
@@ -232,20 +264,25 @@ def _pct(x):
     return f"{x * 100:.0f}%"
 
 
+def _count(c):
+    """The denominator behind the baseline (C cells, R robots, H hours): baseline is stored unrounded as n / count."""
+    return round(c["n"] / c["baseline"])
+
+
 def render(c):
     """The one-sentence text of a claim, from the claim fields alone."""
     kind, zone = c["lesson_kind"], c["zone"]
     what = c["subject"].partition(":")[2]
     span = f"{_hhmm(c['window_start'])}-{_hhmm(c['window_end'])}"
     if kind == "hot_cell":
-        return (f"In zone {zone}, {what} had {c['k']} stalls, {c['ratio']:.1f}x the zone average "
-                f"(n={c['n']} stalls, {span}).")
+        return (f"In zone {zone}, {what} had {c['k']} stalls, {c['ratio']:.1f}x the average stalled cell in the zone "
+                f"(n={c['n']} stalls over {_count(c)} cells, {span}).")
     if kind == "hot_robot":
-        return (f"In zone {zone}, robot {what} had {c['k']} stuck episodes, {c['ratio']:.1f}x the zone average "
-                f"(n={c['n']} episodes, {span}).")
+        return (f"In zone {zone}, robot {what} had {c['k']} stuck episodes, {c['ratio']:.1f}x the average robot in the "
+                f"zone (n={c['n']} episodes over {_count(c)} robots, {span}).")
     if kind == "hot_hour":
-        return (f"In zone {zone}, {what} UTC had {c['k']} stuck episodes, {c['ratio']:.1f}x the zone average "
-                f"(n={c['n']} episodes, {span}).")
+        return (f"In zone {zone}, {what} UTC had {c['k']} stuck episodes, {c['ratio']:.1f}x the average clock hour in "
+                f"the zone (n={c['n']} episodes over {_count(c)} hours, {span}).")
     if kind == "cause_mix":
         cause = c["metric"].partition(":")[2]
         return (f"In zone {zone}, {_pct(c['value'])} of stuck episodes with a known cause were {cause} "
@@ -265,7 +302,7 @@ def _r4(x):
 def make_claim(st, ws, we):
     rule = RULES[st["kind"]]
     c = dict(lesson_kind=st["kind"], subject=st["subject"], zone=st["subject"][1:].partition(":")[0],
-             metric=st["metric"], value=_r4(st["value"]), baseline=_r4(st["baseline"]), ratio=_r4(st["ratio"]),
+             metric=st["metric"], value=_r4(st["value"]), baseline=st["baseline"], ratio=_r4(st["ratio"]),
              n=st["n"], k=st["k"], confidence=confidence(st["k"], st["n"], st["s_star"]),
              threshold=rule["threshold"], n_min=rule["n_min"], window_start=ws, window_end=we)
     c["text"] = render(c)
@@ -285,9 +322,10 @@ def extract(store, run, window_h=DEFAULT_WINDOW_H, recorded_at=None):
     by_kind = {lesson_kind: lessons created}, windows = windows evaluated). Idempotent (dedup_key)."""
     span = window_span(window_h)
     data = Data(store, run)
+    ends = {z: forecast_grade.stream_end(store, run, z) for z in data.zones}
     out = dict(created=0, existing=0, by_kind={k: 0 for k in KINDS}, windows=0)
     for zone in sorted(data.zones):
-        end = forecast_grade.stream_end(store, run, zone)
+        end = ends[zone]
         first = data.first_ts(zone)
         if end is None or first is None:
             continue
@@ -297,7 +335,10 @@ def extract(store, run, window_h=DEFAULT_WINDOW_H, recorded_at=None):
             w = data.window(zone, ws, we)
             fleet = data.fleet_known(ws, we)
             out["windows"] += 1
+            everywhere = all(e is not None and e >= we for e in ends.values())  # cause_mix: fleet baseline needs all zones
             for kind in KINDS:
+                if kind == "cause_mix" and not everywhere:
+                    continue
                 sts = STATS[kind](w, fleet)
                 if kind == "cause_mix":
                     sts = dominant(sts)
@@ -307,7 +348,7 @@ def extract(store, run, window_h=DEFAULT_WINDOW_H, recorded_at=None):
                     claim = make_claim(st, ws, we)
                     _, created = decisions.record_decision(
                         store, run=run, kind=KIND, subject=f"{kind}|{st['subject']}", start_iso=iso(we), decided_at=we,
-                        claim=claim, rationale=claim["text"], expected=None, grade_after=we + span,
+                        claim=claim, rationale=claim["text"], expected=None, grade_after=we + horizon(kind, span),
                         recorded_at=recorded_at)
                     out["created" if created else "existing"] += 1
                     if created:
@@ -326,13 +367,19 @@ def lessons(store, run):
     return store.select("decisions", {"run": run, "kind": KIND})
 
 
+def horizon(kind, span):
+    """Seconds from a lesson's window to the end of its grading window: W, except hot_hour (same clock hours a day later)."""
+    return DAY if kind == "hot_hour" else span
+
+
 def next_value(data, claim):
-    """(stat, passes) of the claim's lesson_kind and subject over [window_end, window_end + W), without the support
-    minimum. A subject with no events in that window has value 0."""
-    kind, e = claim["lesson_kind"], claim["window_end"]
-    span = e - claim["window_start"]
-    w = data.window(claim["zone"], e, e + span)
-    sts = STATS[kind](w, data.fleet_known(e, e + span) if kind == "cause_mix" else None)
+    """(stat, passes) of the claim's lesson_kind and subject over the next window, without the support minimum: the
+    window [window_end, window_end + W), for hot_hour [window_start + 86400, window_end + 86400). A subject with no
+    events in that window has value 0."""
+    kind, s, e = claim["lesson_kind"], claim["window_start"], claim["window_end"]
+    shift = horizon(kind, e - s)
+    w = data.window(claim["zone"], s + shift, e + shift)
+    sts = STATS[kind](w, data.fleet_known(s + shift, e + shift) if kind == "cause_mix" else None)
     st = next((s for s in sts if s["subject"] == claim["subject"] and s["metric"] == claim["metric"]), None)
     if st is None:
         st = dict(kind=kind, subject=claim["subject"], metric=claim["metric"], k=0, n=0, value=0, baseline=None,
@@ -350,7 +397,7 @@ def grade_lessons(store, run):
             continue
         claim = claim_of(d)
         zone, e = claim["zone"], claim["window_end"]
-        span = e - claim["window_start"]
+        span = horizon(claim["lesson_kind"], e - claim["window_start"])
         if zone not in ends:
             ends[zone] = forecast_grade.stream_end(store, run, zone)
         end = ends[zone]

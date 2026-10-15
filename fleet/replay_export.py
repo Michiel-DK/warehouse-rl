@@ -62,8 +62,9 @@ Payload (every key is always present unless marked optional):
               The page must only call a rank grade "still in top 20 after the horizon" when outcome_kind is "rank".
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
-  lessons     the zone's lesson decisions (S8E, kind "lesson", claim zone == the exported zone) sorted by (decided_at,
-              claim subject, lesson_kind): [{decided_at_step, text, lesson_kind, confidence, verdict, graded_at_step}]. verdict "ok" / "off"
+  lessons     EVERY lesson decision of the run (S8E, kind "lesson", all zones, not only the exported one) sorted by
+              (decided_at, int(zone), claim subject, lesson_kind): [{decided_at_step, zone, text, lesson_kind,
+              confidence, verdict, graded_at_step}], zone = the claim's zone string. verdict "ok" / "off"
               and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
               the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key.
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
@@ -293,17 +294,19 @@ def _claim(d):
     return json.loads(c) if isinstance(c, str) else (c or {})
 
 
-def build_lessons(st, run, zone, t0_ts, step_seconds=STEP_SECONDS):
-    """The zone's lesson decisions as a timeline (see the `lessons` payload key). The verdict and graded_at_step come
+def build_lessons(st, run, t0_ts, step_seconds=STEP_SECONDS):
+    """Every lesson decision of the run (all zones) as a timeline (see the `lessons` payload key). The verdict and graded_at_step come
     from the "lesson" forecast_grades row of the decision (window_end = the time the grade exists), never from rows of
     other sources; an open lesson has verdict and graded_at_step null."""
-    decs = [d for d in st.select("decisions", {"run": run, "kind": "lesson"}) if _claim(d).get("zone") == zone]
+    decs = st.select("decisions", {"run": run, "kind": "lesson"})
     by_id = {d["id"]: d for d in decs}
     rows = {g["id"]: g for g in st.select("forecast_grades", {"run": run, "grade_source": "lesson"}) if g["id"] in by_id}
     out = []
-    for d in sorted(decs, key=lambda d: (d["decided_at"], _claim(d)["subject"], _claim(d)["lesson_kind"])):
+    for d in sorted(decs, key=lambda d: (d["decided_at"], int(_claim(d)["zone"]), _claim(d)["subject"],
+                                                _claim(d)["lesson_kind"])):
         c, g = _claim(d), rows.get(d["id"])
-        out.append(dict(decided_at_step=(d["decided_at"] - t0_ts) // step_seconds, text=c["text"],
+        out.append(dict(decided_at_step=(d["decided_at"] - t0_ts) // step_seconds, zone=c["zone"],
+                        text=c["text"],
                         lesson_kind=c["lesson_kind"], confidence=c["confidence"],
                         verdict=None if g is None else g["verdict"],
                         graded_at_step=None if g is None else (g["window_end"] - t0_ts) // step_seconds))
@@ -524,7 +527,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         check = ingest_check(st, run, files)
         publishes = build_publishes(st, run, zone, floor, t0_ts)
         grades = build_grades(st, run, zone, publishes, t0_ts)
-        lessons = build_lessons(st, run, zone, t0_ts)
+        lessons = build_lessons(st, run, t0_ts)
     finally:
         st.close()
 
