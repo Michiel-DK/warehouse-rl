@@ -772,7 +772,7 @@ def worth_constant(paths):
                  source=paths[a]) for a in WORTH_ARMS]
     return dict(bars=bars, map_share=share("map_a32"), map_share_ci95=ci95("map_a32"), oracle_share=share("oracle_a32"),
                 oracle_share_ci95=ci95("oracle_a32"), n_seeds=n, label=WORTH_LABEL.format(n=n),
-                source=posixpath.commonpath([str(paths[a]).replace(os.sep, "/") for a in WORTH_ARMS]))
+                source=", ".join(str(paths[a]) for a in WORTH_ARMS))  # the four paths as passed
 
 
 # ------------------------------------------------------------------------------------------------ one run, one zone
@@ -853,7 +853,10 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         publishes = build_publishes(st, run, zone, floor, t0_ts)
         grades = build_grades(st, run, zone, publishes, t0_ts)
         lessons = build_lessons(st, run, t0_ts, zone=zone)
-        changes = {(r["robot"], r["ts"]) for r in st.select("transitions", {"run": run}) if str(r.get("zone")) == zone}
+        change_rows = [(r["robot"], r["ts"]) for r in st.select("transitions", {"run": run}) if str(r.get("zone")) == zone]
+        changes = set(change_rows)
+        if len(changes) != len(change_rows):  # a set would undercount the transition rows; the detector writes one per message
+            raise ValueError(f"run {run} zone {zone}: {len(change_rows) - len(changes)} duplicate (robot, ts) transition rows")
         verdicts = stuck_verdicts(st, run)
         ledger_rows = st.select("ingest_ledger", {"run": run})
         kept = kept_constant(st, run, ledger_rows, len(truth["zones"]))

@@ -201,16 +201,43 @@ class TestCommittedData(unittest.TestCase):
                 self.assertIn(l["truth"], ("hit", "false_alarm"))
         rx.assert_single_run(self.d)
 
-    @unittest.skipUnless((ROOT / "fleet" / "data" / "s8i-demo-noise" / "store" / "decisions.jsonl").is_file(),
-                         "fleet/data is untracked; this check needs the rebuilt run")
+    @unittest.skipUnless(sys.platform == "darwin", "env numbers are platform-dependent (pyastar2d tie-breaks); data.js was "
+                                                   "made on macOS, so the rebuilt lessons only match there")
     def test_lessons_hold_exactly_the_lesson_decisions_of_the_run_in_the_store(self):
+        """Runs the docs/replay/README.md chain up to grade.py into a temp dir (fleet/data is untracked, and a stale copy there
+        proves nothing), then compares the exporter's lessons for that store with the committed data.js."""
+        import subprocess
         from fleet_analyser.store import JsonlStore
-        st = JsonlStore(ROOT / "fleet" / "data" / "s8i-demo-noise" / "store")
-        rows = st.select("decisions", {"run": "s8i-demo-noise", "kind": "lesson"})
-        st.close()
-        self.assertEqual(len(rows), len(self.d["lessons"]))
-        self.assertEqual(sorted(json.loads(r["claim"])["text"] if isinstance(r["claim"], str) else r["claim"]["text"] for r in rows),
-                         sorted(l["text"] for l in self.d["lessons"]))
+        py = sys.executable
+        with tempfile.TemporaryDirectory() as tmp:
+            R = Path(tmp) / "s8i-demo-noise"
+            R.mkdir()
+            store = f"jsonl:{R}/store"
+            steps = [
+                ["fleet/emit.py", "--zones", "1", "--steps", "500", "--seed-base", "0", "--env",
+                 "tarware-medium-8agvs-4pickers-globalobs-v1", "--disturb", '{"floor": {"cells": 80, "p": [0.3, 0.7]}}',
+                 "--demo", "--demo-noise", "--control-file", f"{R}/control.jsonl", "--dir", str(R), "--workers", "1"],
+                ["fleet/ingest.py", "--glob", f"{R}/*.jsonl.gz", "--store", store, "--once"],
+                ["fleet/costmap.py", "--glob", f"{R}/*.jsonl.gz", "--store", store, "--publish-every", "1250",
+                 "--horizon-s", "1245", "--out", f"{R}/costmap.json"],
+                ["fleet/lessons.py", "--run", "s8i-demo-noise", "--store", store, "--once", "--window-h", "0.5"],
+                ["fleet/grade.py", "--run", "s8i-demo-noise", "--store", store, "--once", "--truth", f"{R}/truth.json"],
+            ]
+            readme = (DOCS / "README.md").read_text(encoding="utf-8")
+            for args in steps:  # every step here is a line of the README chain (same script, same flags)
+                self.assertIn(" ".join(a if not a.startswith(str(R)) else a.replace(str(R), "$R") for a in args[:1]), readme)
+                r = subprocess.run([py] + args, cwd=ROOT, capture_output=True, text=True, timeout=600)
+                self.assertEqual(r.returncode, 0, f"{args[0]}: {r.stderr[-1500:]}")
+            st = JsonlStore(R / "store")
+            rows = st.select("decisions", {"run": "s8i-demo-noise", "kind": "lesson"})
+            built = rx.build_lessons(st, "s8i-demo-noise", self.d["meta"]["t0_ts"], self.d["meta"]["step_seconds"],
+                                     zone=self.d["meta"]["zone"])
+            st.close()
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertEqual(built, self.d["lessons"])
+        for les in self.d["lessons"]:
+            if les["lesson_kind"] == "hot_cell":
+                self.assertIn(les["truth"], ("hit", "false_alarm"))
 
     def test_run_constants_numbers(self):
         rc = self.d["run_constants"]
@@ -232,10 +259,13 @@ class TestCommittedData(unittest.TestCase):
         for key in ("speed", "lessons_long", "audit", "header", "worth"):
             self.assertTrue(rc[key]["source"])
 
-    def test_the_hotspot_file_differs_from_the_s8i_one_only_in_lesson_keys(self):
+    def test_the_hotspot_file_carries_the_same_run_lesson_truth_count(self):
+        """C3c's key-level diff against master is in the PR body (no unittest refers to a git ref); this checks the one
+        lesson-derived key the new chain adds, against the committed data.js."""
         doc = json.loads((ROOT / "results" / "fleet" / "hotspot_s8i-demo-noise.json").read_text())
         self.assertEqual(doc["run"], "s8i-demo-noise")
-        self.assertEqual(doc["grading_counts"]["lesson_truth"], {"hit": 1})  # C3c: the lesson-derived key the new chain adds
+        n_hit = sum(1 for l in self.d["lessons"] if l["truth"] == "hit")
+        self.assertEqual(doc["grading_counts"]["lesson_truth"], {"hit": n_hit})
 
 
 # ------------------------------------------------------------------------------------------------ render check (C5)
@@ -370,7 +400,7 @@ class TestRender(unittest.TestCase):
         rc["header"].update(msgs=7001, noise=77)
         rc["audit"].update(sent=6005, read=6002, missing=3)
         rc["kept"].update(n_changes=1303, n_repeats=4701, kept_pct=12.3)
-        rc["speed"].update(robot_rate=3.7, ingest_rate=1234.6, ratio=333)
+        rc["speed"].update(robot_rate=3.7, ingest_rate=1234.6, ratio=271)  # not floor(1234.6 / 3.7) = 333: a page that recomputes fails
         rc["lessons_long"].update(truth_hit=5, truth_n=6, held=7, graded=8)
         rc["worth"].update(map_share=0.237, oracle_share=0.456)
         for i, (b, m) in enumerate(zip(rc["worth"]["bars"], (11.1, 22.2, 33.3, 44.4))):
@@ -400,7 +430,7 @@ class TestRender(unittest.TestCase):
         self.assertEqual(text_of(snap, "auditline"), "Every message accounted for: 6,005 sent, 6,002 read, 3 missing, checked against "
                          "the sender's own count.")
         self.assertEqual(text_of(snap, "speed-robots"), "Robots send 3.7 messages a second.")
-        self.assertEqual(text_of(snap, "speed-read"), "We can read 1,235 a second, so a fleet 333x larger would still keep up.")
+        self.assertEqual(text_of(snap, "speed-read"), "We can read 1,235 a second, so a fleet 271x larger would still keep up.")
         self.assertIn("real 5 of 6 times, but only 7 of 8 calls", text_of(snap, "lessonlong"))
         self.assertEqual(text_of(snap, "big-mapshare"), "24")
         self.assertEqual(text_of(snap, "big-oracleshare"), "46")

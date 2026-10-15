@@ -142,8 +142,8 @@ class TestSchemaAndFields(Base):
         for key in ("benchmark_msgs_per_s", "kept", "audit", "header", "speed", "lessons_long", "worth", "ingest_msgs_per_s"):
             src = self.payload["run_constants"][key]["source"]
             self.assertIsInstance(src, str, key)
-            if key == "worth":  # the common directory of the four row files
-                self.assertTrue(all(p.startswith(src + "/") for p in self.rows.values()), src)
+            if key == "worth":  # the four row-file paths as passed, in bar order
+                self.assertEqual(src, ", ".join(self.rows[a] for a in rx.WORTH_ARMS))
             else:
                 self.assertTrue(src in passed or src.startswith(("store:", "emit_ledger:")), (key, src))
         for bar in self.payload["run_constants"]["worth"]["bars"]:
@@ -165,6 +165,19 @@ class TestSchemaAndFields(Base):
         self.assertEqual(kept["changes_by_step"][-1], want)
         self.assertEqual(len(kept["changes_by_step"]), tre.STEPS)
         self.assertEqual(kept["changes_by_step"], sorted(kept["changes_by_step"]))
+
+    def test_a_duplicate_transition_row_raises_instead_of_being_undercounted(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / "run"
+            shutil.copytree(self.dir, d)
+            path = d / "store" / "transitions.jsonl"
+            first = next(l for l in path.read_text().splitlines() if l.strip())
+            with path.open("a") as f:
+                f.write(first + "\n")
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                rx.build_payload(d, f"jsonl:{d / 'store'}", "0", env_runner=tre.fake_env, run_dir_arg=str(d),
+                                 benchmark=self.bench, lessons_long=self.long, sticky=self.rows)
 
     def test_audit_ignores_the_headerid_jump_while_the_extractor_counts_it(self):
         a = self.payload["run_constants"]["audit"]

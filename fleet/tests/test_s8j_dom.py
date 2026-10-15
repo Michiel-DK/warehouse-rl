@@ -291,8 +291,8 @@ def need_node(case):
     """The node binary, or a failure on macOS / a skip where CI has no node."""
     node = shutil.which("node")
     if node is None:
-        if sys.platform == "darwin" and not os.environ.get("CI"):
-            case.fail("node is not on PATH; the render check (C5) must run on this machine")
+        if sys.platform == "darwin" or not os.environ.get("CI"):
+            case.fail("node is not on PATH; the render check (C5) must run here (skip only on non-macOS CI)")
         case.skipTest("node is not on PATH (CI without node)")
     return node
 
