@@ -136,7 +136,8 @@ class TestControlParsing(ReaderCase):
                j(t=None, breakdown={"agent": 1, "duration": 0}), j(t=None, breakdown={"agent": 1.0, "duration": 2}),
                j(t=None, breakdown={"agent": True, "duration": 2}), j(t=None, breakdown={"agent": 1}),
                j(t=None, breakdown={"agent": 1, "duration": 2, "x": 1}), j(t=None, breakdown=[1, 2]),
-               j(t=100, zone=0, breakdown={"agent": 9, "duration": 2})]
+               j(t=100, zone=0, breakdown={"agent": 9, "duration": 2}),
+               j(t=None, zone=1, floor={"1,1": 1.5})]  # malformed though addressed to another zone (structure first)
         self.write(*bad)
         self.write(raw=b"\n   \n\t\n")  # blank lines: ignored, not counted
         self.write(j(t=None, floor={"1,1": 0.5}))

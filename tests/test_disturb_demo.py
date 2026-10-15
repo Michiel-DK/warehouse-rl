@@ -234,6 +234,25 @@ class TestFloorInjection(unittest.TestCase):
         finally:
             env.close()
 
+    def test_reinjection_overrides_p(self):  # re-injecting a cell replaces its p (clearing a roadblock with p=0 works)
+        env = make(SMALL, {}, 80, True)
+        try:
+            h = env.env
+            cells = list(h._blockable_cells)
+
+            def before(s, e):
+                if s == 10:
+                    h.inject_floor({c: 1.0 for c in cells})
+                if s == 30:
+                    h.inject_floor({c: 0.0 for c in cells})
+
+            infos = drive(env, 1, 80, before)
+            self.assertGreater(sum(i["floor_skips"] for i in infos[10:30]), 0)
+            self.assertEqual(sum(i["floor_skips"] for i in infos[30:]), 0)
+            self.assertEqual(set(h.injected_floor.values()), {0.0})
+        finally:
+            env.close()
+
     def test_override_uses_injected_p_and_demo_coin(self):  # kills M6, M1 (indexing), M5
         env = make(SMALL, FULL_CFG_FLOOR_ONLY, 150, True)
         try:
