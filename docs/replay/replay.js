@@ -109,7 +109,8 @@
   };
 
   // HOVER_COPY: text that appears only on hover, focus or tap (technical wording allowed). Written by showHover/setHover into
-  // the small tip box, never into a visible element.
+  // the small tip box, never into a visible element. The cell* entries also go to the floor's title and, for the keyboard
+  // cursor in live mode, to the screen-reader-only live region (the cell coordinates tell a keyboard user where the cursor is).
   const HOVER_COPY = {
     kind: { agv: 'AGV', picker: 'picker' },
     tip: { state: 'State: {disp} ({raw})', noDetail: 'no further detail', job: 'Job: {job}', noJob: 'none',
@@ -379,7 +380,7 @@
         mark.setAttribute('aria-label', it.mark === 'ok' ? VISIBLE_COPY.lesson.held : VISIBLE_COPY.lesson.failed);
         conf.appendChild(mark);
       } else {
-        conf.appendChild(el('span', 'mark', VISIBLE_COPY.lesson.notChecked));
+        conf.appendChild(el('span', 'pend', VISIBLE_COPY.lesson.notChecked)); // small and muted, like the support figure
       }
       li.appendChild(conf);
       li.id = 'les-' + i;
