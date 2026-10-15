@@ -327,23 +327,35 @@ python3 -m http.server 8000 --directory docs/replay
 # stop everything: Ctrl-C in terminal 1 (exit code 0, the whole process group is gone)
 ```
 
-Without the page, the same thing from a shell (this is a real run, `--steps 400 --speed 20 --lesson-window-h 0.05`,
-trimmed; the page itself was not opened in a browser):
+Without the page, the same thing from a shell. This is a real run of the default regime (medium map, sticky floor,
+`--router map --alpha 32`) on 15 Oct 2026, with the output trimmed. The page itself was not opened in a browser:
 
 ```text
-$ .venv/bin/python fleet/live.py --steps 400 --speed 20 --lesson-window-h 0.05
-$ curl -s localhost:8765/state        # at ~20 s wall: step 74, sim_time 2026-01-01T00:06:10Z, truth null
-$ curl -s -X POST -H 'Content-Type: application/json' -d '{"floor":{"5,3":0.95}}' localhost:8765/inject
-{"applies_at_step":78}
-$ curl -s localhost:8765/state        # 30 s later
-step 194, costmap cells 31, "5,3" in costmap.cells: True, top10[0] = {"cell": "18,11", "cost": 1.0}
-$ kill -INT <live.py>                 # exit code 0
+$ .venv/bin/python fleet/live.py --speed 20 --steps 240 --dir /tmp/s8g-router-77846 --port 8799
+pgid 77852
+listening http://127.0.0.1:8799
+run dir /private/tmp/s8g-router-77846
+$ curl -s localhost:8799/state        # ~15 s after start
+step 59, sim_time 2026-01-01T00:04:55Z, 12 robots, costmap generated_at 2026-01-01T00:04:00Z with 10 cells, truth null
+$ curl -s -X POST -H 'Content-Type: application/json' -d '{"floor":{"5,3":0.95}}' localhost:8799/inject
+{"applies_at_step":63}
+$ curl -s localhost:8799/state        # 25 s later
+step 159, costmap 27 cells, "5,3" in costmap.cells: True, top3 10,21 (1.0) 4,11 (0.956) 18,11 (0.936),
+lessons 1 (pending), ledger messages_parsed 1920, messages_per_s 47.9, injections_applied 1
+$ kill -INT <live.py pid>             # exit 0; the process group is gone
 ```
+
+The emitter reloads `<dir>/costmap.json` before each step it changed. The publisher's real output from a run like
+this one loads cleanly: 23 cells active, 0 unparsed, router weights set. This was checked with
+`emitter.CostMapFile` on the run's file. The per-run refresh count is not written to truth.json.
+With 80 hidden sticky cells, a flagged injected cell is not proof that the injection caused it. The clean test is the
+gate's smoke (`fleet/tests/test_live_smoke.py`, `--disturb none`). There the injected cell was flagged 3 steps after its
+first counted stall began.
 
 What the viewer sees: robots move on the floor; the extractor panel counts messages read from the growing files; every
 60 simulated seconds the cost map is rebuilt from stalls found in those messages (forward only, never from the
 injection list); every 120 simulated seconds lessons are drawn and graded. `applies_at_step` is the step the emitter
-will apply the roadblock at (it was 78 for an observed step of 74: the emitter polls the control file right after it
+will apply the roadblock at (63 in the run above, a few steps past the step last seen: the emitter polls the control file right after it
 writes a step, plus a small lead). Add `--reveal` to get `/state.truth` and a toggle on the page that shows the hidden
 roadblocks. `--router none` runs the fleet without the cost-aware router (the map is still published and shown).
 `live.py` runs 720 steps unless you pass `--steps 500`.
