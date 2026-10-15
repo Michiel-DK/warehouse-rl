@@ -245,12 +245,13 @@ class TestEndToEnd(unittest.TestCase):
         def accepted(d):
             seen, out = set(), []
             for f in sorted(d.glob("zone*.jsonl.gz")):
-                for line in gzip.open(f, "rb"):
-                    m, _ = parse_line(line)
-                    if m is None or (m.serial, m.header_id) in seen:
-                        continue
-                    seen.add((m.serial, m.header_id))
-                    out.append(strip_header(line))
+                with gzip.open(f, "rb") as fh:
+                    for line in fh:
+                        m, _ = parse_line(line)
+                        if m is None or (m.serial, m.header_id) in seen:
+                            continue
+                        seen.add((m.serial, m.header_id))
+                        out.append(strip_header(line))
             return out
 
         self.assertEqual(accepted(self.dirs["noisy"]), accepted(self.dirs["clean"]))
