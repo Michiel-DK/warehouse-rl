@@ -7,6 +7,7 @@ delivered and delivery_failed (ints for kafka, None for files).
 """
 import gzip
 import os
+import zlib
 from pathlib import Path
 
 DEFAULT_ROTATE_BYTES = 200 * 1024 * 1024
@@ -20,14 +21,18 @@ class SinkError(Exception):
 class FileSink:
     """zone<z>-<nnn>.jsonl.gz, nnn from 000. Rotates BEFORE a write that would push the current file's uncompressed
     bytes over rotate_bytes, so no line is ever split; a single line larger than the limit lands alone in its file.
-    gzip header: mtime=0 and no embedded file name, so equal input gives byte-identical files."""
+    gzip header: mtime=0 and no embedded file name, so equal input gives byte-identical files.
+    sync_flush (demo mode only, off by default): flush_step() ends a deflate block after each step's messages
+    (Z_SYNC_FLUSH) and flushes the raw file, so a live reader sees every finished step. The decompressed bytes are
+    unchanged; the .gz bytes differ from a run without it."""
 
-    def __init__(self, directory, zone, rotate_bytes=DEFAULT_ROTATE_BYTES):
+    def __init__(self, directory, zone, rotate_bytes=DEFAULT_ROTATE_BYTES, sync_flush=False):
         if not isinstance(rotate_bytes, int) or isinstance(rotate_bytes, bool) or rotate_bytes < 1:
             raise SinkError(f"rotate_bytes must be an int >= 1, got {rotate_bytes!r}")
         self.directory = Path(directory)
         self.zone = zone
         self.rotate_bytes = rotate_bytes
+        self.sync_flush = bool(sync_flush)
         self.directory.mkdir(parents=True, exist_ok=True)
         self._files = []  # finished and current file records, in order
         self._raw = self._gz = self._cur = None
@@ -67,6 +72,12 @@ class FileSink:
         cur["last_timestamp"], cur["last_headerId"] = timestamp, header_id
         self.messages += 1
         self.bytes_uncompressed += n
+
+    def flush_step(self):
+        """End of one step's messages: with sync_flush, make everything written so far readable on disk. Else a no-op."""
+        if self.sync_flush and self._gz is not None:
+            self._gz.flush(zlib.Z_SYNC_FLUSH)
+            self._raw.flush()
 
     def stats(self):
         files = []
@@ -152,9 +163,9 @@ class KafkaSink:
 
 
 def make_sink(spec, zone):
-    """spec is a picklable dict: {"kind": "file", "dir", "rotate_bytes"} or {"kind": "kafka", "topic", "bootstrap"}."""
+    """spec is a picklable dict: {"kind": "file", "dir", "rotate_bytes"[, "sync_flush"]} or {"kind": "kafka", "topic", "bootstrap"}."""
     if spec["kind"] == "file":
-        return FileSink(spec["dir"], zone, spec["rotate_bytes"])
+        return FileSink(spec["dir"], zone, spec["rotate_bytes"], spec.get("sync_flush", False))
     if spec["kind"] == "kafka":
         return KafkaSink(spec["topic"], spec.get("bootstrap", "localhost:9092"))
     raise SinkError(f"unknown sink kind {spec['kind']!r}")
