@@ -9,6 +9,8 @@ Message contract and field semantics: docs/SCOPE.md "S5A".
 Demo (NOT a measurement; roadblocks appended while it runs; --demo and --control-file go together):
   python fleet/emit.py --demo --control-file /tmp/ctl.jsonl --rate realtime --speed 5 --dir /tmp/fleet-demo &
   echo '{"t": null, "floor": {"5,3": 0.9}}' >> /tmp/ctl.jsonl     # or {"t": 40, "breakdown": {"agent": 2, "duration": 30}}
+Live mode (S8G, fleet/live.py; demo only): --cost-map-file PATH [--cost-alpha A] re-reads a published costmap.json before
+every step, and the file sink sync-flushes after every step so a reader sees the stream live.
 """
 import argparse
 import os
@@ -51,6 +53,10 @@ def build_parser():
     p.add_argument("--demo", action="store_true",
                    help="demo mode (not a measurement): inject floor patches / breakdowns from --control-file")
     p.add_argument("--control-file", default=None, help="demo control file, one JSON command per line (needs --demo)")
+    p.add_argument("--cost-map-file", default=None, metavar="PATH",
+                   help="demo only: costmap.json re-read before every step; the router uses it with --cost-alpha")
+    p.add_argument("--cost-alpha", type=float, default=None,
+                   help="demo only, needs --cost-map-file: router weight 1 + alpha * cost (default 4)")
     return p
 
 
@@ -61,6 +67,10 @@ def main(argv=None):
         p.error("--zones and --steps must be >= 1 and --seed-base >= 0")
     if a.demo != (a.control_file is not None):
         p.error("--demo and --control-file must be given together")
+    if (a.cost_map_file is not None or a.cost_alpha is not None) and not a.demo:
+        p.error("--cost-map-file and --cost-alpha are demo-mode options (they need --demo)")
+    if a.cost_alpha is not None and a.cost_map_file is None:
+        p.error("--cost-alpha needs --cost-map-file")
     if a.speed < 0 or a.ledger_interval <= 0 or a.rotate_bytes < 1:
         p.error("--speed must be >= 0, --ledger-interval > 0 and --rotate-bytes >= 1")
     try:
@@ -81,6 +91,8 @@ def main(argv=None):
     if a.sink == "file":
         out_dir = Path(a.dir) if a.dir else FLEET / "data" / run_name
         sink_spec = dict(kind="file", dir=str(out_dir), rotate_bytes=a.rotate_bytes)
+        if a.demo:
+            sink_spec["sync_flush"] = True  # a live reader needs every finished step on disk
         ledger_dir = out_dir
     else:
         try:
@@ -95,6 +107,11 @@ def main(argv=None):
                rate=a.rate, speed=a.speed, report_interval=a.ledger_interval)
     if a.demo:
         run.update(demo_mode=True, control_file=str(a.control_file))
+        if a.cost_map_file is not None:
+            from warehouse_rl.disturb import DEFAULT_COST_ALPHA
+
+            run.update(cost_map_file=str(a.cost_map_file),
+                       cost_alpha=DEFAULT_COST_ALPHA if a.cost_alpha is None else a.cost_alpha)
     code, summary = emitter.run_fleet(run, sink_spec, ledger_dir / "emit_ledger.json", min(workers, a.zones),
                                       a.ledger_interval)
     doc, wall = summary["ledger"], summary["wall_s"]
@@ -108,6 +125,9 @@ def main(argv=None):
         print()
     for r in summary["results"]:
         print(f"zone {r['zone']} seed {r['seed']}: deliveries {r['deliveries']} pick_rate {r['pick_rate']:.2f}")
+        if "map_refreshes" in r:
+            print(f"zone {r['zone']} cost map: {r['map_refreshes']} refreshes, {r['map_unparsed']} unusable files kept "
+                  f"the previous map")
     print(f"ledger: {ledger_dir / 'emit_ledger.json'}")
     return code
 

@@ -33,6 +33,11 @@ raising ValueError) are counted in malformed_commands (also when their zone is a
 first, the zone filter second), logged to stderr and skipped. Blank lines are ignored. "Step index" = the run_zone loop
 variable = hook._t before the step, not info["step_count"]. Injections never enter a message or a sink; they show only
 through robot behaviour (an injected breakdown shows the usual BREAKDOWN error, since messages read applied_frozen).
+Demo mode only (S8G): cfg["cost_map_file"] (+ cfg["cost_alpha"]) makes the zone re-read a published cost map (the
+costmap.json document, zone key str(zone)) before every step, next to the control poll and before pol.act. The env starts
+with an empty map. An unparseable or invalid file keeps the previous map and is counted (CostMapFile). A cfg with
+cost_map_file and no demo_mode raises ValueError. In demo mode the file sink also sync-flushes after every step's
+messages (sinks.FileSink.flush_step); messages and truth.json are unchanged, only the .gz bytes differ.
 """
 import datetime as _dt
 import json
@@ -295,6 +300,46 @@ class ControlReader:
         return applied
 
 
+class CostMapFile:
+    """Demo only: keeps the env's cost map in step with a published costmap.json (fleet/costmap.py document shape:
+    {"zones": {"<zone>": {"x,y": cost}}}). poll() is cheap when the file did not change (inode, mtime, size). A file
+    that cannot be read, parsed or validated keeps the previous map and bumps `unparsed`; a valid one replaces the map
+    (a zone without an entry means an empty map) and bumps `refreshes`."""
+
+    def __init__(self, path, zone, hook, log=None):
+        self.path, self.zone, self.hook = Path(path), zone, hook
+        self.log = log or (lambda m: print(m, file=sys.stderr))
+        self.sig = None
+        self.refreshes = 0
+        self.unparsed = 0
+
+    def poll(self):
+        """True iff a new map was loaded."""
+        from warehouse_rl.disturb import normalise_cost_map, validate_cost_map
+
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            return False  # not published yet
+        sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+        if sig == self.sig:
+            return False
+        self.sig = sig
+        try:
+            with open(self.path, "rb") as f:
+                doc = json.loads(f.read())
+            raw = doc["zones"].get(str(self.zone), {})
+            new = validate_cost_map(normalise_cost_map(raw), self.hook.grid_size)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+            self.unparsed += 1
+            self.log(f"zone {self.zone}: cost map file not usable ({type(e).__name__}: {e}); keeping the previous map")
+            return False
+        self.hook._cost_map_arg = new
+        self.hook._set_active_map()
+        self.refreshes += 1
+        return True
+
+
 # ------------------------------------------------------------------------------------------------ zone runner
 def zone_config(run, zone):
     """The picklable per-zone config from the run config dict."""
@@ -319,6 +364,15 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     # cost_map builds exactly the env it always did
     router = {k: cfg[k] for k in ("cost_map", "cost_alpha") if k in cfg}
     demo = bool(cfg.get("demo_mode"))
+    cost_map_file = cfg.get("cost_map_file")
+    if cost_map_file is not None:
+        if not demo:
+            raise ValueError("cost_map_file is a demo-mode option (cfg needs demo_mode)")
+        if "cost_map" in cfg:
+            raise ValueError("cost_map and cost_map_file are mutually exclusive")
+        if "cost_alpha" not in cfg:
+            raise ValueError("cost_map_file needs cost_alpha")
+        router = dict(cost_map={}, cost_alpha=cfg["cost_alpha"])  # starts with no active map; the file fills it
     env = WarehouseEnv(env_id, max_steps=steps, disturb=cfg["disturb"], assign_care_for_agents=False,
                        recovery=cfg["recovery"], **router, **(dict(demo_mode=True) if demo else {}))
     try:
@@ -337,6 +391,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         robots = dict(robots=n, agvs=n_agv, pickers=n - n_agv)
         state = dict(steps_done=0, first_timestamp=None, last_timestamp=None)
         control = ControlReader(cfg["control_file"], zone, steps, hook) if demo else None
+        cmap = CostMapFile(cost_map_file, zone, hook) if cost_map_file is not None else None
+        flush_step = getattr(sink, "flush_step", None) if demo else None  # demo only: per-step sync flush
         if demo:
             state["injections"] = 0  # reaches the ledger through the snapshot, live
 
@@ -363,6 +419,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         paced = cfg.get("rate", "flat") == "realtime" and speed and speed > 0
         interval = cfg.get("report_interval", DEFAULT_LEDGER_INTERVAL)
         for step in range(steps):
+            if cmap is not None:
+                cmap.poll()  # a map published since the last step is in force before pol.act
             if control is not None:
                 control.poll(step)  # before pol.act, every step, whatever the pacing
                 state["injections"] = len(control.injections)
@@ -388,6 +446,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             if state["first_timestamp"] is None:
                 state["first_timestamp"] = ts
             state["last_timestamp"] = ts
+            if flush_step is not None:
+                flush_step()
             state["steps_done"] = step + 1
             if on_step:
                 on_step(step, env, info)
@@ -406,6 +466,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     if demo:
         result.update(injections=control.injections, malformed_commands=control.malformed,
                       unapplied_commands=control.unapplied)
+    if cmap is not None:
+        result.update(map_refreshes=cmap.refreshes, map_unparsed=cmap.unparsed)
     return result
 
 

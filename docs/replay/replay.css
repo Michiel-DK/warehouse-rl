@@ -83,3 +83,13 @@ ol.toplist li { margin: 1px 0; }
 .les.pending .mark { color: var(--muted); }
 .les .conf { grid-column: 2; color: var(--muted); font-size: var(--fs-sm); }
 @media (max-width: 800px) { .les { grid-template-columns: 1fr; } .les .conf { grid-column: 1; } }
+
+/* live mode (S8G) */
+.livebar { margin: 4px 20px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: var(--fs-md); }
+.livebar.bad { border: 2px solid var(--stuck); color: var(--stuck); font-weight: 600; }
+#app.stale .panel { opacity: .55; }
+.sw.ring-mine { border: 3px solid var(--accent); background: transparent; }
+.prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 0; padding: 8px 10px; border: 2px solid var(--accent); border-radius: 6px; background: var(--panel); }
+.prompt .pval { font: var(--fs-sm) ui-monospace, Menlo, monospace; min-width: 3ch; }
+.revealbox { display: block; margin: 4px 0; color: var(--ink); }
+body.live canvas#floor { cursor: crosshair; }

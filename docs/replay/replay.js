@@ -21,6 +21,21 @@
   });
   if (mq && mq.addEventListener) mq.addEventListener('change', function () { if (!userTheme) applyTheme(); });
 
+  // ---- live mode (S8G): ?live=<url on localhost> polls the analyser's /state at 2 Hz; without the param nothing below runs ----
+  var POLL_MS = 500; // 2 Hz
+  var httpGet = function (url, opts) { return window.fetch.call(window, url, opts); }; // live mode is the only caller
+  var LIVE_HOSTS = ['localhost', '127.0.0.1'];
+  var liveParam = new URLSearchParams(window.location.search).get('live');
+  if (liveParam !== null) {
+    var liveBase = liveBaseOf(liveParam);
+    if (liveBase) { startLive(liveBase); return; }
+    var bad = document.createElement('p');
+    bad.className = 'livebar bad';
+    bad.setAttribute('role', 'alert');
+    bad.textContent = 'The live parameter was ignored: it must be an http URL on localhost or 127.0.0.1 (the page sends injections to it). Showing the offline replay.';
+    document.querySelector('.head').insertAdjacentElement('afterend', bad);
+  }
+
   if (!R || !R.frames || !R.meta) {
     $('nodata').hidden = false;
     applyTheme();
@@ -518,4 +533,305 @@
   ready = true;
   applyTheme();
   requestAnimationFrame(tick);
+  // ---- live mode functions (hoisted; only called when ?live= is valid) ----
+  function liveBaseOf(raw) {
+    var u;
+    try { u = new URL(raw); } catch (e) { return null; }
+    if (u.protocol !== 'http:' || LIVE_HOSTS.indexOf(u.hostname) < 0) return null;
+    return u.origin;
+  }
+
+  function startLive(base) {
+    var app = $('app');
+    app.hidden = false;
+    document.body.classList.add('live');
+    $('subtitle').textContent = 'Live: a fleet is running right now. Click a highway cell to put a roadblock there and watch the analyser find it.';
+    ['.controls', '.hint', '#mapnote'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
+    ['prec', 'precstate', 'grades', 'glegend', 'routerBox'].forEach(function (id) { var n = $(id); if (n) n.hidden = true; });
+    Array.prototype.forEach.call(document.querySelectorAll('[aria-labelledby="h-ana"] .cap, [aria-labelledby="h-ana"] h3'), function (n) { n.hidden = true; });
+    $('h-ana').textContent = '3. The analyser: what it flags now';
+    $('h-les').textContent = '4. Lessons';
+    $('lessonscope').textContent = 'Lessons appear when a time window of the run is over, and get a verdict when the next window is over.';
+    var liveGrades = el('p', 'cap', '');
+    $('grades').insertAdjacentElement('afterend', liveGrades);
+    var topHead = document.querySelectorAll('[aria-labelledby="h-ana"] h3')[1];
+    if (topHead) topHead.hidden = false;
+    var bar = el('p', 'livebar', 'Connecting to ' + base + ' ...');
+    bar.setAttribute('role', 'status');
+    document.querySelector('.head').insertAdjacentElement('afterend', bar);
+
+    var CELLV = 22, G = null, state = null, lastOk = 0, failing = 0, inflight = false;
+    var barKey = null, lastStep = null, sameSteps = 0;
+    var placed = {}; // "x,y" -> p, from this page's own successful POSTs
+    var cursor = null, reveal = false, promptCell = null;
+    var floorEl = $('floor'), ctx = floorEl.getContext('2d');
+    floorEl.tabIndex = 0;
+    floorEl.setAttribute('role', 'application'); // operable in live mode (offline it stays role="img")
+    floorEl.setAttribute('aria-label', 'Warehouse floor. Click or press Enter on a highway cell to place a roadblock; arrow keys move the cursor.');
+
+    // legend for the live floor: add the "placed by you" swatch
+    var l2 = document.querySelector('.legend2');
+    l2.textContent = '';
+    [['sw ring-mine', 'placed by you (outlined)'], ['sw shade', 'red = the analyser\'s cost map flags this cell'],
+     ['sw box', 'hidden roadblocks (only with the reveal toggle)']].forEach(function (q) {
+      var s = el('span', q[0]); l2.appendChild(s); l2.appendChild(document.createTextNode(' ' + q[1] + '   '));
+    });
+    var revealBox = el('label', 'revealbox', '');
+    var revealIn = document.createElement('input');
+    revealIn.type = 'checkbox';
+    revealBox.appendChild(revealIn);
+    revealBox.appendChild(document.createTextNode(' Reveal the hidden roadblocks'));
+    revealBox.hidden = true;
+    l2.insertAdjacentElement('afterend', revealBox);
+    revealIn.addEventListener('change', function () { reveal = revealIn.checked; drawLive(); });
+
+    // counters
+    var rows = ['step', 'fleet time', 'messages emitted', 'messages read (parsed)', 'rejected', 'duplicates', 'bytes read', 'messages per second',
+                'roadblocks placed / applied', 'emitter'];
+    var counterDd = rows.map(function (r) {
+      var dt = el('dt', null, r), dd = el('dd', null, '');
+      $('counters').appendChild(dt); $('counters').appendChild(dd);
+      return dd;
+    });
+    // inline prompt
+    var prompt = el('form', 'prompt', '');
+    prompt.hidden = true;
+    prompt.setAttribute('role', 'dialog');
+    prompt.setAttribute('aria-label', 'Place a roadblock');
+    var plabel = el('span', 'plabel', '');
+    var pr = document.createElement('input');
+    pr.type = 'range'; pr.min = '0.5'; pr.max = '1'; pr.step = '0.01'; pr.value = '0.95';
+    pr.setAttribute('aria-label', 'Chance that a robot is stopped when it tries to enter the cell');
+    var pval = el('output', 'pval', '0.95');
+    var ok = el('button', 'btn primary', 'Place');
+    ok.type = 'submit';
+    var cancel = el('button', 'btn', 'Cancel');
+    cancel.type = 'button';
+    [plabel, pr, pval, ok, cancel].forEach(function (n) { prompt.appendChild(n); });
+    floorEl.insertAdjacentElement('afterend', prompt);
+    pr.addEventListener('input', function () { pval.textContent = (+pr.value).toFixed(2); });
+    function closePrompt(refocus) { prompt.hidden = true; promptCell = null; if (refocus) floorEl.focus(); drawLive(); }
+    cancel.addEventListener('click', function () { closePrompt(true); });
+    prompt.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); closePrompt(true); } });
+    prompt.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!promptCell) return;
+      var key = promptCell, p = +(+pr.value).toFixed(2), body = { floor: {} };
+      body.floor[key] = p;
+      ok.disabled = true;
+      httpGet(base + '/inject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          ok.disabled = false;
+          if (res.ok) {
+            placed[key] = p;
+            say('Roadblock placed at ' + key + ' (p ' + p.toFixed(2) + '). It starts at step ' + res.j.applies_at_step + '. The cell turns red when the analyser flags it.');
+            closePrompt(true);
+          } else say('Not placed: ' + (res.j && res.j.error ? res.j.error : 'the server said no') + '.');
+        })
+        .catch(function () { ok.disabled = false; say('Not placed: the live server is not reachable.'); });
+    });
+
+    function say(t) { $('mapstate').textContent = t; $('live').textContent = t; }
+    function isHighway(x, y) { return G && G.highway[y] && G.highway[y].charAt(x) === '1'; }
+    function isGoal(x, y) { return G.goals.some(function (g) { return g[0] === x && g[1] === y; }); }
+    function whyNot(x, y) {
+      if (!G || x < 0 || y < 0 || x >= G.width || y >= G.height) return 'outside the floor';
+      if (!isHighway(x, y)) return 'a shelf cell: roadblocks go on highway cells only';
+      if (isGoal(x, y)) return 'a goal cell: roadblocks go on plain highway cells only';
+      return null;
+    }
+    function openPrompt(x, y) {
+      var why = whyNot(x, y);
+      if (why) { say('Cannot place at ' + x + ',' + y + ': ' + why + '.'); return; }
+      promptCell = x + ',' + y;
+      plabel.textContent = 'Roadblock at ' + promptCell + ', chance a robot is stopped: ';
+      prompt.hidden = false;
+      pr.focus();
+      drawLive();
+    }
+    function cellAt(ev) {
+      var r = floorEl.getBoundingClientRect();
+      return [Math.floor((ev.clientX - r.left) / r.width * G.width), Math.floor((ev.clientY - r.top) / r.height * G.height)];
+    }
+    floorEl.addEventListener('click', function (ev) { if (G) { var c = cellAt(ev); cursor = c; openPrompt(c[0], c[1]); } });
+    floorEl.addEventListener('mousemove', function (ev) {
+      if (!G) return;
+      var c = cellAt(ev), why = whyNot(c[0], c[1]);
+      floorEl.title = why ? 'Cell ' + c[0] + ',' + c[1] + ': ' + why : 'Click to place a roadblock at ' + c[0] + ',' + c[1];
+    });
+    floorEl.addEventListener('keydown', function (e) {
+      if (!G) return;
+      if (!cursor) cursor = [0, 0];
+      var d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (d) {
+        e.preventDefault();
+        cursor = [Math.max(0, Math.min(G.width - 1, cursor[0] + d[0])), Math.max(0, Math.min(G.height - 1, cursor[1] + d[1]))];
+        var why = whyNot(cursor[0], cursor[1]);
+        $('live').textContent = 'Cell ' + cursor[0] + ',' + cursor[1] + (why ? ': ' + why : ': highway, press Enter to place a roadblock');
+        drawLive();
+      } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPrompt(cursor[0], cursor[1]); }
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !prompt.hidden) closePrompt(true); });
+    themeBtn.addEventListener('click', function () { drawLive(); });
+
+    // ---- drawing ----
+    function robotKind(id) { return (parseInt(String(id).split('-')[1], 10) || 0) <= G.agvs ? 'agv' : 'picker'; }
+    function drawLive() {
+      if (!G) return;
+      var c = ctx, W = G.width * CELLV, H = G.height * CELLV;
+      var dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (floorEl.width !== Math.round(W * dpr)) {
+        floorEl.width = Math.round(W * dpr); floorEl.height = Math.round(H * dpr); floorEl.style.width = W + 'px';
+      }
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, W, H);
+      var hw = css('--hw'), shelf = css('--shelf'), goal = css('--goal');
+      var cells = state && state.costmap ? state.costmap.cells : {};
+      for (var y = 0; y < G.height; y++) {
+        for (var x = 0; x < G.width; x++) {
+          var key = x + ',' + y;
+          c.fillStyle = isGoal(x, y) ? goal : (isHighway(x, y) ? hw : shelf);
+          c.fillRect(x * CELLV, y * CELLV, CELLV, CELLV);
+          if (Object.prototype.hasOwnProperty.call(cells, key)) {
+            c.fillStyle = 'rgba(' + css('--cost') + ',' + Math.min(0.55, 0.2 + 0.6 * cells[key]).toFixed(3) + ')';
+            c.fillRect(x * CELLV, y * CELLV, CELLV, CELLV);
+          }
+        }
+      }
+      c.strokeStyle = css('--line'); c.lineWidth = 0.5;
+      for (var gx = 0; gx <= G.width; gx++) { c.beginPath(); c.moveTo(gx * CELLV, 0); c.lineTo(gx * CELLV, H); c.stroke(); }
+      for (var gy = 0; gy <= G.height; gy++) { c.beginPath(); c.moveTo(0, gy * CELLV); c.lineTo(W, gy * CELLV); c.stroke(); }
+      if (reveal && state && state.truth) {
+        c.strokeStyle = css('--obst'); c.lineWidth = 2; c.setLineDash([4, 3]);
+        [state.truth.scheduled, state.truth.injected].forEach(function (m) {
+          Object.keys(m || {}).forEach(function (k) { var xy = k.split(','); c.strokeRect(+xy[0] * CELLV + 2, +xy[1] * CELLV + 2, CELLV - 4, CELLV - 4); });
+        });
+        c.setLineDash([]);
+      }
+      // placed by you: a solid accent outline with a corner mark, never filled (the fill is the analyser's)
+      var mine = {};
+      Object.keys(placed).forEach(function (k) { mine[k] = true; });
+      if (state) state.injections.forEach(function (i) { if (i.kind === 'floor') Object.keys(i.payload).forEach(function (k) { mine[k] = true; }); });
+      c.strokeStyle = css('--accent'); c.lineWidth = 3;
+      Object.keys(mine).forEach(function (k) {
+        var xy = k.split(',');
+        c.strokeRect(+xy[0] * CELLV + 2, +xy[1] * CELLV + 2, CELLV - 4, CELLV - 4);
+        c.fillStyle = css('--accent');
+        c.fillRect(+xy[0] * CELLV + 2, +xy[1] * CELLV + 2, 6, 6);
+      });
+      if (promptCell) {
+        var pxy = promptCell.split(',');
+        c.strokeStyle = css('--ink'); c.lineWidth = 2; c.setLineDash([3, 2]);
+        c.strokeRect(+pxy[0] * CELLV + 1, +pxy[1] * CELLV + 1, CELLV - 2, CELLV - 2);
+        c.setLineDash([]);
+      }
+      if (cursor && document.activeElement === floorEl) {
+        c.strokeStyle = css('--ink'); c.lineWidth = 2;
+        c.strokeRect(cursor[0] * CELLV + 0.5, cursor[1] * CELLV + 0.5, CELLV - 1, CELLV - 1);
+      }
+      if (state) {
+        state.robots.forEach(function (r) {
+          drawRobot(c, robotKind(r.id), r.x * CELLV + CELLV / 2, r.y * CELLV + CELLV / 2, r.state, robotKind(r.id) === 'agv' ? CELLV * 0.33 : CELLV * 0.3);
+        });
+      }
+    }
+
+    function render() {
+      var s = state;
+      counterDd[0].textContent = fmt(s.step);
+      counterDd[1].textContent = s.sim_time || 'not started';
+      counterDd[2].textContent = fmt(s.ledger.messages_emitted) + (s.ledger.expected_messages ? ' of ' + fmt(s.ledger.expected_messages) : '');
+      counterDd[3].textContent = fmt(s.ledger.messages_parsed);
+      counterDd[4].textContent = s.ledger.messages_rejected ? fmt(s.ledger.messages_rejected) : 'none rejected';
+      counterDd[5].textContent = fmt(s.ledger.duplicates);
+      counterDd[6].textContent = fmt(s.ledger.bytes_read) + ' B';
+      counterDd[7].textContent = fmt(s.ledger.messages_per_s);
+      counterDd[8].textContent = fmt(s.ledger.injections_posted) + ' / ' + fmt(s.ledger.injections_applied);
+      counterDd[9].textContent = s.ledger.emit_status || 'starting';
+      var exp = s.ledger.expected_messages;
+      $('covbar').style.width = (exp ? Math.min(1, s.ledger.messages_emitted / exp) * 100 : 0) + '%';
+      $('covlabel').textContent = exp ? 'Run progress ' + (100 * s.ledger.messages_emitted / exp).toFixed(0) + ' % of the messages this run will emit.' : '';
+      $('match').textContent = 'Read straight from the run\'s files as they grow; nothing here is replayed.';
+      var ol = $('top');
+      ol.textContent = '';
+      if (!s.top10.length) { var li0 = el('li', null, s.costmap ? 'the latest map flags no cell' : 'no map published yet'); li0.style.listStyle = 'none'; ol.appendChild(li0); }
+      s.top10.forEach(function (r) { ol.appendChild(el('li', null, r.cell + '  cost ' + r.cost.toFixed(2) + (placed[r.cell] !== undefined ? '  [placed by you]' : ''))); });
+      var g = s.grades;
+      function line(label, o) { return label + ': ' + o.ok + ' held, ' + o.off + ' did not hold, ' + o.pending + ' pending, ' + o.not_gradable + ' not gradable'; }
+      liveGrades.textContent = line('Cost-map calls', g.forecasts) + '. ' + line('Lessons', g.lessons) +
+        '. Graded on what the robots report next (the stream), not on the hidden roadblocks.';
+      $('lessonstate').textContent = s.lessons.length ? line('Graded so far', g.lessons) + '.' : 'No lessons yet. Rules need a few events in a closed time window.';
+      var ul = $('lessons');
+      ul.textContent = '';
+      s.lessons.forEach(function (l) {
+        var st = l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : 'pending');
+        var li = el('li', 'les ' + st);
+        li.appendChild(el('span', 'mark', l.state === 'ok' ? '✓ held' : l.state === 'off' ? '✗ did not hold' : l.state === 'not_gradable' ? 'not gradable' : 'pending'));
+        li.appendChild(el('span', 'ltxt', l.text));
+        li.appendChild(el('span', 'conf', 'zone ' + l.zone + ', rule ' + l.lesson_kind + ', support ' + l.confidence.toFixed(2) + ', drawn at ' + l.decided_at));
+        ul.appendChild(li);
+      });
+      revealBox.hidden = s.truth === null;
+      if (s.truth === null) { reveal = false; revealIn.checked = false; }
+      floorEl.setAttribute('aria-label', 'Warehouse floor, step ' + s.step + ', ' + s.robots.length + ' robots, ' + Object.keys(s.costmap ? s.costmap.cells : {}).length + ' cells flagged. Press Enter on a highway cell to place a roadblock.');
+      drawLive();
+    }
+
+    function setConnected(okNow, err) {
+      // "Live" needs a reachable server AND a run that advances: a finished or stalled run is said so, with the step
+      var key, cls, text, stale;
+      if (okNow) {
+        var status = state && state.ledger ? state.ledger.emit_status : null;
+        if (status && status !== 'running') {
+          key = 'over:' + status; cls = 'livebar bad'; stale = false;
+          text = 'Run ' + status + ' at step ' + state.step + '. Nothing is advancing; the numbers below are final.';
+        } else if (sameSteps >= 6) {
+          key = 'stuck:' + state.step; cls = 'livebar bad'; stale = true;
+          text = 'Connected to ' + base + ', but the run has not advanced past step ' + state.step + ' for ' + Math.round(sameSteps * POLL_MS / 1000) + ' s.';
+        } else {
+          key = 'ok'; cls = 'livebar'; stale = false;
+          text = 'Live from ' + base + ', updated every ' + (POLL_MS / 1000) + ' s.';
+        }
+      } else {
+        var age = lastOk ? Math.round((Date.now() - lastOk) / 1000) : null;
+        key = 'bad:' + err + ':' + (age === null ? '' : Math.floor(age / 5)); cls = 'livebar bad'; stale = true;
+        text = 'Disconnected from ' + base + ', retrying every ' + (POLL_MS / 1000) + ' s. ' +
+          (age === null ? 'No data received yet.' : 'The numbers below are from ' + age + ' s ago and are not live.') + (err ? ' (' + err + ')' : '');
+      }
+      if (key === barKey) return; // do not rewrite the status region on every poll (screen readers re-announce it)
+      barKey = key;
+      bar.className = cls;
+      bar.textContent = text;
+      app.classList.toggle('stale', stale);
+    }
+
+    function poll() {
+      if (inflight) return;
+      inflight = true;
+      var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      var to = setTimeout(function () { if (ctl) ctl.abort(); }, 2000);
+      httpGet(base + '/state', ctl ? { signal: ctl.signal } : {})
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) {
+          sameSteps = lastStep !== null && j.step === lastStep ? sameSteps + 1 : 0;
+          lastStep = j.step;
+          state = j; failing = 0; lastOk = Date.now();
+          setConnected(true);
+          render();
+        })
+        .catch(function (e) { failing++; setConnected(false, e && e.message ? e.message : ''); })
+        .then(function () { clearTimeout(to); inflight = false; });
+    }
+
+    function loadGrid() {
+      httpGet(base + '/grid').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (g) { G = g; drawLive(); })
+        .catch(function () { setConnected(false, 'floor layout not available yet'); setTimeout(loadGrid, 1000); });
+    }
+    loadGrid();
+    poll();
+    setInterval(poll, POLL_MS);
+    applyTheme();
+  }
 })();
