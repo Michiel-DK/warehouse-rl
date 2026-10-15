@@ -63,7 +63,7 @@ Payload (every key is always present unless marked optional):
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
   lessons     the zone's lesson decisions (S8E, kind "lesson", claim zone == the exported zone) sorted by (decided_at,
-              subject): [{decided_at_step, text, lesson_kind, confidence, verdict, graded_at_step}]. verdict "ok" / "off"
+              claim subject, lesson_kind): [{decided_at_step, text, lesson_kind, confidence, verdict, graded_at_step}]. verdict "ok" / "off"
               and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
               the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key.
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
@@ -301,7 +301,7 @@ def build_lessons(st, run, zone, t0_ts, step_seconds=STEP_SECONDS):
     by_id = {d["id"]: d for d in decs}
     rows = {g["id"]: g for g in st.select("forecast_grades", {"run": run, "grade_source": "lesson"}) if g["id"] in by_id}
     out = []
-    for d in sorted(decs, key=lambda d: (d["decided_at"], d["subject"])):
+    for d in sorted(decs, key=lambda d: (d["decided_at"], _claim(d)["subject"], _claim(d)["lesson_kind"])):
         c, g = _claim(d), rows.get(d["id"])
         out.append(dict(decided_at_step=(d["decided_at"] - t0_ts) // step_seconds, text=c["text"],
                         lesson_kind=c["lesson_kind"], confidence=c["confidence"],

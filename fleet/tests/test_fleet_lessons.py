@@ -546,11 +546,11 @@ class TestReplayLessons(unittest.TestCase):
 
     def test_lessons_schema_order_and_zone_filter(self):
         t0, step = self.after["meta"]["t0_ts"], self.after["meta"]["step_seconds"]
-        want = [dict(decided_at_step=100 // step, text="T Z0:cell 3,4", lesson_kind="hot_cell", confidence=0.9,
-                     verdict="ok", graded_at_step=200 // step),
-                dict(decided_at_step=100 // step, text="T Z0:Z0-01", lesson_kind="hot_robot", confidence=0.5, verdict=None,
-                     graded_at_step=None)]
-        # zone 1's lesson is absent; same decided_at, so sorted by the decision subject ("hot_cell|..." < "hot_robot|...")
+        want = [dict(decided_at_step=100 // step, text="T Z0:Z0-01", lesson_kind="hot_robot", confidence=0.5, verdict=None,
+                     graded_at_step=None),
+                dict(decided_at_step=100 // step, text="T Z0:cell 3,4", lesson_kind="hot_cell", confidence=0.9,
+                     verdict="ok", graded_at_step=200 // step)]
+        # zone 1's lesson is absent; same decided_at, so sorted by the claim subject ("Z0:Z0-01" < "Z0:cell 3,4")
         self.assertEqual(self.after["lessons"], want)
         self.assertEqual(t0, tre.BASE)
 
