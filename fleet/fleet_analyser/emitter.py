@@ -43,9 +43,9 @@ replay page's "is the log usable?" panel. DemoNoise draws from its OWN random.Ra
 "<zone seed>:demo-noise" (never the env's, the policy's or the disturbance's generator), so the real messages are the
 same with and without it. Per zone, EXTRA lines only (a real message is never replaced or dropped): about 0.5 % malformed
 lines (kinds json, timestamp, type in rotation; the ingester rejects them with those reasons), about 1 % exact duplicates
-(the same bytes, same headerId, written right after the original) and exactly one headerId jump: one robot's counter skips
-3-5 ids at one step in 1..steps-1 (a jump of g means consecutive ids differ by g + 1; the g skipped ids are `gap_ids`;
-no message content is dropped). The counts are exact, not Bernoulli: max(3, round(0.005 * messages)) malformed (at most
+(the same bytes, same headerId, written right after the original) and exactly one headerId jump: one robot's counter jumps
+by 3-5 (its next id is 3-5 above the previous one, so 2-4 ids are skipped; `gap_ids` is that skipped count, the number
+the ingester reports as missing_messages) at one step in 1..steps-1; no message content is dropped. The counts are exact, not Bernoulli: max(3, round(0.005 * messages)) malformed (at most
 one per message) and max(1, round(0.01 * messages)) duplicates, at positions drawn without replacement, so even a short
 run exercises every kind. The ledger's `messages` and `expected_messages` stay the count of REAL messages (robots * steps);
 extra lines count in `bytes_uncompressed` (the robots "sent" them) but not in `messages`. Per-file `files[].messages` come
@@ -212,7 +212,7 @@ class DemoNoise:
         self.n_agents = n_agents
         self.bad_at = {idx: NOISE_KINDS[k % 3] for k, idx in enumerate(sorted(rng.sample(range(total), n_bad)))}
         self.dup_at = set(rng.sample(range(total), n_dup))
-        self.gap = None  # (step, robot index, ids skipped)
+        self.gap = None  # (step, robot index, jump = difference between the two ids around the gap, 3-5)
         if steps > 1 and n_agents > 0:
             self.gap = (rng.randint(1, steps - 1), rng.randrange(n_agents), rng.randint(*NOISE_GAP_RANGE))
         self.malformed = dict.fromkeys(NOISE_KINDS, 0)
@@ -221,8 +221,8 @@ class DemoNoise:
         self.record = []  # (step, robot index, "dup" | kind) of every extra line, in write order
 
     def header_bump(self, step, i):
-        """Ids to skip before the message of robot i at this step (non-zero at exactly one (step, robot))."""
-        return self.gap[2] if self.gap is not None and self.gap[:2] == (step, i) else 0
+        """Ids to skip before the message of robot i at this step (jump - 1; non-zero at exactly one (step, robot))."""
+        return self.gap[2] - 1 if self.gap is not None and self.gap[:2] == (step, i) else 0
 
     def extras(self, step, i, msg, line):
         """The extra lines to write right after the real message `line` of robot i at `step`."""
@@ -242,7 +242,7 @@ class DemoNoise:
 
     def counts(self):
         return dict(malformed=sum(self.malformed.values()), malformed_by_kind=dict(self.malformed),
-                    duplicates=self.duplicates, gap_ids=self.gap[2] if self.gap is not None else 0)
+                    duplicates=self.duplicates, gap_ids=self.gap[2] - 1 if self.gap is not None else 0)
 
 
 # ------------------------------------------------------------------------------------------------ demo control file
