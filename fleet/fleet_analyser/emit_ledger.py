@@ -6,7 +6,9 @@ The top-level `truth` is null until the ground-truth sidecar truth.json is writt
 or total field.
 Zone states: pending, running, complete, failed, not_started. Run status: running | complete | failed.
 A zone is `complete` only when messages == expected (robots * steps), it did not fail and (kafka) no record failed
-delivery; the run is `complete` only when every configured zone is. Kafka zones also carry integer `delivered` and
+delivery; the run is `complete` only when every configured zone is. Demo noise runs (S8I) add `injected_noise`
+{malformed, malformed_by_kind {json, timestamp, type}, duplicates, gap_ids} per zone and, summed, in total (absent
+otherwise); the extra lines count in bytes_uncompressed but not in messages / expected_messages. Kafka zones also carry integer `delivered` and
 `delivery_failed` (delivered + delivery_failed == messages once the sink is closed); file zones carry null for both.
 """
 import json
@@ -17,6 +19,13 @@ ZONE_FIELDS = ("messages", "bytes_uncompressed", "bytes_compressed", "files", "f
                "steps_done", "robots", "agvs", "pickers", "delivered", "delivery_failed")
 
 
+NOISE_KINDS = ("json", "timestamp", "type")
+
+
+def _blank_noise():
+    return dict(malformed=0, malformed_by_kind=dict.fromkeys(NOISE_KINDS, 0), duplicates=0, gap_ids=0)
+
+
 def _blank_zone():
     return dict(state="pending", messages=0, bytes_uncompressed=0, bytes_compressed=0, files=[], first_timestamp=None,
                 last_timestamp=None, steps_done=0, robots=None, agvs=None, pickers=None, delivered=None,
@@ -24,7 +33,7 @@ def _blank_zone():
 
 
 class EmitLedger:
-    def __init__(self, path, config, zones, steps, demo_mode=False):
+    def __init__(self, path, config, zones, steps, demo_mode=False, demo_noise=False):
         self.path = Path(path)
         self.config = dict(config)
         self.steps = steps
@@ -33,6 +42,8 @@ class EmitLedger:
         # document has exactly the old keys
         self.demo_mode = bool(demo_mode)
         self.injections = {z: 0 for z in range(zones)}
+        self.demo_noise = bool(demo_noise)  # S8I: per-zone injected_noise, only in the document of a noise run
+        self.noise = {z: _blank_noise() for z in range(zones)}
         self.error = None
         self.truth = None  # {file, bytes} once the emitter has written the sidecar; never counted in any zone / total
 
@@ -46,6 +57,8 @@ class EmitLedger:
             z["state"] = state
         if self.demo_mode and snapshot and "injections" in snapshot:
             self.injections[zone] = snapshot["injections"]
+        if self.demo_noise and snapshot and "injected_noise" in snapshot:
+            self.noise[zone] = snapshot["injected_noise"]
 
     def mark_unfinished(self):
         """After a failure: zones that never started are not_started; running ones stay as they were reported."""
@@ -65,6 +78,8 @@ class EmitLedger:
                     last_timestamp=z["last_timestamp"], files=z["files"])
         if self.demo_mode:
             doc["injections"] = self.injections[zone]
+        if self.demo_noise:
+            doc["injected_noise"] = self.noise[zone]
         return doc
 
     def document(self, status):
@@ -88,6 +103,12 @@ class EmitLedger:
         if self.demo_mode:
             doc["demo_mode"] = True
             doc["injections"] = sum(self.injections.values())
+        if self.demo_noise:
+            doc["total"]["injected_noise"] = dict(
+                malformed=sum(d["injected_noise"]["malformed"] for d in zdocs),
+                malformed_by_kind={k: sum(d["injected_noise"]["malformed_by_kind"][k] for d in zdocs) for k in NOISE_KINDS},
+                duplicates=sum(d["injected_noise"]["duplicates"] for d in zdocs),
+                gap_ids=sum(d["injected_noise"]["gap_ids"] for d in zdocs))
         if self.error:
             doc["error"] = self.error
         return doc

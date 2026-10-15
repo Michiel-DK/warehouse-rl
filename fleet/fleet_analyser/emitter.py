@@ -38,6 +38,18 @@ costmap.json document, zone key str(zone)) before every step, next to the contro
 with an empty map. An unparseable or invalid file keeps the previous map and is counted (CostMapFile). A cfg with
 cost_map_file and no demo_mode raises ValueError. In demo mode the file sink also sync-flushes after every step's
 messages (sinks.FileSink.flush_step); messages and truth.json are unchanged, only the .gz bytes differ.
+Demo noise (S8I, `cfg["demo_noise"]`, emit.py --demo --demo-noise; demo only, never a measurement): a messy log for the
+replay page's "is the log usable?" panel. DemoNoise draws from its OWN random.Random seeded with the string
+"<zone seed>:demo-noise" (never the env's, the policy's or the disturbance's generator), so the real messages are the
+same with and without it. Per zone, EXTRA lines only (a real message is never replaced or dropped): about 0.5 % malformed
+lines (kinds json, timestamp, type in rotation; the ingester rejects them with those reasons), about 1 % exact duplicates
+(the same bytes, same headerId, written right after the original) and exactly one headerId jump: one robot's counter skips
+3-5 ids at one step in 1..steps-1 (a jump of g means consecutive ids differ by g + 1; the g skipped ids are `gap_ids`;
+no message content is dropped). The counts are exact, not Bernoulli: max(3, round(0.005 * messages)) malformed (at most
+one per message) and max(1, round(0.01 * messages)) duplicates, at positions drawn without replacement, so even a short
+run exercises every kind. The ledger's `messages` and `expected_messages` stay the count of REAL messages (robots * steps);
+extra lines count in `bytes_uncompressed` (the robots "sent" them) but not in `messages`. Per-file `files[].messages` come
+from the sink and DO include the extra lines. A cfg with demo_noise and no demo_mode raises ValueError.
 """
 import datetime as _dt
 import json
@@ -45,6 +57,7 @@ import math
 import multiprocessing as mp
 import os
 import queue as _queue
+import random
 import re
 import sys
 import time
@@ -167,6 +180,69 @@ def build_message(zone, agent, env_id, header_id, timestamp, order_id, driving, 
 
 def encode(msg):
     return (json.dumps(msg, separators=(",", ":"), sort_keys=False, allow_nan=False) + "\n").encode()
+
+
+# ------------------------------------------------------------------------------------------------ demo noise
+NOISE_KINDS = ("json", "timestamp", "type")
+NOISE_MALFORMED_RATE = 0.005
+NOISE_DUPLICATE_RATE = 0.01
+NOISE_MIN_MALFORMED = 3  # one of each kind, so even a short run exercises every reject reason
+NOISE_MIN_DUPLICATES = 1
+NOISE_GAP_RANGE = (3, 5)
+
+
+def _bad_line(kind, msg, line):
+    """One malformed extra line (with its newline) built from a real message; every other field stays valid, so the
+    ingester rejects it for exactly `kind` (parse.parse_line reasons json / timestamp / type)."""
+    if kind == "json":
+        return line.rstrip(b"\n")[: max(1, len(line) // 2)] + b"\n"  # a truncated object never parses
+    if kind == "timestamp":
+        return encode(dict(msg, timestamp=msg["timestamp"].replace("T", " ").rstrip("Z")))  # still a str, fails _TS_RE
+    return encode(dict(msg, agvPosition=dict(msg["agvPosition"], x=str(msg["agvPosition"]["x"]))))  # x: "7", not an int
+
+
+class DemoNoise:
+    """The demo noise injector of one zone (see the module docstring). Deterministic from (seed, n_agents, steps)."""
+
+    def __init__(self, seed, n_agents, steps):
+        rng = random.Random(f"{seed}:demo-noise")  # a str seed: stable across runs and platforms (never hash())
+        total = n_agents * steps
+        n_bad = min(total, max(NOISE_MIN_MALFORMED, round(NOISE_MALFORMED_RATE * total)))
+        n_dup = min(total, max(NOISE_MIN_DUPLICATES, round(NOISE_DUPLICATE_RATE * total)))
+        self.n_agents = n_agents
+        self.bad_at = {idx: NOISE_KINDS[k % 3] for k, idx in enumerate(sorted(rng.sample(range(total), n_bad)))}
+        self.dup_at = set(rng.sample(range(total), n_dup))
+        self.gap = None  # (step, robot index, ids skipped)
+        if steps > 1 and n_agents > 0:
+            self.gap = (rng.randint(1, steps - 1), rng.randrange(n_agents), rng.randint(*NOISE_GAP_RANGE))
+        self.malformed = dict.fromkeys(NOISE_KINDS, 0)
+        self.duplicates = 0
+        self.extra_lines = 0
+        self.record = []  # (step, robot index, "dup" | kind) of every extra line, in write order
+
+    def header_bump(self, step, i):
+        """Ids to skip before the message of robot i at this step (non-zero at exactly one (step, robot))."""
+        return self.gap[2] if self.gap is not None and self.gap[:2] == (step, i) else 0
+
+    def extras(self, step, i, msg, line):
+        """The extra lines to write right after the real message `line` of robot i at `step`."""
+        idx = step * self.n_agents + i
+        out = []
+        if idx in self.dup_at:
+            out.append(line)
+            self.duplicates += 1
+            self.record.append((step, i, "dup"))
+        kind = self.bad_at.get(idx)
+        if kind is not None:
+            out.append(_bad_line(kind, msg, line))
+            self.malformed[kind] += 1
+            self.record.append((step, i, kind))
+        self.extra_lines += len(out)
+        return out
+
+    def counts(self):
+        return dict(malformed=sum(self.malformed.values()), malformed_by_kind=dict(self.malformed),
+                    duplicates=self.duplicates, gap_ids=self.gap[2] if self.gap is not None else 0)
 
 
 # ------------------------------------------------------------------------------------------------ demo control file
@@ -364,6 +440,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     # cost_map builds exactly the env it always did
     router = {k: cfg[k] for k in ("cost_map", "cost_alpha") if k in cfg}
     demo = bool(cfg.get("demo_mode"))
+    if cfg.get("demo_noise") and not demo:
+        raise ValueError("demo_noise is a demo-mode option (cfg needs demo_mode)")
     cost_map_file = cfg.get("cost_map_file")
     if cost_map_file is not None:
         if not demo:
@@ -396,8 +474,14 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         if demo:
             state["injections"] = 0  # reaches the ledger through the snapshot, live
 
+        noise = None  # set after reset; the snapshot reads it live
+
         def snapshot():
-            return dict(sink.stats(), **robots, **state)
+            snap = dict(sink.stats(), **robots, **state)
+            if noise is not None:  # extra lines are bytes the robots sent, not messages
+                snap["messages"] -= noise.extra_lines
+                snap["injected_noise"] = noise.counts()
+            return snap
 
         obs, info = env.reset(seed=seed)
         floor_cells = {f"{x},{y}": float(p) for (x, y), p in hook.floor_cells.items()}  # ground truth: sidecar only
@@ -409,6 +493,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             on_ready(env)
         if report:
             report(snapshot())
+        if cfg.get("demo_noise"):
+            noise = DemoNoise(seed, n, steps)
         orders = OrderTracker(zone, n)
         headers = [0] * n
         prev_pos = [(a.x, a.y) for a in agents]
@@ -438,9 +524,15 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             for i, agent in enumerate(agents):
                 pos = (agent.x, agent.y)
                 order = orders.update(i, agent.id, agent.busy, agent.target)
+                if noise is not None:
+                    headers[i] += noise.header_bump(step, i)
                 msg = build_message(zone, agent, env_id, headers[i], ts, order, pos != prev_pos[i], bool(frozen[i]),
                                     hook.stuck_counters[i].count, recorded.get(agent.id, ()))
-                sink.write(msg["serialNumber"], encode(msg), ts, headers[i])
+                line = encode(msg)
+                sink.write(msg["serialNumber"], line, ts, headers[i])
+                if noise is not None:
+                    for extra in noise.extras(step, i, msg, line):
+                        sink.write(msg["serialNumber"], extra, ts, headers[i])
                 headers[i] += 1
                 prev_pos[i] = pos
             if state["first_timestamp"] is None:
@@ -513,7 +605,8 @@ def run_fleet(run, sink_spec, ledger_path, workers, ledger_interval=DEFAULT_LEDG
     config = {k: v for k, v in run.items() if k not in ("report_interval",)}
     config.update(sink=sink_spec["kind"], rotate_bytes=sink_spec.get("rotate_bytes"), workers=workers,
                   schema_version=SCHEMA_VERSION)
-    ledger = EmitLedger(ledger_path, config, zones, run["steps"], demo_mode=bool(run.get("demo_mode")))
+    ledger = EmitLedger(ledger_path, config, zones, run["steps"], demo_mode=bool(run.get("demo_mode")),
+                        demo_noise=bool(run.get("demo_noise")))
     ctx = mp.get_context("spawn")
     q = ctx.Queue()
     pending = deque(range(zones))

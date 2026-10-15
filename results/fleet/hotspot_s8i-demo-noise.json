@@ -1,0 +1,116 @@
+{
+ "zones": {
+  "0": {
+   "n_flagged": 60,
+   "n_floor": 80,
+   "spearman": 0.3364017431430208,
+   "zero_stall_share": 0.475,
+   "k": {
+    "20": {
+     "precision": 1.0,
+     "recall": 0.25,
+     "hits": 20
+    },
+    "40": {
+     "precision": 0.75,
+     "recall": 0.375,
+     "hits": 30
+    },
+    "80": {
+     "precision": 0.525,
+     "recall": 0.525,
+     "hits": 42
+    },
+    "120": {
+     "precision": 0.35,
+     "recall": 0.525,
+     "hits": 42
+    }
+   }
+  }
+ },
+ "mean": {
+  "n_flagged": 60.0,
+  "spearman": 0.3364017431430208,
+  "zero_stall_share": 0.475,
+  "k": {
+   "20": {
+    "precision": 1.0,
+    "recall": 0.25
+   },
+   "40": {
+    "precision": 0.75,
+    "recall": 0.375
+   },
+   "80": {
+    "precision": 0.525,
+    "recall": 0.525
+   },
+   "120": {
+    "precision": 0.35,
+    "recall": 0.525
+   }
+  }
+ },
+ "grading_counts": {
+  "outcome_count": {
+   "ok": 9,
+   "off": 31
+  },
+  "outcome": {
+   "ok": 10,
+   "off": 10
+  },
+  "truth": {
+   "hit": 74,
+   "false_alarm": 26
+  }
+ },
+ "rank_grading": {
+  "top_k": [
+   20
+  ],
+  "rank_graded": 20,
+  "unranked": 20
+ },
+ "stall_in_episode": {
+  "total_stalls": 168,
+  "in_episode": 7,
+  "by_cause": {
+   "blocked_by_stuck": 1,
+   "traffic": 2,
+   "unknown": 4
+  }
+ },
+ "tag": "s8i-demo-noise",
+ "run": "s8i-demo-noise",
+ "config": {
+  "env_id": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "disturb_tag": "cfg-6949ea16f9",
+  "disturb": {
+   "floor": {
+    "cells": 80,
+    "p": [
+     0.3,
+     0.7
+    ]
+   }
+  },
+  "steps": 500,
+  "seed_base": 0,
+  "zones": 1,
+  "emit_status": "complete",
+  "emit_schema": "fleet-state/2"
+ },
+ "costmap": {
+  "generated_at": "2026-01-01T00:41:35Z",
+  "window_hours": 1.0,
+  "half_life_h": 1.0,
+  "min_stalls": 1,
+  "exclude_occupied": true
+ },
+ "platform": {
+  "platform": "macOS-14.3.1-arm64-arm-64bit",
+  "python": "3.10.6"
+ }
+}
