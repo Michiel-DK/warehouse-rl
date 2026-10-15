@@ -34,13 +34,14 @@
     </label>
     <output id="clock" class="clock" aria-hidden="true">step 0</output>
     <fieldset id="routerBox" class="router" hidden>
-      <legend>Router</legend>
-      <label><input type="radio" name="router" value="without" checked> without map</label>
-      <label><input type="radio" name="router" value="with"> with map</label>
+      <legend>Show</legend>
+      <label><input type="radio" name="router" value="without" checked> normal run</label>
+      <label><input type="radio" name="router" value="with"> run steering around suspect spots</label>
     </fieldset>
   </section>
+  <p class="howto" id="howto">Press Play to watch the shift. Tap or hover any number for the detail.</p>
   <p class="hint">1x = 1 step (5 s of fleet time) per second. When focus is not on a control, Space plays or pauses and the arrow keys step (Shift: 10 steps).</p>
-  <p class="mapnote" id="mapnote" hidden></p>
+  <p class="mapnote" id="mapnote" tabindex="0" data-hover hidden></p>
 
   <div class="grid">
     <section class="panel" aria-labelledby="h-floor">
@@ -76,9 +77,10 @@
           </ul>
         </div>
         <p class="cap">The analyser never sees the planted items.</p>
-        <p class="cap">Everything in the third row it worked out from the robots&#39; messages.</p>
+        <p class="cap">Everything under &ldquo;Concluded by the analyser from the log alone&rdquo; it worked out from the robots&#39; messages.</p>
       </div>
       <p class="state" id="mapstate"></p>
+      <p class="callsline" id="callsline" tabindex="0" data-hover></p>
     </section>
 
     <section class="panel" aria-labelledby="h-log">
@@ -125,7 +127,7 @@
       <p class="state" id="nomap"></p>
       <figure class="spark">
         <canvas id="spark" role="img" aria-label="Right-rate after each new map"></canvas>
-        <figcaption>gets better as it watches</figcaption>
+        <figcaption id="sparkcap" hidden></figcaption>
       </figure>
       <details data-details id="details-ana">
         <summary>Details</summary>

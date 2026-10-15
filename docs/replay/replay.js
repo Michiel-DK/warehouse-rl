@@ -14,14 +14,14 @@
       breakdownsNone: 'no breakdowns',
       breakdownsSome: '{n} breakdowns',
       breakdownsOne: '1 breakdown',
-      live: 'Live: a fleet is running right now. Click a highway cell to put a roadblock there and watch the analyser find it. So far {messages} robot messages read. Roadblocks placed by you: {placed}{planted}.',
+      live: 'Live: a fleet is running right now. Click an aisle cell to put a roadblock there and watch the analyser find it. So far {messages} robot messages read. Roadblocks placed by you: {placed}{planted}.',
       livePlanted: ', planted by us: {n}'
     },
     floor: {
       noMap: 'The analyser drew no map in this run.',
       mapLater: 'No map yet (the first one appears at {time}).',
-      withMap: 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the stuck-call rings come from the analyser on this run.',
-      calls: 'Stuck calls so far: {n}; still open {open}; judged right {right}, wrong {wrong}; no verdict {none}.',
+      withMap: 'The red shading belongs to the first run and is hidden here; the rings show robots held up in this second run.',
+      calls: 'Robots held up so far: {n}; still waiting: {open}.',
       drawError: 'The page hit an error while drawing: {why}',
       summary: 'Step {step} of {last}, fleet time {time}. Robots: {robots}. Log: {usable} usable, {rejected} rejected, {dups} duplicates. {map}',
       summaryMap: 'Latest map at {time}, right {p} of the time.',
@@ -29,7 +29,7 @@
       announce: 'Step {step} of {last}, fleet time {time}. Robots: {robots}.',
       scrub: 'step {step} of {last}, fleet time {time}',
       clock: 'step {step} / {last}  {time}',
-      withMapNote: 'With map: {note} Alpha {alpha}, {deliveries} deliveries (pick rate {rate} per hour) in this second run.'
+      withMapNote: 'Second run, steering robots around the suspect spots: {deliveries} deliveries ({rate} per hour).'
     },
     log: {
       arrivedUnit: 'messages, {size}',
@@ -47,9 +47,11 @@
     analyser: {
       none: '—',
       noMap: 'no map yet',
-      needTruth: 'start live with the reveal switch to score the map',
+      needTruth: 'not scored: the planted spots are hidden in this live run',
       spark: 'Right-rate after each new map: {list}',
-      sparkNone: 'No map yet.'
+      sparkNone: 'No map yet.',
+      sparkBetter: 'gets better as it watches',
+      sparkFlat: 'right-rate after each new map'
     },
     lesson: {
       hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
@@ -61,6 +63,7 @@
       tickOff: ' ✗',
       held: 'held up',
       failed: 'did not hold',
+      notChecked: ' not checked yet',
       none: 'Nothing to report yet.',
       noData: 'Lesson data is not included in this file.'
     },
@@ -82,26 +85,23 @@
       lost: 'Disconnected from {base}, retrying every {every} s. {age}{err}',
       lostNever: 'No data received yet.',
       lostAge: 'The numbers below are from {s} s ago and are not live.',
-      aria: 'Warehouse floor. Click or press Enter on a highway cell to place a roadblock; arrow keys move the cursor.',
-      ariaNow: 'Warehouse floor, step {step}, {robots} robots, {cells} cells flagged. Press Enter on a highway cell to place a roadblock.',
+      aria: 'Warehouse floor. Click or press Enter on an aisle cell to place a roadblock; arrow keys move the cursor.',
+      ariaNow: 'Warehouse floor, step {step}, {robots} robots, {cells} cells flagged. Press Enter on an aisle cell to place a roadblock.',
       placedBy: 'placed by you (outlined roadblocks)',
       reveal: ' Reveal the hidden roadblocks',
-      promptLabel: 'Roadblock at {cell}, chance a robot is stopped: ',
+      promptLabel: 'Chance a robot is stopped at this roadblock: ',
       promptRange: 'Chance that a robot is stopped when it tries to enter the cell',
       promptDialog: 'Place a roadblock',
       place: 'Place',
       cancel: 'Cancel',
-      placed: 'Roadblock placed at {cell} (p {p}). It starts at step {step}. The cell turns red when the analyser flags it.',
+      placed: 'Roadblock placed. It starts at step {step}. The spot turns red when the analyser flags it.',
       notPlaced: 'Not placed: {why}.',
       serverNo: 'the server said no',
       unreachable: 'Not placed: the live server is not reachable.',
-      cannot: 'Cannot place at {cell}: {why}.',
+      cannot: 'Cannot place a roadblock there: {why}.',
       outside: 'outside the floor',
-      shelf: 'a shelf cell: roadblocks go on highway cells only',
-      goal: 'a goal cell: roadblocks go on plain highway cells only',
-      cellHere: 'Cell {cell}: {why}',
-      cellClick: 'Click to place a roadblock at {cell}',
-      cellKey: 'Cell {cell}: highway, press Enter to place a roadblock',
+      shelf: 'a shelf cell: roadblocks go on aisle cells only',
+      goal: 'a goal cell: roadblocks go on plain aisle cells only',
       noGrid: 'floor layout not available yet',
       noLessons: 'No lessons yet. Rules need a few events in a closed time window.',
       notStarted: 'not started'
@@ -146,6 +146,11 @@
     verdictOk: 'verdict: held, graded at {t}',
     verdictOff: 'verdict: did not hold, graded at {t}',
     origin: ' Written on run {run}.',
+    calls: 'A robot is held up when it waits 30 s with a job (a stuck call). So far {n}, still open {open}. Of the ended ones: judged right {right}, wrong {wrong}, no verdict {none}.',
+    withMapNote: '{note} Router weight alpha {alpha}.',
+    cellHere: 'Cell {cell}: {why}',
+    cellClick: 'Click to place a roadblock at {cell}',
+    cellKey: 'Cell {cell}: aisle, press Enter to place a roadblock',
     close: 'Press Escape to close.'
   };
 
@@ -309,6 +314,12 @@
     setHover('s-found', v.hover.found);
     setHover('s-checks', v.hover.checks);
     drawSpark(v.series);
+    // the caption follows the data: "gets better" only when the right-rate of the latest map is above the first one
+    var cap = $('sparkcap'), sv = v.series;
+    if (cap) {
+      cap.hidden = !sv.length;
+      cap.textContent = sv.length >= 2 && sv[sv.length - 1].p > sv[0].p ? VISIBLE_COPY.analyser.sparkBetter : VISIBLE_COPY.analyser.sparkFlat;
+    }
   }
 
   var sparkSig = null;
@@ -323,11 +334,15 @@
     var c = cv.getContext('2d');
     c.setTransform(d, 0, 0, d, 0, 0);
     c.clearRect(0, 0, W, H);
-    var padL = 8, padR = 44, padT = 8, padB = 8, w = W - padL - padR, h = H - padT - padB;
+    var padL = 40, padR = 44, padT = 8, padB = 8, w = W - padL - padR, h = H - padT - padB;
     function px(x) { return padL + x * w; }
     function py(p) { return padT + (1 - p) * h; }
     c.strokeStyle = css('--line'); c.lineWidth = 1;
-    [0, 1].forEach(function (g) { c.beginPath(); c.moveTo(padL, py(g)); c.lineTo(padL + w, py(g)); c.stroke(); });
+    c.fillStyle = css('--muted'); c.font = 11 + 'px system-ui, sans-serif'; c.textAlign = 'right'; c.textBaseline = 'middle';
+    [0, 1].forEach(function (g) {
+      c.beginPath(); c.moveTo(padL, py(g)); c.lineTo(padL + w, py(g)); c.stroke();
+      c.fillText(pct(g), padL - 6, py(g));
+    });
     cv.setAttribute('aria-label', series.length ? fill(VISIBLE_COPY.analyser.spark, { list: series.map(function (s) { return pct(s.p); }).join(', ') })
       : VISIBLE_COPY.analyser.sparkNone);
     if (!series.length) return;
@@ -342,12 +357,15 @@
   }
 
   var lessonSig = null;
-  // items = [{ kind, conf, mark: 'ok' | 'off' | null, hover }] newest first, already cut to five
+  // items = [{ key, kind, conf, mark: 'ok' | 'off' | null, hover }] newest first, already cut to five; key = a stable identity of
+  // the lesson, so keyboard focus stays on the same line when the list is rebuilt
   function paintLessons(items, emptyText) {
     var sig = JSON.stringify([items, emptyText]);
     if (sig === lessonSig) return;
     lessonSig = sig;
     var ul = $('lessons');
+    var act = document.activeElement;
+    var focusKey = act && act.parentNode === ul ? act.getAttribute('data-key') : null;
     ul.textContent = '';
     setText('lessonstate', items.length ? '' : emptyText);
     items.forEach(function (it, i) {
@@ -360,15 +378,23 @@
         mark.setAttribute('role', 'img');
         mark.setAttribute('aria-label', it.mark === 'ok' ? VISIBLE_COPY.lesson.held : VISIBLE_COPY.lesson.failed);
         conf.appendChild(mark);
+      } else {
+        conf.appendChild(el('span', 'mark', VISIBLE_COPY.lesson.notChecked));
       }
       li.appendChild(conf);
       li.id = 'les-' + i;
       li.tabIndex = 0;
       li.setAttribute('data-hover', '');
+      li.setAttribute('data-key', it.key);
       wireOne(li);
       ul.appendChild(li);
       setHover(li.id, it.hover);
     });
+    if (focusKey !== null) {
+      var again = null;
+      Array.prototype.forEach.call(ul.children, function (n) { if (n.getAttribute('data-key') === focusKey) again = n; });
+      if (again) again.focus(); else hideHover();
+    }
   }
 
   function paintFooter() {
@@ -926,10 +952,11 @@
     if (!HAS_LESSONS) return { items: [], empty: VISIBLE_COPY.lesson.noData };
     var shown = LESSONS.filter(function (l) { return l.decided_at_step <= step; }).slice().reverse().slice(0, 5);
     var items = shown.map(function (l) {
+      var key = l.decided_at_step + ':' + LESSONS.indexOf(l);
       var known = l.graded_at_step !== null && l.graded_at_step <= step;
       var verdict = known ? fill(l.verdict === 'ok' ? HOVER_COPY.verdictOk : HOVER_COPY.verdictOff, { t: clock(l.graded_at_step) })
         : (l.graded_at_step === null ? HOVER_COPY.verdictNa : HOVER_COPY.verdictOpen);
-      return { kind: l.lesson_kind, conf: l.confidence, mark: known ? (l.verdict === 'ok' ? 'ok' : 'off') : null,
+      return { key: key, kind: l.lesson_kind, conf: l.confidence, mark: known ? (l.verdict === 'ok' ? 'ok' : 'off') : null,
         hover: fill(HOVER_COPY.lessonLine, { text: l.text, kind: l.lesson_kind, zone: l.zone, c: l.confidence.toFixed(2), drawn: clock(l.decided_at_step),
           verdict: verdict, origin: SRC.carry_lessons_run ? fill(HOVER_COPY.origin, { run: SRC.carry_lessons_run }) : '' }) };
     });
@@ -951,15 +978,22 @@
       else if (e.verdict === 'confirmed') right++;
       else if (e.verdict === 'refuted') wrong++;
     });
-    return fill(VISIBLE_COPY.floor.calls, { n: n, open: open, right: right, wrong: wrong, none: n - open - right - wrong });
+    var v = { n: n, open: open, right: right, wrong: wrong, none: n - open - right - wrong };
+    return { text: fill(VISIBLE_COPY.floor.calls, v), hover: fill(HOVER_COPY.calls, v) };
   }
+  var callsText = null;
   function mapState(step) {
-    var st = $('mapstate'), t;
+    var t;
     if (layer === 'with') t = VISIBLE_COPY.floor.withMap;
     else if (!pubs.length) t = VISIBLE_COPY.floor.noMap;
     else if (!latestPublish(step)) t = fill(VISIBLE_COPY.floor.mapLater, { time: clock(pubs[0].step) });
     else t = '';
-    st.textContent = (t ? t + ' ' : '') + callCounts(step);
+    $('mapstate').textContent = t;
+    // the visible line counts held-up robots only; how the calls were judged is in its tip (hover, tap or focus)
+    var cc = callCounts(step);
+    if (cc.text !== callsText) { callsText = cc.text; setText('callsline', cc.text); } // a rewrite drops the tip's sr span
+    setHover('callsline', cc.hover);
+    $('mapnote').hidden = layer !== 'with';
   }
 
   // ---- text for screen readers ----
@@ -1058,6 +1092,9 @@
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     var t = e.target && e.target.tagName;
     if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'BUTTON') return;
+    // Space and the arrows belong to an open-able summary or a focused number with a tip, not to playback
+    var own = e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowLeft';
+    if (own && e.target && e.target.closest && e.target.closest('summary,[data-hover]')) return;
     if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -1068,10 +1105,9 @@
 
   if (hasMap) {
     $('routerBox').hidden = false;
-    var note = $('mapnote');
-    note.hidden = false;
-    note.textContent = fill(VISIBLE_COPY.floor.withMapNote, { note: R.with_map.note, alpha: R.with_map.alpha,
-      deliveries: R.with_map.deliveries, rate: R.with_map.pick_rate });
+    // shown only while the second run is selected (mapState toggles it); the run's own note and alpha go to the tip
+    setText('mapnote', fill(VISIBLE_COPY.floor.withMapNote, { deliveries: fmt(R.with_map.deliveries), rate: R.with_map.pick_rate }));
+    setHover('mapnote', fill(HOVER_COPY.withMapNote, { note: R.with_map.note, alpha: R.with_map.alpha }));
     Array.prototype.forEach.call(document.getElementsByName('router'), function (r) {
       r.addEventListener('change', function () { if (r.checked) { layer = r.value; draw(); announce(); } });
     });
@@ -1096,7 +1132,7 @@
     var LV = VISIBLE_COPY.live;
     paintHeader(fill(VISIBLE_COPY.header.live, { messages: 0, placed: 0, planted: '' }));
     setHover('lessoncap', HOVER_COPY.lessonCapOwn); // live lessons are written on this run, not carried
-    ['.controls', '.hint', '#mapnote'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
+    ['.controls', '.hint', '#howto', '#mapnote', '#callsline'].forEach(function (q) { var n = document.querySelector(q); if (n) n.hidden = true; });
     $('routerBox').hidden = true;
     $('grades').parentNode.hidden = true; // the per-map graded bars need the recorded run; live shows the counts instead
     $('detail-notes').hidden = true;
@@ -1172,7 +1208,7 @@
           ok.disabled = false;
           if (res.ok) {
             placed[key] = p;
-            say(fill(LV.placed, { cell: key, p: p.toFixed(2), step: res.j.applies_at_step }));
+            say(fill(LV.placed, { step: res.j.applies_at_step }));
             closePrompt(true);
           } else say(fill(LV.notPlaced, { why: res.j && res.j.error ? res.j.error : LV.serverNo }));
         })
@@ -1190,9 +1226,9 @@
     }
     function openPrompt(x, y) {
       var why = whyNot(x, y);
-      if (why) { say(fill(LV.cannot, { cell: x + ',' + y, why: why })); return; }
+      if (why) { say(fill(LV.cannot, { why: why })); return; }
       promptCell = x + ',' + y;
-      plabel.textContent = fill(LV.promptLabel, { cell: promptCell });
+      plabel.textContent = LV.promptLabel;
       prompt.hidden = false;
       pr.focus();
       drawLive();
@@ -1213,7 +1249,7 @@
     floorEl.addEventListener('mousemove', function (ev) {
       if (!G) return;
       var c = cellAt(ev), why = whyNot(c[0], c[1]), cell = c[0] + ',' + c[1];
-      floorEl.title = why ? fill(LV.cellHere, { cell: cell, why: why }) : fill(LV.cellClick, { cell: cell });
+      floorEl.title = why ? fill(HOVER_COPY.cellHere, { cell: cell, why: why }) : fill(HOVER_COPY.cellClick, { cell: cell });
     });
     floorEl.addEventListener('keydown', function (e) {
       if (!G) return;
@@ -1224,7 +1260,7 @@
         cursor = [Math.max(0, Math.min(G.width - 1, cursor[0] + d[0])), Math.max(0, Math.min(G.height - 1, cursor[1] + d[1]))];
         var why = whyNot(cursor[0], cursor[1]), cell = cursor[0] + ',' + cursor[1];
         var here = tipProvider(cursor[0], cursor[1]).map(function (i) { return tipLines(i).join(', '); }).join('; ');
-        $('live').textContent = (why ? fill(LV.cellHere, { cell: cell, why: why }) : fill(LV.cellKey, { cell: cell })) + (here ? '. ' + here : '');
+        $('live').textContent = (why ? fill(HOVER_COPY.cellHere, { cell: cell, why: why }) : fill(HOVER_COPY.cellKey, { cell: cell })) + (here ? '. ' + here : '');
         drawLive();
       } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPrompt(cursor[0], cursor[1]); }
     });
@@ -1373,7 +1409,7 @@
     function liveLessons(s) {
       var V = HOVER_COPY.liveVerdict;
       return s.lessons.slice(0, 5).map(function (l) {
-        return { kind: l.lesson_kind, conf: l.confidence, mark: l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : null),
+        return { key: [l.decided_at, l.lesson_kind, l.zone, l.text].join('|'), kind: l.lesson_kind, conf: l.confidence, mark: l.state === 'ok' ? 'ok' : (l.state === 'off' ? 'off' : null),
           hover: fill(HOVER_COPY.lessonLineLive, { text: l.text, kind: l.lesson_kind, zone: l.zone, c: l.confidence.toFixed(2),
             drawn: l.decided_at, verdict: V[l.state] || V.pending }) };
       });

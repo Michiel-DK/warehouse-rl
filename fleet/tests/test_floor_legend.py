@@ -279,7 +279,7 @@ LABELS = ["Robots", "Planted by us, hidden from the analyser", "Concluded by the
           "down, the robot reported an error", "bad floor cell", "breakdown moment",
           "suspected bad floor, darker = more evidence", "the ten most suspected cells, numbered 1 to 10", "stuck call, raised after 30 s of waiting with a job",
           "the call was later marked right or wrong", "show pickers in colour", "The analyser never sees the planted items.",
-          "Everything in the third row it worked out from the robots' messages."]
+          "Everything under \u201cConcluded by the analyser from the log alone\u201d it worked out from the robots' messages."]
 BANNED = re.compile(r"stalled|frozen|detector episode", re.I)
 
 
