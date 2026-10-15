@@ -29,6 +29,17 @@ and that filter reads live state (policy dependent). The post-end shrink removes
 draws from the global np.random stream after each delivery, which also depends on what the policy delivered. So two
 policies share the burst order, not necessarily the burst shelves, and not the shrink.
 
+Demo mode (S8F, `demo_mode=True`) is NOT a measurement mode. It is a demo-only runtime seam: between steps a caller may
+`inject_floor({(x, y): p})` (bad floor patches, same ENTER semantics and precedence as the scheduled floor, coins from
+a separate pre-drawn `_demo_coin`) or `inject_breakdown(agent_id, duration_steps)` (writes one row of frozen_schedule from
+`_t` onward). Injections break the "(seed, config) only" invariant BY DESIGN and must never reach scripts/evaluate.py
+(which gets no flag). Without an injection, demo mode is step-for-step identical to non-demo mode. Choices made here:
+RuntimeError is checked before ValueError (demo off / episode over / not yet reset, then payload); "int" means _is_int
+(bool rejected); injecting an already injected cell overrides its p; inject_* before the first reset raises RuntimeError;
+reset clears all injections; floor_cells / floor_coin are never mutated (injected cells live in `injected_floor`).
+The demo generator is seeded SeedSequence([seed, hash(full cfg), _SEED_TAG, _DEMO_TAG]), draws nothing at reset, and
+`_demo_coin` (A, T) is drawn once at the first inject_floor of an episode.
+
 Step clock: `self._t` is the index of the step being (or about to be) executed. It advances once per step, at the end,
 in `_build_info`. Every hook of step s (attribute_macro_actions, find_path, resolve_move_conflict, ...) therefore sees
 the schedule of step s, and after step s the layer already describes step s+1 (what action masks need).
@@ -47,6 +58,7 @@ import pyastar2d
 STEP_SECONDS = 5  # same constant as pick-rate = deliveries * 3600 / (5 * steps)
 _SEED_TAG = 0x44495354  # fixed tag mixed into the layer SeedSequence ("DIST")
 _FLOOR_TAG = 0x464C4F52  # extra tag for the separate floor generator ("FLOR")
+_DEMO_TAG = 0x44454D4F  # extra tag for the demo-only injection generator ("DEMO")
 
 # Types the layer implements. A key outside this set raises ValueError (never a silent no-op).
 LANDED_TYPES = ("breakdown", "delay", "blocked_cell", "burst", "outage", "floor")
@@ -220,7 +232,7 @@ def validate_cost_map(cost_map, grid_size):
 
 class DisturbedWarehouse(Warehouse):
     def __init__(self, *args, disturb, assign_care_for_agents=False, cost_map=None, cost_alpha=DEFAULT_COST_ALPHA,
-                 **kwargs):
+                 demo_mode=False, **kwargs):
         # cost_map (S8C, the analyst's per-zone cost map; NOT part of the disturb config, so the schedules and the floor
         # layout never depend on it): None | {(x, y): cost in (0, 1]} | "oracle". With an active (non-empty) map and
         # cost_alpha > 0 EVERY find_path of this env (macro-action assignment, vendor replans, recovery reroute, policy
@@ -233,6 +245,9 @@ class DisturbedWarehouse(Warehouse):
         # call the env makes when it accepts a macro action (W:366). False (default) is the vendor behaviour.
         self.disturb_config = validate_config(disturb)
         self.assign_care_for_agents = bool(assign_care_for_agents)
+        if not isinstance(demo_mode, bool):
+            raise ValueError(f"demo_mode must be a bool, got {demo_mode!r}")
+        self.demo_mode = demo_mode  # S8F demo-only injection seam; NOT a measurement mode (module docstring)
         self._in_macro_actions = False
         super().__init__(*args, **kwargs)
         if not isinstance(self.max_steps, int) or self.max_steps < 1:
@@ -280,6 +295,10 @@ class DisturbedWarehouse(Warehouse):
         self._abandoned = 0
         self.delivered_per_agent = [0] * A
         self.burst_order = []  # shelf ids in burst priority order (pre-generated at reset when burst is configured)
+        self.injected_floor = {}  # S8F demo injections, (x, y) -> p; separate from floor_cells, cleared at reset
+        self._demo_coin = None  # (A, T) coins, drawn at the first inject_floor of an episode
+        self._demo_rng = None  # set in _generate_schedule in demo mode only
+        self._injected_events = 0
 
     def _generate_schedule(self, seed):
         """Whole schedule for max_steps x num_agents, drawn in a fixed order. No lazy or state-dependent draws."""
@@ -335,6 +354,9 @@ class DisturbedWarehouse(Warehouse):
             ps = frng.uniform(f["p"][0], f["p"][1], size=f["cells"])
             self.floor_cells = {self._blockable_cells[int(i)]: float(pc) for i, pc in zip(idx, ps)}
             self.floor_coin = frng.random((A, T))
+        if self.demo_mode:  # child generator: draws nothing here, see inject_floor
+            self._demo_rng = np.random.default_rng(
+                np.random.SeedSequence([s, config_hash_int(cfg), _SEED_TAG, _DEMO_TAG]))
         for t in range(T):
             if blocked[t]:
                 self._blocked_by_step[t] = frozenset(blocked[t])
@@ -349,6 +371,48 @@ class DisturbedWarehouse(Warehouse):
         self._set_active_map()
         self._clear_map_counters()
         return obs
+
+    # ---------------------------------------------------------------- demo injections (S8F)
+    def _check_injectable(self):
+        if not self.demo_mode:
+            raise RuntimeError("injections need demo_mode=True")
+        if self._demo_rng is None:
+            raise RuntimeError("inject_* called before reset()")
+        if self._t >= self.max_steps:
+            raise RuntimeError("the episode is over; inject_* is for between steps of a running episode")
+
+    def inject_floor(self, cells):
+        """Demo only, call BETWEEN steps. cells = non-empty {(x, y): p}; from step `_t` on, a FORWARD request into an
+        injected cell is NOOPed iff _demo_coin[agent.id - 1, t] < p (precedence frozen > delayed > floor > obstacle)."""
+        self._check_injectable()
+        if not isinstance(cells, dict) or not cells:
+            raise ValueError(f"cells must be a non-empty dict {{(x, y): p}}, got {cells!r}")
+        rows, cols = self.grid_size
+        clean = {}
+        for k, p in cells.items():
+            if not (isinstance(k, tuple) and len(k) == 2 and all(_is_int(c) for c in k)):
+                raise ValueError(f"injected cell {k!r} must be an (int, int) tuple")
+            if not (0 <= k[0] < cols and 0 <= k[1] < rows):
+                raise ValueError(f"injected cell {k!r} is outside the {cols}x{rows} grid")
+            if not _is_real(p) or not 0 <= p <= 1:
+                raise ValueError(f"injected p for {k!r} must be a finite real in [0, 1], got {p!r}")
+            clean[(int(k[0]), int(k[1]))] = float(p)
+        if self._demo_coin is None:
+            self._demo_coin = self._demo_rng.random((self.num_agents, self.max_steps))
+        self.injected_floor.update(clean)
+        self._injected_events += 1
+
+    def inject_breakdown(self, agent_id, duration_steps):
+        """Demo only, call BETWEEN steps. Freezes agent `agent_id` (vendor agent.id, 1-based) for steps
+        [_t, _t + duration_steps), clipped at max_steps; writes that one frozen_schedule row only, never a column < _t."""
+        self._check_injectable()
+        if not _is_int(agent_id) or not 1 <= agent_id <= self.num_agents:
+            raise ValueError(f"agent_id must be an int in 1..{self.num_agents}, got {agent_id!r}")
+        if not _is_int(duration_steps) or duration_steps < 1:
+            raise ValueError(f"duration_steps must be an int >= 1, got {duration_steps!r}")
+        t = self._t
+        self.frozen_schedule[agent_id - 1, t:t + duration_steps] = True
+        self._injected_events += 1
 
     # ---------------------------------------------------------------- queries
     def _masks_at(self, t):
@@ -464,7 +528,7 @@ class DisturbedWarehouse(Warehouse):
         for agent in agent_list:
             if self._suppressed[agent.id - 1]:
                 agent.req_action = Action.NOOP  # all micro-actions: FORWARD, LEFT, RIGHT, TOGGLE_LOAD
-            elif self.floor_cells and self._floor_skips(agent, t):
+            elif (self.floor_cells or self.injected_floor) and self._floor_skips(agent, t):
                 # Floor: ENTER semantics, not leave. req_location is the target cell the vendor's move resolution
                 # evaluates; a move INTO a bad cell is the physical event (wheel slip on a bad patch / floor marker
                 # misread on arrival). "Leave" would also fire for agents parked on a floor cell. Precedence
@@ -481,7 +545,11 @@ class DisturbedWarehouse(Warehouse):
         if agent.req_action != Action.FORWARD or t >= self.max_steps:
             return False
         target = agent.req_location(self.grid_size)
-        if target == (agent.x, agent.y) or target not in self.floor_cells:
+        if target == (agent.x, agent.y):
+            return False
+        if target in self.injected_floor:  # demo override: injected p and the demo coin
+            return bool(self._demo_coin[agent.id - 1, t] < self.injected_floor[target])
+        if target not in self.floor_cells:
             return False
         return bool(self.floor_coin[agent.id - 1, t] < self.floor_cells[target])
 
@@ -564,6 +632,8 @@ class DisturbedWarehouse(Warehouse):
         if self._active_map:
             self._map_entered += sum(1 for p, q in zip(self._prev_pos, pos) if p != q and q in self._active_map)
         self._prev_pos = pos
+        info["injected_events"] = self._injected_events
+        self._injected_events = 0
         info["routes_changed_by_map"] = self._routes_changed
         info["map_cells_entered"] = self._map_entered
         self._routes_changed = 0
