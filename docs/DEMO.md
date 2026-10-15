@@ -309,3 +309,54 @@ What we need from you (the Sprint 5 brief's open operator items, before Stage 2)
 - Your definition of "manual reset".
 - Whether the fleet manager speaks VDA 5050.
 - How the files arrive: size, cadence, format, compression.
+
+## 8. Live mode: place a roadblock and watch the analyser find it
+
+This is a demo, not a measurement. One command starts a fleet, the ingester, a cost-map publisher, the lessons and the
+grader, and serves what the analyser knows over HTTP on `127.0.0.1`. The replay page can then poll it.
+
+```sh
+# terminal 1 (medium map, the default regime: 80 hidden sticky floor cells, p 0.9-0.99; --speed 5 = 5x real time)
+.venv/bin/python fleet/live.py --speed 5 --steps 500 --port 8765
+# prints:  pgid <N>   listening http://127.0.0.1:8765   run dir fleet/data/live-<timestamp>
+# terminal 2: serve the page (do not open it from a script)
+python3 -m http.server 8000 --directory docs/replay
+# in a browser: http://localhost:8000/?live=http://localhost:8765
+#   click a highway cell, keep p at 0.95, press Place: the cell gets a blue outline ("placed by you").
+#   It turns red only when the analyser's own cost map (built from the robots' messages) contains the cell.
+# stop everything: Ctrl-C in terminal 1 (exit code 0, the whole process group is gone)
+```
+
+Without the page, the same thing from a shell (this is a real run, `--steps 400 --speed 20 --lesson-window-h 0.05`,
+trimmed; the page itself was not opened in a browser):
+
+```text
+$ curl -s localhost:8765/state        # at ~20 s wall: step 74, sim_time 2026-01-01T00:06:10Z, truth null
+$ curl -s -X POST -H 'Content-Type: application/json' -d '{"floor":{"5,3":0.95}}' localhost:8765/inject
+{"applies_at_step":78}
+$ curl -s localhost:8765/state        # 30 s later
+step 194, costmap cells 31, "5,3" in costmap.cells: True, top10[0] = {"cell": "18,11", "cost": 1.0}
+$ kill -INT <live.py>                 # exit code 0
+```
+
+What the viewer sees: robots move on the floor; the extractor panel counts messages read from the growing files; every
+60 simulated seconds the cost map is rebuilt from stalls found in those messages (forward only, never from the
+injection list); every 120 simulated seconds lessons are drawn and graded. `applies_at_step` is the step the emitter
+will apply the roadblock at (it was 78 for an observed step of 74: the emitter polls the control file right after it
+writes a step, plus a small lead). Add `--reveal` to get `/state.truth` and a toggle on the page that shows the hidden
+roadblocks. `--router none` runs the fleet without the cost-aware router (the map is still published and shown).
+`live.py` runs 720 steps unless you pass `--steps 500`.
+
+Why the default regime is sticky floor, computed from `results/closed_loop_sticky/summary.json` (30 seeds):
+
+| arm | pick rate (lines/h) |
+|---|---|
+| `none` (floor on, no map) | 16.13 |
+| `map_a32` (cost map, alpha 32) | 20.30 |
+
+Paired delta `map_a32` minus `none`: +4.18 lines/h, CI95 [2.20, 6.15], which is 11.1 % of the 37.5 lines/h the floor
+costs (undisturbed reference 53.66). Measured config: `stuck_aware_cta` with `timeout` recovery, medium map, 500 steps.
+
+The live demo refreshes the cost map from its own stream every 60 simulated seconds. That was NOT what was measured: the
+measurement used one fixed map built in a separate phase-A run (`phaseA/costmap.json`). The live demo shows the
+mechanism, not the number.
