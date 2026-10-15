@@ -1,0 +1,180 @@
+{
+ "zones": {
+  "0": {
+   "n_flagged": 74,
+   "n_floor": 80,
+   "spearman": 0.6618840677666261,
+   "zero_stall_share": 0.2375,
+   "k": {
+    "20": {
+     "precision": 1.0,
+     "recall": 0.25,
+     "hits": 20
+    },
+    "40": {
+     "precision": 0.9,
+     "recall": 0.45,
+     "hits": 36
+    },
+    "80": {
+     "precision": 0.6,
+     "recall": 0.6,
+     "hits": 48
+    },
+    "120": {
+     "precision": 0.4,
+     "recall": 0.6,
+     "hits": 48
+    }
+   }
+  },
+  "1": {
+   "n_flagged": 89,
+   "n_floor": 80,
+   "spearman": 0.6107696296109724,
+   "zero_stall_share": 0.175,
+   "k": {
+    "20": {
+     "precision": 0.95,
+     "recall": 0.2375,
+     "hits": 19
+    },
+    "40": {
+     "precision": 0.925,
+     "recall": 0.4625,
+     "hits": 37
+    },
+    "80": {
+     "precision": 0.65,
+     "recall": 0.65,
+     "hits": 52
+    },
+    "120": {
+     "precision": 0.45,
+     "recall": 0.675,
+     "hits": 54
+    }
+   }
+  },
+  "2": {
+   "n_flagged": 80,
+   "n_floor": 80,
+   "spearman": 0.5835295914008195,
+   "zero_stall_share": 0.2,
+   "k": {
+    "20": {
+     "precision": 1.0,
+     "recall": 0.25,
+     "hits": 20
+    },
+    "40": {
+     "precision": 0.9,
+     "recall": 0.45,
+     "hits": 36
+    },
+    "80": {
+     "precision": 0.6875,
+     "recall": 0.6875,
+     "hits": 55
+    },
+    "120": {
+     "precision": 0.4583333333333333,
+     "recall": 0.6875,
+     "hits": 55
+    }
+   }
+  }
+ },
+ "mean": {
+  "n_flagged": 81.0,
+  "spearman": 0.6187277629261393,
+  "zero_stall_share": 0.2041666666666667,
+  "k": {
+   "20": {
+    "precision": 0.9833333333333334,
+    "recall": 0.24583333333333335
+   },
+   "40": {
+    "precision": 0.9083333333333333,
+    "recall": 0.45416666666666666
+   },
+   "80": {
+    "precision": 0.6458333333333334,
+    "recall": 0.6458333333333334
+   },
+   "120": {
+    "precision": 0.4361111111111111,
+    "recall": 0.6541666666666667
+   }
+  }
+ },
+ "grading_counts": {
+  "outcome_count": {
+   "off": 754,
+   "ok": 786
+  },
+  "outcome": {
+   "ok": 292,
+   "off": 128
+  },
+  "lesson": {
+   "off": 11,
+   "ok": 4
+  },
+  "truth": {
+   "hit": 1171,
+   "false_alarm": 612
+  },
+  "lesson_truth": {
+   "hit": 28,
+   "false_alarm": 1
+  }
+ },
+ "rank_grading": {
+  "top_k": [
+   20
+  ],
+  "rank_graded": 420,
+  "unranked": 1120
+ },
+ "stall_in_episode": {
+  "total_stalls": 2543,
+  "in_episode": 116,
+  "by_cause": {
+   "blocked_by_stuck": 18,
+   "traffic": 24,
+   "unknown": 74
+  }
+ },
+ "tag": "s8e-long-w1.0",
+ "run": "s8e-long",
+ "config": {
+  "env_id": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "disturb_tag": "cfg-6949ea16f9",
+  "disturb": {
+   "floor": {
+    "cells": 80,
+    "p": [
+     0.3,
+     0.7
+    ]
+   }
+  },
+  "steps": 2000,
+  "seed_base": 0,
+  "zones": 3,
+  "emit_status": "complete",
+  "emit_schema": "fleet-state/2"
+ },
+ "costmap": {
+  "generated_at": "2026-01-01T02:46:35Z",
+  "window_hours": 1.0,
+  "half_life_h": 1.0,
+  "min_stalls": 1,
+  "exclude_occupied": true
+ },
+ "platform": {
+  "platform": "macOS-14.3.1-arm64-arm-64bit",
+  "python": "3.10.6"
+ }
+}
