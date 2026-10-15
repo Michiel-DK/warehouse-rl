@@ -34,13 +34,13 @@
     if (kind === 'agv') c.arc(cx, cy, r, 0, 6.2832); else c.rect(cx - r, cy - r, 2 * r, 2 * r);
   }
   // Colour is never the only channel: moving = filled, working = filled with a centre dot, waiting = hollow,
-  // down = filled with a cross. Pickers are a muted grey unless "show pickers in colour" is ticked; the cross stays.
+  // down = filled with a cross. Pickers are a muted grey unless "show pickers in colour" is ticked; the shapes stay.
   function drawRobot(c, kind, cx, cy, disp, r) {
     var grey = kind === 'picker' && !showPickers;
     var col = grey ? css('--picker') : css('--' + disp), bg = css('--bg'), panel = css('--panel');
     c.save();
     c.lineWidth = 1.5; c.strokeStyle = bg; c.fillStyle = col;
-    if (disp === 'waiting' && !grey) {
+    if (disp === 'waiting') {
       robotPath(c, kind, cx, cy, r); c.fillStyle = panel; c.fill();
       c.strokeStyle = col; c.lineWidth = 2.5; c.stroke();
     } else {
@@ -50,7 +50,7 @@
     if (disp === 'down') {
       var d = r * 0.55;
       c.beginPath(); c.moveTo(cx - d, cy - d); c.lineTo(cx + d, cy + d); c.moveTo(cx + d, cy - d); c.lineTo(cx - d, cy + d); c.stroke();
-    } else if (disp === 'working' && !grey) {
+    } else if (disp === 'working') {
       c.beginPath(); c.arc(cx, cy, r * 0.3, 0, 6.2832); c.fill();
     }
     c.restore();
@@ -124,8 +124,8 @@
 
   // tooltip: hover (mouse) or tap (touch) on a robot. provider(cx, cy) -> [{id, kind, raw, disp, job, waitS}].
   function tipLines(i) {
-    return [i.id + ', ' + (i.kind === 'agv' ? 'AGV' : 'picker'), 'State: ' + i.disp + ' (' + (RAW_TEXT[i.raw] || i.raw) + ')',
-            'Job: ' + (i.job || 'none'), 'Waiting: ' + i.waitS + ' s'];
+    return [i.id + ', ' + (i.kind === 'agv' ? 'AGV' : 'picker'), 'State: ' + i.disp + ' (' + (RAW_TEXT[i.raw] || 'no further detail') + ')',
+            'Job: ' + (i.job || 'none'), (i.job ? 'Waiting: ' : 'Not moving: ') + i.waitS + ' s'];
   }
   function refreshTip() {
     var tip = $('tip');
@@ -161,9 +161,14 @@
       if (ev.pointerType !== 'touch') return;
       var c = cellOf(ev);
       var same = tipAt && c && tipAt.cell[0] === c[0] && tipAt.cell[1] === c[1];
-      tipAt = c && !same ? { cell: c, x: ev.clientX, y: ev.clientY } : null;
+      // only a tap on a robot opens a tooltip, so a tap on an empty cell leaves tipAt null (the live prompt relies on it)
+      tipAt = c && !same && tipProvider && tipProvider(c[0], c[1]).length ? { cell: c, x: ev.clientX, y: ev.clientY } : null;
       refreshTip();
     });
+    function clear() { if (tipAt) { tipAt = null; refreshTip(); } }
+    document.addEventListener('pointerdown', function (ev) { if (ev.target !== cv) clear(); });
+    window.addEventListener('scroll', clear, { passive: true });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') clear(); });
   }
 
   // ---- live mode (S8G): ?live=<url on localhost> polls the analyser's /state at 2 Hz; without the param nothing below runs ----
@@ -527,17 +532,22 @@
   }
 
   function callCounts(step) {
-    var n = 0, right = 0, wrong = 0;
+    // open = not ended at this step; an ended call is right (confirmed), wrong (refuted) or has no verdict (inconclusive,
+    // ungraded, or a layer without a grader)
+    var n = 0, open = 0, right = 0, wrong = 0;
     (layer === 'with' ? episodesWith : episodesMain).forEach(function (e) {
       if (e.start_step > step) return;
       n++;
-      if (e.end_step !== null && e.end_step <= step) { if (e.verdict === 'confirmed') right++; else if (e.verdict === 'refuted') wrong++; }
+      if (e.end_step === null || e.end_step > step) open++;
+      else if (e.verdict === 'confirmed') right++;
+      else if (e.verdict === 'refuted') wrong++;
     });
-    return 'Stuck calls so far: ' + n + '; graded right ' + right + ', wrong ' + wrong + ', not gradable ' + (n - right - wrong) + '.';
+    return 'Stuck calls so far: ' + n + '; still open ' + open + '; graded right ' + right + ', wrong ' + wrong +
+      '; no verdict ' + (n - open - right - wrong) + '.';
   }
   function mapState(step) {
     var st = $('mapstate'), t;
-    if (layer === 'with') t = 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the rings come from the detector on this run.';
+    if (layer === 'with') t = 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the stuck-call rings come from the analyser on this run.';
     else if (!pubs.length) t = 'The analyser published no cost map in this run.';
     else if (!latestPublish(step)) t = 'No map published yet (the first publish is at ' + clock(pubs[0].step) + ').';
     else t = '';
@@ -629,7 +639,7 @@
   }
 
   $('play').addEventListener('click', function () { setPlaying(!playing); });
-  $('speed').addEventListener('change', function (e) { speed = +e.target.value; });
+  $('speed').addEventListener('change', function (e) { speed = +e.target.value; draw(); });
   $('scrub').max = STEPS - 1;
   $('scrub').addEventListener('input', function (e) {
     pos = +e.target.value; draw();
@@ -790,7 +800,8 @@
     floorEl.addEventListener('click', function (ev) {
       if (!G) return;
       var c = cellAt(ev);
-      if (lastPointer === 'touch' && tipProvider(c[0], c[1]).length) return; // a tap on a robot shows its tooltip
+      // the first tap on a robot shows its tooltip; tapping the same cell again closes it and opens the prompt
+      if (lastPointer === 'touch' && tipAt && tipAt.cell[0] === c[0] && tipAt.cell[1] === c[1] && tipProvider(c[0], c[1]).length) return;
       cursor = c; openPrompt(c[0], c[1]);
     });
     floorEl.addEventListener('mousemove', function (ev) {
@@ -806,7 +817,8 @@
         e.preventDefault();
         cursor = [Math.max(0, Math.min(G.width - 1, cursor[0] + d[0])), Math.max(0, Math.min(G.height - 1, cursor[1] + d[1]))];
         var why = whyNot(cursor[0], cursor[1]);
-        $('live').textContent = 'Cell ' + cursor[0] + ',' + cursor[1] + (why ? ': ' + why : ': highway, press Enter to place a roadblock');
+        var here = tipProvider(cursor[0], cursor[1]).map(function (i) { return tipLines(i).join(', '); }).join('; ');
+        $('live').textContent = 'Cell ' + cursor[0] + ',' + cursor[1] + (why ? ': ' + why : ': highway, press Enter to place a roadblock') + (here ? '. ' + here : '');
         drawLive();
       } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPrompt(cursor[0], cursor[1]); }
     });
@@ -875,7 +887,7 @@
         });
         state.robots.forEach(function (r) {
           var k = robotKind(r.id), cx = r.x * CELLV + CELLV / 2, cy = r.y * CELLV + CELLV / 2;
-          drawRobot(c, k, cx, cy, r.state, k === 'agv' ? CELLV * 0.33 : CELLV * 0.3);
+          drawRobot(c, k, cx, cy, DISPLAY.indexOf(r.state) < 0 ? 'waiting' : r.state, k === 'agv' ? CELLV * 0.33 : CELLV * 0.3);
           if (flashUntil[r.id] > now) drawStar(c, cx, cy - CELLV * 0.45, CELLV * 0.55, css('--down'));
         });
         marks.forEach(function (m) {
@@ -896,16 +908,17 @@
     wireTips(floorEl, function () { return G; });
     // a state document: a robot that is down now and was not down at the previous poll flashes for 1.5 s; the first time a
     // call id shows up graded right or wrong, its mark stays for 3 s
-    function noteChanges(j) {
+    // On the first poll, and on the first poll after an outage, only record what is there: no flash, no mark.
+    function noteChanges(j, quiet) {
       var now = Date.now();
       j.robots.forEach(function (r) {
-        if (r.state === 'down' && prevDisp[r.id] !== undefined && prevDisp[r.id] !== 'down') {
+        if (!quiet && r.state === 'down' && prevDisp[r.id] !== undefined && prevDisp[r.id] !== 'down') {
           flashUntil[r.id] = now + 1500; setTimeout(drawLive, 1600);
         }
         prevDisp[r.id] = r.state;
         if (r.call && (r.call.verdict === 'confirmed' || r.call.verdict === 'refuted') && !marked[r.call.id]) {
           marked[r.call.id] = true;
-          marks.push({ cell: r.call.cell, verdict: r.call.verdict, until: now + 3000 });
+          if (!quiet) marks.push({ cell: r.call.cell, verdict: r.call.verdict, until: now + 3000 });
           setTimeout(drawLive, 3100);
         }
       });
@@ -991,7 +1004,7 @@
         .then(function (j) {
           sameSteps = lastStep !== null && j.step === lastStep ? sameSteps + 1 : 0;
           lastStep = j.step;
-          noteChanges(j);
+          noteChanges(j, state === null || failing > 0);
           state = j; failing = 0; lastOk = Date.now();
           setConnected(true);
           render();
