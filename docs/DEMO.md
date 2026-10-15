@@ -331,6 +331,7 @@ Without the page, the same thing from a shell (this is a real run, `--steps 400 
 trimmed; the page itself was not opened in a browser):
 
 ```text
+$ .venv/bin/python fleet/live.py --steps 400 --speed 20 --lesson-window-h 0.05
 $ curl -s localhost:8765/state        # at ~20 s wall: step 74, sim_time 2026-01-01T00:06:10Z, truth null
 $ curl -s -X POST -H 'Content-Type: application/json' -d '{"floor":{"5,3":0.95}}' localhost:8765/inject
 {"applies_at_step":78}
@@ -346,6 +347,9 @@ will apply the roadblock at (it was 78 for an observed step of 74: the emitter p
 writes a step, plus a small lead). Add `--reveal` to get `/state.truth` and a toggle on the page that shows the hidden
 roadblocks. `--router none` runs the fleet without the cost-aware router (the map is still published and shown).
 `live.py` runs 720 steps unless you pass `--steps 500`.
+The server sends `Access-Control-Allow-Origin: *` so the page can poll it from another port. That also means any web
+page open in the same browser could read `/state` or place a roadblock while the demo runs. It binds 127.0.0.1 only and
+drives a simulator, so this is acceptable for a demo; do not run it next to anything that matters.
 
 Why the default regime is sticky floor, computed from `results/closed_loop_sticky/summary.json` (30 seeds):
 

@@ -240,7 +240,7 @@ def build_parser():
     p.add_argument("--env", default=DEFAULT_ENV)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--disturb", default=DEFAULT_DISTURB, help="disturbance preset name or JSON object")
-    p.add_argument("--speed", type=float, default=5.0, help="simulated seconds per wall second / 5 (1 = real time); > 0")
+    p.add_argument("--speed", type=float, default=5.0, help="simulated seconds per wall second (1 = real time, 5 = 5x real time); > 0")
     p.add_argument("--steps", type=int, default=emitter.DEFAULT_STEPS)
     p.add_argument("--t0", default=emitter.DEFAULT_T0)
     p.add_argument("--dir", default=None, help="run directory (default fleet/data/live-<timestamp>)")
@@ -310,6 +310,9 @@ def main(argv=None):
         p.error(str(e))
     d = Path(a.dir) if a.dir else FLEET / "data" / time.strftime("live-%Y%m%dT%H%M%S")
     d = d.resolve()
+    if d.exists() and any(d.iterdir()):
+        p.error(f"--dir {d} is not empty: a live run needs a fresh directory (stale control.jsonl / *.done files would "
+                f"replay old roadblocks or end the loops at once)")
     d.mkdir(parents=True, exist_ok=True)
     store = a.store or f"jsonl:{d / 'store'}"
     (d / "control.jsonl").touch()

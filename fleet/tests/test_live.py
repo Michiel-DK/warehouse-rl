@@ -161,6 +161,47 @@ class HandlerTests(unittest.TestCase):
         self.assertGreaterEqual(json.loads(body)["applies_at_step"], 123)
 
 
+class LockOrderTests(unittest.TestCase):
+    def test_concurrent_inject_and_snapshot_do_not_deadlock(self):
+        # the real wiring: the injector's step_fn is LiveState.current_step and snapshot() calls injector.listing()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name)
+        inj = live_state.Injector(d / "control.jsonl", GRID, 6, lambda: 0, lead=2)
+        state = live_state.LiveState(d, "run", f"jsonl:{d / 'store'}", str(d / "zone*-*.jsonl.gz"), inj, ttl=0)
+        inj.step_fn = state.current_step
+        n = 300
+
+        def posts():
+            for _ in range(n):
+                inj.submit(b'{"floor": {"1,1": 0.5}}')
+
+        def gets():
+            for _ in range(n):
+                state.snapshot()
+
+        threads = [threading.Thread(target=f, daemon=True) for f in (posts, gets)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(30)
+        self.assertFalse(any(t.is_alive() for t in threads), "POST /inject and GET /state deadlocked")
+        self.assertEqual(len((d / "control.jsonl").read_bytes().splitlines()), n)
+
+
+class DirGuardTests(unittest.TestCase):
+    def test_non_empty_dir_is_refused_before_anything_starts(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name)
+        (d / "ingest.done").touch()
+        r = subprocess.run([sys.executable, str(ROOT / "fleet" / "live.py"), "--dir", str(d), "--port", "0"],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("not empty", r.stderr)
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["ingest.done"])
+
+
 class StreamAndPublisherTests(unittest.TestCase):
     def _write_run(self, d, steps=40):
         """A tiny hand-made stream: robot A stalls in front of cell (3,2) from step 2 to 6."""

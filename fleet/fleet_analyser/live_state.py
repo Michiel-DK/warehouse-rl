@@ -235,8 +235,10 @@ class Injector:
         if len(body) != 1 or len(kinds) != 1:
             raise BadRequest("body must have exactly one top-level key, floor or breakdown")
         kind = kinds[0]
+        # step_fn (LiveState.current_step) takes the LiveState lock, and LiveState.snapshot holds that lock while it
+        # calls listing(): read the step BEFORE taking self.lock so the only lock order is LiveState -> Injector.
+        t = int(self.step_fn()) + self.lead
         with self.lock:
-            t = int(self.step_fn()) + self.lead
             line = json.dumps({"t": t, kind: body[kind]}, separators=(",", ":"))
             try:
                 zone, pt, pkind, payload = emitter.parse_command(line, self.grid_size, self.num_agents)

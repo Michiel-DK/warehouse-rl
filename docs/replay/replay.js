@@ -561,10 +561,12 @@
     document.querySelector('.head').insertAdjacentElement('afterend', bar);
 
     var CELLV = 22, G = null, state = null, lastOk = 0, failing = 0, inflight = false;
+    var barKey = null, lastStep = null, sameSteps = 0;
     var placed = {}; // "x,y" -> p, from this page's own successful POSTs
     var cursor = null, reveal = false, promptCell = null;
     var floorEl = $('floor'), ctx = floorEl.getContext('2d');
     floorEl.tabIndex = 0;
+    floorEl.setAttribute('role', 'application'); // operable in live mode (offline it stays role="img")
     floorEl.setAttribute('aria-label', 'Warehouse floor. Click or press Enter on a highway cell to place a roadblock; arrow keys move the cursor.');
 
     // legend for the live floor: add the "placed by you" swatch
@@ -757,7 +759,8 @@
       s.top10.forEach(function (r) { ol.appendChild(el('li', null, r.cell + '  cost ' + r.cost.toFixed(2) + (placed[r.cell] !== undefined ? '  [placed by you]' : ''))); });
       var g = s.grades;
       function line(label, o) { return label + ': ' + o.ok + ' held, ' + o.off + ' did not hold, ' + o.pending + ' pending, ' + o.not_gradable + ' not gradable'; }
-      liveGrades.textContent = line('Cost-map calls', g.forecasts) + '. ' + line('Lessons', g.lessons) + '.';
+      liveGrades.textContent = line('Cost-map calls', g.forecasts) + '. ' + line('Lessons', g.lessons) +
+        '. Graded on what the robots report next (the stream), not on the hidden roadblocks.';
       $('lessonstate').textContent = s.lessons.length ? line('Graded so far', g.lessons) + '.' : 'No lessons yet. Rules need a few events in a closed time window.';
       var ul = $('lessons');
       ul.textContent = '';
@@ -776,15 +779,31 @@
     }
 
     function setConnected(okNow, err) {
+      // "Live" needs a reachable server AND a run that advances: a finished or stalled run is said so, with the step
+      var key, cls, text, stale;
       if (okNow) {
-        bar.className = 'livebar';
-        bar.textContent = 'Live from ' + base + ', updated every ' + (POLL_MS / 1000) + ' s.';
-        app.classList.remove('stale');
+        var status = state && state.ledger ? state.ledger.emit_status : null;
+        if (status && status !== 'running') {
+          key = 'over:' + status; cls = 'livebar bad'; stale = false;
+          text = 'Run ' + status + ' at step ' + state.step + '. Nothing is advancing; the numbers below are final.';
+        } else if (sameSteps >= 6) {
+          key = 'stuck:' + state.step; cls = 'livebar bad'; stale = true;
+          text = 'Connected to ' + base + ', but the run has not advanced past step ' + state.step + ' for ' + Math.round(sameSteps * POLL_MS / 1000) + ' s.';
+        } else {
+          key = 'ok'; cls = 'livebar'; stale = false;
+          text = 'Live from ' + base + ', updated every ' + (POLL_MS / 1000) + ' s.';
+        }
       } else {
-        bar.className = 'livebar bad';
-        bar.textContent = 'Disconnected from ' + base + ', retrying every ' + (POLL_MS / 1000) + ' s. The numbers below are the last ones received and are not live.' + (err ? ' (' + err + ')' : '');
-        app.classList.add('stale');
+        var age = lastOk ? Math.round((Date.now() - lastOk) / 1000) : null;
+        key = 'bad:' + err + ':' + (age === null ? '' : Math.floor(age / 5)); cls = 'livebar bad'; stale = true;
+        text = 'Disconnected from ' + base + ', retrying every ' + (POLL_MS / 1000) + ' s. ' +
+          (age === null ? 'No data received yet.' : 'The numbers below are from ' + age + ' s ago and are not live.') + (err ? ' (' + err + ')' : '');
       }
+      if (key === barKey) return; // do not rewrite the status region on every poll (screen readers re-announce it)
+      barKey = key;
+      bar.className = cls;
+      bar.textContent = text;
+      app.classList.toggle('stale', stale);
     }
 
     function poll() {
@@ -795,6 +814,8 @@
       httpGet(base + '/state', ctl ? { signal: ctl.signal } : {})
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (j) {
+          sameSteps = lastStep !== null && j.step === lastStep ? sameSteps + 1 : 0;
+          lastStep = j.step;
           state = j; failing = 0; lastOk = Date.now();
           setConnected(true);
           render();
