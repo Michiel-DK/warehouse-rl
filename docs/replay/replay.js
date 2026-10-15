@@ -371,6 +371,7 @@
   }
 
   // ---- panel 4: lessons ----
+  var HAS_LESSONS = R.lessons !== undefined;
   var LESSONS = R.lessons || [];
   var lessonKey = null;
   function drawLessons(step) {
@@ -383,18 +384,28 @@
     var ul = $('lessons');
     ul.textContent = '';
     var state = $('lessonstate');
+    if (!HAS_LESSONS) { state.textContent = 'Lesson data is not included in this file.'; return; }
     if (!LESSONS.length) { state.textContent = 'No lessons in this run, in any zone: no rule reached its threshold.'; return; }
     if (!shown.length) { state.textContent = 'No lessons yet. The first one is drawn at ' + clock(LESSONS[0].decided_at_step) + '.'; return; }
-    state.textContent = '';
+    var held = 0, failed = 0, waiting = 0, never = 0;
+    shown.forEach(function (l) {
+      if (l.graded_at_step === null) never++;
+      else if (l.graded_at_step > step) waiting++;
+      else if (l.verdict === 'ok') held++;
+      else failed++;
+    });
+    state.textContent = 'Graded so far: ' + held + ' held, ' + failed + ' did not hold, ' + waiting + ' pending' +
+      (never ? ', ' + never + ' not gradable (the shift ends before the next window).' : '.');
     shown.slice().reverse().forEach(function (l) {
       var known = l.graded_at_step !== null && l.graded_at_step <= step;
+      var never = l.graded_at_step === null;
       var status = !known ? 'pending' : (l.verdict === 'ok' ? 'ok' : 'off');
       var li = el('li', 'les ' + status);
-      var mark = el('span', 'mark', !known ? 'pending: next window not over' : (status === 'ok' ? '✓ held next window' : '✗ did not hold'));
+      var mark = el('span', 'mark', never ? 'not gradable' : !known ? 'pending' : (status === 'ok' ? '✓ held' : '✗ did not hold'));
       li.appendChild(mark);
       li.appendChild(el('span', 'ltxt', l.text));
       li.appendChild(el('span', 'conf', 'zone ' + l.zone + (String(l.zone) === String(R.meta.zone) ? ' (the zone shown above)' : '') +
-        ', confidence ' + l.confidence.toFixed(2) + ', drawn at ' + clock(l.decided_at_step)));
+        ', rule ' + l.lesson_kind + ', support ' + l.confidence.toFixed(2) + ', drawn at ' + clock(l.decided_at_step)));
       ul.appendChild(li);
     });
   }

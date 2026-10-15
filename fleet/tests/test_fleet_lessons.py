@@ -993,7 +993,14 @@ class TestCommittedPage(unittest.TestCase):
     def test_panel_has_labels_empty_state_and_no_network(self):
         self.assertIn('id="lessons"', self.html)
         self.assertIn("Lessons", self.html)
-        self.assertIn("held next window", self.js)  # text label next to the tick
+        self.assertIn("'✓ held'", self.js)  # text label next to the tick
+        self.assertIn("'not gradable'", self.js)  # graded_at_step null: the shift ends before the next window
+        self.assertIn("Graded so far: ", self.js)  # running held / did not hold / pending tally
+        self.assertIn("'Lesson data is not included in this file.'", self.js)  # no lessons key != no lessons
+        self.assertIn("', support ' + l.confidence", self.js)  # not called a confidence on the page
+        self.assertNotIn("confidence ' +", self.js)
+        self.assertIn("no model and no learning", self.html)
+        self.assertIn("does not say how likely the lesson is to hold", self.html)
         self.assertIn("did not hold", self.js)  # text label next to the cross
         self.assertIn("No lessons", self.js)  # empty state
         self.assertIn("all zones of the shift", self.html)  # the feed is not limited to the drawn zone
