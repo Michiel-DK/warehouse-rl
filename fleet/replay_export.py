@@ -10,7 +10,8 @@ atomically (tmp + os.replace) and the writer raises, without writing, when it is
 
 Payload (every key is always present unless marked optional):
   meta        run, zone (str), env_id, steps, step_seconds (5), t0_ts (epoch s of step 0), seed, disturb, policy, recovery,
-              schema "replay/1", source {run_dir, store, closed_loop} = the paths exactly as given on the command line
+              schema "replay/2", state_display {raw state: display state} = live_state.display_state over STATES (moving,
+              working, waiting, down; the page draws this and falls back to waiting for a raw value missing from it), source {run_dir, store, closed_loop} = the paths exactly as given on the command line
               (never resolved to absolute paths). Step s covers event time t0_ts + s * step_seconds.
   grid        {width, height, highway, goals, shelves}: shape is width (columns, x) by height (rows, y), the same (x, y)
               system as agvPosition. highway = height strings of width chars, "1" = highway cell, "0" = not;
@@ -19,8 +20,9 @@ Payload (every key is always present unless marked optional):
               are class attributes: never two envs in one process). Every robot position of every layer must lie inside
               the grid or the export raises.
   robots      [{serial, kind}] sorted by serial; kind "agv" or "picker" (the first num_agvs agents are AGVs).
-  frames      frames[step][robot_index] = [x, y, state] for every step and every robot (robots order). A robot with no
-              message at a step keeps its previous entry (before its first message: its first position, "idle").
+  frames      frames[step][robot_index] = [x, y, state, job] for every step and every robot (robots order). job is the
+              order id of the message the entry came from ("" = none). A robot with no message at a step keeps its
+              previous entry, job included (before its first message: its first position, "idle", "").
               A step with several messages of a robot uses the highest headerId. state is one of
               moving, loading, stalled, stuck, frozen, idle, derived by derive_state() with precedence
               frozen > stuck > stalled > loading > moving > idle:
@@ -68,7 +70,9 @@ Payload (every key is always present unless marked optional):
               and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
               the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key.
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
-              [{start_step, end_step (null = open), robot, cell [x, y], cause, resolution, left_censored}]. Only the
+              [{start_step, end_step (null = open), robot, cell [x, y], cause, resolution, left_censored, episode_id,
+              verdict}]. verdict is the verdict of the graded stuck_cause decision whose claim names the episode_id
+              (confirmed / refuted / inconclusive), else null. Only the
               frames skip left_censored and "interrupted" rows (see stuck above); the page does the same.
   stalls      [[robot, cell, start_step, end_step, counted]] from hotspot.extract_stalls, counted = hotspot.counted() after
               annotate_episodes (the filter the cost map uses).
@@ -77,7 +81,8 @@ Payload (every key is always present unless marked optional):
               per-seed aggregates only, so this layer RE-SIMULATES the zone's seed (same env, disturbance, recovery and
               policy, steps) with the cost-aware router and the FINAL phaseA map of this zone applied from step 0
               (in-sample, not learned live). Its episodes come from running fleet_analyser.detector.Detector (the ingest
-              default stuck_after) over the re-simulated messages (same row shape as the top-level episodes); frames use
+              default stuck_after) over the re-simulated messages (same row shape as the top-level episodes, verdict always
+              null: no store, no grader); frames use
               the same derive_state() and stuck overlay as the main layer (derive_layer). Env numbers are
               platform-dependent (pyastar2d tie-breaks): only the layer's layout is stable across machines.
 """
@@ -99,9 +104,10 @@ for _p in (FLEET, REPO / "src", REPO / "scripts"):
 
 import hotspot_score  # noqa: E402
 from fleet_analyser import detector, emitter, hotspot, ledger, store as store_mod  # noqa: E402
+from fleet_analyser import live_state  # noqa: E402
 from fleet_analyser.parse import epoch_of, parse_line  # noqa: E402
 
-SCHEMA = "replay/1"
+SCHEMA = "replay/2"
 STATES = ("moving", "loading", "stalled", "stuck", "frozen", "idle")
 MAX_BYTES = 2 * 1024 * 1024
 PREFIX = "window.REPLAY = "
@@ -143,7 +149,7 @@ def _within(spans, ts):
 
 
 def build_frames(messages, robots, t0_ts, steps, episodes, stalls, grid, step_seconds=STEP_SECONDS):
-    """frames[step][robot_index] = [x, y, state]. Raises ValueError for a position outside the grid."""
+    """frames[step][robot_index] = [x, y, state, job]. Raises ValueError for a position outside the grid."""
     ep_by = _intervals(episodes)
     st_by = _intervals(stalls)
     index = {r["serial"]: i for i, r in enumerate(robots)}
@@ -159,7 +165,7 @@ def build_frames(messages, robots, t0_ts, steps, episodes, stalls, grid, step_se
         state = derive_state(m, _within(ep_by.get(m.serial, ()), m.ts), _within(st_by.get(m.serial, ()), m.ts))
         prev = cell.get((i, step))
         if prev is None or m.header_id > prev[0]:
-            cell[(i, step)] = (m.header_id, [m.x, m.y, state])
+            cell[(i, step)] = (m.header_id, [m.x, m.y, state, m.order_id])
     frames = [[None] * len(robots) for _ in range(steps)]
     for i in range(len(robots)):
         last = None
@@ -168,7 +174,7 @@ def build_frames(messages, robots, t0_ts, steps, episodes, stalls, grid, step_se
             if (i, s) in cell:
                 last = cell[(i, s)][1]
             elif last is None and first is not None:
-                last = [first[0], first[1], "idle"]
+                last = [first[0], first[1], "idle", ""]
             frames[s][i] = list(last) if last is not None else None
     for s, row in enumerate(frames):
         for i, e in enumerate(row):
@@ -368,7 +374,17 @@ def build_grades(st, run, zone, publishes, t0_ts, step_seconds=STEP_SECONDS):
     return dict(per_publish=per_publish, timeline=timeline)
 
 
-def build_episodes(rows, zone, t0_ts, step_seconds=STEP_SECONDS):
+def stuck_verdicts(st, run):
+    """{episode_id: verdict} of the graded stuck_cause decisions (the claim names the episode)."""
+    out = {}
+    for d in st.select("decisions", {"run": run, "kind": "stuck_cause"}):
+        if d.get("status") == "graded" and d.get("verdict") in ("confirmed", "refuted", "inconclusive"):
+            out[_claim(d).get("episode_id")] = d["verdict"]
+    return out
+
+
+def build_episodes(rows, zone, t0_ts, step_seconds=STEP_SECONDS, verdicts=None):
+    verdicts = verdicts or {}
     out = []
     for e in rows:
         if str(e["zone"]) != str(zone):
@@ -376,7 +392,8 @@ def build_episodes(rows, zone, t0_ts, step_seconds=STEP_SECONDS):
         out.append(dict(start_step=(e["start"] - t0_ts) // step_seconds,
                         end_step=None if e.get("end") is None else (e["end"] - t0_ts) // step_seconds,
                         robot=e["robot"], cell=list(e["cell"]), cause=e["cause"], resolution=e["resolution"],
-                        left_censored=bool(e.get("left_censored"))))
+                        left_censored=bool(e.get("left_censored")),
+                        episode_id=e["episode_id"], verdict=verdicts.get(e["episode_id"])))
     return sorted(out, key=lambda e: (e["start_step"], e["robot"]))
 
 
@@ -528,6 +545,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         publishes = build_publishes(st, run, zone, floor, t0_ts)
         grades = build_grades(st, run, zone, publishes, t0_ts)
         lessons = build_lessons(st, run, t0_ts)
+        verdicts = stuck_verdicts(st, run)
     finally:
         st.close()
 
@@ -549,7 +567,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
     payload = dict(
         meta=dict(run=run, zone=zone, env_id=truth["env_id"], steps=steps, step_seconds=STEP_SECONDS, t0_ts=t0_ts,
                   seed=seed, disturb=truth["disturb"], policy=cfg.get("policy"), recovery=cfg.get("recovery"),
-                  schema=SCHEMA,
+                  schema=SCHEMA, state_display={raw: live_state.display_state(raw) for raw in STATES},
                   source=dict(run_dir=run_dir_arg if run_dir_arg is not None else str(run_dir),
                               store=store_spec if store_spec is not None else None,
                               closed_loop=closed_loop_arg if closed_loop_arg is not None else closed_loop)),
@@ -557,7 +575,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         obstacles=[dict(kind="floor", cell=c, p=floor[c], hidden_from_analyser=True) for c in sorted(floor)],
         extractor=dict(series=series, totals=totals, check=check),
         publishes=publishes, grades=grades, lessons=lessons,
-        episodes=build_episodes(episode_rows, zone, t0_ts),
+        episodes=build_episodes(episode_rows, zone, t0_ts, verdicts=verdicts),
         stalls=[[s["robot"], s["cell"], (s["start"] - t0_ts) // STEP_SECONDS, (s["end"] - t0_ts) // STEP_SECONDS,
                  bool(hotspot.counted(s))] for s in stalls if s["zone"] == zone])
     if wm:

@@ -48,12 +48,37 @@
     <section class="panel" aria-labelledby="h-floor">
       <h2 id="h-floor">1. The floor</h2>
       <canvas id="floor" role="img" aria-label="Warehouse floor with robots, hidden floor problems and the cost map"></canvas>
-      <ul class="legend" id="legend" aria-label="Robot states"></ul>
-      <p class="legend2"><span class="sw box"></span> Hidden floor problems: the analyser cannot see these
-        <span class="sw shade"></span> cost map (darker = costlier)
-        <span class="sw ring"></span> detector stuck episode
-        <span class="kinds">Circle = carrier robot, square = picker.</span></p>
-      <p class="cap">A stall is a robot with an order that tried to move and did not.</p>
+      <div class="floorlegend" id="floorlegend">
+        <div class="lrow" id="lrow-robots">
+          <h3 class="ltitle">Robots</h3>
+          <ul class="legend">
+          <li><canvas class="icon" data-ico="agv" width="24" height="24" aria-hidden="true"></canvas><span>circle = AGV, carries shelves</span></li>
+          <li><canvas class="icon" data-ico="picker" width="24" height="24" aria-hidden="true"></canvas><span>square = picker, loads and unloads, drawn grey</span></li>
+          <li><canvas class="icon" data-ico="moving" width="24" height="24" aria-hidden="true"></canvas><span>moving</span></li>
+          <li><canvas class="icon" data-ico="working" width="24" height="24" aria-hidden="true"></canvas><span>working</span></li>
+          <li><canvas class="icon" data-ico="waiting" width="24" height="24" aria-hidden="true"></canvas><span>waiting</span></li>
+          <li><canvas class="icon" data-ico="down" width="24" height="24" aria-hidden="true"></canvas><span>down, the robot reported an error</span></li>
+          </ul>
+          <label class="pickbox"><input type="checkbox" id="pickcol"> <span>show pickers in colour</span></label>
+        </div>
+        <div class="lrow" id="lrow-planted">
+          <h3 class="ltitle">Planted by us, hidden from the analyser</h3>
+          <ul class="legend">
+          <li><canvas class="icon" data-ico="floor" width="24" height="24" aria-hidden="true"></canvas><span>bad floor cell</span></li>
+          <li><canvas class="icon" data-ico="breakdown" width="24" height="24" aria-hidden="true"></canvas><span>breakdown moment</span></li>
+          </ul>
+        </div>
+        <div class="lrow" id="lrow-concluded">
+          <h3 class="ltitle">Concluded by the analyser from the log alone</h3>
+          <ul class="legend">
+          <li><canvas class="icon" data-ico="shade" width="24" height="24" aria-hidden="true"></canvas><span>suspected bad floor, darker = more evidence</span></li>
+          <li><canvas class="icon" data-ico="call" width="24" height="24" aria-hidden="true"></canvas><span>stuck call, raised after 30 s of waiting with a job</span></li>
+          <li><canvas class="icon" data-ico="marks" width="38" height="24" aria-hidden="true"></canvas><span>the call was later graded right or wrong</span></li>
+          </ul>
+        </div>
+        <p class="cap">The analyser never sees the planted items.</p>
+        <p class="cap">Everything in the third row it worked out from the robots&#39; messages.</p>
+      </div>
       <p class="state" id="mapstate"></p>
     </section>
 
@@ -98,6 +123,7 @@
   </div>
   <div id="live" class="sr" aria-live="polite"></div>
 </main>
+<div id="tip" class="tip" role="tooltip" hidden></div>
 
 <script src="data.js"></script>
 <script src="replay.js"></script>

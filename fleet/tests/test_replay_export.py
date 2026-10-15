@@ -188,14 +188,15 @@ class TestSchema(Fixture):
                          ("t0_ts", int), ("seed", int), ("disturb", dict), ("policy", str), ("recovery", dict),
                          ("schema", str), ("source", dict)):
             self.assertIsInstance(m[key], typ, key)
-        self.assertEqual((m["schema"], m["steps"], m["step_seconds"], m["t0_ts"]), ("replay/1", STEPS, 5, BASE))
+        self.assertEqual((m["schema"], m["steps"], m["step_seconds"], m["t0_ts"]), ("replay/2", STEPS, 5, BASE))
         self.assertEqual(set(p["grid"]), {"width", "height", "highway", "goals", "shelves"})
         self.assertEqual(len(p["frames"]), STEPS)
         self.assertEqual([r["serial"] for r in p["robots"]], ["Z0-01", "Z0-02", "Z0-03", "Z0-04"])
         self.assertEqual([r["kind"] for r in p["robots"]], ["agv", "agv", "picker", "picker"])
         for frame in p["frames"]:
             self.assertEqual(len(frame), len(p["robots"]))
-            for x, y, state in frame:
+            for x, y, state, job in frame:
+                self.assertIsInstance(job, str)
                 self.assertIsInstance(x, int)
                 self.assertIsInstance(y, int)
                 self.assertIn(state, rx.STATES)
@@ -206,7 +207,8 @@ class TestSchema(Fixture):
             self.assertEqual(set(pub), {"t", "step", "cells", "precision_at_20", "hits_at_20", "n_flagged"})
         self.assertEqual(set(p["grades"]), {"per_publish", "timeline"})
         for e in p["episodes"]:
-            self.assertEqual(set(e), {"start_step", "end_step", "robot", "cell", "cause", "resolution", "left_censored"})
+            self.assertEqual(set(e), {"start_step", "end_step", "robot", "cell", "cause", "resolution", "left_censored",
+                                       "episode_id", "verdict"})
         for s in p["stalls"]:
             self.assertEqual(len(s), 5)
         self.assertEqual(p["meta"]["source"], dict(run_dir=str(self.dir), store=self.spec, closed_loop=None))
@@ -263,7 +265,8 @@ class TestSchema(Fixture):
             self.assert_shape(r, dict(serial=str, kind=str))
         for e in p["episodes"]:
             self.assert_shape(e, dict(start_step=int, end_step=(int, type(None)), robot=str, cell=list, cause=str,
-                                      resolution=str, left_censored=bool))
+                                      resolution=str, left_censored=bool, episode_id=str,
+                                      verdict=(str, type(None))))
         for s_ in p["stalls"]:
             robot, cell, a, b, counted = s_
             self.assertIsInstance(robot, str)
@@ -296,7 +299,8 @@ class TestSchema(Fixture):
         self.assertTrue(wm["episodes"])
         for e in wm["episodes"]:
             self.assert_shape(e, dict(start_step=int, end_step=(int, type(None)), robot=str, cell=list, cause=str,
-                                      resolution=str, left_censored=bool))
+                                      resolution=str, left_censored=bool, episode_id=str,
+                                      verdict=(str, type(None))))
 
     def test_obstacles_are_the_zones_hidden_floor_cells(self):
         obs = self.payload["obstacles"]
@@ -350,11 +354,11 @@ class TestStateDerivation(unittest.TestCase):
 
     def test_episodes_list_is_unfiltered_and_flags_left_censored(self):
         rows = [dict(zone="0", robot="Z0-01", start=BASE, end=BASE + 50, cell=[1, 2], cause="traffic",
-                     resolution="interrupted", left_censored=False),
+                     resolution="interrupted", left_censored=False, episode_id="a"),
                 dict(zone="0", robot="Z0-02", start=BASE + 5, end=None, cell=[3, 4], cause="unknown",
-                     resolution="open", left_censored=True),
+                     resolution="open", left_censored=True, episode_id="b"),
                 dict(zone="1", robot="Z1-01", start=BASE, end=BASE + 5, cell=[0, 0], cause="unknown",
-                     resolution="moved", left_censored=False)]
+                     resolution="moved", left_censored=False, episode_id="c")]
         out = rx.build_episodes(rows, "0", BASE)
         self.assertEqual([(e["robot"], e["start_step"], e["end_step"], e["resolution"], e["left_censored"]) for e in out],
                          [("Z0-01", 0, 10, "interrupted", False), ("Z0-02", 1, None, "open", True)])
@@ -370,9 +374,9 @@ class TestStateDerivation(unittest.TestCase):
 class TestPipelineStates(Fixture):
     def test_known_positions_and_states(self):
         self.assertEqual(self.state("Z0-01", 0)[:2], [0, 2])
-        self.assertEqual(self.state("Z0-01", 1), [1, 2, "moving"])
+        self.assertEqual(self.state("Z0-01", 1)[:3], [1, 2, "moving"])
         self.assertEqual(self.state("Z0-01", 2)[:2], [2, 2])
-        self.assertEqual(self.state("Z0-04", 77), [0, 0, "idle"])
+        self.assertEqual(self.state("Z0-04", 77)[:3], [0, 0, "idle"])
         self.assertEqual(self.state("Z0-02", 5)[:2], [5, 5])
         self.assertEqual(self.state("Z0-02", 5)[2], "moving")
 
@@ -786,7 +790,7 @@ class TestCommittedData(unittest.TestCase):
         self.assertTrue(text.startswith("window.REPLAY = "))
         data = json.loads(text[len("window.REPLAY = "):].rstrip().rstrip(";"))
         meta = data["meta"]
-        self.assertEqual((meta["schema"], meta["steps"], len(data["frames"])), ("replay/1", 500, 500))
+        self.assertEqual((meta["schema"], meta["steps"], len(data["frames"])), ("replay/2", 500, 500))
         for rel in (meta["source"]["run_dir"], meta["source"]["store"].split(":", 1)[-1], meta["source"]["closed_loop"]):
             self.assertFalse(str(rel).startswith("/"), rel)
         layers = [data["frames"]] + ([data["with_map"]["frames"]] if "with_map" in data else [])
@@ -795,7 +799,8 @@ class TestCommittedData(unittest.TestCase):
             self.assertEqual(len(frames), 500)
             for frame in frames:
                 self.assertEqual(len(frame), len(data["robots"]))
-                for x, y, state in frame:
+                for x, y, state, job in frame:
+                    self.assertIsInstance(job, str)
                     self.assertTrue(0 <= x < w and 0 <= y < h)
                     self.assertIn(state, rx.STATES)
         pubs = [p["t"] for p in data["publishes"]]
@@ -838,9 +843,9 @@ class TestPageStatic(unittest.TestCase):
 
     def test_wording(self):
         self.assertIn("still in top 20 after the horizon", self.js)
-        self.assertIn("Hidden floor problems: the analyser cannot see these", self.html + self.js)
+        self.assertIn("Planted by us, hidden from the analyser", self.html)
         self.assertNotIn("rank hit", (self.html + self.js).lower())
-        for word in ("analyst", "AGV", "re-simulation", "ingester", "emit ledger"):
+        for word in ("analyst", "re-simulation", "ingester", "emit ledger"):
             self.assertNotIn(word, self.html + self.js, word)
 
     def test_rank_wording_lives_only_in_the_rank_branch(self):

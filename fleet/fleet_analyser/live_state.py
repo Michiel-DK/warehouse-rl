@@ -19,7 +19,7 @@ import re
 import threading
 import time
 import zlib
-from collections import deque
+from collections import Counter, deque
 from pathlib import Path
 
 from . import decisions, emitter, hotspot, lessons as lessons_mod, store as store_mod
@@ -260,6 +260,25 @@ class Injector:
 
 
 # ------------------------------------------------------------------------------------------------ state
+DISPLAY_STATES = ("moving", "working", "waiting", "down")
+# raw state -> what the page draws. stalled / stuck / idle are all "waiting", whatever the cell-change flag of an interval
+# boundary frame says (no cell-change input on purpose: the mapping is of the raw state alone). frozen is the robot's own
+# error report, shown as "down".
+_DISPLAY = {"moving": "moving", "loading": "working", "frozen": "down", "stalled": "waiting", "stuck": "waiting",
+            "idle": "waiting"}
+UNKNOWN_STATES = Counter()  # raw value -> times display_state() had to fall back to "waiting"
+
+
+def display_state(raw):
+    """The one mapping from a raw robot state (replay_export.STATES, robot_state) to DISPLAY_STATES. An unknown value is
+    drawn as "waiting" and counted in UNKNOWN_STATES."""
+    d = _DISPLAY.get(raw)
+    if d is None:
+        UNKNOWN_STATES[raw] += 1
+        return "waiting"
+    return d
+
+
 def robot_state(m):
     if m.faulted:
         return "frozen"
@@ -299,6 +318,8 @@ class LiveState:
         self._cache_at = -1e9
         self._costmap = (None, None)  # (signature, parsed)
         self._decisions = (None, None)
+        self._calls = (None, None)  # (signature, {robot: latest stuck episode joined to its stuck_cause verdict})
+        self._wait = {}  # serial -> ts of the first message of the current uninterrupted run of waiting messages
         self._emit = (None, None)
         self._rate = deque(maxlen=64)  # (clock, parsed)
 
@@ -308,6 +329,11 @@ class LiveState:
             old = self.latest.get(m.serial)
             if old is None or m.header_id > old.header_id:
                 self.latest[m.serial] = m
+                # waiting run: restarts at the first waiting message after any non-waiting one (header order)
+                if display_state(robot_state(m)) != "waiting":
+                    self._wait.pop(m.serial, None)
+                else:
+                    self._wait.setdefault(m.serial, m.ts)
             if m.header_id > self.step:
                 self.step = m.header_id
             if self.sim_ts is None or m.ts > self.sim_ts:
@@ -358,6 +384,45 @@ class LiveState:
             self._decisions = (sig, rows)
         return self._decisions[1] or []
 
+    def _call_rows(self):
+        """{robot: {id, cell, open, verdict}} of each robot's latest stuck episode (by start), joined to the verdict of its
+        stuck_cause decision (null while open or ungraded). Reread when the episodes or decisions file changes."""
+        kind, _, rest = self.store_spec.partition(":")
+        if kind == "jsonl":
+            sig = (_sig(Path(rest) / "stuck_episodes.jsonl"), _sig(Path(rest) / "decisions.jsonl"))
+        else:
+            sig = time.time()
+        if sig != self._calls[0]:
+            st = store_mod.open_store(self.store_spec, self.run)
+            try:
+                eps = [e for e in st.select("stuck_episodes", {"run": self.run}) if str(e.get("zone")) == str(self.zone)]
+                verdicts = {}
+                for d in st.select("decisions", {"run": self.run, "kind": "stuck_cause"}):
+                    claim = d["claim"]
+                    claim = json.loads(claim) if isinstance(claim, str) else (claim or {})
+                    if d.get("status") == "graded" and d.get("verdict") in ("confirmed", "refuted", "inconclusive"):
+                        verdicts[claim.get("episode_id")] = d["verdict"]
+            finally:
+                st.close()
+            out = {}
+            for e in sorted(eps, key=lambda e: (e["start"], e["episode_id"])):
+                out[e["robot"]] = dict(id=e["episode_id"], cell=list(e["cell"]), open=e.get("end") is None,
+                                       verdict=None if e.get("end") is None else verdicts.get(e["episode_id"]))
+            self._calls = (sig, out)
+        return self._calls[1] or {}
+
+    def _robots(self):
+        calls = self._call_rows()
+        out = []
+        for s, m in sorted(self.latest.items()):
+            raw = robot_state(m)
+            state = display_state(raw)
+            wait = self._wait.get(s)
+            out.append(dict(id=s, x=m.x, y=m.y, raw=raw, state=state, job=m.order_id,
+                            waiting_s=(m.ts - wait) if state == "waiting" and wait is not None else 0,
+                            call=calls.get(s)))
+        return out
+
     def _lessons_and_grades(self, run_over):
         rows = self._decision_rows()
         grades = {k: dict(ok=0, off=0, pending=0, not_gradable=0) for k in ("lessons", "forecasts")}
@@ -405,7 +470,7 @@ class LiveState:
             doc = dict(
                 step=step,
                 sim_time=iso(self.sim_ts) if self.sim_ts is not None else None,
-                robots=[dict(id=s, x=m.x, y=m.y, state=robot_state(m)) for s, m in sorted(self.latest.items())],
+                robots=self._robots(),
                 ledger=dict(pgid=self.pgid, run=self.run, emit_status=led.get("status"),
                             messages_emitted=total.get("messages", 0), expected_messages=total.get("expected_messages"),
                             steps_done=total.get("steps_done", 0), injections_applied=led.get("injections", 0),

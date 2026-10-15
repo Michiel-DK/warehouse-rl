@@ -12,7 +12,8 @@
     var t = userTheme || (mq && mq.matches ? 'dark' : 'light');
     root.setAttribute('data-theme', t);
     themeBtn.textContent = 'Theme: ' + (userTheme ? t : 'auto (' + t + ')');
-    if (R && ready) { drawLegends(); draw(); }
+    drawLegends();
+    if (R && ready) draw();
   }
   var ready = false;
   themeBtn.addEventListener('click', function () {
@@ -20,6 +21,155 @@
     applyTheme();
   });
   if (mq && mq.addEventListener) mq.addEventListener('change', function () { if (!userTheme) applyTheme(); });
+
+  // ---- shared drawing (replay and live): display states, robots, marks, legend icons, tooltip ----
+  // Four display states (live_state.DISPLAY_STATES). The raw state is kept only for the tooltip.
+  var DISPLAY = ['moving', 'working', 'waiting', 'down'];
+  var RAW_TEXT = { moving: 'changed cell', loading: 'at a shelf or station', stalled: 'tried to move and did not',
+                   stuck: 'inside a stuck call', frozen: 'reported an error', idle: 'no job, not moving' };
+  var showPickers = false, redrawHook = null, tipProvider = null, tipAt = null;
+
+  function robotPath(c, kind, cx, cy, r) {
+    c.beginPath();
+    if (kind === 'agv') c.arc(cx, cy, r, 0, 6.2832); else c.rect(cx - r, cy - r, 2 * r, 2 * r);
+  }
+  // Colour is never the only channel: moving = filled, working = filled with a centre dot, waiting = hollow,
+  // down = filled with a cross. Pickers are a muted grey unless "show pickers in colour" is ticked; the shapes stay.
+  function drawRobot(c, kind, cx, cy, disp, r) {
+    var grey = kind === 'picker' && !showPickers;
+    var col = grey ? css('--picker') : css('--' + disp), bg = css('--bg'), panel = css('--panel');
+    c.save();
+    c.lineWidth = 1.5; c.strokeStyle = bg; c.fillStyle = col;
+    if (disp === 'waiting') {
+      robotPath(c, kind, cx, cy, r); c.fillStyle = panel; c.fill();
+      c.strokeStyle = col; c.lineWidth = 2.5; c.stroke();
+    } else {
+      robotPath(c, kind, cx, cy, r); c.fill(); c.stroke();
+    }
+    c.strokeStyle = bg; c.fillStyle = bg; c.lineWidth = 2.2;
+    if (disp === 'down') {
+      var d = r * 0.55;
+      c.beginPath(); c.moveTo(cx - d, cy - d); c.lineTo(cx + d, cy + d); c.moveTo(cx + d, cy - d); c.lineTo(cx - d, cy + d); c.stroke();
+    } else if (disp === 'working') {
+      c.beginPath(); c.arc(cx, cy, r * 0.3, 0, 6.2832); c.fill();
+    }
+    c.restore();
+  }
+  // breakdown moment: a four-point star
+  function drawStar(c, cx, cy, r, col) {
+    c.save();
+    c.beginPath();
+    for (var k = 0; k < 8; k++) {
+      var a = k * Math.PI / 4, rr = k % 2 ? r * 0.35 : r;
+      c[k ? 'lineTo' : 'moveTo'](cx + Math.sin(a) * rr, cy - Math.cos(a) * rr);
+    }
+    c.closePath();
+    c.lineWidth = 3.5; c.strokeStyle = css('--bg'); c.stroke();
+    c.fillStyle = col; c.fill();
+    c.lineWidth = 1; c.strokeStyle = col; c.stroke();
+    c.restore();
+  }
+  // stuck call: a ring around the cell
+  function drawRing(c, cx, cy, rr, alpha) {
+    c.save();
+    c.globalAlpha = alpha;
+    c.beginPath(); c.arc(cx, cy, rr, 0, 6.2832); c.strokeStyle = css('--bg'); c.lineWidth = 4; c.stroke();
+    c.beginPath(); c.arc(cx, cy, rr, 0, 6.2832); c.strokeStyle = css('--ring'); c.lineWidth = 2; c.stroke();
+    c.restore();
+  }
+  // grade mark: check = the call was graded right, cross = wrong
+  function drawMark(c, cx, cy, verdict, size) {
+    var ok = verdict === 'confirmed';
+    c.save();
+    c.font = 'bold ' + size + 'px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.lineWidth = 4; c.strokeStyle = css('--bg'); c.strokeText(ok ? '✓' : '✗', cx, cy);
+    c.fillStyle = css(ok ? '--ok' : '--off'); c.fillText(ok ? '✓' : '✗', cx, cy);
+    c.restore();
+  }
+  function drawIcon(c, ico) {
+    var bg = css('--bg');
+    if (ico === 'agv') {
+      c.beginPath(); c.arc(12, 12, 7, 0, 6.2832); c.fillStyle = css('--muted'); c.fill(); c.strokeStyle = bg; c.lineWidth = 1.5; c.stroke();
+    } else if (ico === 'picker') {
+      drawRobot(c, 'picker', 12, 12, 'moving', 6.5);
+    } else if (ico === 'moving' || ico === 'working' || ico === 'waiting' || ico === 'down') {
+      drawRobot(c, 'agv', 12, 12, ico, 7);
+    } else if (ico === 'floor') {
+      c.strokeStyle = css('--obst'); c.lineWidth = 2; c.setLineDash([4, 3]); c.strokeRect(4, 4, 16, 16); c.setLineDash([]);
+    } else if (ico === 'breakdown') {
+      drawStar(c, 12, 12, 8, css('--down'));
+    } else if (ico === 'shade') {
+      c.fillStyle = 'rgba(' + css('--cost') + ',.6)'; c.fillRect(4, 4, 16, 16);
+      c.strokeStyle = css('--line'); c.lineWidth = 1; c.strokeRect(4.5, 4.5, 15, 15);
+    } else if (ico === 'call') {
+      drawRing(c, 12, 12, 8, 1);
+    } else if (ico === 'marks') {
+      drawMark(c, 9, 12, 'confirmed', 15); drawMark(c, 29, 12, 'refuted', 15);
+    } else if (ico === 'placed') {
+      c.strokeStyle = css('--accent'); c.lineWidth = 3; c.strokeRect(4, 4, 16, 16); c.fillStyle = css('--accent'); c.fillRect(4, 4, 6, 6);
+    }
+  }
+  function drawLegends() {
+    Array.prototype.forEach.call(document.querySelectorAll('canvas[data-ico]'), function (cv) {
+      var d = Math.max(1, window.devicePixelRatio || 1), w = cv.getAttribute('data-ico') === 'marks' ? 38 : 24;
+      if (cv.width !== Math.round(w * d)) { cv.width = Math.round(w * d); cv.height = Math.round(24 * d); cv.style.width = w + 'px'; cv.style.height = '24px'; }
+      var c = cv.getContext('2d');
+      c.setTransform(d, 0, 0, d, 0, 0);
+      c.clearRect(0, 0, w, 24);
+      drawIcon(c, cv.getAttribute('data-ico'));
+    });
+  }
+  var pickBox = $('pickcol');
+  pickBox.addEventListener('change', function () { showPickers = pickBox.checked; drawLegends(); if (redrawHook) redrawHook(); });
+
+  // tooltip: hover (mouse) or tap (touch) on a robot. provider(cx, cy) -> [{id, kind, raw, disp, job, waitS}].
+  function tipLines(i) {
+    return [i.id + ', ' + (i.kind === 'agv' ? 'AGV' : 'picker'), 'State: ' + i.disp + ' (' + (RAW_TEXT[i.raw] || 'no further detail') + ')',
+            'Job: ' + (i.job || 'none'), (i.job ? 'Waiting: ' : 'Not moving: ') + i.waitS + ' s'];
+  }
+  function refreshTip() {
+    var tip = $('tip');
+    var list = tipAt && tipProvider ? tipProvider(tipAt.cell[0], tipAt.cell[1]) : [];
+    if (!list.length) { tip.hidden = true; return; }
+    tip.textContent = '';
+    list.forEach(function (i, k) {
+      var box = document.createElement('div');
+      if (k) box.className = 'tipsep';
+      tipLines(i).forEach(function (t, j) { var line = document.createElement('div'); if (!j) line.className = 'tiphead'; line.textContent = t; box.appendChild(line); });
+      tip.appendChild(box);
+    });
+    tip.hidden = false;
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, tipAt.x + 12)) + 'px';
+    tip.style.top = Math.max(4, Math.min(window.innerHeight - h - 4, tipAt.y + 12)) + 'px';
+  }
+  function wireTips(cv, dims) {
+    function cellOf(ev) {
+      var r = cv.getBoundingClientRect(), g = dims();
+      if (!g) return null;
+      var cx = Math.floor((ev.clientX - r.left) / r.width * g.width), cy = Math.floor((ev.clientY - r.top) / r.height * g.height);
+      return cx < 0 || cy < 0 || cx >= g.width || cy >= g.height ? null : [cx, cy];
+    }
+    cv.addEventListener('pointermove', function (ev) {
+      if (ev.pointerType === 'touch') return;
+      var c = cellOf(ev);
+      tipAt = c ? { cell: c, x: ev.clientX, y: ev.clientY } : null;
+      refreshTip();
+    });
+    cv.addEventListener('pointerleave', function (ev) { if (ev.pointerType !== 'touch') { tipAt = null; refreshTip(); } });
+    cv.addEventListener('pointerdown', function (ev) {
+      if (ev.pointerType !== 'touch') return;
+      var c = cellOf(ev);
+      var same = tipAt && c && tipAt.cell[0] === c[0] && tipAt.cell[1] === c[1];
+      // only a tap on a robot opens a tooltip, so a tap on an empty cell leaves tipAt null (the live prompt relies on it)
+      tipAt = c && !same && tipProvider && tipProvider(c[0], c[1]).length ? { cell: c, x: ev.clientX, y: ev.clientY } : null;
+      refreshTip();
+    });
+    function clear() { if (tipAt) { tipAt = null; refreshTip(); } }
+    document.addEventListener('pointerdown', function (ev) { if (ev.target !== cv) clear(); });
+    window.addEventListener('scroll', clear, { passive: true });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') clear(); });
+  }
 
   // ---- live mode (S8G): ?live=<url on localhost> polls the analyser's /state at 2 Hz; without the param nothing below runs ----
   var POLL_MS = 500; // 2 Hz
@@ -44,8 +194,8 @@
   $('app').hidden = false;
 
   var M = R.meta, G = R.grid, STEPS = M.steps, SEC = M.step_seconds;
-  var STATES = ['moving', 'loading', 'stalled', 'stuck', 'frozen', 'idle'];
-  var STATE_TEXT = { moving: 'moving', loading: 'loading', stalled: 'stalled', stuck: 'stuck', frozen: 'frozen (reports an error)', idle: 'idle' };
+  // raw state -> display state, as exported (meta.state_display); a raw value missing from it is drawn as waiting
+  function dispOf(raw) { var m = M.state_display; return (m && m[raw]) || 'waiting'; }
   var CELL = 22;
   var hasMap = !!R.with_map;
   var layer = 'without';
@@ -91,55 +241,6 @@
     li.appendChild(document.createTextNode(text));
     parent.appendChild(li);
   }
-  // A robot is drawn with a second channel besides colour: stuck = X, frozen = bar, stalled = dashed ring,
-  // idle = hollow, moving = filled, loading = filled with a centre dot.
-  function robotPath(c, kind, cx, cy, r) {
-    c.beginPath();
-    if (kind === 'agv') c.arc(cx, cy, r, 0, 6.2832); else c.rect(cx - r, cy - r, 2 * r, 2 * r);
-  }
-  function drawRobot(c, kind, cx, cy, state, r) {
-    var col = css('--' + state), bg = css('--bg'), panel = css('--panel');
-    c.save();
-    c.lineWidth = 1.5; c.strokeStyle = bg; c.fillStyle = col;
-    if (state === 'idle') {
-      robotPath(c, kind, cx, cy, r); c.fillStyle = panel; c.fill();
-      c.strokeStyle = col; c.lineWidth = 2; c.stroke();
-    } else {
-      robotPath(c, kind, cx, cy, r); c.fill(); c.stroke();
-    }
-    c.strokeStyle = bg; c.fillStyle = bg; c.lineWidth = 2;
-    if (state === 'stuck') {
-      var d = r * 0.5;
-      c.beginPath(); c.moveTo(cx - d, cy - d); c.lineTo(cx + d, cy + d); c.moveTo(cx + d, cy - d); c.lineTo(cx - d, cy + d); c.stroke();
-    } else if (state === 'frozen') {
-      c.beginPath(); c.moveTo(cx - r * 0.6, cy); c.lineTo(cx + r * 0.6, cy); c.stroke();
-    } else if (state === 'loading') {
-      c.beginPath(); c.arc(cx, cy, r * 0.3, 0, 6.2832); c.fill();
-    } else if (state === 'stalled') {
-      c.strokeStyle = col; c.lineWidth = 1.5; c.setLineDash([2.5, 2]);
-      robotPath(c, kind, cx, cy, r + 3); c.stroke();
-    }
-    c.restore();
-  }
-  var legendIcons = [];
-  STATES.forEach(function (s) {
-    var li = el('li'), cv = el('canvas', 'icon');
-    var d = Math.max(1, window.devicePixelRatio || 1);
-    cv.width = 24 * d; cv.height = 24 * d; cv.style.width = '24px'; cv.style.height = '24px';
-    cv.setAttribute('aria-hidden', 'true');
-    li.appendChild(cv); li.appendChild(document.createTextNode(STATE_TEXT[s]));
-    $('legend').appendChild(li);
-    legendIcons.push([cv, s, d]);
-  });
-  function drawLegends() {
-    legendIcons.forEach(function (q) {
-      var c = q[0].getContext('2d');
-      c.setTransform(q[2], 0, 0, q[2], 0, 0);
-      c.clearRect(0, 0, 24, 24);
-      drawRobot(c, 'agv', 12, 12, q[1], 7);
-    });
-  }
-
   // ---- canvases ----
   var floor = $('floor'), fctx = floor.getContext('2d');
   var prec = $('prec'), pctx = prec.getContext('2d');
@@ -196,23 +297,28 @@
       c.strokeRect(+xy[0] * CELL + 2, +xy[1] * CELL + 2, CELL - 4, CELL - 4);
     });
     c.setLineDash([]);
-    // detector episodes of the shown layer: a pulse at the cell while active (still at paused or reduced motion)
+    // stuck calls of the shown layer: a pulse at the cell while the call is open (still at paused or reduced motion)
     var phase = (!playing || reduceMotion) ? 0.5 : ((performance.now() / 700) % 1);
-    var bg = css('--bg'), ring = css('--ring');
-    (layer === 'with' ? episodesWith : episodesMain).forEach(function (e) {
+    var calls = layer === 'with' ? episodesWith : episodesMain;
+    calls.forEach(function (e) {
       if (e.start_step <= step && (e.end_step === null || step <= e.end_step)) {
-        var ex = e.cell[0] * CELL + CELL / 2, ey = e.cell[1] * CELL + CELL / 2, er = CELL * (0.45 + 0.4 * phase);
-        c.globalAlpha = 1 - 0.7 * phase;
-        c.beginPath(); c.arc(ex, ey, er, 0, 6.2832); c.strokeStyle = bg; c.lineWidth = 4; c.stroke();
-        c.beginPath(); c.arc(ex, ey, er, 0, 6.2832); c.strokeStyle = ring; c.lineWidth = 2; c.stroke();
-        c.globalAlpha = 1;
+        drawRing(c, e.cell[0] * CELL + CELL / 2, e.cell[1] * CELL + CELL / 2, CELL * (0.45 + 0.4 * phase), 1 - 0.7 * phase);
       }
     });
-    // robots
-    var fr = frames()[step];
+    // robots; a flash on the step a robot goes down
+    var fr = frames()[step], prev = step > 0 ? frames()[step - 1] : null;
     R.robots.forEach(function (r, i) {
-      var e = fr[i];
-      drawRobot(c, r.kind, e[0] * CELL + CELL / 2, e[1] * CELL + CELL / 2, e[2], r.kind === 'agv' ? CELL * 0.33 : CELL * 0.3);
+      var e = fr[i], cx = e[0] * CELL + CELL / 2, cy = e[1] * CELL + CELL / 2;
+      drawRobot(c, r.kind, cx, cy, dispOf(e[2]), r.kind === 'agv' ? CELL * 0.33 : CELL * 0.3);
+      if (prev && dispOf(e[2]) === 'down' && dispOf(prev[i][2]) !== 'down') drawStar(c, cx, cy - CELL * 0.45, CELL * 0.55, css('--down'));
+    });
+    // grade marks, anchored to end_step: how the call ended decides the grade, and a batch run stamps graded_at with the
+    // run's last timestamp, so that is no display time. Shown for max(3, 3 * speed) steps; inconclusive and ungraded draw nothing.
+    var hold = Math.max(3, 3 * speed);
+    calls.forEach(function (e) {
+      if ((e.verdict === 'confirmed' || e.verdict === 'refuted') && e.end_step !== null && e.end_step <= step && step <= e.end_step + hold) {
+        drawMark(c, e.cell[0] * CELL + CELL / 2, e.cell[1] * CELL + CELL / 2, e.verdict, CELL * 0.9);
+      }
     });
   }
 
@@ -425,19 +531,34 @@
     });
   }
 
+  function callCounts(step) {
+    // open = not ended at this step; an ended call is right (confirmed), wrong (refuted) or has no verdict (inconclusive,
+    // ungraded, or a layer without a grader)
+    var n = 0, open = 0, right = 0, wrong = 0;
+    (layer === 'with' ? episodesWith : episodesMain).forEach(function (e) {
+      if (e.start_step > step) return;
+      n++;
+      if (e.end_step === null || e.end_step > step) open++;
+      else if (e.verdict === 'confirmed') right++;
+      else if (e.verdict === 'refuted') wrong++;
+    });
+    return 'Stuck calls so far: ' + n + '; still open ' + open + '; graded right ' + right + ', wrong ' + wrong +
+      '; no verdict ' + (n - open - right - wrong) + '.';
+  }
   function mapState(step) {
-    var st = $('mapstate');
-    if (layer === 'with') st.textContent = 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the rings come from the detector on this run.';
-    else if (!pubs.length) st.textContent = 'The analyser published no cost map in this run.';
-    else if (!latestPublish(step)) st.textContent = 'No map published yet (the first publish is at ' + clock(pubs[0].step) + ').';
-    else st.textContent = '';
+    var st = $('mapstate'), t;
+    if (layer === 'with') t = 'Second run with the map switched on: the red shading belongs to the first run and is hidden, the stuck-call rings come from the analyser on this run.';
+    else if (!pubs.length) t = 'The analyser published no cost map in this run.';
+    else if (!latestPublish(step)) t = 'No map published yet (the first publish is at ' + clock(pubs[0].step) + ').';
+    else t = '';
+    st.textContent = (t ? t + ' ' : '') + callCounts(step);
   }
 
   // ---- text for screen readers ----
   function counts(step) {
     var c = {};
-    frames()[step].forEach(function (e) { c[e[2]] = (c[e[2]] || 0) + 1; });
-    return STATES.filter(function (s) { return c[s]; }).map(function (s) { return c[s] + ' ' + STATE_TEXT[s]; }).join(', ');
+    frames()[step].forEach(function (e) { var d = dispOf(e[2]); c[d] = (c[d] || 0) + 1; });
+    return DISPLAY.filter(function (s) { return c[s]; }).map(function (s) { return c[s] + ' ' + s; }).join(', ');
   }
   function summary(step) {
     var pub = latestPublish(step);
@@ -470,7 +591,25 @@
       }
       lastLive = now;
     }
+    refreshTip();
   }
+
+  // tooltip: waiting seconds = consecutive steps up to and including this step with display state waiting, times step_seconds
+  function waitSteps(i, step) {
+    var n = 0, fr = frames();
+    for (var k = step; k >= 0 && dispOf(fr[k][i][2]) === 'waiting'; k--) n++;
+    return n;
+  }
+  tipProvider = function (cx, cy) {
+    var step = curStep(), fr = frames()[step], out = [];
+    R.robots.forEach(function (r, i) {
+      var e = fr[i];
+      if (e[0] === cx && e[1] === cy) out.push({ id: r.serial, kind: r.kind, raw: e[2], disp: dispOf(e[2]), job: e[3], waitS: waitSteps(i, step) * SEC });
+    });
+    return out;
+  };
+  wireTips(floor, function () { return G; });
+  redrawHook = function () { draw(); };
 
   function setPlaying(p) {
     var was = playing;
@@ -500,7 +639,7 @@
   }
 
   $('play').addEventListener('click', function () { setPlaying(!playing); });
-  $('speed').addEventListener('change', function (e) { speed = +e.target.value; });
+  $('speed').addEventListener('change', function (e) { speed = +e.target.value; draw(); });
   $('scrub').max = STEPS - 1;
   $('scrub').addEventListener('input', function (e) {
     pos = +e.target.value; draw();
@@ -563,26 +702,28 @@
     var CELLV = 22, G = null, state = null, lastOk = 0, failing = 0, inflight = false;
     var barKey = null, lastStep = null, sameSteps = 0;
     var placed = {}; // "x,y" -> p, from this page's own successful POSTs
+    var prevDisp = {}, flashUntil = {}, marked = {}, marks = []; // breakdown flashes (per robot) and grade marks, wall clock
     var cursor = null, reveal = false, promptCell = null;
     var floorEl = $('floor'), ctx = floorEl.getContext('2d');
     floorEl.tabIndex = 0;
     floorEl.setAttribute('role', 'application'); // operable in live mode (offline it stays role="img")
     floorEl.setAttribute('aria-label', 'Warehouse floor. Click or press Enter on a highway cell to place a roadblock; arrow keys move the cursor.');
 
-    // legend for the live floor: add the "placed by you" swatch
-    var l2 = document.querySelector('.legend2');
-    l2.textContent = '';
-    [['sw ring-mine', 'placed by you (outlined)'], ['sw shade', 'red = the analyser\'s cost map flags this cell'],
-     ['sw box', 'hidden roadblocks (only with the reveal toggle)']].forEach(function (q) {
-      var s = el('span', q[0]); l2.appendChild(s); l2.appendChild(document.createTextNode(' ' + q[1] + '   '));
-    });
+    // legend for the live floor: the static legend plus the operator's own roadblocks
+    var planted = document.querySelector('#lrow-planted ul');
+    var li = el('li');
+    var ic = el('canvas', 'icon');
+    ic.setAttribute('data-ico', 'placed'); ic.setAttribute('aria-hidden', 'true');
+    li.appendChild(ic); li.appendChild(el('span', null, 'placed by you (outlined roadblocks)'));
+    planted.appendChild(li);
+    drawLegends();
     var revealBox = el('label', 'revealbox', '');
     var revealIn = document.createElement('input');
     revealIn.type = 'checkbox';
     revealBox.appendChild(revealIn);
     revealBox.appendChild(document.createTextNode(' Reveal the hidden roadblocks'));
     revealBox.hidden = true;
-    l2.insertAdjacentElement('afterend', revealBox);
+    $('floorlegend').insertAdjacentElement('afterend', revealBox);
     revealIn.addEventListener('change', function () { reveal = revealIn.checked; drawLive(); });
 
     // counters
@@ -654,7 +795,15 @@
       var r = floorEl.getBoundingClientRect();
       return [Math.floor((ev.clientX - r.left) / r.width * G.width), Math.floor((ev.clientY - r.top) / r.height * G.height)];
     }
-    floorEl.addEventListener('click', function (ev) { if (G) { var c = cellAt(ev); cursor = c; openPrompt(c[0], c[1]); } });
+    var lastPointer = 'mouse';
+    floorEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType; });
+    floorEl.addEventListener('click', function (ev) {
+      if (!G) return;
+      var c = cellAt(ev);
+      // the first tap on a robot shows its tooltip; tapping the same cell again closes it and opens the prompt
+      if (lastPointer === 'touch' && tipAt && tipAt.cell[0] === c[0] && tipAt.cell[1] === c[1] && tipProvider(c[0], c[1]).length) return;
+      cursor = c; openPrompt(c[0], c[1]);
+    });
     floorEl.addEventListener('mousemove', function (ev) {
       if (!G) return;
       var c = cellAt(ev), why = whyNot(c[0], c[1]);
@@ -668,7 +817,8 @@
         e.preventDefault();
         cursor = [Math.max(0, Math.min(G.width - 1, cursor[0] + d[0])), Math.max(0, Math.min(G.height - 1, cursor[1] + d[1]))];
         var why = whyNot(cursor[0], cursor[1]);
-        $('live').textContent = 'Cell ' + cursor[0] + ',' + cursor[1] + (why ? ': ' + why : ': highway, press Enter to place a roadblock');
+        var here = tipProvider(cursor[0], cursor[1]).map(function (i) { return tipLines(i).join(', '); }).join('; ');
+        $('live').textContent = 'Cell ' + cursor[0] + ',' + cursor[1] + (why ? ': ' + why : ': highway, press Enter to place a roadblock') + (here ? '. ' + here : '');
         drawLive();
       } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPrompt(cursor[0], cursor[1]); }
     });
@@ -731,10 +881,48 @@
         c.strokeRect(cursor[0] * CELLV + 0.5, cursor[1] * CELLV + 0.5, CELLV - 1, CELLV - 1);
       }
       if (state) {
+        var now = Date.now();
         state.robots.forEach(function (r) {
-          drawRobot(c, robotKind(r.id), r.x * CELLV + CELLV / 2, r.y * CELLV + CELLV / 2, r.state, robotKind(r.id) === 'agv' ? CELLV * 0.33 : CELLV * 0.3);
+          if (r.call && r.call.open) drawRing(c, r.call.cell[0] * CELLV + CELLV / 2, r.call.cell[1] * CELLV + CELLV / 2, CELLV * 0.65, 0.6);
+        });
+        state.robots.forEach(function (r) {
+          var k = robotKind(r.id), cx = r.x * CELLV + CELLV / 2, cy = r.y * CELLV + CELLV / 2;
+          drawRobot(c, k, cx, cy, DISPLAY.indexOf(r.state) < 0 ? 'waiting' : r.state, k === 'agv' ? CELLV * 0.33 : CELLV * 0.3);
+          if (flashUntil[r.id] > now) drawStar(c, cx, cy - CELLV * 0.45, CELLV * 0.55, css('--down'));
+        });
+        marks.forEach(function (m) {
+          if (m.until > now) drawMark(c, m.cell[0] * CELLV + CELLV / 2, m.cell[1] * CELLV + CELLV / 2, m.verdict, CELLV * 0.9);
         });
       }
+      refreshTip();
+    }
+    redrawHook = function () { drawLive(); };
+    tipProvider = function (cx, cy) {
+      var out = [];
+      if (!state) return out;
+      state.robots.forEach(function (r) {
+        if (r.x === cx && r.y === cy) out.push({ id: r.id, kind: robotKind(r.id), raw: r.raw, disp: r.state, job: r.job, waitS: r.waiting_s });
+      });
+      return out;
+    };
+    wireTips(floorEl, function () { return G; });
+    // a state document: a robot that is down now and was not down at the previous poll flashes for 1.5 s; the first time a
+    // call id shows up graded right or wrong, its mark stays for 3 s
+    // On the first poll, and on the first poll after an outage, only record what is there: no flash, no mark.
+    function noteChanges(j, quiet) {
+      var now = Date.now();
+      j.robots.forEach(function (r) {
+        if (!quiet && r.state === 'down' && prevDisp[r.id] !== undefined && prevDisp[r.id] !== 'down') {
+          flashUntil[r.id] = now + 1500; setTimeout(drawLive, 1600);
+        }
+        prevDisp[r.id] = r.state;
+        if (r.call && (r.call.verdict === 'confirmed' || r.call.verdict === 'refuted') && !marked[r.call.id]) {
+          marked[r.call.id] = true;
+          if (!quiet) marks.push({ cell: r.call.cell, verdict: r.call.verdict, until: now + 3000 });
+          setTimeout(drawLive, 3100);
+        }
+      });
+      marks = marks.filter(function (m) { return m.until > now; });
     }
 
     function render() {
@@ -816,6 +1004,7 @@
         .then(function (j) {
           sameSteps = lastStep !== null && j.step === lastStep ? sameSteps + 1 : 0;
           lastStep = j.step;
+          noteChanges(j, state === null || failing > 0);
           state = j; failing = 0; lastOk = Date.now();
           setConnected(true);
           render();
