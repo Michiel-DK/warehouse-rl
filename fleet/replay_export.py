@@ -88,6 +88,8 @@ Payload (every key is always present unless marked optional):
                                    starting "__" (the bookkeeping the store adds, e.g. __key) removed and every other key,
                                    run included, kept. Run level (all zones), not only the exported zone. Null without
                                    ingest_ledger rows.
+                                   The formula string, verbatim (it is also run_constants.kept.formula):
+kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) / sum(ingest_ledger.bytes_read_uncompressed); B(T) = sum over the rows of store.select(T, {run}) of len(json.dumps(row, sort_keys=True, separators=(',', ':')).encode()) with keys starting '__' removed
                 hotspot            {precision_at_20, recall_at_k, k (= n_floor), zero_stall_share, n_floor, source} from
                                    --hotspot zones[zone]; the export raises when the file's run != meta.run or its n_floor
                                    != the number of obstacles.
