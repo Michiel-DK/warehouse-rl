@@ -238,6 +238,7 @@ class TestBuilder(unittest.TestCase):
             self.assertNotEqual(rc, 0)
             self.assertFalse(out.exists())
             self.assertIn("map_share", err)
+            self.assertIn("KeyError", err)  # the cause is named, not swallowed
 
     def test_leftover_placeholder_refuses_and_names_it(self):
         with tempfile.TemporaryDirectory() as td:
@@ -249,7 +250,7 @@ class TestBuilder(unittest.TestCase):
             self.assertIn("oops_token", err)
 
     def test_placeholder_like_text_in_script_and_style_is_not_refused(self):
-        page, left = ob.build(ob.load_inputs(ROOT / D, ROOT))
+        page, left, _ = ob.build(ob.load_inputs(ROOT / D, ROOT))
         self.assertEqual(left, [])
 
     def test_missing_input_file_refuses_and_writes_nothing(self):
@@ -441,7 +442,8 @@ class TestChips(Committed):
         banner = kids[1]
         self.assertTrue(banner.attrs.get("role") == "note" or banner.tag == "aside")
         t = banner.text()
-        for level in ("Tested in simulation", "Tested, but weakly", "Not tested", "Not built"):
+        # design-audit: the banner uses the chips' own labels verbatim, so a cold reader meets one vocabulary
+        for level in ("Tested in simulation.", "Tested, weakly.", "Timing tested, reasons not.", "Not built."):
             self.assertIn(level, t)
 
     def test_each_content_block_has_exactly_one_chip_with_the_right_level(self):
@@ -477,6 +479,13 @@ class TestChips(Committed):
                       "calls repeated in the next half hour; the repeat test is being reworked."
                       % (lt["truth_hit"], lt["truth_n"], lt["held"], lt["graded"]), lessons)
         self.assertEqual((lt["truth_hit"], lt["truth_n"], lt["held"], lt["graded"]), (27, 27, 9, 31))
+        # review round 1: benchmark.json batch.score.unmatched_detected has frozen (7,246) > by_design (5,600), so the chip
+        # must not say most unmatched stops are shelf waits; and the stops are not "real" (only the precision share matches)
+        problem = chips[0].text()
+        self.assertNotIn("most of the rest", problem)
+        self.assertIn("by design", problem)
+        self.assertIn("broke down", problem)
+        self.assertNotIn("real stuck periods", self.html)
 
 
 # ------------------------------------------------------------------------------------------------ K6, K7

@@ -30,13 +30,6 @@ HOT = "results/fleet/hotspot_s8b-medium-80-p03-07.json"
 STICKY = "results/closed_loop_sticky/summary.json"
 INPUTS = (DATA, BENCH, HOT, STICKY)
 
-# Two words are assembled from parts on purpose. test_fleet_hotspot.TestAnalystIsolation greps every fleet/*.py (bar a fixed
-# list) for them to keep the hidden answers out of the analyser. This builder is a viewer of finished runs, not an analyser, and
-# the keys it reads are named that way in data.js and summary.json. The straightforward fix is to exempt this file in that
-# test; the lane was told not to edit existing tests, so the words are composed here and the operator can decide.
-_TW = "tru" + "th"
-_FS = "floor" + "_skip"
-
 PLACEHOLDER = re.compile(r"\{[A-Za-z_][A-Za-z0-9_.]*\}")
 
 # name -> (file, expression, kind). The expression grammar is in resolve(). Names must not contain digits (they sit in TEMPLATE).
@@ -66,8 +59,8 @@ NUMS = {
     "hits_top": (DATA, "hits(publishes.-1.cells,obstacles,%d)" % TOP_K, "int"),
     "map_precision": (HOT, "mean.k.%d.precision" % TOP_K, "pct0"),
     "map_ceiling": (HOT, "1-mean.zero_stall_share", "pct0"),
-    "lt_hit": (DATA, "run_constants.lessons_long.%s_hit" % _TW, "int"),
-    "lt_n": (DATA, "run_constants.lessons_long.%s_n" % _TW, "int"),
+    "lt_hit": (DATA, "run_constants.lessons_long.truth_hit", "int"),
+    "lt_n": (DATA, "run_constants.lessons_long.truth_n", "int"),
     "held": (DATA, "run_constants.lessons_long.held", "int"),
     "graded": (DATA, "run_constants.lessons_long.graded", "int"),
     "n_seeds": (DATA, W + ".n_seeds", "int"),
@@ -77,7 +70,7 @@ NUMS = {
     "oracle_share": (DATA, W + ".oracle_share", "pct1"),
     "oracle_share_lo": (DATA, W + ".oracle_share_ci95.0", "pct1"),
     "oracle_share_hi": (DATA, W + ".oracle_share_ci95.1", "pct1"),
-    "fewer_drives": (STICKY, "1-arms.map_a32.{0}_steps_mean/arms.none.{0}_steps_mean".format(_FS), "pct0"),
+    "fewer_drives": (STICKY, "1-arms.map_a32.floor_skip_steps_mean/arms.none.floor_skip_steps_mean", "pct0"),
 }
 BAR_KEYS = ("none", "map_a32", "oracle_a32", "undisturbed")
 BAR_LABELS = ("Bad floor, no map", "With the analyser's map", "With perfect knowledge", "Clean floor")
@@ -85,7 +78,7 @@ for _i in range(4):
     for _f, _name in (("mean", "m"), ("ci95_low", "lo"), ("ci95_high", "hi")):
         NUMS["bar%d_%s" % (_i, _name)] = (DATA, "%s.bars.%d.%s" % (W, _i, _f), "f1")
 
-KIND_BY_SRC ={"%s:%s" % (f, e): k for f, e, k in NUMS.values()}
+KIND_BY_SRC = {"%s:%s" % (f, e): k for f, e, k in NUMS.values()}
 
 
 # ------------------------------------------------------------------------------------------------ resolver
@@ -205,7 +198,7 @@ def lesson_items(inputs):
     for kind, l in sorted(newest.items(), key=lambda kv: (-kv[1]["decided_at_step"], kv[0])):
         m = re.search(r"cell (\d+,\d+)", l["text"]) if kind == "hot_cell" else (re.search(r"robot (\S+?)[ ,.]", l["text"]) if kind == "hot_robot" else None)
         where = '<b>%s</b>' % esc(m.group(1)) if m else ""
-        mark_text = MARKS.get(l.get(_TW))
+        mark_text = MARKS.get(l.get("truth"))
         mark = ' <span class="mark">%s</span>' % esc(mark_text) if mark_text else ""
         items.append('<div class="lesson" data-kind="%s"><span class="ic" aria-hidden="true">%s</span><span>%s %s%s</span></div>'
                      % (esc(kind), LESSON_ICON.get(kind, "•"), esc(LESSON_TEXT.get(kind, LESSON_FALLBACK)), where, mark))
@@ -222,7 +215,7 @@ def bars_html(inputs):
         pc = lambda v: "%.2f" % (max(0.0, v) / top * 100)
         hi = " hi" if b["key"] == "map_a32" else ""
         rows.append(
-            '<div class="br%s"><span class="lab">%s</span><span class="tr">'
+            '<div class="br%s"><span class="lab">%s</span><span class="tr" aria-hidden="true">'
             '<span class="fl" style="width:%s%%"></span>'
             '<span class="wh" style="left:%s%%;width:%s%%"></span></span>'
             '<span class="val">%s <span class="ci">(%s to %s)</span></span></div>'
@@ -278,7 +271,7 @@ h1{font-family:var(--font-display);font-weight:700;font-size:clamp(38px,6.5vw,64
 .cta{display:inline-block;margin-top:28px;padding:12px 22px;border-radius:999px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
 .steps{display:grid;gap:0;margin-top:24px}
 .step{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:40px;align-items:center;padding-block:56px;border-top:1px solid var(--hair)}
-.step:nth-child(even) .txt{order:2}
+@media (min-width:801px){.step:nth-child(even) .txt{order:2}}
 .eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
 h2{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.2vw,40px);line-height:1.1;margin:0;max-width:18ch;text-wrap:balance}
 .one{margin:14px 0 0;font-size:17px;color:#3f4741;max-width:44ch}
@@ -296,7 +289,7 @@ b.num{font-variant-numeric:tabular-nums}
 .card .lbl{font-size:13px;font-weight:600;color:var(--card-muted)}
 .funnel{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:8px}
 .fx{background:rgba(255,255,255,.08);border-radius:14px;padding:14px 12px;min-width:0}
-.fx .h{font-size:12px;color:var(--card-muted)} .fx .v{font-family:var(--font-display);font-size:28px;line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums} .fx .s{font-size:11.5px;color:var(--card-muted);margin-top:6px;line-height:1.35}
+.fx .h{font-size:12px;color:var(--card-muted)} .fx .v{font-family:var(--font-display);font-size:clamp(20px,2.6vw,28px);line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums} .fx .s{font-size:11.5px;color:var(--card-muted);margin-top:6px;line-height:1.35}
 .fx.drop{margin-top:8px}
 .fxcol{display:grid;gap:8px;align-content:start}
 .far{align-self:center;color:var(--card-muted);font-size:22px}
@@ -340,6 +333,9 @@ a{color:var(--accent)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
 .pulse{animation:pulse 1.6s ease-in-out infinite}
+.hero .note{margin-top:10px;font-size:14px;color:var(--muted)}
+.closer .again{margin-top:20px}
+.closer .again a{color:var(--accent);font-weight:600}
 @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
 @media (max-width:720px){
   .hero .wrap{padding-block:44px 28px}
@@ -357,7 +353,7 @@ a{color:var(--accent)}
 
 <aside class="banner" role="note"><div class="wrap">
   <div><b>Internal draft, 15 Oct 2026. What is tested and what is not.</b> Every number on this page comes from a run in the warehouse-rl repo: synthetic data from a simulator, one laptop, macOS numbers.</div>
-  <div><b>Tested in simulation:</b> the log, the planted floor, the floor map. <b>Tested, but weakly:</b> the "stuck" definition, the operator's list and the route planner. <b>Not tested:</b> the reasons it gives for a stop. <b>Not built:</b> the three onboarding steps at the bottom.</div>
+  <div><b>Tested in simulation.</b> The log, the planted floor, the floor map. <b>Tested, weakly.</b> The "stuck" definition, the operator's list and the route planner. <b>Timing tested, reasons not.</b> When it spots a stop is measured; the reason it gives is not. <b>Not built.</b> The three onboarding steps at the bottom.</div>
 </div></aside>
 
 <main>
@@ -367,6 +363,7 @@ a{color:var(--accent)}
   <p class="lead">We read the fleet's own log as it arrives and hand operators a short, checked list of what to go and look at.</p>
   <div class="flow"><span class="fb">robot log</span><span class="ar">→</span><span class="fb">who is stuck</span><span class="ar">→</span><span class="fb">where the floor is bad</span><span class="ar">→</span><span class="fb">the operator's list</span></div>
   <a class="cta" href="../replay/index.html">See it move →</a>
+  <p class="note">Everything on this page ran on simulated robots, not on a real warehouse.</p>
 </div></section>
 
 <div class="wrap"><div class="steps">
@@ -378,7 +375,7 @@ a{color:var(--accent)}
       <p class="one">One test area, one {shift_min}-minute shift. Each red mark is a robot that sat with a job for over {stuck_after} seconds.</p>
       <p class="prior">Different from what exists: most fleet managers show the stop, not the pattern; trend tools exist, this one grades its own calls.</p>
       <div class="big">{stuck_periods}<span>stuck periods in one shift, {robots} robots</span></div>
-      <div class="st weak"><i></i><span><b>Tested, weakly.</b> "Stuck" here means waited over {stuck_after} seconds with a job. Only {precision} of those stops match the simulator's own stuck flag; most of the rest are robots waiting at a shelf by design.</span></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> "Stuck" here means waited over {stuck_after} seconds with a job. Only {precision} of those stops match the simulator's own stuck flag; the others are robots waiting at a shelf by design or robots that broke down while stopped.</span></div>
     </div>
     <div class="pic"><svg id="m1" class="map" role="img" aria-label="Floor plan with every stuck period marked"></svg>
       <div class="legend"><span><i style="background:var(--hw);border:1px solid var(--hair)"></i>aisle</span><span><i style="background:var(--shelf)"></i>shelves</span><span><i style="background:var(--goal)"></i>pick stations</span><span><i style="background:var(--stuck);border-radius:50%"></i>a robot got stuck here</span></div></div>
@@ -390,7 +387,7 @@ a{color:var(--accent)}
       <h2>A warehouse where we plant the faults ourselves.</h2>
       <p class="one">A simulator with {planted} bad floor cells hidden on the aisles. The analyser gets only the robot messages, never the answer, so every call it makes can be checked.</p>
       <div class="big">{robots}<span>robots in the test area, no hints given to the analyser</span></div>
-      <div class="st ok"><i></i><span><b>Tested.</b> The planted cells and the hidden {tw} are in the run files; the analyser never reads them.</span></div>
+      <div class="st ok"><i></i><span><b>Tested.</b> The planted cells and the hidden truth are in the run files; the analyser never reads them.</span></div>
     </div>
     <div class="pic"><svg id="m2" class="map" role="img" aria-label="The same floor plan with the planted bad cells shown"></svg>
       <div class="legend"><span><i style="background:var(--planted)"></i>planted bad cell, hidden from the analyser</span></div></div>
@@ -425,11 +422,11 @@ a{color:var(--accent)}
       <div class="big">{alert_median}<span>seconds from the moment it could know to the alert</span></div>
       <div class="st no"><i></i><span><b>Timing tested, reasons not.</b> The {alert_median} seconds and the {recall} are measured. The cause labels were only compared with a proximity proxy; the simulator does not say which robot blocked which, and most cause claims could not be confirmed either way.</span></div>
     </div>
-    <div class="card"><div class="lbl">{n_examples} real stuck periods from this shift</div>
+    <div class="card"><div class="lbl">{n_examples} stuck periods from this shift</div>
 <div class="eplist">
 {ep_rows}
 </div>
-      <div class="ticks"><div class="tk"><i>✓</i>finds {recall} of the real stuck periods over {bench_msgs} million messages</div><div class="tk"><i>✓</i>every reason is written down and checked once the stop ends</div></div>
+      <div class="ticks"><div class="tk"><i>✓</i>finds {recall} of the stuck periods the simulator flags, over {bench_msgs} million messages</div><div class="tk"><i>✓</i>every reason is written down and checked once the stop ends</div></div>
     </div>
   </div>
 
@@ -442,7 +439,7 @@ a{color:var(--accent)}
       <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
     </div>
     <div class="pic"><svg id="m3" class="map" role="img" aria-label="Floor plan with the analyser's top 20 cells ringed over the planted bad cells"></svg>
-      <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--accent);background:transparent"></i>analyser's top 20</span><span><i style="border:2.5px solid var(--stuck);background:transparent"></i>flagged, not planted</span><span>it can only find cells robots drive over: {map_ceiling} of them in one shift</span></div></div>
+      <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--ink);box-shadow:0 0 0 2px #fff inset;background:var(--planted)"></i>analyser's top 20</span><span><i style="border:2.5px dashed var(--stuck);background:transparent"></i>flagged, not planted</span><span>it can only find cells robots drive over: {map_ceiling} of them in one shift</span></div></div>
   </div>
 
   <div class="step">
@@ -451,7 +448,7 @@ a{color:var(--accent)}
       <h2>Plain sentences. Each one checked afterwards.</h2>
       <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
       <div class="big">{lt_hit}<span>of {lt_n} flagged cells were real planted cells</span></div>
-      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden {tw}. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.</span></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.</span></div>
     </div>
     <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
 {lessons_html}
@@ -468,7 +465,7 @@ a{color:var(--accent)}
       <div class="st weak"><i></i><span><b>Tested, weakly.</b> On mild floor damage the gain is within noise; on damage that traps robots it is measurable.</span></div>
     </div>
     <div class="pic">
-      <div class="bars" role="img" aria-label="Pick-rate in order lines per hour for four setups, with 95% intervals">
+      <div class="bars">
         {bars_html}
       </div>
       <div class="legend"><span>Order lines per hour, mean of {n_seeds} shifts. The bars come from a test on a floor that traps robots, not from the shift above. Bars start at zero; the line is the 95% interval.</span></div>
@@ -484,6 +481,7 @@ a{color:var(--accent)}
     <div class="cbox"><h3>Tell us what "stuck" means</h3><p>Here it is {stuck_after} seconds waiting with a job. Yours may differ. One line.</p><div class="st nb"><i></i><span><b>Not built.</b> The rule is a constant in the detector, not a client setting.</span></div></div>
     <div class="cbox"><h3>Read the list</h3><p>Every call is checked against what happened next, on your floor.</p><div class="st nb"><i></i><span><b>Not built.</b> Checking exists for the simulator only; no client log has been run.</span></div></div>
   </div>
+  <p class="again"><a href="../replay/index.html">See the shift this page uses, step by step →</a></p>
 </div></section>
 </main>
 
@@ -537,10 +535,12 @@ const COPY = {
     if (o.flagged) {
       D.top.forEach(function (v, i) {
         var key = v[0], xy = key.split(',').map(Number), hit = planted[key] !== undefined;
-        el('rect', { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: hit ? 'var(--accent)' : 'var(--stuck)', 'stroke-width': 2.4 },
-          COPY.pick + (i + 1) + COPY.pickCell + key + (hit ? COPY.pickHit : COPY.pickMiss));
+        el('rect', { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: '#fff', 'stroke-width': 4.4 });
+        var ring = { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: hit ? 'var(--ink)' : 'var(--stuck)', 'stroke-width': 2.2 };
+        if (!hit) ring['stroke-dasharray'] = '3 2';
+        el('rect', ring, COPY.pick + (i + 1) + COPY.pickCell + key + (hit ? COPY.pickHit : COPY.pickMiss));
         if (i < 10) {
-          var tx = el('text', { x: xy[0] * C + C / 2 - 0.5, y: xy[1] * C + C / 2 + 3, 'text-anchor': 'middle', 'font-size': '8.5', 'font-weight': '700', fill: '#fff', 'font-family': 'ui-sans-serif,system-ui,sans-serif', 'pointer-events': 'none' });
+          var tx = el('text', { x: xy[0] * C + C / 2 - 0.5, y: xy[1] * C + C / 2 + 3, 'text-anchor': 'middle', 'font-size': '8.5', 'font-weight': '700', fill: '#fff', stroke: 'var(--ink)', 'stroke-width': 2, 'paint-order': 'stroke', 'font-family': 'ui-sans-serif,system-ui,sans-serif', 'pointer-events': 'none' });
           tx.textContent = String(i + 1);
         }
       });
@@ -569,25 +569,25 @@ def visible_chunks(html_text):
 
 
 def build(inputs):
-    """The filled page and the placeholder tokens still left outside script/style."""
-    values = {"tw": _TW}
+    """The filled page, the placeholder tokens still left outside script/style, and {name: error} for each value that failed."""
+    values, errors = {}, {}
     for name in NUMS:
         try:
             values[name] = num_element(name, inputs)
-        except Exception:
-            pass  # a number that does not resolve leaves its {name} in the page; main() refuses to write it
+        except Exception as e:  # leaves its {name} in the page; main() names the cause and refuses to write
+            errors[name] = "%s: %s" % (type(e).__name__, e)
     for name, fn in (("ep_rows", example_rows), ("lessons_html", lesson_items), ("bars_html", bars_html)):
         try:
             values[name] = fn(inputs)
-        except Exception:
-            pass
+        except Exception as e:
+            errors[name] = "%s: %s" % (type(e).__name__, e)
     fill = lambda m: values.get(m.group(0)[1:-1], m.group(0))
     parts = []
     for is_code, text in visible_chunks(TEMPLATE):
         parts.append(text if is_code else PLACEHOLDER.sub(fill, text))
     page = "".join(parts).replace("__DATA__", script_data(inputs))
     left = sorted({t for is_code, text in visible_chunks(page) if not is_code for t in PLACEHOLDER.findall(text)})
-    return page, left
+    return page, left, errors
 
 
 def main(argv=None):
@@ -598,12 +598,14 @@ def main(argv=None):
     a = ap.parse_args(argv)
     try:
         inputs = load_inputs(a.data, a.results_root)
-        page, left = build(inputs)
+        page, left, errors = build(inputs)
     except Exception as e:  # missing or malformed input: nothing is written
         print("overview_build: %s: %s" % (type(e).__name__, e), file=sys.stderr)
         return 2
     if left:
         print("overview_build: placeholders left unfilled: %s" % ", ".join(left), file=sys.stderr)
+        for name, err in sorted(errors.items()):
+            print("overview_build:   %s <- %s" % (name, err), file=sys.stderr)
         return 3
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

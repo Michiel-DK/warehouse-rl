@@ -1141,14 +1141,18 @@ class TestAnalystIsolation(unittest.TestCase):
                   # score.py, report.py, alert.py: S5C1 CLIs (score.py is the ground-truth scorer), not lane-added
                   # replay_export.py (S8-REPLAY): a viewer of a finished run that reads truth.json on purpose, to draw
                   # the hidden floor problems; nothing it reads feeds back into any analyst module
+                  # overview_build.py (S8K): builds the landing page from data.js and results files, reads the keys
+                  # truth_hit / floor_skip_steps_mean by name; a viewer, nothing in the analyser imports it
                   if p.name not in ("emit.py", "grade.py", "hotspot_score.py", "__init__.py", "score.py", "report.py",
-                                    "alert.py", "replay_export.py")]
+                                    "alert.py", "replay_export.py", "overview_build.py")]
         return files
 
     def test_no_analyser_module_imports_replay_export(self):
         # replay_export.py is exempt from the truth scan above only because nothing in the analyser reads it back
         for p in sorted((ROOT / "fleet" / "fleet_analyser").glob("*.py")):
             self.assertNotRegex(p.read_text(), r"(?m)^\s*(from|import)\s+(\.*\s*)?replay_export\b|import\s+.*replay_export",
+                                p.name)
+            self.assertNotRegex(p.read_text(), r"(?m)^\s*(from|import)\s+(\.*\s*)?overview_build\b|import\s+.*overview_build",
                                 p.name)
 
     def test_no_ground_truth_in_analyst_code(self):
