@@ -72,3 +72,14 @@ ol.toplist li { margin: 1px 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 800px) { .grid, .ana { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.lessons { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.les { display: grid; grid-template-columns: 15ch 1fr; gap: 2px 12px; padding: 6px 10px; border: 1px solid var(--line); border-left-width: 5px; border-radius: 6px; font-size: var(--fs-md); }
+.les.ok { border-left-color: var(--ok); }
+.les.off { border-left-color: var(--off); }
+.les.pending { border-left-color: var(--open); }
+.les .mark { font-weight: 600; white-space: nowrap; }
+.les.ok .mark { color: var(--ok); }
+.les.off .mark { color: var(--off); }
+.les.pending .mark { color: var(--muted); }
+.les .conf { grid-column: 2; color: var(--muted); font-size: var(--fs-sm); }
+@media (max-width: 800px) { .les { grid-template-columns: 1fr; } .les .conf { grid-column: 1; } }

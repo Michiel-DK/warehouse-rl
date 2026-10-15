@@ -62,6 +62,11 @@ Payload (every key is always present unless marked optional):
               The page must only call a rank grade "still in top 20 after the horizon" when outcome_kind is "rank".
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
+  lessons     EVERY lesson decision of the run (S8E, kind "lesson", all zones, not only the exported one) sorted by
+              (decided_at, int(zone), claim subject, lesson_kind): [{decided_at_step, zone, text, lesson_kind,
+              confidence, verdict, graded_at_step}], zone = the claim's zone string. verdict "ok" / "off"
+              and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
+              the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key.
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
               [{start_step, end_step (null = open), robot, cell [x, y], cause, resolution, left_censored}]. Only the
               frames skip left_censored and "interrupted" rows (see stuck above); the page does the same.
@@ -289,6 +294,25 @@ def _claim(d):
     return json.loads(c) if isinstance(c, str) else (c or {})
 
 
+def build_lessons(st, run, t0_ts, step_seconds=STEP_SECONDS):
+    """Every lesson decision of the run (all zones) as a timeline (see the `lessons` payload key). The verdict and graded_at_step come
+    from the "lesson" forecast_grades row of the decision (window_end = the time the grade exists), never from rows of
+    other sources; an open lesson has verdict and graded_at_step null."""
+    decs = st.select("decisions", {"run": run, "kind": "lesson"})
+    by_id = {d["id"]: d for d in decs}
+    rows = {g["id"]: g for g in st.select("forecast_grades", {"run": run, "grade_source": "lesson"}) if g["id"] in by_id}
+    out = []
+    for d in sorted(decs, key=lambda d: (d["decided_at"], int(_claim(d)["zone"]), _claim(d)["subject"],
+                                                _claim(d)["lesson_kind"])):
+        c, g = _claim(d), rows.get(d["id"])
+        out.append(dict(decided_at_step=(d["decided_at"] - t0_ts) // step_seconds, zone=c["zone"],
+                        text=c["text"],
+                        lesson_kind=c["lesson_kind"], confidence=c["confidence"],
+                        verdict=None if g is None else g["verdict"],
+                        graded_at_step=None if g is None else (g["window_end"] - t0_ts) // step_seconds))
+    return out
+
+
 def build_grades(st, run, zone, publishes, t0_ts, step_seconds=STEP_SECONDS):
     decs = [d for d in st.select("decisions", {"run": run, "kind": "hotspot_forecast"})
             if d["subject"].startswith(f"Z{zone}:")]
@@ -503,6 +527,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         check = ingest_check(st, run, files)
         publishes = build_publishes(st, run, zone, floor, t0_ts)
         grades = build_grades(st, run, zone, publishes, t0_ts)
+        lessons = build_lessons(st, run, t0_ts)
     finally:
         st.close()
 
@@ -531,7 +556,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         grid=grid, robots=robots, frames=frames,
         obstacles=[dict(kind="floor", cell=c, p=floor[c], hidden_from_analyser=True) for c in sorted(floor)],
         extractor=dict(series=series, totals=totals, check=check),
-        publishes=publishes, grades=grades,
+        publishes=publishes, grades=grades, lessons=lessons,
         episodes=build_episodes(episode_rows, zone, t0_ts),
         stalls=[[s["robot"], s["cell"], (s["start"] - t0_ts) // STEP_SECONDS, (s["end"] - t0_ts) // STEP_SECONDS,
                  bool(hotspot.counted(s))] for s in stalls if s["zone"] == zone])

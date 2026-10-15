@@ -9,7 +9,8 @@ zone|. Cost ties break on the cell string. Spearman (average ranks on ties) betw
 cells) over the flagged cells, null below 3 flagged cells or when either side is constant. zero_stall_share = share of
 the zone's floor cells with no stall of any kind in the store. Also: forecast_grades counts by (grade_source, verdict) as grading_counts: "outcome" = the
 rank grade (cell still in the zone's top K at window_end), "outcome_count" = the count grade (stall count within
-tolerance), "truth"; rank_grading = {top_k: sorted K values seen, rank_graded: n forecasts with an "outcome" row,
+tolerance), "truth", and, when the store holds lessons (S8E), "lesson" (next-window grade) and "lesson_truth"
+(hot_cell lessons against the floor); lesson rows enter nothing else; rank_grading = {top_k: sorted K values seen, rank_graded: n forecasts with an "outcome" row,
 unranked: n forecasts with an "outcome_count" row but no "outcome" row (rank > K or a v1 claim)};
 stall_in_episode counts by detector cause, platform.
 """
