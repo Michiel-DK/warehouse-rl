@@ -983,7 +983,7 @@ class TestCommittedPage(unittest.TestCase):
         data = rx.read_data_js(DOCS / "data.js")
         self.assertIn("lessons", data)
         self.assertLessEqual((DOCS / "data.js").stat().st_size, rx.MAX_BYTES)
-        keys = {"decided_at_step", "zone", "text", "lesson_kind", "confidence", "verdict", "graded_at_step"}
+        keys = {"decided_at_step", "zone", "text", "lesson_kind", "confidence", "verdict", "graded_at_step", "run", "truth"}  # S8J: run and truth
         for les in data["lessons"]:
             self.assertEqual(set(les), keys)
             self.assertIn(les["verdict"], ("ok", "off", None))
