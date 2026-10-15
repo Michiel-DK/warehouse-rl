@@ -14,6 +14,8 @@ All cadences are simulated seconds, converted to wall seconds with --speed (the 
 a due publish is not delayed). When the emitter finishes, the ingester drains, then publisher -> lessons -> grader each
 run one final cycle and live.py exits 0. Exit code: 0 after Ctrl-C or a finished run, 1 if a child died unexpectedly (named
 on stderr). Children log to <dir>/log-<name>.txt. Internal sub-commands: _probe, _publisher, _lessons, _grader.
+The default --disturb schedules a few breakdowns on AGVs only (pickers are excluded); to include pickers pass a JSON with
+"agent_types": ["agv", "picker"] in the breakdown block. POST /inject breakdowns are unrestricted.
 """
 import argparse
 import json
@@ -35,7 +37,8 @@ for _p in (REPO / "scripts", REPO / "src", FLEET):  # FLEET ends up first: lesso
 from fleet_analyser import emitter, live_state  # noqa: E402
 
 DEFAULT_ENV = emitter.DEFAULT_ENV
-DEFAULT_DISTURB = '{"floor": {"cells": 80, "p": [0.9, 0.99]}}'
+DEFAULT_DISTURB = ('{"floor": {"cells": 80, "p": [0.9, 0.99]}, '
+                   '"breakdown": {"rate_per_hour": 2.0, "duration": [20, 60], "agent_types": ["agv"]}}')
 DEFAULT_WINDOW_H = 0.1
 STEP_SECONDS = live_state.STEP_SECONDS
 CHILDREN = ("emitter", "ingester", "publisher", "lessons", "grader")
@@ -239,7 +242,8 @@ def build_parser():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--env", default=DEFAULT_ENV)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--disturb", default=DEFAULT_DISTURB, help="disturbance preset name or JSON object")
+    p.add_argument("--disturb", default=DEFAULT_DISTURB, help="disturbance preset name or JSON object. The default schedules breakdowns on AGVs only; "
+                   'to include pickers set "agent_types": ["agv", "picker"] in the breakdown block')
     p.add_argument("--speed", type=float, default=5.0, help="simulated seconds per wall second (1 = real time, 5 = 5x real time); > 0")
     p.add_argument("--steps", type=int, default=emitter.DEFAULT_STEPS)
     p.add_argument("--t0", default=emitter.DEFAULT_T0)
