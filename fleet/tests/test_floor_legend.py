@@ -277,8 +277,8 @@ class TestCommittedDataV2(unittest.TestCase):
 LABELS = ["Robots", "Planted by us, hidden from the analyser", "Concluded by the analyser from the log alone",
           "circle = AGV, carries shelves", "square = picker, loads and unloads, drawn grey", "moving", "working", "waiting",
           "down, the robot reported an error", "bad floor cell", "breakdown moment",
-          "suspected bad floor, darker = more evidence", "stuck call, raised after 30 s of waiting with a job",
-          "the call was later graded right or wrong", "show pickers in colour", "The analyser never sees the planted items.",
+          "suspected bad floor, darker = more evidence", "the ten most suspected cells, numbered 1 to 10", "stuck call, raised after 30 s of waiting with a job",
+          "the call was later marked right or wrong", "show pickers in colour", "The analyser never sees the planted items.",
           "Everything in the third row it worked out from the robots' messages."]
 BANNED = re.compile(r"stalled|frozen|detector episode", re.I)
 

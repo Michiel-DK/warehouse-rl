@@ -852,10 +852,15 @@ class TestPageStatic(unittest.TestCase):
             self.assertNotIn(word, self.html + self.js, word)
 
     def test_rank_wording_lives_only_in_the_rank_branch(self):
+        """The phrase is a banned-word text, so since S8I it lives in DETAILS_COPY.wording.rank (closed details block only) and
+        the one function that picks wording returns that entry only for outcome_kind === 'rank'."""
         phrase = "still in top 20 after the horizon"
         self.assertEqual(self.js.count(phrase), 1)
-        before = self.js[:self.js.index(phrase)]
-        self.assertIn("kind === 'rank'", before.splitlines()[-1])  # same line as the rank test
+        self.assertEqual(self.js.count("rank: { lab: 'rank grade', ok: '" + phrase + "'"), 1)
+        pick = self.js[self.js.index("function wording(kind)"):]
+        pick = pick[:pick.index("\n  }") + 4]
+        self.assertIn("kind === 'rank' ? w.rank", pick)
+        self.assertNotIn(phrase, pick)
         self.assertNotIn(phrase, self.html)
         self.assertIn("stall count about as claimed", self.js)
 

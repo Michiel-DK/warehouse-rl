@@ -14,8 +14,8 @@
       breakdownsNone: 'no breakdowns',
       breakdownsSome: '{n} breakdowns',
       breakdownsOne: '1 breakdown',
-      live: 'Live: a fleet is running right now. Click a highway cell to put a roadblock there and watch the analyser find it. So far {messages} robot messages, {placed} roadblocks placed by you{planted}.',
-      livePlanted: ', {n} planted by us'
+      live: 'Live: a fleet is running right now. Click a highway cell to put a roadblock there and watch the analyser find it. So far {messages} robot messages read. Roadblocks placed by you: {placed}{planted}.',
+      livePlanted: ', planted by us: {n}'
     },
     floor: {
       noMap: 'The analyser drew no map in this run.',
@@ -107,10 +107,10 @@
     arrived: 'Lines read from the robots\' files so far: {lines}, {bytes} B uncompressed. Ingest speed {rate} (store:ingest_ledger).{bench}',
     arrivedBench: ' Pipeline benchmark: {rate} msgs/s ({source}).',
     arrivedLive: 'Lines read from the robots\' files so far: {lines}, {bytes} B uncompressed. Speed measured from the last polls of /state (ledger.messages_per_s). Behind the robots: ledger.steps_done minus the newest step read, times 5 s.',
-    usable: 'Parsed and valid: {accepted}. Rejected {rejected}{reasons}. Duplicates {dups}. Sequence gaps {gaps}, {missing} message numbers missing.{gapnote}',
+    usable: 'Parsed and valid: {accepted}. Rejected {rejected}{reasons}. Duplicates {dups}. Sequence gaps {gaps}, {missing} message numbers not seen.{gapnote}',
     usableLive: 'Parsed and valid: {accepted}. Rejected {rejected}. Duplicates {dups}. Counted from the files as they grow.',
     gapNote: ' A jump in message numbers, nothing missing: the emitter skipped {ids} ids on purpose (demo noise), every message is still counted.',
-    kept: 'Kept {kept} B of {arrived} B that arrived = {pct}%. Scope: the whole run ({zones} zones), not only the shift shown. By table: {tables}. Formula: {formula} Source: {source}.',
+    kept: 'Kept {kept} B of {arrived} B that arrived = {pct}%. Scope: the whole run (zones in the run: {zones}), not only the shift shown. By table: {tables}. Formula: {formula} Source: {source}.',
     keptNone: 'No kept figure: the store has no ingest ledger for this run.',
     right: 'Of the 20 cells flagged most strongly, how many sit on a planted bad cell. Per map: {list}.',
     rightLive: 'Of the 20 cells flagged most strongly, how many sit on a revealed roadblock. Scored only while the hidden layout is revealed.',
@@ -217,6 +217,7 @@
   }
   function hideHover() { $('htip').hidden = true; hoverFor = null; }
   function setHover(id, text) {
+    if (hoverText[id] === text && $(id + '-d')) return; // unchanged: replay redraws every frame
     hoverText[id] = text;
     var node = $(id);
     if (!node) return;
@@ -272,7 +273,7 @@
     var cov = $('covbar');
     if (cov) cov.style.width = (v.cov === null ? 0 : Math.min(1, v.cov) * 100) + '%';
     setText('covlabel', v.cov === null ? VISIBLE_COPY.log.unknown
-      : fill(v.live ? VISIBLE_COPY.log.caughtUp : VISIBLE_COPY.log.nothingLost, { c: pct(Math.min(1, v.cov)) }));
+      : fill(v.live ? VISIBLE_COPY.log.caughtUp : VISIBLE_COPY.log.nothingLost, { c: (Math.floor(Math.min(1, v.cov) * 1000) / 10) + '%' }));
     setHover('f-arrived', v.hover.arrived);
     setHover('f-usable', v.hover.usable);
     setHover('f-kept', v.hover.kept);
@@ -741,6 +742,11 @@
     Object.keys(S.rejected_by_reason).forEach(function (k) { var v = S.rejected_by_reason[k][i]; if (v) parts.push(k + ' ' + v); });
     return parts.join(', ');
   }
+  // accounted for = accepted / sent so far, the share of the run's expected messages that the clock has reached by step i
+  function sentSoFar(i) {
+    if (!T.expected_messages) return null;
+    return S.accepted[i] / (T.expected_messages * (i + 1) / STEPS);
+  }
   function replayLog(i) {
     var rate = RC.ingest_msgs_per_s ? RC.ingest_msgs_per_s.value : null;
     var bench = RC.benchmark_msgs_per_s;
@@ -756,7 +762,7 @@
       zones: kept.n_zones, tables: Object.keys(kept.bytes_by_table).map(function (k) { return k + ' ' + fmt(kept.bytes_by_table[k]); }).join(', '),
       formula: kept.formula, source: kept.source }) : HOVER_COPY.keptNone;
     return { lines: S.messages[i], bytes: S.bytes[i], rate: rate, lag: null, live: false, usable: S.accepted[i], rejected: S.rejected[i],
-      dups: S.duplicates[i], kept: kept ? kept.kept_pct : null, cov: S.coverage[i], hover: { arrived: arrived, usable: usable, kept: keptHover } };
+      dups: S.duplicates[i], kept: kept ? kept.kept_pct : null, cov: sentSoFar(i), hover: { arrived: arrived, usable: usable, kept: keptHover } };
   }
   function drawLog(step) {
     paintLog(replayLog(step));

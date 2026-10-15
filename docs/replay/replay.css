@@ -152,3 +152,5 @@ details[data-details] > summary { cursor: pointer; color: var(--accent); font-we
   .foot { margin-left: 12px; margin-right: 12px; }
   .big { font-size: 22px; }
 }
+.counters dd { overflow-wrap: anywhere; }
+.head > div { min-width: 0; }

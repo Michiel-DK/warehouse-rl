@@ -993,20 +993,21 @@ class TestCommittedPage(unittest.TestCase):
         self.assertTrue(all(x["text"].startswith(f"In zone {x['zone']}, ") for x in data["lessons"]))
 
     def test_panel_has_labels_empty_state_and_no_network(self):
+        """S8I rewrote panel 4 as plain-language lines keyed on lesson_kind (the raw lesson text moved to the hover)."""
         self.assertIn('id="lessons"', self.html)
-        self.assertIn("Lessons", self.html)
-        self.assertIn("'✓ held'", self.js)  # text label next to the tick
-        self.assertIn("'not gradable'", self.js)  # graded_at_step null: the shift ends before the next window
-        self.assertIn("Graded so far: ", self.js)  # running held / did not hold / pending tally
-        self.assertIn("'Lesson data is not included in this file.'", self.js)  # no lessons key != no lessons
-        self.assertIn("', support ' + l.confidence", self.js)  # not called a confidence on the page
+        self.assertIn("4. What it would tell your operators", self.html)
+        self.assertIn("Written by rules over the counts, not by a language model.", self.html)
+        self.assertIn("support {c}", self.js)  # not called a confidence on the page
         self.assertNotIn("confidence ' +", self.js)
-        self.assertIn("no model and no learning", self.html)
-        self.assertIn("does not say how likely the lesson is to hold", self.html)
-        self.assertIn("did not hold", self.js)  # text label next to the cross
-        self.assertIn("No lessons", self.js)  # empty state
-        self.assertIn("all zones of the shift", self.html)  # the feed is not limited to the drawn zone
-        self.assertIn("'zone ' + l.zone", self.js)  # every line names its zone
+        self.assertIn("role', 'img'", self.js)  # the tick and the cross carry a text alternative
+        self.assertIn("held up", self.js)
+        self.assertIn("did not hold", self.js)
+        self.assertIn("Nothing to report yet.", self.js)  # empty state
+        self.assertIn("Lesson data is not included in this file.", self.js)  # no lessons key != no lessons
+        self.assertIn("Original text: {text}", self.js)  # hover: the S8E lesson text, kind, zone, support, steps, verdict
+        self.assertIn("slice(0, 5)", self.js)  # at most five lines
+        for kind in ("hot_cell", "hot_robot", "recurring_pair", "fallback"):
+            self.assertRegex(self.js, kind + r"\s*:")
         for text in (self.html, self.js, self.css):
             self.assertNotRegex(text.replace("http://www.w3.org/2000/svg", ""), r"https?://")
 
