@@ -188,7 +188,7 @@ class TestSchema(Fixture):
                          ("t0_ts", int), ("seed", int), ("disturb", dict), ("policy", str), ("recovery", dict),
                          ("schema", str), ("source", dict)):
             self.assertIsInstance(m[key], typ, key)
-        self.assertEqual((m["schema"], m["steps"], m["step_seconds"], m["t0_ts"]), ("replay/3", STEPS, 5, BASE))
+        self.assertEqual((m["schema"], m["steps"], m["step_seconds"], m["t0_ts"]), ("replay/4", STEPS, 5, BASE))
         self.assertEqual(set(p["grid"]), {"width", "height", "highway", "goals", "shelves"})
         self.assertEqual(len(p["frames"]), STEPS)
         self.assertEqual([r["serial"] for r in p["robots"]], ["Z0-01", "Z0-02", "Z0-03", "Z0-04"])
@@ -212,8 +212,7 @@ class TestSchema(Fixture):
         for s in p["stalls"]:
             self.assertEqual(len(s), 5)
         self.assertEqual(p["meta"]["source"], dict(run_dir=str(self.dir), store=self.spec, closed_loop=None,
-                                                   costmap=f"{self.dir}/costmap.json", demo_noise=False, injected_noise=None,
-                                                   carry_lessons=None, carry_lessons_run=None))
+                                                   costmap=f"{self.dir}/costmap.json", demo_noise=False, injected_noise=None))
 
     def test_documented_keys_and_types_of_every_section(self):
         p = self.payload
@@ -793,7 +792,7 @@ class TestCommittedData(unittest.TestCase):
         self.assertTrue(text.startswith("window.REPLAY = "))
         data = json.loads(text[len("window.REPLAY = "):].rstrip().rstrip(";"))
         meta = data["meta"]
-        self.assertEqual((meta["schema"], meta["steps"], len(data["frames"])), ("replay/3", 500, 500))
+        self.assertEqual((meta["schema"], meta["steps"], len(data["frames"])), ("replay/4", 500, 500))
         for rel in (meta["source"]["run_dir"], meta["source"]["store"].split(":", 1)[-1], meta["source"]["closed_loop"]):
             self.assertFalse(str(rel).startswith("/"), rel)
         layers = [data["frames"]] + ([data["with_map"]["frames"]] if "with_map" in data else [])

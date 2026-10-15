@@ -931,20 +931,19 @@ class TestReplayLessons(unittest.TestCase):
         a, b = copy.deepcopy(self.before), copy.deepcopy(self.after)
         a.pop("lessons")
         b.pop("lessons")
-        for d in (a, b):  # the kept bytes count every decisions row, lesson decisions included (replay/3)
+        for d in (a, b):  # the kept bytes count every decisions row, lesson decisions included (replay/4)
             d["run_constants"].pop("kept")
         self.assertEqual(a, b)
         self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True))
 
-    def test_lessons_hold_every_zone_with_a_zone_field_in_the_documented_order(self):
+    def test_lessons_hold_the_exported_zone_only_in_the_documented_order(self):
         t0, step = self.after["meta"]["t0_ts"], self.after["meta"]["step_seconds"]
-        want = [dict(decided_at_step=100 // step, zone="0", text="T Z0:Z0-01", lesson_kind="hot_robot", confidence=0.5,
-                     verdict=None, graded_at_step=None),
-                dict(decided_at_step=100 // step, zone="0", text="T Z0:cell 3,4", lesson_kind="hot_cell",
-                     confidence=0.9, verdict="ok", graded_at_step=200 // step),
-                dict(decided_at_step=100 // step, zone="1", text="T Z1:cell 1,1", lesson_kind="hot_cell",
-                     confidence=0.7, verdict="off", graded_at_step=200 // step)]
-        # the exported zone is 0 and zone 1's lesson is IN the feed; same decided_at, so by int(zone), then claim subject
+        want = [dict(run=tre.RUN, decided_at_step=100 // step, zone="0", text="T Z0:Z0-01", lesson_kind="hot_robot",
+                     confidence=0.5, verdict=None, graded_at_step=None, truth=None),
+                dict(run=tre.RUN, decided_at_step=100 // step, zone="0", text="T Z0:cell 3,4", lesson_kind="hot_cell",
+                     confidence=0.9, verdict="ok", graded_at_step=200 // step, truth=None)]
+        # S8J: the exported zone is 0 and zone 1's lesson stays out of the feed (assert_single_run); same decided_at, so
+        # by claim subject
         self.assertEqual(self.after["meta"]["zone"], "0")
         self.assertEqual(self.after["lessons"], want)
         self.assertEqual(t0, tre.BASE)

@@ -3,7 +3,8 @@
 Usage: python fleet/replay_export.py --run-dir DIR --store jsonl:DIR/store --zone 0 --out docs/replay/data.js
        [--closed-loop results/closed_loop] [--benchmark results/fleet/benchmark.json]
        [--hotspot results/fleet/hotspot_<tag>.json] [--closed-loop-summary results/closed_loop_sticky/summary.json]
-       [--carry-lessons docs/replay/data.js]
+       [--lessons-long results/fleet/hotspot_s8e-long-w0.5.json]
+       [--sticky-none PATH --sticky-map-a32 PATH --sticky-oracle-a32 PATH --sticky-undisturbed PATH]
 DIR holds the zone files zone<Z>-<nnn>.jsonl.gz, truth.json, emit_ledger.json and costmap.json (the run name is
 costmap.json["run"], as fleet/hotspot_score.py reads it). The store is only READ (every table through
 store.select(table, {"run": run}); the raw .jsonl store files are never read and nothing is upserted). The export reuses
@@ -12,14 +13,11 @@ atomically (tmp + os.replace) and the writer raises, without writing, when it is
 
 Payload (every key is always present unless marked optional):
   meta        run, zone (str), env_id, steps, step_seconds (5), t0_ts (epoch s of step 0), seed, disturb, policy, recovery,
-              schema "replay/3", state_display {raw state: display state} = live_state.display_state over STATES (moving,
-              working, waiting, down; the page draws this and falls back to waiting for a raw value missing from it), source {run_dir, store, closed_loop, costmap, demo_noise, injected_noise, carry_lessons, carry_lessons_run} = the
+              schema "replay/4", state_display {raw state: display state} = live_state.display_state over STATES (moving,
+              working, waiting, down; the page draws this and falls back to waiting for a raw value missing from it), source {run_dir, store, closed_loop, costmap, demo_noise, injected_noise} = the
               paths exactly as given on the command line (never resolved to absolute paths); costmap = "<run_dir>/costmap.json"
               as given; demo_noise = the emit ledger's config.demo_noise (bool) and injected_noise its total.injected_noise
-              (null without); carry_lessons = the --carry-lessons path (null without) and carry_lessons_run = the run the
-              carried lessons were written on (the carry file's meta.source.carry_lessons_run when it has one, else its
-              meta.run, so a second export from an exported file keeps the origin). Step s covers event time
-              t0_ts + s * step_seconds.
+              (null without). Step s covers event time t0_ts + s * step_seconds.
   grid        {width, height, highway, goals, shelves}: shape is width (columns, x) by height (rows, y), the same (x, y)
               system as agvPosition. highway = height strings of width chars, "1" = highway cell, "0" = not;
               goals = [[x, y]]; shelves = [[x, y]] shelf positions right after the reset. Built from the vendored env of
@@ -74,7 +72,8 @@ Payload (every key is always present unless marked optional):
               The page must only call a rank grade "still in top 20 after the horizon" when outcome_kind is "rank".
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
-  run_constants  {ingest_msgs_per_s, benchmark_msgs_per_s, kept, hotspot, closed_loop}: the numbers the page shows that
+  run_constants  {ingest_msgs_per_s, benchmark_msgs_per_s, kept, hotspot, closed_loop, audit, header, speed, lessons_long,
+              worth}: the numbers the page shows that
               are not per-step, each an object with a `source` (the path exactly as given, or a "store:..." name for
               store-derived ones) or null when its source is absent. The page types none of them.
                 ingest_msgs_per_s  {value, source "store:ingest_ledger", formula}: over the run's ingest_ledger rows with a
@@ -87,7 +86,11 @@ Payload (every key is always present unless marked optional):
                                    len(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()) with every key
                                    starting "__" (the bookkeeping the store adds, e.g. __key) removed and every other key,
                                    run included, kept. Run level (all zones), not only the exported zone. Null without
-                                   ingest_ledger rows.
+                                   ingest_ledger rows. Also n_changes (zone level) = the transition rows of the run and
+                                   the exported zone whose (robot, ts) is an accepted message of the replayed extractor
+                                   (every transition row is one: the detector writes a transition at the ts of the message
+                                   that changed the state, also from end_all), and n_repeats = extractor totals.accepted -
+                                   n_changes, the accepted messages that are not a counted change of state.
                                    The formula string, verbatim (it is also run_constants.kept.formula):
 kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) / sum(ingest_ledger.bytes_read_uncompressed); B(T) = sum over the rows of store.select(T, {run}) of len(json.dumps(row, sort_keys=True, separators=(',', ':')).encode()) with keys starting '__' removed
                 hotspot            {precision_at_20, recall_at_k, k (= n_floor), zero_stall_share, n_floor, source} from
@@ -96,14 +99,41 @@ kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) 
                 closed_loop        {arm (= headline_arm), map_share, map_share_ci95, oracle_share, oracle_share_ci95,
                                    source} from --closed-loop-summary: arms[arm] and arms["oracle"]
                                    .share_of_floor_loss_recovered.
-  lessons     EVERY lesson decision of the run (S8E, kind "lesson", all zones, not only the exported one) sorted by
-              (decided_at, int(zone), claim subject, lesson_kind): [{decided_at_step, zone, text, lesson_kind,
-              confidence, verdict, graded_at_step}], zone = the claim's zone string. verdict "ok" / "off"
+                audit              {sent, read, missing, source "emit_ledger:zones[Z].messages / store:extractor"}: sent =
+                                   the emit ledger's zones[Z].messages (the sender's own count of robot messages), read =
+                                   extractor totals.accepted, missing = sent - read. The deliberate headerId jump of the demo
+                                   noise is NOT a missing message (the extractor's missing_messages counts it, this does
+                                   not). Null without a ledger entry for the zone.
+                header             {msgs, noise, source}: msgs = extractor totals.messages (lines that arrived), noise = the
+                                   exported zone's ledger injected_noise malformed + duplicates (the ledger total when the
+                                   zone has no entry of its own; noise_scope says "zone" or "total").
+                speed              {robot_rate, ingest_rate, ratio, source = the --benchmark path, robot_rate_source}:
+                                   robot_rate = ledger zones[Z].messages / (meta.steps * STEP_SECONDS), ingest_rate =
+                                   benchmark batch.msgs_per_s, ratio = floor(ingest_rate / robot_rate). Null without
+                                   --benchmark or the ledger count.
+                lessons_long       {truth_hit, truth_n, held, graded, source} from --lessons-long: grading_counts.lesson_truth.hit,
+                                   sum(grading_counts.lesson_truth.values()), grading_counts.lesson.ok, lesson.ok + lesson.off.
+                                   Context from a longer independent run, not from this shift.
+                worth              {bars [{key, mean, ci95_low, ci95_high, source}] in the order none, map_a32, oracle_a32,
+                                   undisturbed, map_share, map_share_ci95, oracle_share, oracle_share_ci95, n_seeds, label,
+                                   source = the common directory of the four row files}. bars come from the row files
+                                   --sticky-none / --sticky-map-a32 / --sticky-oracle-a32 / --sticky-undisturbed (one file
+                                   per arm: pick_rate_mean, ci95_low, ci95_high of the file). Each file's rows are sorted by
+                                   seed and the export raises when the four seed sets differ. SHARE FORMULA: share(arm) =
+                                   mean over seeds of (arm_pick_rate - none_pick_rate) / mean over seeds of
+                                   (undisturbed_pick_rate - none_pick_rate), paired on seed; the ci95 is the seed bootstrap
+                                   of scripts/closed_loop.share_recovered (the only part taken from it). This is a 30-seed
+                                   test on a floor that traps robots, NOT the shift in the replay; `label` says so. Null
+                                   unless all four files are given. Every entry above, like the other run_constants, may
+                                   come from other files or runs than the replay: they are labelled context.
+  lessons     every lesson decision of the run and of the exported zone (S8E, kind "lesson"), sorted by
+              (decided_at, int(zone), claim subject, lesson_kind): [{run, decided_at_step, zone, text, lesson_kind,
+              confidence, verdict, graded_at_step, truth}], zone = the claim's zone string. verdict "ok" / "off"
               and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
-              the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key (but run_constants.kept counts the bytes of every decisions row).
-              --carry-lessons PATH: when the store has NO lesson decision for the run, `lessons` is copied verbatim from the
-              `lessons` array of PATH (read before the output is written, so PATH may be the output file); when the store
-              has lesson decisions the flag is an error.
+              the lesson is open. truth = the verdict of the decision's "lesson_truth" grade row ("hit" / "false_alarm") or
+              null. Rows of other grade sources never enter it, and lesson rows enter no other key (but
+              run_constants.kept counts the bytes of every decisions row). The lessons are always this run's own: there is
+              no carry-over from another run, and assert_single_run (below) raises on a foreign one.
   episodes    ALL detector stuck-episode rows of the zone from store.select (zone == the exported zone), NOT filtered:
               [{start_step, end_step (null = open), robot, cell [x, y], cause, resolution, left_censored, episode_id,
               verdict}]. verdict is the verdict of the graded stuck_cause decision whose claim names the episode_id
@@ -142,7 +172,7 @@ from fleet_analyser import detector, emitter, hotspot, ledger, store as store_mo
 from fleet_analyser import live_state  # noqa: E402
 from fleet_analyser.parse import epoch_of, parse_line  # noqa: E402
 
-SCHEMA = "replay/3"
+SCHEMA = "replay/4"
 STATES = ("moving", "loading", "stalled", "stuck", "frozen", "idle")
 MAX_BYTES = 2 * 1024 * 1024
 PREFIX = "window.REPLAY = "
@@ -223,8 +253,9 @@ def zone_files(run_dir, zone):
     return sorted(Path(run_dir).glob(f"zone{zone}-*.jsonl.gz"))
 
 
-def replay_extractor(files, t0_ts, steps, expected, bytes_compressed=None, step_seconds=STEP_SECONDS):
-    """Replay the zone files line by line; returns (series, totals). See the module docstring."""
+def replay_extractor(files, t0_ts, steps, expected, bytes_compressed=None, step_seconds=STEP_SECONDS, accepted_out=None):
+    """Replay the zone files line by line; returns (series, totals). See the module docstring. accepted_out: an optional set that
+    receives (serial, ts) of every accepted message."""
     zeros = lambda: [0] * steps  # noqa: E731
     delta = {k: zeros() for k in SERIES_KEYS}
     reasons = {}
@@ -247,6 +278,8 @@ def replay_extractor(files, t0_ts, steps, expected, bytes_compressed=None, step_
                         delta["duplicates"][step] += 1
                     else:
                         delta["accepted"][step] += 1
+                        if accepted_out is not None:
+                            accepted_out.add((msg.serial, msg.ts))
                         if missing:
                             delta["sequence_gaps"][step] += 1
                             delta["missing_messages"][step] += missing
@@ -338,22 +371,28 @@ def _claim(d):
     return json.loads(c) if isinstance(c, str) else (c or {})
 
 
-def build_lessons(st, run, t0_ts, step_seconds=STEP_SECONDS):
-    """Every lesson decision of the run (all zones) as a timeline (see the `lessons` payload key). The verdict and graded_at_step come
-    from the "lesson" forecast_grades row of the decision (window_end = the time the grade exists), never from rows of
-    other sources; an open lesson has verdict and graded_at_step null."""
+def build_lessons(st, run, t0_ts, step_seconds=STEP_SECONDS, zone=None):
+    """Every lesson decision of the run (all zones, or only `zone` when given) as a timeline (see the `lessons` payload key). The
+    verdict and graded_at_step come from the "lesson" forecast_grades row of the decision (window_end = the time the grade
+    exists), truth from its "lesson_truth" row, never from rows of other sources; an open lesson has verdict and graded_at_step
+    null, an unscored one has truth null."""
     decs = st.select("decisions", {"run": run, "kind": "lesson"})
+    if zone is not None:
+        decs = [d for d in decs if str(_claim(d)["zone"]) == str(zone)]
     by_id = {d["id"]: d for d in decs}
-    rows = {g["id"]: g for g in st.select("forecast_grades", {"run": run, "grade_source": "lesson"}) if g["id"] in by_id}
+    grades = st.select("forecast_grades", {"run": run})
+    rows = {g["id"]: g for g in grades if g["grade_source"] == "lesson" and g["id"] in by_id}
+    truth = {g["id"]: g["verdict"] for g in grades if g["grade_source"] == "lesson_truth" and g["id"] in by_id}
     out = []
     for d in sorted(decs, key=lambda d: (d["decided_at"], int(_claim(d)["zone"]), _claim(d)["subject"],
                                                 _claim(d)["lesson_kind"])):
         c, g = _claim(d), rows.get(d["id"])
-        out.append(dict(decided_at_step=(d["decided_at"] - t0_ts) // step_seconds, zone=c["zone"],
+        out.append(dict(run=d["run"], decided_at_step=(d["decided_at"] - t0_ts) // step_seconds, zone=c["zone"],
                         text=c["text"],
                         lesson_kind=c["lesson_kind"], confidence=c["confidence"],
                         verdict=None if g is None else g["verdict"],
-                        graded_at_step=None if g is None else (g["window_end"] - t0_ts) // step_seconds))
+                        graded_at_step=None if g is None else (g["window_end"] - t0_ts) // step_seconds,
+                        truth=truth.get(d["id"])))
     return out
 
 
@@ -634,19 +673,155 @@ def closed_loop_constant(path):
         raise ValueError(f"{path} lacks arms[headline_arm / oracle].share_of_floor_loss_recovered ({e})") from e
 
 
-def carried_lessons(path):
-    """(lessons, origin run) of an existing data.js: the origin is its meta.source.carry_lessons_run, else its meta.run."""
-    data = read_data_js(path)
-    if "lessons" not in data:
-        raise ValueError(f"{path} has no lessons to carry")
-    meta = data.get("meta") or {}
-    return data["lessons"], (meta.get("source") or {}).get("carry_lessons_run") or meta.get("run")
+WORTH_ARMS = ("none", "map_a32", "oracle_a32", "undisturbed")
+WORTH_LABEL = ("The bars come from a {n}-seed simulator test on a harder floor, one that traps robots, not from the shift in "
+               "panel 1.")
+
+
+def lessons_long_constant(path):
+    if path is None:
+        return None
+    try:
+        counts = _load_json(path, "lessons-long")["grading_counts"]
+        truth, lesson = counts["lesson_truth"], counts["lesson"]
+        return dict(truth_hit=truth["hit"], truth_n=sum(truth.values()), held=lesson["ok"], graded=lesson["ok"] + lesson["off"],
+                    source=path)
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"{path} lacks grading_counts.lesson / lesson_truth ({e})") from e
+
+
+def zone_ledger(emit, zone):
+    """The emit ledger's entry of the exported zone, or {}."""
+    return next((z for z in emit.get("zones", []) if str(z.get("zone")) == str(zone)), {})
+
+
+def audit_constant(zrow, totals, zone):
+    """run_constants.audit: the sender's own count against what the extractor accepted (see the module docstring)."""
+    sent = zrow.get("messages")
+    if sent is None:
+        return None
+    return dict(sent=sent, read=totals["accepted"], missing=sent - totals["accepted"],
+                source=f"emit_ledger:zones[{zone}].messages / store:extractor accepted")
+
+
+def header_constant(emit, zrow, totals, zone):
+    """run_constants.header: lines that arrived and the deliberately broken ones, from the emit ledger."""
+    entry = zrow.get("injected_noise")
+    scope = "zone"
+    if entry is None:
+        entry, scope = (emit.get("total") or {}).get("injected_noise"), "total"
+    if entry is None:
+        return None
+    where = f"zones[{zone}]" if scope == "zone" else "total"
+    return dict(msgs=totals["messages"], noise=entry["malformed"] + entry["duplicates"], noise_scope=scope,
+                source=f"emit_ledger:{where}.injected_noise (malformed + duplicates) / store:extractor messages")
+
+
+def speed_constant(benchmark, zrow, steps, zone):
+    """run_constants.speed (see the module docstring); None without the benchmark or the ledger's message count."""
+    if benchmark is None or zrow.get("messages") is None:
+        return None
+    robot_rate = zrow["messages"] / (steps * STEP_SECONDS)
+    return dict(robot_rate=robot_rate, ingest_rate=benchmark["value"], ratio=int(benchmark["value"] // robot_rate),
+                source=benchmark["source"],
+                robot_rate_source=f"emit_ledger:zones[{zone}].messages / (meta.steps * {STEP_SECONDS})")
+
+
+def _row_file(path, arm):
+    doc = _load_json(path, f"sticky row ({arm})")
+    try:
+        rows = sorted(doc["rows"], key=lambda r: r["seed"])
+        for k in ("pick_rate_mean", "ci95_low", "ci95_high"):
+            doc[k]
+        [r["pick_rate"] for r in rows]
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"{path} is not a closed-loop row file ({e})") from e
+    return doc, rows
+
+
+def worth_constant(paths):
+    """run_constants.worth from the four sticky row files; paths = {arm: path}; None unless all four are given."""
+    if not paths or any(paths.get(a) is None for a in WORTH_ARMS):
+        return None
+    docs, rows = {}, {}
+    for arm in WORTH_ARMS:
+        docs[arm], rows[arm] = _row_file(paths[arm], arm)
+    seeds = {arm: [r["seed"] for r in rows[arm]] for arm in WORTH_ARMS}
+    if any(seeds[a] != seeds["none"] for a in WORTH_ARMS) or len(set(seeds["none"])) != len(seeds["none"]):
+        raise ValueError(f"the sticky row files do not hold the same seeds: { {a: len(v) for a, v in seeds.items()} }")
+    n = len(rows["none"])
+    pr = {a: [r["pick_rate"] for r in rows[a]] for a in WORTH_ARMS}
+
+    def share(arm):
+        loss = sum(u - b for u, b in zip(pr["undisturbed"], pr["none"])) / n
+        if loss <= 0:
+            raise ValueError("the floor loss (undisturbed - none) is not positive, so there is no share to show")
+        return sum(a - b for a, b in zip(pr[arm], pr["none"])) / n / loss
+
+    import closed_loop  # scripts/closed_loop.py loads the evaluate script at import time, so only here
+
+    def ci95(arm):
+        res = closed_loop.share_recovered(rows[arm], rows["none"], rows["undisturbed"])
+        if res["ci95"] is None:
+            raise ValueError(f"no confidence interval for the {arm} share: {res['reason']}")
+        return res["ci95"]
+
+    bars = [dict(key=a, mean=docs[a]["pick_rate_mean"], ci95_low=docs[a]["ci95_low"], ci95_high=docs[a]["ci95_high"],
+                 source=paths[a]) for a in WORTH_ARMS]
+    return dict(bars=bars, map_share=share("map_a32"), map_share_ci95=ci95("map_a32"), oracle_share=share("oracle_a32"),
+                oracle_share_ci95=ci95("oracle_a32"), n_seeds=n, label=WORTH_LABEL.format(n=n),
+                source=posixpath.commonpath([str(paths[a]).replace(os.sep, "/") for a in WORTH_ARMS]))
+
+
+# ------------------------------------------------------------------------------------------------ one run, one zone
+def _serial_zone(serial):
+    """'Z3-01' -> '3'; None for a name that does not start with Z<number>-."""
+    head, sep, _ = str(serial).partition("-")
+    return head[1:] if sep and head[:1] == "Z" and head[1:].isnumeric() else None
+
+
+def assert_single_run(payload):
+    """Raise ValueError when an element of frames, publishes, grades, lessons, episodes or stalls belongs to another run or
+    another zone than meta.run / meta.zone: a dict element with a different `run` or `zone`, or a robot serial or job id
+    (frames, episodes, stalls) that names another zone. Entries of run_constants carry a `source` and are labelled context:
+    they are not checked."""
+    try:
+        run, zone = payload["meta"]["run"], str(payload["meta"]["zone"])
+    except (KeyError, TypeError) as e:
+        raise ValueError("the payload has no meta.run / meta.zone to check against") from e
+
+    def bad(where, what):
+        raise ValueError(f"{where} holds {what}, but the export is run {run!r} zone {zone!r}")
+
+    def check(where, e):
+        if isinstance(e, dict):
+            if "run" in e and e["run"] != run:
+                bad(where, f"run {e['run']!r}")
+            if "zone" in e and str(e["zone"]) != zone:
+                bad(where, f"zone {e['zone']!r}")
+            if "robot" in e and _serial_zone(e["robot"]) not in (None, zone):
+                bad(where, f"robot {e['robot']!r}")
+        elif isinstance(e, (list, tuple)):
+            if where == "stalls" and e and _serial_zone(e[0]) not in (None, zone):
+                bad(where, f"robot {e[0]!r}")
+            if where == "frames" and len(e) > 3 and _serial_zone(str(e[3]).split("-o")[0]) not in (None, zone):
+                bad(where, f"job {e[3]!r}")
+
+    for key in ("publishes", "lessons", "episodes", "stalls"):
+        for e in payload.get(key) or ():
+            check(key, e)
+    for key, rows in (payload.get("grades") or {}).items():
+        for e in rows or ():
+            check("grades." + key, e)
+    for step in payload.get("frames") or ():
+        for e in step:
+            check("frames", e)
 
 
 # ------------------------------------------------------------------------------------------------ assembly
 def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, log=print,
                   run_dir_arg=None, closed_loop_arg=None, benchmark=None, hotspot_file=None, closed_loop_summary=None,
-                  carry_lessons=None):
+                  lessons_long=None, sticky=None):
     zone = str(zone)
     run_dir = Path(run_dir)
     truth = json.loads((run_dir / "truth.json").read_text())
@@ -660,14 +835,13 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
     t0_ts = epoch_of(cfg.get("t0") or emitter.DEFAULT_T0)
     seed = truth["zones"][zone]["seed"]
     floor = truth["zones"][zone]["floor_cells"]
-    zrow = next((z for z in emit.get("zones", []) if str(z.get("zone")) == zone), {})
+    zrow = zone_ledger(emit, zone)
     expected = zrow.get("expected_messages")
 
     files = zone_files(run_dir, zone)
     if not files:
         raise ValueError(f"no zone{zone}-*.jsonl.gz files under {run_dir}")
     messages = hotspot.read_messages(str(run_dir / f"zone{zone}-*.jsonl.gz"))
-    carry = carried_lessons(carry_lessons) if carry_lessons is not None else None  # read before anything is written
     st = store_mod.open_store(store_spec, run)
     try:
         episode_rows = st.select("stuck_episodes", {"run": run, "zone": zone})
@@ -676,25 +850,16 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         check = ingest_check(st, run, files)
         publishes = build_publishes(st, run, zone, floor, t0_ts)
         grades = build_grades(st, run, zone, publishes, t0_ts)
-        lessons = build_lessons(st, run, t0_ts)
+        lessons = build_lessons(st, run, t0_ts, zone=zone)
+        changes = {(r["robot"], r["ts"]) for r in st.select("transitions", {"run": run}) if str(r.get("zone")) == zone}
         verdicts = stuck_verdicts(st, run)
         ledger_rows = st.select("ingest_ledger", {"run": run})
         kept = kept_constant(st, run, ledger_rows, len(truth["zones"]))
     finally:
         st.close()
 
-    if carry is not None:
-        if lessons:
-            raise ValueError("--carry-lessons is only for a store without lesson decisions, but this store has "
-                             f"{len(lessons)} for run {run}")
-        lessons = carry[0]
     rate = ingest_rate(ledger_rows)
-    run_constants = dict(
-        ingest_msgs_per_s=None if rate is None else dict(value=rate, source="store:ingest_ledger", formula=INGEST_RATE_FORMULA),
-        benchmark_msgs_per_s=benchmark_constant(benchmark),
-        kept=kept,
-        hotspot=hotspot_constant(hotspot_file, run, zone, len(floor)),
-        closed_loop=closed_loop_constant(closed_loop_summary))
+    bench = benchmark_constant(benchmark)
 
     wm = with_map_job(closed_loop, zone, dict(seed_base=truth["seed_base"], steps=steps, env_id=truth["env_id"],
                                               policy=cfg.get("policy", emitter.DEFAULT_POLICY),
@@ -707,8 +872,25 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
     grid = env["grid"]
     robots = [dict(serial=s, kind=k) for s, k in sorted(env["kinds"].items())]
 
-    series, totals = replay_extractor(files, t0_ts, steps, expected, zrow.get("bytes_compressed"))
+    accepted_keys = set()
+    series, totals = replay_extractor(files, t0_ts, steps, expected, zrow.get("bytes_compressed"), accepted_out=accepted_keys)
     verify_check(totals, check)
+    # a transition is written at the ts of the message that changed the state (also from end_all), so every one is an accepted
+    # message; counting only those keeps n_changes + n_repeats = accepted by construction
+    n_changes = len(changes & accepted_keys)
+    if kept is not None:
+        kept = dict(kept, n_changes=n_changes, n_repeats=totals["accepted"] - n_changes)
+    run_constants = dict(
+        ingest_msgs_per_s=None if rate is None else dict(value=rate, source="store:ingest_ledger", formula=INGEST_RATE_FORMULA),
+        benchmark_msgs_per_s=bench,
+        kept=kept,
+        hotspot=hotspot_constant(hotspot_file, run, zone, len(floor)),
+        closed_loop=closed_loop_constant(closed_loop_summary),
+        audit=audit_constant(zrow, totals, zone),
+        header=header_constant(emit, zrow, totals, zone),
+        speed=speed_constant(bench, zrow, steps, zone),
+        lessons_long=lessons_long_constant(lessons_long),
+        worth=worth_constant(sticky))
     if check is not None:
         cov = ledger.coverage(check["messages_accepted"], expected)
         check = dict(check, coverage=None if cov is None else round(cov, 6))
@@ -724,8 +906,7 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
                               costmap=posixpath.join((run_dir_arg if run_dir_arg is not None else str(run_dir)).replace(os.sep, "/"),
                                                      "costmap.json"),
                               demo_noise=bool(cfg.get("demo_noise")),
-                              injected_noise=(emit.get("total") or {}).get("injected_noise"),
-                              carry_lessons=carry_lessons, carry_lessons_run=None if carry is None else carry[1])),
+                              injected_noise=(emit.get("total") or {}).get("injected_noise"))),
         grid=grid, robots=robots, frames=frames,
         obstacles=[dict(kind="floor", cell=c, p=floor[c], hidden_from_analyser=True) for c in sorted(floor)],
         extractor=dict(series=series, totals=totals, check=check),
@@ -746,11 +927,14 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
                                    map_generated_at=info["map_generated_at"], map_tag=info["map_tag"],
                                    deliveries=env["deliveries"], pick_rate=round(env["pick_rate"], 2), frames=wm_frames,
                                    episodes=build_episodes(wm_rows, zone, t0_ts), note=WITH_MAP_NOTE)
+    assert_single_run(payload)
     return payload
 
 
 def write_data_js(payload, out, max_bytes=MAX_BYTES):
-    """Atomic write of `window.REPLAY = <compact json>;\\n`; raises (nothing written) above max_bytes."""
+    """Atomic write of `window.REPLAY = <compact json>;\\n`; raises (nothing written) above max_bytes or when
+    assert_single_run does."""
+    assert_single_run(payload)
     body = PREFIX + json.dumps(payload, allow_nan=False, separators=(",", ":")) + ";\n"
     data = body.encode("utf-8")
     if len(data) > max_bytes:
@@ -784,13 +968,17 @@ def main(argv=None):
     p.add_argument("--hotspot", default=None, metavar="PATH", help="results/fleet/hotspot_<tag>.json of this run: run_constants.hotspot")
     p.add_argument("--closed-loop-summary", default=None, metavar="PATH",
                    help="results/closed_loop_sticky/summary.json: run_constants.closed_loop")
-    p.add_argument("--carry-lessons", default=None, metavar="PATH",
-                   help="an existing data.js whose lessons are copied when the store has none (error if it has some)")
+    p.add_argument("--lessons-long", default=None, metavar="PATH",
+                   help="results/fleet/hotspot_s8e-long-w0.5.json: run_constants.lessons_long (context from a longer run)")
+    for arm in WORTH_ARMS:
+        p.add_argument("--sticky-" + arm.replace("_", "-"), default=None, metavar="PATH",
+                       help=f"results/closed_loop_sticky/{arm}/*.json (one row file): a bar of run_constants.worth")
     a = p.parse_args(argv)
     try:
         payload = build_payload(a.run_dir, a.store, a.zone, a.closed_loop, run_dir_arg=a.run_dir,
                                 closed_loop_arg=a.closed_loop, benchmark=a.benchmark, hotspot_file=a.hotspot,
-                                closed_loop_summary=a.closed_loop_summary, carry_lessons=a.carry_lessons)
+                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long,
+                                sticky={arm: getattr(a, "sticky_" + arm) for arm in WORTH_ARMS})
         n = write_data_js(payload, a.out)
     except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
