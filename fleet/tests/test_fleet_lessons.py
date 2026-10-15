@@ -931,6 +931,8 @@ class TestReplayLessons(unittest.TestCase):
         a, b = copy.deepcopy(self.before), copy.deepcopy(self.after)
         a.pop("lessons")
         b.pop("lessons")
+        for d in (a, b):  # the kept bytes count every decisions row, lesson decisions included (replay/3)
+            d["run_constants"].pop("kept")
         self.assertEqual(a, b)
         self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True))
 

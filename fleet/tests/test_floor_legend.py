@@ -1,4 +1,4 @@
-"""S8H-FLOOR-LEGEND: the display-state mapping, replay/2 export fields, the live robots[] entry, the page text, the demo
+"""S8H-FLOOR-LEGEND: the display-state mapping, replay/3 export fields, the live robots[] entry, the page text, the demo
 config. The page itself is checked on its files only (no browser, no DOM)."""
 import html as htmllib
 import json
@@ -206,9 +206,9 @@ class TestExportV2(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_schema_and_state_display(self):
-        self.assertEqual(rx.SCHEMA, "replay/2")
+        self.assertEqual(rx.SCHEMA, "replay/3")
         m = self.payload["meta"]
-        self.assertEqual(m["schema"], "replay/2")
+        self.assertEqual(m["schema"], "replay/3")
         self.assertEqual(m["state_display"], {s: live_state.display_state(s) for s in rx.STATES})
 
     def test_frames_are_x_y_raw_job_and_the_job_is_the_source_messages(self):
@@ -262,7 +262,7 @@ class TestCommittedDataV2(unittest.TestCase):
         path = DOCS / "data.js"
         self.assertLessEqual(path.stat().st_size, 2097152)
         d = rx.read_data_js(path)
-        self.assertEqual(d["meta"]["schema"], "replay/2")
+        self.assertEqual(d["meta"]["schema"], "replay/3")
         self.assertEqual(d["meta"]["state_display"], {s: live_state.display_state(s) for s in rx.STATES})
         for frames in (d["frames"], d["with_map"]["frames"]):
             self.assertEqual(len(frames), 500)

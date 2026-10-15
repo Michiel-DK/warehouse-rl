@@ -182,13 +182,13 @@ class TestSchema(Fixture):
     def test_top_level_keys_and_types(self):
         p = self.payload
         self.assertEqual(list(p), ["meta", "grid", "robots", "frames", "obstacles", "extractor", "publishes", "grades",
-                                   "lessons", "episodes", "stalls"])  # no with_map without --closed-loop
+                                   "lessons", "run_constants", "episodes", "stalls"])  # no with_map without --closed-loop
         m = p["meta"]
         for key, typ in (("run", str), ("zone", str), ("env_id", str), ("steps", int), ("step_seconds", int),
                          ("t0_ts", int), ("seed", int), ("disturb", dict), ("policy", str), ("recovery", dict),
                          ("schema", str), ("source", dict)):
             self.assertIsInstance(m[key], typ, key)
-        self.assertEqual((m["schema"], m["steps"], m["step_seconds"], m["t0_ts"]), ("replay/2", STEPS, 5, BASE))
+        self.assertEqual((m["schema"], m["steps"], m["step_seconds"], m["t0_ts"]), ("replay/3", STEPS, 5, BASE))
         self.assertEqual(set(p["grid"]), {"width", "height", "highway", "goals", "shelves"})
         self.assertEqual(len(p["frames"]), STEPS)
         self.assertEqual([r["serial"] for r in p["robots"]], ["Z0-01", "Z0-02", "Z0-03", "Z0-04"])
@@ -204,14 +204,16 @@ class TestSchema(Fixture):
         for key in ("series", "totals", "check"):
             self.assertIn(key, p["extractor"])
         for pub in p["publishes"]:
-            self.assertEqual(set(pub), {"t", "step", "cells", "precision_at_20", "hits_at_20", "n_flagged"})
+            self.assertEqual(set(pub), {"t", "step", "cells", "precision_at_20", "hits_at_20", "n_flagged", "recall_at_k", "k"})
         self.assertEqual(set(p["grades"]), {"per_publish", "timeline"})
         for e in p["episodes"]:
             self.assertEqual(set(e), {"start_step", "end_step", "robot", "cell", "cause", "resolution", "left_censored",
                                        "episode_id", "verdict"})
         for s in p["stalls"]:
             self.assertEqual(len(s), 5)
-        self.assertEqual(p["meta"]["source"], dict(run_dir=str(self.dir), store=self.spec, closed_loop=None))
+        self.assertEqual(p["meta"]["source"], dict(run_dir=str(self.dir), store=self.spec, closed_loop=None,
+                                                   costmap=f"{self.dir}/costmap.json", demo_noise=False, injected_noise=None,
+                                                   carry_lessons=None, carry_lessons_run=None))
 
     def test_documented_keys_and_types_of_every_section(self):
         p = self.payload
@@ -230,7 +232,7 @@ class TestSchema(Fixture):
         for e in p["grades"]["timeline"]:
             self.assert_shape(e, dict(t=int, step=int, outcome_ok=int, outcome_off=int, truth_hit=int, truth_false_alarm=int))
         for pub in p["publishes"]:
-            self.assert_shape(pub, dict(t=int, step=int, cells=list, precision_at_20=num, hits_at_20=int, n_flagged=int))
+            self.assert_shape(pub, dict(t=int, step=int, cells=list, precision_at_20=num, hits_at_20=int, n_flagged=int, recall_at_k=num, k=int))
             for cell, cost, stalls in pub["cells"]:
                 self.assertIsInstance(cell, str)
                 self.assertIsInstance(cost, num)
@@ -255,8 +257,9 @@ class TestSchema(Fixture):
             self.assertIsInstance(x["totals"][k], int, k)
         self.assertIsInstance(x["totals"]["rejected_by_reason"], dict)
         self.assertIsInstance(x["totals"]["coverage"], num)
-        self.assertEqual(set(x["check"]), set(rx.CHECK_KEYS))
-        self.assertTrue(all(isinstance(v, int) for v in x["check"].values()))
+        self.assertEqual(set(x["check"]), set(rx.CHECK_KEYS) | {"coverage"})
+        self.assertTrue(all(isinstance(v, int) for k, v in x["check"].items() if k != "coverage"))
+        self.assertEqual(x["check"]["coverage"], 1.0)  # 6 * 120 accepted of the 6 * 120 the ledger expects
         self.assertTrue(p["obstacles"])
         for o in p["obstacles"]:
             self.assert_shape(o, dict(kind=str, cell=str, p=num, hidden_from_analyser=bool))
@@ -790,7 +793,7 @@ class TestCommittedData(unittest.TestCase):
         self.assertTrue(text.startswith("window.REPLAY = "))
         data = json.loads(text[len("window.REPLAY = "):].rstrip().rstrip(";"))
         meta = data["meta"]
-        self.assertEqual((meta["schema"], meta["steps"], len(data["frames"])), ("replay/2", 500, 500))
+        self.assertEqual((meta["schema"], meta["steps"], len(data["frames"])), ("replay/3", 500, 500))
         for rel in (meta["source"]["run_dir"], meta["source"]["store"].split(":", 1)[-1], meta["source"]["closed_loop"]):
             self.assertFalse(str(rel).startswith("/"), rel)
         layers = [data["frames"]] + ([data["with_map"]["frames"]] if "with_map" in data else [])
@@ -809,7 +812,7 @@ class TestCommittedData(unittest.TestCase):
         for key in rx.SERIES_KEYS:
             self.assertEqual(series[key][-1], data["extractor"]["totals"][key])
             self.assertEqual(series[key], sorted(series[key]))
-        self.assertEqual(data["grades"]["per_publish"][0]["outcome_kind"], "count")  # publish 1: the older count grade
+        self.assertEqual(data["grades"]["per_publish"][0]["outcome_kind"], "rank")  # the S8I demo run is graded with the v2 rank claim
         if "with_map" in data:
             self.assertIn("episodes", data["with_map"])
             self.assertEqual(data["with_map"]["alpha"], 4.0)

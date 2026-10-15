@@ -98,7 +98,7 @@ Payload (every key is always present unless marked optional):
               (decided_at, int(zone), claim subject, lesson_kind): [{decided_at_step, zone, text, lesson_kind,
               confidence, verdict, graded_at_step}], zone = the claim's zone string. verdict "ok" / "off"
               and graded_at_step (the step of the "lesson" grade row's window_end, when the grade exists) are null while
-              the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key.
+              the lesson is open. Rows of other grade sources never enter it, and lesson rows enter no other key (but run_constants.kept counts the bytes of every decisions row).
               --carry-lessons PATH: when the store has NO lesson decision for the run, `lessons` is copied verbatim from the
               `lessons` array of PATH (read before the output is written, so PATH may be the output file); when the store
               has lesson decisions the flag is an error.
