@@ -12,6 +12,7 @@
   <div>
     <h1>Fleet replay</h1>
     <p class="sub" id="subtitle">A simulated warehouse fleet: its robot log, what an analyser worked out from the log alone, and what it would tell the operators.</p>
+    <p class="sub" id="noiseline" tabindex="0" data-hover hidden></p>
   </div>
   <button type="button" id="theme" class="btn">Theme: auto</button>
 </header>
@@ -100,16 +101,23 @@
           <p class="small" id="usable-unit"></p>
           <p class="small" id="usable-aside"></p>
         </div>
-        <div class="farrow"><span class="glyph" aria-hidden="true">&rarr;</span><span class="alabel">state changes + every decision + a 2% raw sample</span></div>
+        <div class="farrow" aria-hidden="true"><span class="glyph">&rarr;</span></div>
         <div class="fbox" id="f-kept" tabindex="0" data-hover>
           <h3>Kept</h3>
           <p class="big" id="big-kept">—</p>
           <p class="small" id="kept-unit"></p>
         </div>
+        <div class="farrow" aria-hidden="true"><span class="glyph">&rarr;</span></div>
+        <div class="fbox" id="f-dropped" tabindex="0" data-hover>
+          <h3>Dropped</h3>
+          <p class="big" id="big-dropped">—</p>
+          <p class="small" id="dropped-unit"></p>
+        </div>
       </div>
-      <div class="cov" aria-hidden="true"><div class="covbar" id="covbar"></div></div>
-      <p class="covlabel" id="covlabel"></p>
-      <p class="cap" id="logsentence">Every message is read and counted. Stored: state changes, every decision with its evidence, every rejected line with its reason, and a 2% raw sample. The raw files stay where they are produced.</p>
+      <p class="cap" id="rebuildsentence"></p>
+      <p class="cap" id="auditline" tabindex="0" data-hover hidden></p>
+      <p class="cap" id="speed-robots" hidden></p>
+      <p class="cap" id="speed-read" tabindex="0" data-hover hidden></p>
       <details data-details id="details-log">
         <summary>All the counters</summary>
         <dl class="counters" id="counters"></dl>
@@ -120,9 +128,9 @@
     <section class="panel wide" aria-labelledby="h-ana">
       <h2 id="h-ana">3. What the analyser figured out</h2>
       <div class="sentences">
-        <p class="sentence" id="s-right" tabindex="0" data-hover>Points at a bad spot: right <span class="big" id="big-right">—</span> of the time.</p>
+        <p class="sentence" id="s-right" tabindex="0" data-hover>Its 20 strongest picks: <span class="big" id="big-right">—</span> of 20 real.</p>
         <p class="sentence" id="s-found" tabindex="0" data-hover>Found <span class="big" id="big-found">—</span> of the planted spots. The rest no robot has driven over yet.</p>
-        <p class="sentence" id="s-checks" tabindex="0" data-hover>Checks its own work: <span class="big" id="big-calls">—</span> calls made, <span class="big" id="big-hits">—</span> confirmed, <span class="big" id="big-wrong">—</span> wrong.</p>
+        <p class="sentence" id="s-checks" tabindex="0" data-hover>Of all <span class="big" id="big-calls">—</span> spots it flagged: <span class="big" id="big-hits">—</span> real, <span class="big" id="big-wrong">—</span> not.</p>
       </div>
       <p class="state" id="nomap"></p>
       <figure class="spark">
@@ -151,14 +159,23 @@
       <p class="cap" id="lessoncap" tabindex="0" data-hover>Written by rules over the counts, not by a language model. Each line is checked against what happened next.</p>
       <p class="state" id="lessonstate"></p>
       <ul class="lessons" id="lessons" aria-label="Lines for the operators, newest first"></ul>
+      <p class="cap" id="lessonshort"></p>
+      <p class="cap" id="lessonlong" tabindex="0" data-hover hidden></p>
+    </section>
+
+    <section class="panel wide" aria-labelledby="h-worth" id="panel-worth">
+      <h2 id="h-worth">5. What is it worth?</h2>
+      <p class="sentence" id="s-worth" tabindex="0" data-hover><span class="big" id="big-mapshare">—</span>% of the lost throughput recovered, <span class="big" id="big-oracleshare">—</span>% with perfect knowledge</p>
+      <div class="worthbars" id="worthbars"></div>
+      <p class="cap" id="worthlabel"></p>
+      <p class="cap">On mild floor damage the gain is within noise; on damage that traps robots it is measurable.</p>
     </section>
   </div>
   <div id="live" class="sr" aria-live="polite"></div>
 </main>
 
 <footer class="foot" id="foot">
-  <p>Synthetic data from a simulator. &#39;Stuck&#39; here means 30 s waiting with a job; your definition may differ. Lessons are checked against the planted truth; their persistence check needs longer shifts.</p>
-  <p id="payoff"></p>
+  <p>Synthetic data from a simulator. &#39;Stuck&#39; here means 30 s waiting with a job; your definition may differ.</p>
   <details data-details id="details-sources">
     <summary>Sources</summary>
     <ul id="sources"></ul>

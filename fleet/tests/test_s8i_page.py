@@ -18,15 +18,15 @@ DOCS = ROOT / "docs" / "replay"
 
 BANNED = re.compile(r"\b(cost|publish|grade|horizon|stream|rank|stall|episode|zone|coverage)\w*", re.I)
 VOID = {"meta", "link", "input", "br", "img", "hr", "source", "wbr"}
-HEADINGS = ["1. The floor", "2. The log", "3. What the analyser figured out", "4. What it would tell your operators"]
+HEADINGS = ["1. The floor", "2. The log", "3. What the analyser figured out", "4. What it would tell your operators",
+            "5. What is it worth?"]  # S8J: a fifth panel
 OLD_HEADINGS = ["The extractor: is the log usable?", "The analyser and the fleet memory"]
-STRINGS = ["Arrived", "Usable", "Kept", "state changes + every decision + a 2% raw sample",
+# S8J: three strings are superseded and removed here (the funnel arrow label, the log sentence under the funnel and the footer
+# sentence about persistence); fleet/tests/test_s8j_page.py holds their replacements. "Dropped" joins the funnel labels.
+STRINGS = ["Arrived", "Usable", "Kept", "Dropped",
            "nothing is dropped silently, every rejected line is stored with its reason",
-           "Every message is read and counted. Stored: state changes, every decision with its evidence, every rejected line with "
-           "its reason, and a 2% raw sample. The raw files stay where they are produced.",
            "Written by rules over the counts, not by a language model. Each line is checked against what happened next.",
-           "gets better as it watches", "Synthetic data from a simulator.",
-           "Lessons are checked against the planted truth; their persistence check needs longer shifts."]
+           "gets better as it watches", "Synthetic data from a simulator."]
 LESSON_KEYS = ["hot_cell", "hot_robot", "recurring_pair", "fallback"]
 # Literals that may stand outside VISIBLE_COPY / HOVER_COPY / DETAILS_COPY although they contain whitespace or an uppercase
 # letter: units and separators, key names, CSS classes and ids, canvas fonts, media queries, HTTP plumbing. None is a sentence.
@@ -304,8 +304,9 @@ class TestPagesReady(unittest.TestCase):
     def test_readme_has_the_chain(self):
         readme = (DOCS / "README.md").read_text(encoding="utf-8")
         lines = readme.splitlines()
-        export = [ln for ln in lines if "replay_export.py" in ln and "--carry-lessons" in ln]
-        self.assertTrue(export, "no replay_export.py line with --carry-lessons")
+        # S8J: the --carry-lessons check is replaced by --lessons-long (the lessons are this run's own now)
+        export = [ln for ln in lines if "replay_export.py" in ln and "--lessons-long" in ln]
+        self.assertTrue(export, "no replay_export.py line with --lessons-long")
         for flag in ("--hotspot results/fleet/hotspot_s8i-demo-noise.json",
                      "--closed-loop-summary results/closed_loop_sticky/summary.json",
                      "--benchmark results/fleet/benchmark.json"):

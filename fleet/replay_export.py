@@ -91,6 +91,8 @@ Payload (every key is always present unless marked optional):
                                    (every transition row is one: the detector writes a transition at the ts of the message
                                    that changed the state, also from end_all), and n_repeats = extractor totals.accepted -
                                    n_changes, the accepted messages that are not a counted change of state.
+                                   changes_by_step = n_changes cumulated by event-time step (steps entries, the last is
+                                   n_changes), for the page's running Kept and Dropped numbers.
                                    The formula string, verbatim (it is also run_constants.kept.formula):
 kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) / sum(ingest_ledger.bytes_read_uncompressed); B(T) = sum over the rows of store.select(T, {run}) of len(json.dumps(row, sort_keys=True, separators=(',', ':')).encode()) with keys starting '__' removed
                 hotspot            {precision_at_20, recall_at_k, k (= n_floor), zero_stall_share, n_floor, source} from
@@ -877,9 +879,14 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
     verify_check(totals, check)
     # a transition is written at the ts of the message that changed the state (also from end_all), so every one is an accepted
     # message; counting only those keeps n_changes + n_repeats = accepted by construction
-    n_changes = len(changes & accepted_keys)
+    counted = changes & accepted_keys
+    n_changes = len(counted)
+    by_step = [0] * steps
+    for _, ts in counted:
+        by_step[min(max((ts - t0_ts) // STEP_SECONDS, 0), steps - 1)] += 1
     if kept is not None:
-        kept = dict(kept, n_changes=n_changes, n_repeats=totals["accepted"] - n_changes)
+        kept = dict(kept, n_changes=n_changes, n_repeats=totals["accepted"] - n_changes,
+                    changes_by_step=[sum(by_step[:i + 1]) for i in range(steps)])
     run_constants = dict(
         ingest_msgs_per_s=None if rate is None else dict(value=rate, source="store:ingest_ledger", formula=INGEST_RATE_FORMULA),
         benchmark_msgs_per_s=bench,
