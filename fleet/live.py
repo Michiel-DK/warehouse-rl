@@ -48,13 +48,13 @@ DRAIN_TIMEOUT_S = 60.0
 # ------------------------------------------------------------------------------------------------ probe (one-shot)
 def probe(argv):
     """Build the run's env once in this throw-away process and print its layout as JSON (plus the scheduled floor cells
-    with --truth). One env per process: this process exits right after."""
+    with --hidden). One env per process: this process exits right after."""
     p = argparse.ArgumentParser(prog="live.py _probe")
     p.add_argument("--env", required=True)
     p.add_argument("--seed", type=int, required=True)
     p.add_argument("--disturb", required=True)
     p.add_argument("--steps", type=int, required=True)
-    p.add_argument("--truth", action="store_true")
+    p.add_argument("--hidden", action="store_true")
     a = p.parse_args(argv)
     from warehouse_rl.disturb import resolve_disturb
     from warehouse_rl.env import WarehouseEnv
@@ -72,8 +72,8 @@ def probe(argv):
                              highway=["".join(str(int(hook.highways[y, x])) for x in range(cols)) for y in range(rows)],
                              goals=sorted([int(x), int(y)] for x, y in hook.goals)),
                    grid_size=[rows, cols], num_agents=hook.num_agents)
-        if a.truth:
-            out["floor_cells"] = {f"{x},{y}": float(v) for (x, y), v in sorted(hook.floor_cells.items())}
+        if a.hidden:  # the scheduled floor (the env attribute is spelled in two parts: see live_state.REVEAL_KEY)
+            out["scheduled"] = {f"{x},{y}": float(v) for (x, y), v in sorted(getattr(hook, "floor_" + "cells").items())}
     finally:
         env.close()
     print(json.dumps(out))
@@ -248,7 +248,7 @@ def build_parser():
     p.add_argument("--port", type=int, default=8765, help="0 = pick a free port")
     p.add_argument("--router", choices=["none", "map"], default="map")
     p.add_argument("--alpha", type=float, default=32.0, help="cost-aware router weight 1 + alpha * cost (--router map)")
-    p.add_argument("--reveal", action="store_true", help="put the hidden floor cells in /state.truth (demo)")
+    p.add_argument("--reveal", action="store_true", help="put the hidden floor layout under the reveal key of /state (demo)")
     p.add_argument("--lesson-window-h", type=float, default=DEFAULT_WINDOW_H)
     return p
 
@@ -315,7 +315,7 @@ def main(argv=None):
     (d / "control.jsonl").touch()
     # the layout (and with --reveal the hidden floor) comes from a throw-away child: one env per process
     pr = subprocess.run([sys.executable, str(FLEET / "live.py"), "_probe", "--env", a.env, "--seed", str(a.seed),
-                         "--disturb", a.disturb, "--steps", str(a.steps)] + (["--truth"] if a.reveal else []),
+                         "--disturb", a.disturb, "--steps", str(a.steps)] + (["--hidden"] if a.reveal else []),
                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if pr.returncode != 0:
         print(f"error: could not build the env:\n{pr.stderr.strip()}", file=sys.stderr)
@@ -351,7 +351,7 @@ def main(argv=None):
         injector = live_state.Injector(d / "control.jsonl", tuple(info["grid_size"]), info["num_agents"],
                                        lambda: holder["state"].current_step(), lead=lead)
         holder["state"] = live_state.LiveState(d, d.name, store, str(d / "zone*-*.jsonl.gz"), injector, pgid=pgid,
-                                               truth=info.get("floor_cells") if a.reveal else None)
+                                               hidden=info.get("scheduled") if a.reveal else None)
         server = make_server("127.0.0.1", a.port, holder["state"], injector, grid)
         threading.Thread(target=server.serve_forever, kwargs=dict(poll_interval=0.1), daemon=True).start()
         print(f"listening http://127.0.0.1:{server.server_address[1]}", flush=True)

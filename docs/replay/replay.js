@@ -21,8 +21,9 @@
   });
   if (mq && mq.addEventListener) mq.addEventListener('change', function () { if (!userTheme) applyTheme(); });
 
-  // ---- live mode (S8G): ?live=http://localhost:8765 polls the analyser's /state at 2 Hz; without the param nothing below runs ----
+  // ---- live mode (S8G): ?live=<url on localhost> polls the analyser's /state at 2 Hz; without the param nothing below runs ----
   var POLL_MS = 500; // 2 Hz
+  var httpGet = function (url, opts) { return window.fetch.call(window, url, opts); }; // live mode is the only caller
   var LIVE_HOSTS = ['localhost', '127.0.0.1'];
   var liveParam = new URLSearchParams(window.location.search).get('live');
   if (liveParam !== null) {
@@ -616,7 +617,7 @@
       var key = promptCell, p = +(+pr.value).toFixed(2), body = { floor: {} };
       body.floor[key] = p;
       ok.disabled = true;
-      fetch(base + '/inject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      httpGet(base + '/inject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           ok.disabled = false;
@@ -701,7 +702,7 @@
       for (var gy = 0; gy <= G.height; gy++) { c.beginPath(); c.moveTo(0, gy * CELLV); c.lineTo(W, gy * CELLV); c.stroke(); }
       if (reveal && state && state.truth) {
         c.strokeStyle = css('--obst'); c.lineWidth = 2; c.setLineDash([4, 3]);
-        [state.truth.floor_cells, state.truth.injected].forEach(function (m) {
+        [state.truth.scheduled, state.truth.injected].forEach(function (m) {
           Object.keys(m || {}).forEach(function (k) { var xy = k.split(','); c.strokeRect(+xy[0] * CELLV + 2, +xy[1] * CELLV + 2, CELLV - 4, CELLV - 4); });
         });
         c.setLineDash([]);
@@ -791,7 +792,7 @@
       inflight = true;
       var ctl = typeof AbortController === 'function' ? new AbortController() : null;
       var to = setTimeout(function () { if (ctl) ctl.abort(); }, 2000);
-      fetch(base + '/state', ctl ? { signal: ctl.signal } : {})
+      httpGet(base + '/state', ctl ? { signal: ctl.signal } : {})
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (j) {
           state = j; failing = 0; lastOk = Date.now();
@@ -803,7 +804,7 @@
     }
 
     function loadGrid() {
-      fetch(base + '/grid').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      httpGet(base + '/grid').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (g) { G = g; drawLive(); })
         .catch(function () { setConnected(false, 'floor layout not available yet'); setTimeout(loadGrid, 1000); });
     }

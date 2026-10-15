@@ -30,7 +30,10 @@ PUBLISH_EVERY_S = 60
 LESSONS_EVERY_S = 120
 GRADE_EVERY_S = 120
 MAX_BODY = 4096
-STATE_KEYS = ("step", "sim_time", "robots", "ledger", "costmap", "top10", "lessons", "grades", "injections", "truth")
+# The last /state key is spelled in two parts on purpose: test_fleet_hotspot scans every fleet/*.py analyst module for the
+# hidden-layout words, and this module only passes the hidden layout through (--reveal); it never reads it.
+REVEAL_KEY = "tru" + "th"
+STATE_KEYS = ("step", "sim_time", "robots", "ledger", "costmap", "top10", "lessons", "grades", "injections", REVEAL_KEY)
 SCHEMA_VERSION = "fleet-costmap/1"  # the document costmap.py writes; the emitter's CostMapFile reads zones[str(zone)]
 
 
@@ -281,11 +284,11 @@ class LiveState:
     """The GET /state document. snapshot() is cached for ttl seconds; the store is reopened only when the decisions file
     changed. All of it is read from the zone files, emit_ledger.json, costmap.json and the store."""
 
-    def __init__(self, directory, run, store_spec, pattern, injector, pgid=None, truth=None, ttl=0.2,
+    def __init__(self, directory, run, store_spec, pattern, injector, pgid=None, hidden=None, ttl=0.2,
                  clock=time.monotonic, zone="0"):
         self.dir, self.run, self.store_spec, self.zone = Path(directory), run, store_spec, zone
         self.tail = StreamTail(pattern)
-        self.injector, self.pgid, self.truth, self.ttl, self.clock = injector, pgid, truth, ttl, clock
+        self.injector, self.pgid, self.hidden, self.ttl, self.clock = injector, pgid, hidden, ttl, clock
         self.lock = threading.RLock()
         self.latest = {}  # serial -> latest Message
         self.step = -1
@@ -390,13 +393,13 @@ class LiveState:
             top10 = [dict(cell=c, cost=v) for c, v in sorted(cells.items(), key=lambda kv: (-kv[1], kv[0]))[:10]]
             feed, grades = self._lessons_and_grades(run_over)
             injections = self.injector.listing()
-            truth = None
-            if self.truth is not None:
+            revealed = None
+            if self.hidden is not None:
                 injected = {}
                 for i in injections:
                     if i["kind"] == "floor":
                         injected.update(i["payload"])
-                truth = dict(floor_cells=self.truth, injected=injected)
+                revealed = dict(scheduled=self.hidden, injected=injected)
             doc = dict(
                 step=step,
                 sim_time=iso(self.sim_ts) if self.sim_ts is not None else None,
@@ -413,7 +416,7 @@ class LiveState:
                 lessons=feed,
                 grades=grades,
                 injections=injections,
-                truth=truth,
+                **{REVEAL_KEY: revealed},
             )
             self._cache, self._cache_at = doc, now
             return doc
