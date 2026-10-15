@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fleet replay: one zone of a real run</title>
+<title>Fleet replay</title>
 <script>if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark');</script>
 <link rel="stylesheet" href="replay.css">
 </head>
@@ -11,15 +11,13 @@
 <header class="head">
   <div>
     <h1>Fleet replay</h1>
-    <p class="sub" id="subtitle">One zone of a fleet run: the log goes through an extractor, the analyser looks for stuck robots, and a map remembers the bad floor.</p>
+    <p class="sub" id="subtitle">A simulated warehouse fleet: its robot log, what an analyser worked out from the log alone, and what it would tell the operators.</p>
   </div>
   <button type="button" id="theme" class="btn">Theme: auto</button>
 </header>
 
 <div id="nodata" class="notice" hidden>
-  <strong>No data loaded.</strong> This page needs <code>data.js</code> next to it. Create it with
-  <code>.venv/bin/python fleet/replay_export.py --run-dir fleet/data/&lt;run&gt; --store jsonl:fleet/data/&lt;run&gt;/store --zone 0 --out docs/replay/data.js</code>
-  and reload.
+  <strong>No data loaded.</strong> This page needs <code>data.js</code> next to it. The README in this folder has the command that creates it.
 </div>
 
 <main id="app" hidden>
@@ -72,8 +70,9 @@
           <h3 class="ltitle">Concluded by the analyser from the log alone</h3>
           <ul class="legend">
           <li><canvas class="icon" data-ico="shade" width="24" height="24" aria-hidden="true"></canvas><span>suspected bad floor, darker = more evidence</span></li>
+          <li><canvas class="icon" data-ico="top" width="24" height="24" aria-hidden="true"></canvas><span>the ten most suspected cells, numbered 1 to 10</span></li>
           <li><canvas class="icon" data-ico="call" width="24" height="24" aria-hidden="true"></canvas><span>stuck call, raised after 30 s of waiting with a job</span></li>
-          <li><canvas class="icon" data-ico="marks" width="38" height="24" aria-hidden="true"></canvas><span>the call was later graded right or wrong</span></li>
+          <li><canvas class="icon" data-ico="marks" width="38" height="24" aria-hidden="true"></canvas><span>the call was later marked right or wrong</span></li>
           </ul>
         </div>
         <p class="cap">The analyser never sees the planted items.</p>
@@ -82,48 +81,89 @@
       <p class="state" id="mapstate"></p>
     </section>
 
-    <section class="panel" aria-labelledby="h-ext">
-      <h2 id="h-ext">2. The extractor: is the log usable?</h2>
-      <dl class="counters" id="counters"></dl>
+    <section class="panel" aria-labelledby="h-log">
+      <h2 id="h-log">2. The log</h2>
+      <p class="question">Is the robot log usable?</p>
+      <div class="funnel">
+        <div class="fbox" id="f-arrived" tabindex="0" data-hover>
+          <h3>Arrived</h3>
+          <p class="big" id="big-arrived">—</p>
+          <p class="small" id="arrived-unit"></p>
+          <p class="small" id="arrived-rate"></p>
+        </div>
+        <div class="farrow" aria-hidden="true"><span class="glyph">&rarr;</span></div>
+        <div class="fbox" id="f-usable" tabindex="0" data-hover>
+          <h3>Usable</h3>
+          <p class="big" id="big-usable">—</p>
+          <p class="small" id="usable-unit"></p>
+          <p class="small" id="usable-aside"></p>
+        </div>
+        <div class="farrow"><span class="glyph" aria-hidden="true">&rarr;</span><span class="alabel">state changes + every decision + a 2% raw sample</span></div>
+        <div class="fbox" id="f-kept" tabindex="0" data-hover>
+          <h3>Kept</h3>
+          <p class="big" id="big-kept">—</p>
+          <p class="small" id="kept-unit"></p>
+        </div>
+      </div>
       <div class="cov" aria-hidden="true"><div class="covbar" id="covbar"></div></div>
       <p class="covlabel" id="covlabel"></p>
-      <p class="match" id="match"></p>
+      <p class="cap" id="logsentence">Every message is read and counted. Stored: state changes, every decision with its evidence, every rejected line with its reason, and a 2% raw sample. The raw files stay where they are produced.</p>
+      <details data-details id="details-log">
+        <summary>All the counters</summary>
+        <dl class="counters" id="counters"></dl>
+        <p class="match" id="match"></p>
+      </details>
     </section>
 
     <section class="panel wide" aria-labelledby="h-ana">
-      <h2 id="h-ana">3. The analyser and the fleet memory</h2>
-      <div class="ana">
-        <div>
-          <h3>Top-20 hit rate, one dot per published map</h3>
-          <canvas id="prec" role="img" aria-label="Top-20 hit rate per published map, one dot each; the values are listed in the graded calls"></canvas>
-          <p class="state" id="precstate"></p>
-          <h3>Top 10 cells of the latest map</h3>
-          <ol class="toplist" id="top"></ol>
-        </div>
-        <div>
-          <h3>Every call, graded afterwards</h3>
-          <div id="grades"></div>
-          <ul class="legend" id="glegend"></ul>
-        </div>
+      <h2 id="h-ana">3. What the analyser figured out</h2>
+      <div class="sentences">
+        <p class="sentence" id="s-right" tabindex="0" data-hover>Points at a bad spot: right <span class="big" id="big-right">—</span> of the time.</p>
+        <p class="sentence" id="s-found" tabindex="0" data-hover>Found <span class="big" id="big-found">—</span> of the planted spots. The rest no robot has driven over yet.</p>
+        <p class="sentence" id="s-checks" tabindex="0" data-hover>Checks its own work: <span class="big" id="big-calls">—</span> calls made, <span class="big" id="big-hits">—</span> confirmed, <span class="big" id="big-wrong">—</span> wrong.</p>
       </div>
-      <p class="cap">Top-20 hit rate: of the 20 most-flagged cells, how many sit on a hidden floor problem.</p>
-      <p class="cap">The map is rules plus a decayed count of stalls per cell, and nothing is trained.</p>
-      <p class="cap">Every call is graded afterwards, the count and rank grades against what happened next and the truth grade against the hidden layout, which the analyser never reads.</p>
-      <p class="cap">Cells nobody drives over cannot be found, because a stall needs a robot to try to enter the cell.</p>
+      <p class="state" id="nomap"></p>
+      <figure class="spark">
+        <canvas id="spark" role="img" aria-label="Right-rate after each new map"></canvas>
+        <figcaption>gets better as it watches</figcaption>
+      </figure>
+      <details data-details id="details-ana">
+        <summary>Details</summary>
+        <div class="ana">
+          <div>
+            <h3>Top 10 cells of the latest map</h3>
+            <ol class="toplist" id="top"></ol>
+          </div>
+          <div>
+            <h3>Every call, graded afterwards</h3>
+            <div id="grades"></div>
+            <ul class="legend" id="glegend"></ul>
+          </div>
+        </div>
+        <p class="cap" id="detail-notes"></p>
+      </details>
     </section>
 
     <section class="panel wide" aria-labelledby="h-les">
-      <h2 id="h-les">4. Lessons</h2>
-      <p class="cap">A lesson is one sentence the analyser can back with counts. Lessons come from fixed rules over stall and stuck counts (cell, robot, robot pair, hour, cause); there is no model and no learning. It is drawn when a time window of its zone is over, and graded when the next window of the same length is over (for an hour-of-day lesson, the same hours one day later): did it hold?</p>
-      <p class="cap" id="lessonscope">This feed covers all zones of the shift, not only the zone drawn above; each line names its zone.</p>
-      <p class="cap" id="lessonstate"></p>
-      <ul class="lessons" id="lessons" aria-label="Lessons drawn so far, newest first"></ul>
-      <p class="cap small">Support is the low end of a 95 % Wilson interval on the count, divided by what the rule needs. It says how thin the counts are. It does not say how likely the lesson is to hold in the next window.</p>
+      <h2 id="h-les">4. What it would tell your operators</h2>
+      <p class="cap" id="lessoncap" tabindex="0" data-hover>Written by rules over the counts, not by a language model. Each line is checked against what happened next.</p>
+      <p class="state" id="lessonstate"></p>
+      <ul class="lessons" id="lessons" aria-label="Lines for the operators, newest first"></ul>
     </section>
   </div>
   <div id="live" class="sr" aria-live="polite"></div>
 </main>
+
+<footer class="foot" id="foot">
+  <p>Synthetic data from a simulator. &#39;Stuck&#39; here means 30 s waiting with a job; your definition may differ. Lessons are checked against the planted truth; their persistence check needs longer shifts.</p>
+  <p id="payoff"></p>
+  <details data-details id="details-sources">
+    <summary>Sources</summary>
+    <ul id="sources"></ul>
+  </details>
+</footer>
 <div id="tip" class="tip" role="tooltip" hidden></div>
+<div id="htip" class="tip" role="tooltip" hidden></div>
 
 <script src="data.js"></script>
 <script src="replay.js"></script>
