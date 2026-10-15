@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleet stuck analyser</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titan+One&display=swap">
+<style>
+:root{
+  --paper:#ffffff; --paper-deep:#f3f5f8; --ink:#141714; --muted:#5c5c5c; --hair:#e4e7ec;
+  --accent:#1f5fbf; --card:#13233a; --card-muted:rgba(255,255,255,.72);
+  --hw:#eef0f3; --shelf:#b9bfca; --goal:#cfe8d5; --planted:#7a3e00; --stuck:#b3261e;
+  --font-logo:'Titan One',Georgia,serif; --font-display:Georgia,'Times New Roman',Times,serif; --font-sans:ui-sans-serif,system-ui,-apple-system,sans-serif; --font-mono:ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-sans);font-size:16px;line-height:1.5}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{background:var(--ink);color:#fff}
+header.top .wrap{display:flex;align-items:center;gap:18px;padding-block:14px}
+.wm{font-family:var(--font-logo);font-size:20px;text-transform:lowercase;display:inline-flex;align-items:baseline;gap:6px}
+.wm .wmn{font-family:var(--font-sans);font-weight:300;font-size:15px;color:#fc6c85}
+.prod{font-family:var(--font-display);font-weight:700;font-size:17px;padding-left:18px;border-left:1px solid rgba(255,255,255,.3)}
+.banner{background:#fff6d6;border-bottom:1px solid #e8d79a;color:#4a3a00}
+.banner .wrap{padding-block:12px;font-size:14px;line-height:1.5;display:grid;gap:4px}
+.hero .wrap{padding-block:64px 40px}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(38px,6.5vw,64px);line-height:1.02;margin:0;max-width:14ch;text-wrap:balance}
+.lead{margin:18px 0 0;font-size:19px;line-height:1.5;color:#3f4741;max-width:48ch}
+.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:36px}
+.flow .fb{background:var(--paper-deep);border-radius:12px;padding:10px 16px;font-weight:600;font-size:15px}
+.flow .ar{color:var(--muted);font-size:20px}
+.cta{display:inline-block;margin-top:28px;padding:12px 22px;border-radius:999px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
+.steps{display:grid;gap:0;margin-top:24px}
+.step{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:40px;align-items:center;padding-block:56px;border-top:1px solid var(--hair)}
+@media (min-width:801px){.step:nth-child(even) .txt{order:2}}
+.eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+h2{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.2vw,40px);line-height:1.1;margin:0;max-width:18ch;text-wrap:balance}
+.one{margin:14px 0 0;font-size:17px;color:#3f4741;max-width:44ch}
+.prior{margin:12px 0 0;font-size:15px;color:var(--muted);max-width:44ch}
+.big{margin-top:26px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.big b.num{font-family:var(--font-display);font-size:clamp(44px,6vw,64px);line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
+.big span{font-size:15px;color:var(--muted);max-width:30ch}
+.big .sub{display:block;font-size:13px}
+b.num{font-variant-numeric:tabular-nums}
+.pic{display:grid;gap:10px}
+.map{width:100%;height:auto;display:block;border-radius:14px;background:#fff;border:1px solid var(--hair)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+.card{background:var(--card);color:#fff;border-radius:22px;padding:22px 22px 24px;display:grid;gap:12px;box-shadow:0 18px 40px rgba(19,35,58,.18)}
+.card .lbl{font-size:13px;font-weight:600;color:var(--card-muted)}
+.funnel{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:8px}
+.fx{background:rgba(255,255,255,.08);border-radius:14px;padding:14px 12px;min-width:0}
+.fx .h{font-size:12px;color:var(--card-muted)} .fx .v{font-family:var(--font-display);font-size:clamp(20px,2.6vw,28px);line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums} .fx .s{font-size:11.5px;color:var(--card-muted);margin-top:6px;line-height:1.35}
+.fx.drop{margin-top:8px}
+.fxcol{display:grid;gap:8px;align-content:start}
+.far{align-self:center;color:var(--card-muted);font-size:22px}
+.ep{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:rgba(255,255,255,.07);border-radius:12px;padding:9px 12px;font-size:13.5px}
+.ep .who{font-family:var(--font-mono);font-size:12px;color:#9cc4ff} .ep .tag{font-size:11px;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.eplist{display:grid;gap:8px}
+.ticks{display:grid;gap:8px}
+.tk{display:flex;gap:10px;align-items:center;font-size:14px}
+.tk i{flex:none;width:20px;height:20px;border-radius:50%;background:#2fbf94;color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-size:12px;font-style:normal;font-weight:700}
+.lessons{display:grid;gap:8px}
+.lesson{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;background:rgba(255,255,255,.07);border-radius:12px;padding:11px 13px;font-size:14px;line-height:1.45}
+.lesson .ic{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:13px}
+.lesson b{color:#ffd166;font-weight:600}
+.lesson .mark{display:inline-block;margin-left:6px;color:#8fe3c3;font-weight:600}
+.bars{display:grid;gap:14px}
+.br{display:grid;grid-template-columns:minmax(120px,1fr) 3fr;gap:4px 12px;align-items:center;font-size:14px}
+.br .lab{color:#3f4741}
+.br .tr{position:relative;height:26px;background:var(--paper-deep);border-radius:6px}
+.br .fl{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:#9db9e6}
+.br.hi .fl{background:var(--accent)}
+.br .wh{position:absolute;top:50%;height:2px;margin-top:-1px;background:var(--ink)}
+.br .wh::before,.br .wh::after{content:"";position:absolute;top:-6px;width:2px;height:14px;background:var(--ink)}
+.br .wh::before{left:0} .br .wh::after{right:0}
+.br .val{grid-column:2;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.br .ci{font-weight:400;color:var(--muted)}
+.closer{background:var(--paper-deep);margin-top:40px}
+.closer .wrap{padding-block:48px;display:grid;gap:22px}
+.closer h2{font-size:clamp(24px,3.4vw,32px);max-width:none}
+.cboxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:22px}
+.closer h3{font-family:var(--font-display);font-size:21px;margin:0 0 6px}
+.closer p{margin:0;color:var(--muted);font-size:15px}
+footer{background:#0a0a0a;color:rgba(255,255,255,.75);font-size:12.5px}
+footer .wrap{padding-block:20px;display:grid;gap:8px}
+footer .wm{color:#fff} footer code{font-family:var(--font-mono);font-size:11.5px;color:rgba(255,255,255,.9);overflow-wrap:anywhere}
+.st{display:flex;align-items:flex-start;gap:8px;margin-top:14px;font-size:13px;line-height:1.4;color:var(--muted);max-width:46ch;background:var(--paper-deep);border-radius:10px;padding:8px 11px}
+.st i{flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px}
+.st.ok i{background:#1b7a4b} .st.weak i{background:#d98c00} .st.no i{background:#b3261e} .st.nb i{background:#8a8a8a}
+.st b{font-weight:700;color:var(--ink)}
+.closer .st{background:#fff;margin-top:10px}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+.hero .note{margin-top:10px;font-size:14px;color:var(--muted)}
+.closer .again{margin-top:20px}
+.closer .again a{color:var(--accent);font-weight:600}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+@media (max-width:720px){
+  .hero .wrap{padding-block:44px 28px}
+  .step{grid-template-columns:1fr;padding-block:40px;gap:24px}
+  .step:nth-child(even) .txt{order:0}
+  .funnel{grid-template-columns:1fr} .far{transform:rotate(90deg);justify-self:center}
+  .flow .ar{display:none} .flow{gap:8px}
+  .br{grid-template-columns:1fr} .br .val{grid-column:1}
+}
+@media (max-width:480px){.ep{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><span class="wm">roger<span class="wmn">3000</span></span><span class="prod">fleet stuck analyser</span></div></header>
+
+<aside class="banner" role="note"><div class="wrap">
+  <div><b>Internal draft, 15 Oct 2026. What is tested and what is not.</b> Every number on this page comes from a run in the warehouse-rl repo: synthetic data from a simulator, one laptop, macOS numbers.</div>
+  <div><b>Tested in simulation.</b> The log, the planted floor, the floor map. <b>Tested, weakly.</b> The "stuck" definition, the operator's list and the route planner. <b>Timing tested, reasons not.</b> When it spots a stop is measured; the reason it gives is not. <b>Not built.</b> The three onboarding steps at the bottom.</div>
+</div></aside>
+
+<main>
+<section class="hero"><div class="wrap">
+  <p class="eb">Warehouse robot fleets</p>
+  <h1>Robots get stuck. Nobody knows why.</h1>
+  <p class="lead">We read the fleet's own log as it arrives and hand operators a short, checked list of what to go and look at.</p>
+  <div class="flow"><span class="fb">robot log</span><span class="ar">→</span><span class="fb">who is stuck</span><span class="ar">→</span><span class="fb">where the floor is bad</span><span class="ar">→</span><span class="fb">the operator's list</span></div>
+  <a class="cta" href="../replay/index.html">See it move →</a>
+  <p class="note">Everything on this page ran on simulated robots, not on a real warehouse.</p>
+</div></section>
+
+<div class="wrap"><div class="steps">
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">The problem</p>
+      <h2>Every stop is a log line. None of them says why.</h2>
+      <p class="one">One test area, one <b class="num" data-src="docs/replay/data.js:meta.steps*meta.step_seconds/60">42</b>-minute shift. Each red mark is a robot that sat with a job for over <b class="num" data-src="results/fleet/benchmark.json:batch.score.stuck_after">30</b> seconds.</p>
+      <p class="prior">Different from what exists: most fleet managers show the stop, not the pattern; trend tools exist, this one grades its own calls.</p>
+      <div class="big"><b class="num" data-src="docs/replay/data.js:len(episodes)">61</b><span>stuck periods in one shift, <b class="num" data-src="docs/replay/data.js:len(robots)">12</b> robots</span></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> "Stuck" here means waited over <b class="num" data-src="results/fleet/benchmark.json:batch.score.stuck_after">30</b> seconds with a job. Only <b class="num" data-src="results/fleet/benchmark.json:batch.score.precision">22%</b> of those stops match the simulator's own stuck flag; the others are robots waiting at a shelf by design or robots that broke down while stopped.</span></div>
+    </div>
+    <div class="pic"><svg id="m1" class="map" role="img" aria-label="Floor plan with every stuck period marked"></svg>
+      <div class="legend"><span><i style="background:var(--hw);border:1px solid var(--hair)"></i>aisle</span><span><i style="background:var(--shelf)"></i>shelves</span><span><i style="background:var(--goal)"></i>pick stations</span><span><i style="background:var(--stuck);border-radius:50%"></i>a robot got stuck here</span></div></div>
+  </div>
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">What we built</p>
+      <h2>A warehouse where we plant the faults ourselves.</h2>
+      <p class="one">A simulator with <b class="num" data-src="docs/replay/data.js:len(obstacles)">80</b> bad floor cells hidden on the aisles. The analyser gets only the robot messages, never the answer, so every call it makes can be checked.</p>
+      <div class="big"><b class="num" data-src="docs/replay/data.js:len(robots)">12</b><span>robots in the test area, no hints given to the analyser</span></div>
+      <div class="st ok"><i></i><span><b>Tested.</b> The planted cells and the hidden truth are in the run files; the analyser never reads them.</span></div>
+    </div>
+    <div class="pic"><svg id="m2" class="map" role="img" aria-label="The same floor plan with the planted bad cells shown"></svg>
+      <div class="legend"><span><i style="background:var(--planted)"></i>planted bad cell, hidden from the analyser</span></div></div>
+  </div>
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">Step 1 · the log</p>
+      <h2>Reads it live. Loses nothing.</h2>
+      <p class="one">Files or a live feed, read while they are still being written. Every line counted, the useful part kept.</p>
+      <div class="big"><b class="num" data-src="results/fleet/benchmark.json:live.lag_p50_s">2.6</b><span>seconds behind the robots, measured on a live feed</span></div>
+      <div class="st ok"><i></i><span><b>Tested in simulation.</b> The log carried <b class="num" data-src="docs/replay/data.js:run_constants.header.noise">90</b> deliberately broken lines, some malformed and some repeated, and every one was counted. The kept share is measured on the store.</span></div>
+    </div>
+    <div class="card"><div class="lbl">One shift, one test area</div>
+      <div class="funnel">
+        <div class="fx"><div class="h">Arrived</div><div class="v"><b class="num" data-src="docs/replay/data.js:run_constants.header.msgs">6,090</b></div><div class="s">messages, <b class="num" data-src="docs/replay/data.js:run_constants.header.noise">90</b> of them broken lines or repeats</div></div><div class="far">→</div>
+        <div class="fx"><div class="h">Usable</div><div class="v"><b class="num" data-src="docs/replay/data.js:run_constants.audit.read">6,000</b></div><div class="s">messages read, the broken ones stored with their reason</div></div><div class="far">→</div>
+        <div class="fxcol">
+          <div class="fx"><div class="h">Kept</div><div class="v"><b class="num" data-src="docs/replay/data.js:run_constants.kept.n_changes">1,306</b></div><div class="s">changes of state, <b class="num" data-src="docs/replay/data.js:run_constants.kept.kept_pct">13.3%</b> of the bytes</div></div>
+          <div class="fx drop"><div class="h">Dropped</div><div class="v"><b class="num" data-src="docs/replay/data.js:run_constants.kept.n_repeats">4,694</b></div><div class="s">in-between positions and repeats</div></div>
+        </div>
+      </div>
+      <div class="ticks"><div class="tk"><i>✓</i>nothing went missing: <b class="num" data-src="docs/replay/data.js:run_constants.audit.read">6,000</b> of <b class="num" data-src="docs/replay/data.js:run_constants.audit.sent">6,000</b> messages read</div><div class="tk"><i>✓</i>robots send <b class="num" data-src="docs/replay/data.js:run_constants.speed.robot_rate">2.4</b> messages a second, we read <b class="num" data-src="docs/replay/data.js:run_constants.speed.ingest_rate">2,789</b> a second, so a fleet <b class="num" data-src="docs/replay/data.js:run_constants.speed.ratio">1,162</b> times larger would keep up</div></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">Step 2 · who is stuck</p>
+      <h2>Names the robot, the spot and a likely reason.</h2>
+      <p class="one"><b class="num" data-src="results/fleet/benchmark.json:batch.score.stuck_after">30</b> seconds waiting with a job means stuck. Then: a broken robot in the way, another stuck one, traffic, or nothing at all.</p>
+      <div class="big"><b class="num" data-src="results/fleet/benchmark.json:live.alert_latency_from_entry_p50_s">8</b><span>seconds from the moment it could know to the alert</span></div>
+      <div class="st no"><i></i><span><b>Timing tested, reasons not.</b> The <b class="num" data-src="results/fleet/benchmark.json:live.alert_latency_from_entry_p50_s">8</b> seconds and the <b class="num" data-src="results/fleet/benchmark.json:batch.score.recall">70%</b> are measured. The cause labels were only compared with a proximity proxy; the simulator does not say which robot blocked which, and most cause claims could not be confirmed either way.</span></div>
+    </div>
+    <div class="card"><div class="lbl"><b class="num" data-src="docs/replay/data.js:nexamples(episodes)">3</b> stuck periods from this shift</div>
+<div class="eplist">
+<div class="ep"><span class="who">Z0-06</span><span>stopped at 10,17 for 215 seconds, nothing in the way; the job was dropped</span><span class="tag">cause: unknown</span></div>
+<div class="ep"><span class="who">Z0-04</span><span>stopped at 15,24 for 75 seconds, waited behind another stuck robot; it moved on</span><span class="tag">blocked by a stuck robot</span></div>
+<div class="ep"><span class="who">Z0-02</span><span>stopped at 18,12 for 45 seconds, queued with other robots in the aisle; the job was dropped</span><span class="tag">traffic</span></div>
+</div>
+      <div class="ticks"><div class="tk"><i>✓</i>finds <b class="num" data-src="results/fleet/benchmark.json:batch.score.recall">70%</b> of the stuck periods the simulator flags, over <b class="num" data-src="results/fleet/benchmark.json:batch.messages_expected">6.9</b> million messages</div><div class="tk"><i>✓</i>every reason is written down and checked once the stop ends</div></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">Step 3 · where the floor is bad</p>
+      <h2>Draws the map from the stops nobody could explain.</h2>
+      <p class="one">Unexplained hold-ups are counted per floor cell. The worst cells become the map. Blue rings are the analyser's top 20; brown is what we planted.</p>
+      <div class="big"><b class="num" data-src="docs/replay/data.js:hits(publishes.-1.cells,obstacles,20)">20</b><span>of 20 right on the latest map of this test area; <b class="num" data-src="results/fleet/hotspot_s8b-medium-80-p03-07.json:mean.k.20.precision">97%</b> on average over all test areas</span></div>
+      <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
+    </div>
+    <div class="pic"><svg id="m3" class="map" role="img" aria-label="Floor plan with the analyser's top 20 cells ringed over the planted bad cells"></svg>
+      <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--ink);box-shadow:0 0 0 2px #fff inset;background:var(--planted)"></i>analyser's top 20</span><span><i style="border:2.5px dashed var(--stuck);background:transparent"></i>flagged, not planted</span><span>it can only find cells robots drive over: <b class="num" data-src="results/fleet/hotspot_s8b-medium-80-p03-07.json:1-mean.zero_stall_share">56%</b> of them in one shift</span></div></div>
+  </div>
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">Step 4 · the operator's list</p>
+      <h2>Plain sentences. Each one checked afterwards.</h2>
+      <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
+      <div class="big"><b class="num" data-src="docs/replay/data.js:run_constants.lessons_long.truth_hit">27</b><span>of <b class="num" data-src="docs/replay/data.js:run_constants.lessons_long.truth_n">27</b> flagged cells were real planted cells</span></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real <b class="num" data-src="docs/replay/data.js:run_constants.lessons_long.truth_hit">27</b> of <b class="num" data-src="docs/replay/data.js:run_constants.lessons_long.truth_n">27</b> times, but only <b class="num" data-src="docs/replay/data.js:run_constants.lessons_long.held">9</b> of <b class="num" data-src="docs/replay/data.js:run_constants.lessons_long.graded">31</b> calls repeated in the next half hour; the repeat test is being reworked.</span></div>
+    </div>
+    <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
+<div class="lesson" data-kind="hot_cell"><span class="ic" aria-hidden="true">▦</span><span>One spot on the floor keeps holding robots up. Worth a look. <b>10,20</b> <span class="mark">✓ real spot</span></span></div>
+</div></div>
+  </div>
+
+  <div class="step">
+    <div class="txt">
+      <p class="eb">What's next</p>
+      <h2>Give the map to the route planner.</h2>
+      <p class="one">Robots steer around the worst cells. On a floor that traps robots, the map wins back part of the lost pick-rate.</p>
+      <div class="big"><b class="num" data-src="docs/replay/data.js:run_constants.worth.map_share">11.1%</b><span>of the pick-rate lost to the bad floor won back with the analyser's map<span class="sub">95% interval <b class="num" data-src="docs/replay/data.js:run_constants.worth.map_share_ci95.0">6.0%</b> to <b class="num" data-src="docs/replay/data.js:run_constants.worth.map_share_ci95.1">15.9%</b>. With perfect knowledge: <b class="num" data-src="docs/replay/data.js:run_constants.worth.oracle_share">26.9%</b>, interval <b class="num" data-src="docs/replay/data.js:run_constants.worth.oracle_share_ci95.0">22.4%</b> to <b class="num" data-src="docs/replay/data.js:run_constants.worth.oracle_share_ci95.1">31.4%</b>.</span></span></div>
+      <div class="big"><b class="num" data-src="results/closed_loop_sticky/summary.json:1-arms.map_a32.floor_skip_steps_mean/arms.none.floor_skip_steps_mean">38%</b><span>fewer drives into bad cells with the map on</span></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> On mild floor damage the gain is within noise; on damage that traps robots it is measurable.</span></div>
+    </div>
+    <div class="pic">
+      <div class="bars">
+        <div class="br"><span class="lab">Bad floor, no map</span><span class="tr" aria-hidden="true"><span class="fl" style="width:27.38%"></span><span class="wh" style="left:24.83%;width:5.11%"></span></span><span class="val"><b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.0.mean">16.1</b> <span class="ci">(<b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.0.ci95_low">14.6</b> to <b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.0.ci95_high">17.6</b>)</span></span></div>
+        <div class="br hi"><span class="lab">With the analyser's map</span><span class="tr" aria-hidden="true"><span class="fl" style="width:34.47%"></span><span class="wh" style="left:31.03%;width:6.89%"></span></span><span class="val"><b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.1.mean">20.3</b> <span class="ci">(<b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.1.ci95_low">18.3</b> to <b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.1.ci95_high">22.3</b>)</span></span></div>
+        <div class="br"><span class="lab">With perfect knowledge</span><span class="tr" aria-hidden="true"><span class="fl" style="width:44.50%"></span><span class="wh" style="left:41.13%;width:6.74%"></span></span><span class="val"><b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.2.mean">26.2</b> <span class="ci">(<b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.2.ci95_low">24.2</b> to <b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.2.ci95_high">28.2</b>)</span></span></div>
+        <div class="br"><span class="lab">Clean floor</span><span class="tr" aria-hidden="true"><span class="fl" style="width:91.11%"></span><span class="wh" style="left:86.99%;width:8.25%"></span></span><span class="val"><b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.3.mean">53.7</b> <span class="ci">(<b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.3.ci95_low">51.2</b> to <b class="num" data-src="docs/replay/data.js:run_constants.worth.bars.3.ci95_high">56.1</b>)</span></span></div>
+      </div>
+      <div class="legend"><span>Order lines per hour, mean of <b class="num" data-src="docs/replay/data.js:run_constants.worth.n_seeds">30</b> shifts. The bars come from a test on a floor that traps robots, not from the shift above. Bars start at zero; the line is the 95% interval.</span></div>
+    </div>
+  </div>
+
+</div></div>
+
+<section class="closer"><div class="wrap">
+  <h2>What it would take on your floor</h2>
+  <div class="cboxes">
+    <div class="cbox"><h3>Point it at your log</h3><p>Files or a live feed. VDA 5050 out of the box, a short mapping file for anything else.</p><div class="st nb"><i></i><span><b>Not built.</b> No mapping file exists yet; only the VDA 5050 shape parses.</span></div></div>
+    <div class="cbox"><h3>Tell us what "stuck" means</h3><p>Here it is <b class="num" data-src="results/fleet/benchmark.json:batch.score.stuck_after">30</b> seconds waiting with a job. Yours may differ. One line.</p><div class="st nb"><i></i><span><b>Not built.</b> The rule is a constant in the detector, not a client setting.</span></div></div>
+    <div class="cbox"><h3>Read the list</h3><p>Every call is checked against what happened next, on your floor.</p><div class="st nb"><i></i><span><b>Not built.</b> Checking exists for the simulator only; no client log has been run.</span></div></div>
+  </div>
+  <p class="again"><a href="../replay/index.html">See the shift this page uses, step by step →</a></p>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div><span class="wm">roger<span class="wmn">3000</span></span> &nbsp;·&nbsp; a product studio in Ericeira, Portugal</div>
+  <div>Synthetic data from a simulator (TA-RWARE, medium map). Sources in the warehouse-rl repo: <code>docs/replay/data.js</code>, <code>results/fleet/benchmark.json</code>, <code>results/fleet/hotspot_s8b-medium-80-p03-07.json</code>, <code>results/closed_loop_sticky/summary.json</code>, <code>results/fleet/hotspot_s8e-long-w0.5.json</code> (the lesson counts, carried in data.js) and <code>laptop-scheduler/reports/wr-s8e-lessons-long.md</code>. Cause labels are compared with a proximity proxy, not a known answer.</div>
+</div></footer>
+<script>
+const D = {"grid":{"width":22,"height":25,"highway":["1111111111111111111111","1111111111111111111111","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1111111111111111111111","1111111111111111111111","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1100110011001100110011","1111111111111111111111","1111111111111111111111","1111111111111111111111","1111111111111111111111","1111111111111111111111"],"goals":[[2,24],[3,24],[6,24],[7,24],[10,24],[11,24],[14,24],[15,24],[18,24],[19,24]],"shelves":[[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],[2,12],[2,13],[2,14],[2,15],[2,16],[2,17],[2,18],[2,19],[3,2],[3,3],[3,4],[3,5],[3,6],[3,7],[3,8],[3,9],[3,12],[3,13],[3,14],[3,15],[3,16],[3,17],[3,18],[3,19],[6,2],[6,3],[6,4],[6,5],[6,6],[6,7],[6,8],[6,9],[6,12],[6,13],[6,14],[6,15],[6,16],[6,17],[6,18],[6,19],[7,2],[7,3],[7,4],[7,5],[7,6],[7,7],[7,8],[7,9],[7,12],[7,13],[7,14],[7,15],[7,16],[7,17],[7,18],[7,19],[10,2],[10,3],[10,4],[10,5],[10,6],[10,7],[10,8],[10,9],[10,12],[10,13],[10,14],[10,15],[10,16],[10,17],[10,18],[10,19],[11,2],[11,3],[11,4],[11,5],[11,6],[11,7],[11,8],[11,9],[11,12],[11,13],[11,14],[11,15],[11,16],[11,17],[11,18],[11,19],[14,2],[14,3],[14,4],[14,5],[14,6],[14,7],[14,8],[14,9],[14,12],[14,13],[14,14],[14,15],[14,16],[14,17],[14,18],[14,19],[15,2],[15,3],[15,4],[15,5],[15,6],[15,7],[15,8],[15,9],[15,12],[15,13],[15,14],[15,15],[15,16],[15,17],[15,18],[15,19],[18,2],[18,3],[18,4],[18,5],[18,6],[18,7],[18,8],[18,9],[18,12],[18,13],[18,14],[18,15],[18,16],[18,17],[18,18],[18,19],[19,2],[19,3],[19,4],[19,5],[19,6],[19,7],[19,8],[19,9],[19,12],[19,13],[19,14],[19,15],[19,16],[19,17],[19,18],[19,19]]},"obstacles":[["0,11",0.61],["0,15",0.54],["0,18",0.47],["0,20",0.42],["0,5",0.36],["0,7",0.41],["1,12",0.62],["1,21",0.46],["10,1",0.39],["10,20",0.56],["10,21",0.46],["11,0",0.53],["12,0",0.62],["12,1",0.51],["12,16",0.53],["12,23",0.6],["13,18",0.33],["13,23",0.51],["13,24",0.36],["13,5",0.54],["13,7",0.41],["14,0",0.62],["14,1",0.39],["14,20",0.62],["14,21",0.46],["15,20",0.39],["15,22",0.47],["15,23",0.43],["16,14",0.33],["16,15",0.67],["16,21",0.55],["16,22",0.58],["16,4",0.53],["16,6",0.49],["17,11",0.64],["17,13",0.51],["17,20",0.46],["17,22",0.5],["17,5",0.68],["17,9",0.38],["18,0",0.34],["19,0",0.62],["19,21",0.42],["2,21",0.36],["2,22",0.6],["20,15",0.31],["20,18",0.65],["20,19",0.32],["20,3",0.56],["20,4",0.61],["21,1",0.39],["21,2",0.51],["21,24",0.33],["21,8",0.53],["4,12",0.38],["4,20",0.46],["4,3",0.31],["4,6",0.5],["4,8",0.35],["5,16",0.31],["5,2",0.47],["5,22",0.5],["5,4",0.35],["5,5",0.58],["6,1",0.36],["6,10",0.58],["7,1",0.48],["7,11",0.31],["7,22",0.49],["7,23",0.7],["8,13",0.32],["8,16",0.44],["8,2",0.43],["8,23",0.41],["9,1",0.36],["9,15",0.52],["9,18",0.5],["9,23",0.55],["9,24",0.36],["9,7",0.43]],"top":[["10,20",7],["9,15",5],["8,2",4],["16,4",4],["12,16",4],["13,7",4],["6,10",4],["14,21",4],["7,23",3],["14,20",3],["1,12",3],["7,22",3],["15,22",3],["20,4",3],["4,12",2],["7,11",2],["7,1",2],["13,5",2],["6,1",2],["9,18",2]],"stuck_cells":[[18,12],[10,17],[11,16],[10,3],[6,13],[11,7],[20,3],[19,16],[9,22],[18,12],[10,17],[19,23],[14,16],[11,16],[19,3],[19,19],[6,13],[10,3],[12,15],[13,1],[7,2],[7,18],[3,9],[15,17],[11,7],[15,23],[11,19],[15,24],[2,5],[2,17],[7,2],[16,13],[7,19],[15,9],[7,18],[7,2],[14,5],[15,13],[2,17],[11,19],[6,18],[2,5],[7,19],[11,15],[7,15],[6,18],[10,12],[3,15],[11,16],[7,2],[3,14],[7,15],[18,11],[11,15],[3,14],[10,12],[11,16],[3,4],[14,4],[6,19],[17,19]]};
+const COPY = {
+  aisle: 'aisle ', shelf: 'shelf ', station: 'pick station ',
+  planted: 'planted bad cell ', plantedMid: ': a move into it fails ', plantedEnd: '% of the time',
+  stuckHead: ' stuck period', stuckPlural: 's', stuckAt: ' at ',
+  pick: 'analyser pick number ', pickCell: ', cell ', pickHit: ', a planted bad cell', pickMiss: ', not a planted cell'
+};
+(function () {
+  var g = D.grid, W = g.width, H = g.height, C = 14, ns = 'http://www.w3.org/2000/svg';
+  var planted = {}; D.obstacles.forEach(function (o) { planted[o[0]] = o[1]; });
+  var goals = {}; g.goals.forEach(function (p) { goals[p.join(',')] = true; });
+  var stuck = {}; D.stuck_cells.forEach(function (c) { var k = c.join(','); stuck[k] = (stuck[k] || 0) + 1; });
+  function draw(id, o) {
+    var svg = document.getElementById(id);
+    svg.setAttribute('viewBox', '0 0 ' + (W * C) + ' ' + (H * C));
+    function el(tag, attrs, title) {
+      var e = document.createElementNS(ns, tag);
+      Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+      if (title) { var t = document.createElementNS(ns, 'title'); t.textContent = title; e.appendChild(t); }
+      svg.appendChild(e);
+      return e;
+    }
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var key = x + ',' + y, hw = g.highway[y][x] === '1';
+        var fill = hw ? 'var(--hw)' : 'var(--shelf)', t = (hw ? COPY.aisle : COPY.shelf) + key;
+        if (goals[key]) { fill = 'var(--goal)'; t = COPY.station + key; }
+        if (o.planted && planted[key] !== undefined) {
+          fill = 'var(--planted)';
+          t = COPY.planted + key + COPY.plantedMid + Math.round(planted[key] * 100) + COPY.plantedEnd;
+        }
+        el('rect', { x: x * C, y: y * C, width: C - 1, height: C - 1, rx: 2, fill: fill }, t);
+      }
+    }
+    if (o.stuck) {
+      Object.keys(stuck).forEach(function (k) {
+        var n = stuck[k], xy = k.split(',').map(Number);
+        var c = el('circle', { cx: xy[0] * C + C / 2 - 0.5, cy: xy[1] * C + C / 2 - 0.5, r: 3.2 + Math.min(n, 4) * 1.1, fill: 'var(--stuck)', opacity: 0.85 },
+          n + COPY.stuckHead + (n > 1 ? COPY.stuckPlural : '') + COPY.stuckAt + k);
+        c.setAttribute('class', 'pulse');
+      });
+    }
+    if (o.flagged) {
+      D.top.forEach(function (v, i) {
+        var key = v[0], xy = key.split(',').map(Number), hit = planted[key] !== undefined;
+        el('rect', { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: '#fff', 'stroke-width': 4.4 });
+        var ring = { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: hit ? 'var(--ink)' : 'var(--stuck)', 'stroke-width': 2.2 };
+        if (!hit) ring['stroke-dasharray'] = '3 2';
+        el('rect', ring, COPY.pick + (i + 1) + COPY.pickCell + key + (hit ? COPY.pickHit : COPY.pickMiss));
+        if (i < 10) {
+          var tx = el('text', { x: xy[0] * C + C / 2 - 0.5, y: xy[1] * C + C / 2 + 3, 'text-anchor': 'middle', 'font-size': '8.5', 'font-weight': '700', fill: '#fff', stroke: 'var(--ink)', 'stroke-width': 2, 'paint-order': 'stroke', 'font-family': 'ui-sans-serif,system-ui,sans-serif', 'pointer-events': 'none' });
+          tx.textContent = String(i + 1);
+        }
+      });
+    }
+  }
+  draw('m1', { stuck: true });
+  draw('m2', { planted: true });
+  draw('m3', { planted: true, flagged: true });
+})();
+</script>
+</body>
+</html>
