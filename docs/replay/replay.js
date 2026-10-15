@@ -66,7 +66,7 @@
       truthHit: '✓ real spot',
       truthMiss: '✗ not a planted spot',
       short: 'Short shift, few events. On a full day the list is longer and more varied.',
-      long: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.',
+      long: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times, but only {held} of {total} calls repeated in the next half hour; the repeat test is being reworked.',
       tickOk: ' ✓',
       tickOff: ' ✗',
       held: 'held up',
@@ -1056,7 +1056,7 @@
     setText('lessonshort', VISIBLE_COPY.lesson.short);
     $('lessonlong').hidden = !LL;
     if (LL) {
-      setText('lessonlong', fill(VISIBLE_COPY.lesson.long, { hit: fmt(LL.truth_hit), n: fmt(LL.truth_n), held: fmt(LL.held), graded: fmt(LL.graded) }));
+      setText('lessonlong', fill(VISIBLE_COPY.lesson.long, { hit: fmt(LL.truth_hit), n: fmt(LL.truth_n), held: fmt(LL.held), total: fmt(LL.graded) }));
       setHover('lessonlong', fill(HOVER_COPY.longHover, { source: LL.source }));
     }
     paintWorth(RC.worth);
