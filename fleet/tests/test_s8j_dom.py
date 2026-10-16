@@ -260,7 +260,8 @@ function snap() {
   });
   const wb = document.getElementById('worthbars');
   wb.children.forEach(function (b) {
-    s.bars.push({ key: b.getAttribute('data-key'), label: visibleText(query(b, '.wlab', true)[0]), value: visibleText(query(b, '.wval', true)[0]) });
+    s.bars.push({ key: b.getAttribute('data-key'), label: visibleText(query(b, '.wlab', true)[0]), value: visibleText(query(b, '.wval', true)[0]),
+      role: b.getAttribute('role'), aria: b.getAttribute('aria-label'), cls: b.className });
   });
   s.hovers = {};
   (scenario.hover_ids || []).forEach(function (id) {
