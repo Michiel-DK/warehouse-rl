@@ -4,6 +4,7 @@ Usage: python fleet/replay_export.py --run-dir DIR --store jsonl:DIR/store --zon
        [--closed-loop results/closed_loop] [--benchmark results/fleet/benchmark.json]
        [--hotspot results/fleet/hotspot_<tag>.json] [--closed-loop-summary results/closed_loop_sticky/summary.json]
        [--lessons-long results/fleet/hotspot_s8e-long-w0.5.json]
+       [--dose-response "p 0.3-0.7=results/closed_loop/summary.json" ...]   (repeatable, order kept)
        [--sticky-none PATH --sticky-map-a32 PATH --sticky-oracle-a32 PATH --sticky-undisturbed PATH]
 DIR holds the zone files zone<Z>-<nnn>.jsonl.gz, truth.json, emit_ledger.json and costmap.json (the run name is
 costmap.json["run"], as fleet/hotspot_score.py reads it). The store is only READ (every table through
@@ -73,7 +74,7 @@ Payload (every key is always present unless marked optional):
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
   run_constants  {ingest_msgs_per_s, benchmark_msgs_per_s, kept, hotspot, closed_loop, audit, header, speed, lessons_long,
-              worth}: the numbers the page shows that
+              worth, dose_response}: the numbers the page shows that
               are not per-step, each an object with a `source` (the path exactly as given, or a "store:..." name for
               store-derived ones) or null when its source is absent. The page types none of them.
                 ingest_msgs_per_s  {value, source "store:ingest_ledger", formula}: over the run's ingest_ledger rows with a
@@ -131,6 +132,14 @@ kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) 
                                    test on a floor that traps robots, NOT the shift in the replay; `label` says so. Null
                                    unless all four files are given. Every entry above, like the other run_constants, may
                                    come from other files or runs than the replay: they are labelled context.
+                dose_response      [{label, p_lo, p_hi, floor_loss, arms {none, map_a4, map_a32, oracle: each {pick_rate_mean,
+                                   ci95, share, share_ci95}}, source}] in the order of the repeatable --dose-response
+                                   LABEL=PATH (split on the first "="), one entry per closed-loop summary.json. p_lo/p_hi =
+                                   json.loads(summary["disturb"])["floor"]["p"]; floor_loss = undisturbed - none pick-rate
+                                   mean = share_of_floor_loss_recovered.mean_loss (the export raises when an arm disagrees);
+                                   share/share_ci95 = share_of_floor_loss_recovered of the arm (null for "none"); source =
+                                   PATH as given. Raises, naming the file, when a summary lacks one of the four arms or
+                                   "undisturbed". Null without --dose-response. Context from other runs than the replay.
   lessons     every lesson decision of the run and of the exported zone (S8E, kind "lesson"), sorted by
               (decided_at, int(zone), claim subject, lesson_kind): [{run, decided_at_step, zone, text, lesson_kind,
               confidence, verdict, graded_at_step, truth}], zone = the claim's zone string. verdict "ok" / "off"
@@ -700,6 +709,48 @@ def lessons_long_constant(path):
         raise ValueError(f"{path} lacks grading_counts.lesson / lesson_truth ({e})") from e
 
 
+DOSE_ARMS = ("none", "map_a4", "map_a32", "oracle")
+
+
+def dose_response_constant(specs):
+    """run_constants.dose_response from ["LABEL=PATH", ...] (see the module docstring); None without specs."""
+    if not specs:
+        return None
+    out = []
+    for spec in specs:
+        label, sep, path = spec.partition("=")
+        if not sep or not label or not path:
+            raise ValueError(f"--dose-response {spec!r} is not LABEL=PATH")
+        doc = _load_json(path, "dose-response")
+        try:
+            arms = doc["arms"]
+            missing = [a for a in DOSE_ARMS + ("undisturbed",) if not isinstance(arms.get(a), dict)]
+            if missing:
+                raise ValueError(f"{path} lacks arms {', '.join(missing)}")
+            disturb = doc["disturb"]
+            p_lo, p_hi = (json.loads(disturb) if isinstance(disturb, str) else disturb)["floor"]["p"]
+            loss = arms["undisturbed"]["pick_rate_mean"] - arms["none"]["pick_rate_mean"]
+            entry_arms, mean_loss = {}, None
+            for a in DOSE_ARMS:
+                row = arms[a]
+                sh = row.get("share_of_floor_loss_recovered")
+                if a == "none":
+                    share = share_ci = None
+                else:
+                    if not isinstance(sh, dict):
+                        raise ValueError(f"{path} arm {a} lacks share_of_floor_loss_recovered")
+                    if abs(sh["mean_loss"] - loss) > 1e-9:
+                        raise ValueError(f"{path} arm {a} mean_loss {sh['mean_loss']} != undisturbed - none {loss}")
+                    mean_loss = sh["mean_loss"]
+                    share, share_ci = sh["share"], list(sh["ci95"])
+                entry_arms[a] = dict(pick_rate_mean=row["pick_rate_mean"], ci95=list(row["pick_rate_ci95"]),
+                                     share=share, share_ci95=share_ci)
+        except (KeyError, TypeError, IndexError) as e:
+            raise ValueError(f"{path} is not a closed-loop summary with the fields the dose response needs ({type(e).__name__}: {e})") from e
+        out.append(dict(label=label, p_lo=p_lo, p_hi=p_hi, floor_loss=mean_loss, arms=entry_arms, source=path))
+    return out
+
+
 def zone_ledger(emit, zone):
     """The emit ledger's entry of the exported zone, or {}."""
     return next((z for z in emit.get("zones", []) if str(z.get("zone")) == str(zone)), {})
@@ -831,7 +882,7 @@ def assert_single_run(payload):
 # ------------------------------------------------------------------------------------------------ assembly
 def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, log=print,
                   run_dir_arg=None, closed_loop_arg=None, benchmark=None, hotspot_file=None, closed_loop_summary=None,
-                  lessons_long=None, sticky=None):
+                  lessons_long=None, sticky=None, dose_response=None):
     zone = str(zone)
     run_dir = Path(run_dir)
     truth = json.loads((run_dir / "truth.json").read_text())
@@ -908,7 +959,8 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         header=header_constant(emit, zrow, totals, zone),
         speed=speed_constant(bench, zrow, steps, zone),
         lessons_long=lessons_long_constant(lessons_long),
-        worth=worth_constant(sticky))
+        worth=worth_constant(sticky),
+        dose_response=dose_response_constant(dose_response))
     if check is not None:
         cov = ledger.coverage(check["messages_accepted"], expected)
         check = dict(check, coverage=None if cov is None else round(cov, 6))
@@ -975,27 +1027,49 @@ def read_data_js(path):
     return json.loads(text[len(PREFIX):].rstrip().removesuffix(";"))
 
 
-def refresh_constants(out, lessons_long_path, max_bytes=MAX_BYTES):
-    """Rewrite only run_constants.lessons_long of an existing data.js by text splice. Returns the new byte size."""
+def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES):
+    """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response) of an existing data.js by text
+    splice; a key that is not in the file yet is appended to run_constants. Returns the new byte size."""
     out = Path(out)
     if not out.is_file():
         raise ValueError(f"--out {out} does not exist (refresh mode never creates a file)")
+    new_values = {}
+    if lessons_long_path is not None:
+        new_values["lessons_long"] = lessons_long_constant(lessons_long_path)
+    if dose_response:
+        new_values["dose_response"] = dose_response_constant(dose_response)
+    if not new_values:
+        raise ValueError("nothing to refresh: give --lessons-long and/or --dose-response")
     text = out.read_text(encoding="utf-8")
     if not text.startswith(PREFIX):
         raise ValueError(f"{out} does not start with {PREFIX!r}")
-    key = '"lessons_long":'
-    if text.count(key) != 1:
-        raise ValueError(f'{out}: {key} occurs {text.count(key)} times, expected exactly once')
-    start = text.index(key) + len(key)
-    _, end = json.JSONDecoder().raw_decode(text, start)
-    new_value = json.dumps(lessons_long_constant(lessons_long_path), separators=(",", ":"), allow_nan=False)
-    new_text = text[:start] + new_value + text[end:]
     before = json.loads(text[len(PREFIX):].rstrip().removesuffix(";"))
+    new_text = text
+    for name, value in new_values.items():
+        enc = json.dumps(value, separators=(",", ":"), allow_nan=False)
+        key = f'"{name}":'
+        if name in before["run_constants"]:
+            if new_text.count(key) != 1:
+                raise ValueError(f'{out}: {key} occurs {new_text.count(key)} times, expected exactly once')
+            start = new_text.index(key) + len(key)
+            _, end = json.JSONDecoder().raw_decode(new_text, start)
+            new_text = new_text[:start] + enc + new_text[end:]
+        else:
+            rc_key = '"run_constants":'
+            if new_text.count(rc_key) != 1:
+                raise ValueError(f'{out}: {rc_key} occurs {new_text.count(rc_key)} times, expected exactly once')
+            rc_start = new_text.index(rc_key) + len(rc_key)
+            _, rc_end = json.JSONDecoder().raw_decode(new_text, rc_start)
+            sep = "" if new_text[rc_end - 2] == "{" else ","
+            new_text = new_text[:rc_end - 1] + f'{sep}{key}{enc}' + new_text[rc_end - 1:]
     after = json.loads(new_text[len(PREFIX):].rstrip().removesuffix(";"))
-    before["run_constants"].pop("lessons_long")
-    after["run_constants"].pop("lessons_long")
+    for name in new_values:
+        if after["run_constants"].get(name) != new_values[name]:
+            raise ValueError(f"refresh did not write run_constants.{name} as computed")
+        before["run_constants"].pop(name, None)
+        after["run_constants"].pop(name)
     if before != after:
-        raise ValueError("refresh would change keys other than run_constants.lessons_long")
+        raise ValueError(f"refresh would change keys other than run_constants.{'/'.join(new_values)}")
     data = new_text.encode("utf-8")
     if len(data) > max_bytes:
         raise ValueError(f"replay payload is {len(data)} bytes, over the {max_bytes} byte cap")
@@ -1011,7 +1085,7 @@ def refresh_constants(out, lessons_long_path, max_bytes=MAX_BYTES):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--refresh-constants-only", action="store_true",
-                   help="rewrite only run_constants.lessons_long of the existing --out from --lessons-long (no re-simulation)")
+                   help="rewrite only the run_constants keys given by --lessons-long and/or --dose-response of the existing --out (no re-simulation)")
     p.add_argument("--run-dir", default=None)
     p.add_argument("--store", default=None, help="jsonl:<dir> or clickhouse://host[:port]/db (read only)")
     p.add_argument("--zone", default="0")
@@ -1023,26 +1097,29 @@ def main(argv=None):
                    help="results/closed_loop_sticky/summary.json: run_constants.closed_loop")
     p.add_argument("--lessons-long", default=None, metavar="PATH",
                    help="results/fleet/hotspot_s8e-long-w0.5.json: run_constants.lessons_long (context from a longer run)")
+    p.add_argument("--dose-response", action="append", default=None, metavar="LABEL=PATH",
+                   help="repeatable: a closed-loop summary.json and its label, in page order: run_constants.dose_response")
     for arm in WORTH_ARMS:
         p.add_argument("--sticky-" + arm.replace("_", "-"), default=None, metavar="PATH",
                        help=f"results/closed_loop_sticky/{arm}/*.json (one row file): a bar of run_constants.worth")
     a = p.parse_args(argv)
     if a.refresh_constants_only:
-        if a.lessons_long is None:
-            p.error("--refresh-constants-only requires --lessons-long")
+        if a.lessons_long is None and not a.dose_response:
+            p.error("--refresh-constants-only requires --lessons-long and/or --dose-response")
         try:
-            n = refresh_constants(a.out, a.lessons_long)
+            n = refresh_constants(a.out, a.lessons_long, a.dose_response)
         except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
-        print(f"refreshed run_constants.lessons_long, {n} bytes -> {a.out}")
+        names = [k for k, v in (("lessons_long", a.lessons_long), ("dose_response", a.dose_response)) if v]
+        print(f"refreshed run_constants.{' and '.join(names)}, {n} bytes -> {a.out}")
         return 0
     if a.run_dir is None or a.store is None:
         p.error("--run-dir and --store are required (unless --refresh-constants-only)")
     try:
         payload = build_payload(a.run_dir, a.store, a.zone, a.closed_loop, run_dir_arg=a.run_dir,
                                 closed_loop_arg=a.closed_loop, benchmark=a.benchmark, hotspot_file=a.hotspot,
-                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long,
+                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long, dose_response=a.dose_response,
                                 sticky={arm: getattr(a, "sticky_" + arm) for arm in WORTH_ARMS})
         n = write_data_js(payload, a.out)
     except (ValueError, OSError) as e:
