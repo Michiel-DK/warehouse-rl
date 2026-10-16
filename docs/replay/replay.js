@@ -67,7 +67,8 @@
       truthHit: '✓ real spot',
       truthMiss: '✗ not a planted spot',
       short: 'Short shift, few events. On a full day the list is longer and more varied.',
-      long: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times, but only {held} of {total} calls repeated in the next half hour; the repeat test is being reworked.',
+      long: "Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times; {ph} of {pg} were still above their area's average in the next half hour; only {held} of {total} repeated their own peak, the bar the first version used.",
+      longNoPersist: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times; only {held} of {total} repeated their own peak, the bar the first version used.',
       tickOk: ' ✓ repeated',
       tickOff: ' ✗ did not repeat',
       held: 'repeated in the next half hour',
@@ -1065,7 +1066,13 @@
     setText('lessonshort', VISIBLE_COPY.lesson.short);
     $('lessonlong').hidden = !LL;
     if (LL) {
-      setText('lessonlong', fill(VISIBLE_COPY.lesson.long, { hit: fmt(LL.truth_hit), n: fmt(LL.truth_n), held: fmt(LL.held), total: fmt(LL.graded) }));
+      var llBase = { hit: fmt(LL.truth_hit), n: fmt(LL.truth_n), held: fmt(LL.held), total: fmt(LL.graded) };
+      if (LL.persist_held != null && LL.persist_graded != null) {
+        llBase.ph = fmt(LL.persist_held); llBase.pg = fmt(LL.persist_graded);
+        setText('lessonlong', fill(VISIBLE_COPY.lesson.long, llBase));
+      } else {
+        setText('lessonlong', fill(VISIBLE_COPY.lesson.longNoPersist, llBase));
+      }
       setHover('lessonlong', fill(HOVER_COPY.longHover, { source: LL.source }));
     }
     paintWorth(RC.worth);

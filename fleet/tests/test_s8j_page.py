@@ -60,8 +60,11 @@ TEMPLATES = [
     ("{..} in-between positions and repeats", "replay.js"),
     ("Rebuilding the shift from what we kept gives every robot's state at every step, and its position at every change.", "replay.js"),
     ("Every message accounted for: {..} sent, {..} read, {..} missing, checked against the sender's own count.", "replay.js"),
-    ("Checked against the hidden truth. On a longer test shift the flagged cells were real {..} of {..} times, but only {..} of {..} "
-     "calls repeated in the next half hour; the repeat test is being reworked.", "replay.js"),
+    ("Checked against the hidden truth. On a longer test shift the flagged cells were real {..} of {..} times; {..} of {..} were "
+     "still above their area's average in the next half hour; only {..} of {..} repeated their own peak, the bar the first version used.",
+     "replay.js"),
+    ("Checked against the hidden truth. On a longer test shift the flagged cells were real {..} of {..} times; only {..} of {..} "
+     "repeated their own peak, the bar the first version used.", "replay.js"),
     ("Short shift, few events. On a full day the list is longer and more varied.", "replay.js"),
     ("{..}% of the lost throughput recovered, {..}% with perfect knowledge", "index.html"),
     ("On mild floor damage the gain is within noise; on damage that traps robots it is measurable.", "index.html"),
@@ -371,8 +374,12 @@ class TestRender(unittest.TestCase):
         # lessons footnote, panel 5
         ll = rc["lessons_long"]
         self.assertEqual(text_of(last, "lessonlong"), f"Checked against the hidden truth. On a longer test shift the flagged cells were "
-                         f"real {ll['truth_hit']} of {ll['truth_n']} times, but only {ll['held']} of {ll['graded']} calls repeated in "
-                         "the next half hour; the repeat test is being reworked.")
+                         f"real {ll['truth_hit']} of {ll['truth_n']} times; {ll['persist_held']} of {ll['persist_graded']} were still above "
+                         f"their area's average in the next half hour; only {ll['held']} of {ll['graded']} repeated their own peak, "
+                         "the bar the first version used.")
+        self.assertEqual(text_of(last, "lessonlong"), "Checked against the hidden truth. On a longer test shift the flagged cells were "
+                         "real 27 of 27 times; 18 of 25 were still above their area's average in the next half hour; only 9 of 31 "
+                         "repeated their own peak, the bar the first version used.")
         w = rc["worth"]
         self.assertEqual(text_of(last, "big-mapshare"), pct_num(w["map_share"]))
         self.assertEqual(text_of(last, "big-oracleshare"), pct_num(w["oracle_share"]))
@@ -401,11 +408,30 @@ class TestRender(unittest.TestCase):
         rc["audit"].update(sent=6005, read=6002, missing=3)
         rc["kept"].update(n_changes=1303, n_repeats=4701, kept_pct=12.3)
         rc["speed"].update(robot_rate=3.7, ingest_rate=1234.6, ratio=271)  # not floor(1234.6 / 3.7) = 333: a page that recomputes fails
-        rc["lessons_long"].update(truth_hit=5, truth_n=6, held=7, graded=8)
+        rc["lessons_long"].update(truth_hit=5, truth_n=6, held=7, graded=8, persist_held=3, persist_graded=4)
         rc["worth"].update(map_share=0.237, oracle_share=0.456)
         for i, (b, m) in enumerate(zip(rc["worth"]["bars"], (11.1, 22.2, 33.3, 44.4))):
             b.update(mean=m, ci95_low=m - 1.1 - i * 0.1, ci95_high=m + 1.3 + i * 0.1)
         return d
+
+    def _no_persist_text(self, mutate):
+        d = copy.deepcopy(self.d)
+        mutate(d["run_constants"]["lessons_long"])
+        ll = d["run_constants"]["lessons_long"]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = run_page(self, self.scenario([499]), self.write(tmp, d))
+        text = text_of(out[0]["snap"], "lessonlong")
+        self.assertEqual(text, "Checked against the hidden truth. On a longer test shift the flagged cells were "
+                         f"real {ll['truth_hit']} of {ll['truth_n']} times; only {ll['held']} of {ll['graded']} repeated their own "
+                         "peak, the bar the first version used.")
+        self.assertNotIn("null", text)
+        self.assertNotIn("undefined", text)
+
+    def test_footnote_without_persist_numbers_uses_the_short_sentence_when_null(self):
+        self._no_persist_text(lambda ll: ll.update(persist_held=None, persist_graded=None))
+
+    def test_footnote_without_persist_numbers_uses_the_short_sentence_when_absent(self):
+        self._no_persist_text(lambda ll: (ll.pop("persist_held"), ll.pop("persist_graded")))
 
     def test_each_rendered_element_shows_its_own_field_so_a_swap_fails(self):
         d = self.distinct()
@@ -431,7 +457,9 @@ class TestRender(unittest.TestCase):
                          "the sender's own count.")
         self.assertEqual(text_of(snap, "speed-robots"), "Robots send 3.7 messages a second.")
         self.assertEqual(text_of(snap, "speed-read"), "We can read 1,235 a second, so a fleet 271x larger would still keep up.")
-        self.assertIn("real 5 of 6 times, but only 7 of 8 calls", text_of(snap, "lessonlong"))
+        self.assertEqual(text_of(snap, "lessonlong"), "Checked against the hidden truth. On a longer test shift the flagged cells were real 5 of 6 "
+                         "times; 3 of 4 were still above their area's average in the next half hour; only 7 of 8 repeated their own "
+                         "peak, the bar the first version used.")
         self.assertEqual(text_of(snap, "big-mapshare"), "24")
         self.assertEqual(text_of(snap, "big-oracleshare"), "46")
         by_key = {b["key"]: b["value"] for b in snap["bars"]}
