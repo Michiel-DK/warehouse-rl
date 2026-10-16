@@ -1143,8 +1143,10 @@ class TestAnalystIsolation(unittest.TestCase):
                   # the hidden floor problems; nothing it reads feeds back into any analyst module
                   # overview_build.py (S8K): builds the landing page from data.js and results files, reads the keys
                   # truth_hit / floor_skip_steps_mean by name; a viewer, nothing in the analyser imports it
+                  # time_to_detect.py (S8P): an evaluation script like hotspot_score.py; reads truth.json on purpose;
+                  # nothing in the analyser imports it
                   if p.name not in ("emit.py", "grade.py", "hotspot_score.py", "__init__.py", "score.py", "report.py",
-                                    "alert.py", "replay_export.py", "overview_build.py")]
+                                    "alert.py", "replay_export.py", "overview_build.py", "time_to_detect.py")]
         return files
 
     def test_no_analyser_module_imports_replay_export(self):
@@ -1154,13 +1156,15 @@ class TestAnalystIsolation(unittest.TestCase):
                                 p.name)
             self.assertNotRegex(p.read_text(), r"(?m)^\s*(from|import)\s+(\.*\s*)?overview_build\b|import\s+.*overview_build",
                                 p.name)
+            self.assertNotRegex(p.read_text(), r"(?m)^\s*(from|import)\s+(\.*\s*)?time_to_detect\b|import\s+.*time_to_detect",
+                                p.name)
 
     def test_no_ground_truth_in_analyst_code(self):
         # inject: mention truth.json / floor_cells in costmap.py, hotspot.py or any new analyst module
         names = {p.name for p in self.analyst_files()}
         self.assertTrue({"hotspot.py", "parse.py", "costmap.py", "ingest.py", "ledger.py", "detector.py",
                          "forecast_grade.py", "grade.py"} <= names)
-        self.assertTrue({"emitter.py", "emit_ledger.py", "sinks.py", "hotspot_score.py"}.isdisjoint(names))
+        self.assertTrue({"emitter.py", "emit_ledger.py", "sinks.py", "hotspot_score.py", "time_to_detect.py"}.isdisjoint(names))
         hits = []
         for p in self.analyst_files():
             for n, line in enumerate(p.read_text().splitlines(), 1):

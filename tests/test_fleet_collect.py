@@ -16,6 +16,9 @@ def load_tests(loader, standard_tests, pattern):
     suite = unittest.TestSuite()
     suite.addTests(standard_tests)
     suite.addTests(unittest.TestLoader().discover(str(FLEET_TESTS), pattern="test_fleet_*.py", top_level_dir=str(ROOT)))
+    # S8P: the operator fixed this file's name, which test_fleet_*.py does not match, so it gets its own discover
+    suite.addTests(unittest.TestLoader().discover(str(FLEET_TESTS), pattern="test_time_to_detect.py",
+                                                  top_level_dir=str(ROOT)))
     return suite
 
 
@@ -26,6 +29,19 @@ class TestCollector(unittest.TestCase):
         self.assertTrue(files)
         found = unittest.TestLoader().discover(str(FLEET_TESTS), pattern="test_fleet_*.py", top_level_dir=str(ROOT))
         self.assertGreater(found.countTestCases(), 0)
+
+    def test_time_to_detect_tests_are_collected(self):
+        # inject: drop the extra discover in load_tests (the file would run nowhere in the gate)
+        suite = load_tests(unittest.TestLoader(), unittest.TestSuite(), "test*.py")
+
+        def names(s):
+            for t in s:
+                if isinstance(t, unittest.TestSuite):
+                    yield from names(t)
+                else:
+                    yield type(t).__module__
+
+        self.assertIn("fleet.tests.test_time_to_detect", set(names(suite)))
 
 
 if __name__ == "__main__":
