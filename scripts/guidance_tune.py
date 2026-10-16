@@ -149,6 +149,14 @@ def load_arm(baseline_dir, arm, meta, seeds):
     doc = json.loads(f.read_text())
     if doc.get("env") != meta["env"] or doc.get("steps") != meta["steps"]:
         raise ValueError(f"{f} is env {doc.get('env')!r} steps {doc.get('steps')!r}, phase A is {meta['env']!r} {meta['steps']!r}")
+    from warehouse_rl.disturb import resolve_disturb
+
+    # every arm runs under phase A's disturbance except undisturbed (--disturb none, stored as tag 'none', config {})
+    tag, config = resolve_disturb("none" if arm == "undisturbed" else meta["disturb"])
+    want = dict(policy=POLICY, recovery_tag=RECOVERY, disturb_tag=tag, disturb=config)
+    have = {k: doc.get(k) for k in want}
+    if have != want:
+        raise ValueError(f"{f} was run with {have}, arm {arm} of this phase A needs {want}")
     return doc, restrict_rows(doc["rows"], seeds, str(f)), f
 
 
@@ -163,7 +171,7 @@ def run_evaluate(cmd):
 def evaluate_cmd(meta, seeds, costmap, alpha, results_dir, workers):
     cmd = [sys.executable, REPO / "scripts" / "evaluate.py", "--policy", POLICY, "--recovery", RECOVERY, "--env", meta["env"],
            "--steps", str(meta["steps"]), "--disturb", meta["disturb"], "--seeds", ",".join(str(s) for s in sorted(seeds)),
-           "--costmap", str(costmap), "--costmap-alpha", alpha if isinstance(alpha, str) else repr(float(alpha)),"--results-dir", str(results_dir)]
+           "--costmap", str(costmap), "--costmap-alpha", alpha if isinstance(alpha, str) else repr(float(alpha)), "--results-dir", str(results_dir)]
     if workers is not None:
         cmd += ["--workers", str(workers)]
     return cmd

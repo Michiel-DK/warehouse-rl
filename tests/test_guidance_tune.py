@@ -20,6 +20,7 @@ _spec = importlib.util.spec_from_file_location("guidance_tune_script", ROOT / "s
 gt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gt)
 ev, cl = gt.ev, gt.cl
+from warehouse_rl.disturb import resolve_disturb  # noqa: E402  (src is on sys.path once guidance_tune is loaded)
 
 SMALL = cl.SMALL
 GRID = (25, 14)  # (rows, cols) of the small map
@@ -75,8 +76,10 @@ class Fixture:
               "map_a32": [10.5 + 2 * s for s in self.seeds], "oracle": [12.0 + s for s in self.seeds],
               "undisturbed": [15.0 + s for s in self.seeds]}
         for arm, vals in pr.items():
+            tag, config = resolve_disturb("none" if arm == "undisturbed" else cl.FLOOR_REGIME)
             _write_results(self.base / arm / f"stuck_aware_cta_{SMALL}_500_{arm}.json", _rows(vals, self.seeds),
-                           {"costmap_alpha": {"map_a4": 4.0, "map_a32": 32.0, "oracle": 4.0}.get(arm)})
+                           {"costmap_alpha": {"map_a4": 4.0, "map_a32": 32.0, "oracle": 4.0}.get(arm),
+                            "policy": "stuck_aware_cta", "recovery_tag": "timeout", "disturb_tag": tag, "disturb": config})
         self.out = self.tmp / "out"
 
 
@@ -295,6 +298,26 @@ class TestHeldout(unittest.TestCase):
                     gt.heldout(fx.pa, tf, [3], fx.out / "h.json", baseline_dir=fx.base)
                 self.assertEqual(calls, [])
 
+    def test_refuses_baseline_with_another_disturbance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = Fixture(tmp)
+            tf = self._tuned(fx)
+            calls = []
+            with mock.patch.object(gt, "run_evaluate", fake_run_evaluate(calls)):
+                for arm, field, value in (("map_a32", "disturb", {"floor": {"cells": 40, "p": [0.3, 0.7]}}),
+                                          ("undisturbed", "disturb_tag", "cfg-86550f4e27"),
+                                          ("oracle", "recovery_tag", "rec-0123456789")):
+                    (mf,) = (fx.base / arm).glob("*.json")
+                    good = mf.read_text()
+                    doc = json.loads(good)
+                    doc[field] = value
+                    mf.write_text(json.dumps(doc))
+                    with self.assertRaisesRegex(ValueError, f"arm {arm} of this phase A needs"):
+                        gt.heldout(fx.pa, tf, [3, 4], fx.out / "h.json", baseline_dir=fx.base)
+                    mf.write_text(good)
+                gt.heldout(fx.pa, tf, [3, 4], fx.out / "h.json", baseline_dir=fx.base)  # restored files pass
+            self.assertEqual(len(calls), 1)  # only the final, clean heldout ran evaluate
+
     def test_imported_stats(self):
         with tempfile.TemporaryDirectory() as tmp:
             fx = Fixture(tmp)
@@ -341,12 +364,18 @@ class TestQueueCommands(unittest.TestCase):
             "--workers $SCHED_WORKERS --out results/guidance/sticky/heldout.json")
 
     def test_parse(self):
+        def argv(line, workers):  # '$SCHED_WORKERS' becomes ONE argv element, '' when the variable is empty-but-quoted
+            return [workers if w == "$SCHED_WORKERS" else w for w in line.split()][1:]
+
         for workers, want in (("3", 3), ("", None)):
-            a = gt.build_parser().parse_args(shlex.split(self.TUNE.replace("$SCHED_WORKERS", workers))[1:])
+            a = gt.build_parser().parse_args(argv(self.TUNE, workers))
             self.assertEqual((a.cmd, a.train_seeds, a.evals, a.search_seed, a.baseline_dir, a.workers),
                              ("tune", list(range(10)), 48, 0, None, want))
-            a = gt.build_parser().parse_args(shlex.split(self.HELD.replace("$SCHED_WORKERS", workers))[1:])
+            a = gt.build_parser().parse_args(argv(self.HELD, workers))
             self.assertEqual((a.cmd, a.heldout_seeds, a.workers), ("heldout", list(range(10, 30)), want))
+        # unquoted and unset, the shell drops the word: bare --workers
+        a = gt.build_parser().parse_args(shlex.split(self.TUNE.replace("$SCHED_WORKERS", ""))[1:])
+        self.assertEqual((a.evals, a.workers, a.out_dir), (48, None, "results/guidance/sticky"))
 
 
 class TestHygiene(unittest.TestCase):
