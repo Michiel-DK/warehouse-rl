@@ -44,6 +44,11 @@ Notes:
   the footnote under the lessons and for panel 5. They come from other runs than the replay, and the page says so.
   Re-running `hotspot_score.py` after `lessons.py` and `grade.py` adds `grading_counts.lesson_truth` to
   `results/fleet/hotspot_s8i-demo-noise.json`; nothing else in that file changes.
+- `run_constants.dose_response` (added without a schema bump, it is an additive key of `replay/4`) holds one entry per
+  closed-loop `summary.json`, in the order of the repeatable `--dose-response LABEL=PATH` flag: `{label, p_lo, p_hi,
+  floor_loss, arms {none, map_a4, map_a32, oracle: {pick_rate_mean, ci95, share, share_ci95}}, source}`. It feeds the
+  "When a map helps" figure on the overview page. `--refresh-constants-only` can add or replace it (and `lessons_long`)
+  in an existing `data.js` without re-simulating.
 - The exporter reads the numbers it shows (`run_constants`) from `results/fleet/benchmark.json`,
   `results/fleet/hotspot_s8i-demo-noise.json` (committed, a demo artifact), `results/closed_loop_sticky/summary.json`, the
   `--lessons-long` file and the four sticky row files, and from the emit ledger (sent, noise) and the replayed extractor. It records
