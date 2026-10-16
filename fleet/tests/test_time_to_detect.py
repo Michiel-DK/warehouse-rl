@@ -6,6 +6,7 @@ import importlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -229,6 +230,9 @@ class TestStoreAndCli(unittest.TestCase):
             orig = row("0", "1,1", END, 7, window=2.0)
             orig["dedup_key"] = decisions.dedup_key("hotspot_forecast", "Z0:1,1", iso(END))
             make_phase_a(d, orig_extra=[orig])
+            st = JsonlStore(Path(d) / "store")  # a phase A grade of that row: must not replay onto the rerun's row
+            st.update_where("decisions", {"id": orig["id"]}, {"status": "graded", "verdict": "hit"})
+            st.close()
 
             def real_dedup_rerun(phase_a, copy, every):
                 st = JsonlStore(copy)
@@ -241,7 +245,12 @@ class TestStoreAndCli(unittest.TestCase):
             doc = ttd.run(d, EVERY, [1], Path(d) / "o.json", rerun=real_dedup_rerun, span=span())
             self.assertEqual(doc["meta"]["window_hours"], 1.0)
             self.assertEqual(doc["by_k"]["1"]["cells"]["0"]["1,1"]["first_detect_s"], 100)
-            self.assertEqual(sum(1 for ln in (Path(d) / "store" / "decisions.jsonl").read_text().splitlines() if ln), 1)
+            self.assertEqual(sum(1 for ln in (Path(d) / "store" / "decisions.jsonl").read_text().splitlines() if ln), 2)
+            copy = Path(d) / "copy"
+            shutil.copytree(Path(d) / "store", copy)
+            # inject: keep __upd records in strip_forecasts -> the stripped row's grade stays in the copy
+            self.assertEqual(ttd.strip_forecasts(copy), 1)
+            self.assertEqual((copy / "decisions.jsonl").read_text().strip(), "")
 
     def test_copy_dir_removed_unless_keep_store(self):
         # inject: never remove the copy / always remove it

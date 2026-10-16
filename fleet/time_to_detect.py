@@ -170,15 +170,12 @@ def strip_forecasts(copy):
     path = Path(copy) / "decisions.jsonl"
     if not path.exists():
         return 0
-    keep, dropped = [], 0
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                r = json.loads(line)
-                if r.get("kind") == "hotspot_forecast" and r.get("run") == RUN:
-                    dropped += 1
-                    continue
-            keep.append(line)
+    lines = [ln for ln in path.read_text(encoding="utf-8").splitlines(keepends=True)]
+    recs = [json.loads(ln) if ln.strip() else None for ln in lines]
+    gone = {r["id"] for r in recs if r and r.get("kind") == "hotspot_forecast" and r.get("run") == RUN}
+    keep = [ln for ln, r in zip(lines, recs)  # also the update records (grades) of the dropped rows: same ids on rerun
+            if not (r and (r.get("id") in gone and "__upd" not in r or r.get("__upd", {}).get("eq", {}).get("id") in gone))]
+    dropped = len(gone)
     with open(path, "w", encoding="utf-8") as f:
         f.writelines(keep)
     return dropped
