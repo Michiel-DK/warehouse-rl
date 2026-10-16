@@ -1,0 +1,153 @@
+{
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "n_seeds": 30,
+  "steps": 500,
+  "disturb": "{\"floor\": {\"cells\": 80, \"p\": [0.8, 0.95]}}",
+  "recovery": "timeout",
+  "policy": "stuck_aware_cta",
+  "map_tag": "628d1ac304",
+  "map_path": "results/closed_loop_p08_095/phaseA/costmap.json",
+  "map_generated_at": "2026-01-01T00:41:35Z",
+  "alphas": [
+    4.0,
+    32.0
+  ],
+  "headline_alpha": 4.0,
+  "headline_alpha_note": "fixed in scripts/closed_loop.py before any result was seen",
+  "headline_arm": "map_a4",
+  "reference_medium_30seed_undisturbed": 53.66,
+  "reference_note": "context only; not used in any computation",
+  "definitions": {
+    "none": "floor on, no map",
+    "undisturbed": "--disturb none, same recovery and seeds",
+    "share": "mean(arm - none) / mean(undisturbed - none), paired per seed"
+  },
+  "arms": {
+    "none": {
+      "alpha": null,
+      "n": 30,
+      "pick_rate_mean": 27.504000000000005,
+      "pick_rate_ci95": [
+        26.311363312921532,
+        28.696636687078477
+      ],
+      "floor_skip_steps_mean": 1278.0666666666666,
+      "stuck_busy_agent_steps_mean": 501.23333333333335,
+      "routes_changed_by_map_mean": 0.0,
+      "map_cells_entered_mean": 0.0
+    },
+    "map_a4": {
+      "alpha": 4.0,
+      "n": 30,
+      "pick_rate_mean": 30.191999999999997,
+      "pick_rate_ci95": [
+        28.39223589462971,
+        31.991764105370283
+      ],
+      "floor_skip_steps_mean": 1027.3333333333333,
+      "stuck_busy_agent_steps_mean": 507.8,
+      "routes_changed_by_map_mean": 250.73333333333332,
+      "map_cells_entered_mean": 153.16666666666666,
+      "paired_delta_vs_none": {
+        "mean": 2.688000000000001,
+        "ci95": [
+          1.0860214994081168,
+          4.289978500591886
+        ],
+        "n": 30
+      },
+      "share_of_floor_loss_recovered": {
+        "share": 0.10275229357798166,
+        "ci95": [
+          0.04313798554652216,
+          0.156530264279625
+        ],
+        "mean_loss": 26.16,
+        "n_resamples": 1000,
+        "n_resamples_used": 1000,
+        "bootstrap_seed": 0,
+        "reason": null
+      }
+    },
+    "map_a32": {
+      "alpha": 32.0,
+      "n": 30,
+      "pick_rate_mean": 31.487999999999996,
+      "pick_rate_ci95": [
+        29.82496424516011,
+        33.15103575483988
+      ],
+      "floor_skip_steps_mean": 644.0333333333333,
+      "stuck_busy_agent_steps_mean": 459.5,
+      "routes_changed_by_map_mean": 354.2,
+      "map_cells_entered_mean": 64.83333333333333,
+      "paired_delta_vs_none": {
+        "mean": 3.984,
+        "ci95": [
+          2.3272695218302553,
+          5.640730478169745
+        ],
+        "n": 30
+      },
+      "share_of_floor_loss_recovered": {
+        "share": 0.1522935779816514,
+        "ci95": [
+          0.09161976126501746,
+          0.20732517624179558
+        ],
+        "mean_loss": 26.16,
+        "n_resamples": 1000,
+        "n_resamples_used": 1000,
+        "bootstrap_seed": 0,
+        "reason": null
+      }
+    },
+    "oracle": {
+      "alpha": 4.0,
+      "n": 30,
+      "pick_rate_mean": 34.752,
+      "pick_rate_ci95": [
+        33.10704344123601,
+        36.396956558763996
+      ],
+      "floor_skip_steps_mean": 740.6666666666666,
+      "stuck_busy_agent_steps_mean": 526.9,
+      "routes_changed_by_map_mean": 320.8666666666667,
+      "map_cells_entered_mean": 88.83333333333333,
+      "paired_delta_vs_none": {
+        "mean": 7.247999999999998,
+        "ci95": [
+          5.604559018375541,
+          8.891440981624456
+        ],
+        "n": 30
+      },
+      "share_of_floor_loss_recovered": {
+        "share": 0.2770642201834862,
+        "ci95": [
+          0.22006636100386098,
+          0.34054250972283767
+        ],
+        "mean_loss": 26.16,
+        "n_resamples": 1000,
+        "n_resamples_used": 1000,
+        "bootstrap_seed": 0,
+        "reason": null
+      }
+    },
+    "undisturbed": {
+      "alpha": null,
+      "n": 30,
+      "pick_rate_mean": 53.66400000000001,
+      "pick_rate_ci95": [
+        51.23510847821339,
+        56.092891521786626
+      ],
+      "floor_skip_steps_mean": 0.0,
+      "stuck_busy_agent_steps_mean": 639.8333333333334,
+      "routes_changed_by_map_mean": 0.0,
+      "map_cells_entered_mean": 0.0
+    }
+  },
+  "wall_s": 100.35028505325317
+}

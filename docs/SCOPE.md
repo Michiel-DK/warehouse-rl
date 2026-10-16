@@ -834,6 +834,16 @@ avoids it, and reality grades both. Results are in README "Sprint 8, analyst hal
   - The comment at `fleet/sql/schema.sql:300` still calls `outcome` the count grade.
   - The oracle and the analyst map are on different cost scales (oracle p_c in [0.3, 0.7], analyst max 1.0 per zone).
 
+Findings, 2026-10-16 (queue items `wr-s8c-dose-response`, `wr-s8c-long-shift`, `wr-s8m-guidance-tune-run` and
+`wr-s8m-guidance-heldout`; numbers in README "Sprint 8: sticky floor routing", printed by `scripts/sprint8_tables.py`):
+- **Dose-response.** The map's benefit depends on how sticky the floor is and on alpha. At alpha 4 the map recovers a
+  share that is above zero from p 0.6 up, and the share shrinks as the floor gets stickier. Alpha 32 is clearly worse
+  than no map at p 0.3-0.7 and beats no map from p 0.8 up. The headline regime p 0.3-0.7 remains "does not".
+- **Longer shift.** Running the sticky regime at 1,500 steps instead of 500 shows no growth in the map's share.
+- **Guidance tuning (S8M).** On held-out seeds 10-29 the tuned map->weight transform beats no map and beats the identity
+  transform (alpha 4). It is within noise of the fixed alpha-32 map, with a lower point estimate. So tuning bought
+  nothing beyond "use a high alpha on a sticky floor".
+
 Next layers, listed with no claims. Each would be a later one-lane addition with the four-part contract (ground
 truth preset, blind analyst feature, planner input, graded decision kind):
 - aisle congestion by time of day
