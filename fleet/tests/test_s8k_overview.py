@@ -29,6 +29,8 @@ INPUTS = ["docs/replay/data.js", "results/fleet/benchmark.json",
           "results/fleet/hotspot_s8b-medium-80-p03-07.json", "results/closed_loop_sticky/summary.json"]
 D, B, H, S = INPUTS
 EXEMPT = "most fleet managers show the stop, not the pattern; trend tools exist, this one grades its own calls"
+# S8O: the operator-approved step-4 wording uses the word "zone" in exactly these two phrases (a documented K4 exemption)
+ZONE_EXEMPT = ("still above the zone average next window", "were still above their zone's average in the next half hour")
 MILD = "On mild floor damage the gain is within noise; on damage that traps robots it is measurable."
 VOID = {"meta", "link", "input", "br", "img", "hr", "source", "wbr", "area", "base", "col", "embed", "param", "track"}
 
@@ -273,6 +275,7 @@ REQUIRED = [
     (B, "batch.score.recall"), (B, "batch.score.precision"), (H, "mean.k.20.precision"), (H, "1-mean.zero_stall_share"),
     (D, "run_constants.lessons_long.truth_hit"), (D, "run_constants.lessons_long.truth_n"),
     (D, "run_constants.lessons_long.held"), (D, "run_constants.lessons_long.graded"),
+    (D, "run_constants.lessons_long.persist_held"), (D, "run_constants.lessons_long.persist_graded"),
     (D, "run_constants.worth.map_share"), (D, "run_constants.worth.map_share_ci95.0"), (D, "run_constants.worth.map_share_ci95.1"),
     (D, "run_constants.worth.oracle_share"), (D, "run_constants.worth.oracle_share_ci95.0"),
     (D, "run_constants.worth.oracle_share_ci95.1"),
@@ -326,6 +329,7 @@ class TestNumbers(Committed):
             (D, "run_constants.speed.ratio"): (999, "999"),
             (D, "run_constants.lessons_long.truth_hit"): (11, "11"), (D, "run_constants.lessons_long.truth_n"): (12, "12"),
             (D, "run_constants.lessons_long.held"): (13, "13"), (D, "run_constants.lessons_long.graded"): (14, "14"),
+            (D, "run_constants.lessons_long.persist_held"): (15, "15"), (D, "run_constants.lessons_long.persist_graded"): (16, "16"),
             (D, "run_constants.worth.map_share"): (0.123, "12.3%"),
             (D, "run_constants.worth.map_share_ci95.0"): (0.045, "4.5%"), (D, "run_constants.worth.map_share_ci95.1"): (0.234, "23.4%"),
             (D, "run_constants.worth.oracle_share"): (0.456, "45.6%"),
@@ -411,6 +415,9 @@ class TestWords(Committed):
         text = " ".join(" ".join(all_visible(self.root)).split())
         self.assertEqual(text.count(EXEMPT), 1)
         rest = text.replace(EXEMPT, " ")
+        for phrase in ZONE_EXEMPT:
+            self.assertEqual(rest.count(phrase), 1)
+            rest = rest.replace(phrase, " ")
         self.assertEqual([m.group(0) for m in s8i.BANNED.finditer(rest)], [])
 
     def test_footer_paths_are_visible_and_pass(self):
@@ -475,9 +482,10 @@ class TestChips(Committed):
         self.assertNotIn("interval includes zero", self.html)
         lessons = chips[5].text()
         lt = self.inputs[D]["run_constants"]["lessons_long"]
-        self.assertIn("Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times, but only %d of %d "
-                      "calls repeated in the next half hour; the repeat test is being reworked."
-                      % (lt["truth_hit"], lt["truth_n"], lt["held"], lt["graded"]), lessons)
+        self.assertIn("Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times; %d of %d were "
+                      "still above their zone's average in the next half hour; only %d of %d repeated their own peak, the bar the "
+                      "first version used."
+                      % (lt["truth_hit"], lt["truth_n"], lt["persist_held"], lt["persist_graded"], lt["held"], lt["graded"]), lessons)
         self.assertEqual((lt["truth_hit"], lt["truth_n"], lt["held"], lt["graded"]), (27, 27, 9, 31))
         # review round 1: benchmark.json batch.score.unmatched_detected has frozen (7,246) > by_design (5,600), so the chip
         # must not say most unmatched stops are shelf waits; and the stops are not "real" (only the precision share matches)
@@ -728,19 +736,20 @@ class TestS8NGlossStepFourAndMapLabels(Committed):
     def test_step_four_shows_both_figures_at_one_size_each_with_its_label(self):
         ll = self.inputs[D]["run_constants"]["lessons_long"]
         figs = self.root.find_all(cls="fignum")
-        self.assertEqual([f.text() for f in figs], ["%d/%d" % (ll["truth_hit"], ll["truth_n"]), "%d/%d" % (ll["held"], ll["graded"])])
+        self.assertEqual([f.text() for f in figs], ["%d/%d" % (ll["truth_hit"], ll["truth_n"]), "%d/%d" % (ll["persist_held"], ll["persist_graded"])])
         labels = []
         for f in figs:
             sib = [k for k in f.parent.kids if isinstance(k, Node)]
             nxt = sib[sib.index(f) + 1]
             self.assertIn("figlab", nxt.classes)
             labels.append(nxt.text())
-        self.assertEqual(labels, ["real on the truth", "still above average next window"])
+        self.assertEqual(labels, ["real on the truth", "still above the zone average next window"])
         self.assertEqual(len({tuple(f.classes) for f in figs}), 1)
         self.assertNotIn("flagged cells were real planted cells", self.html)
-        chip = ("Tested, weakly. Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times, "
-                "but only %d of %d calls repeated in the next half hour; the repeat test is being reworked."
-                % (ll["truth_hit"], ll["truth_n"], ll["held"], ll["graded"]))
+        chip = ("Tested, weakly. Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times; "
+                "%d of %d were still above their zone's average in the next half hour; only %d of %d repeated their own peak, "
+                "the bar the first version used."
+                % (ll["truth_hit"], ll["truth_n"], ll["persist_held"], ll["persist_graded"], ll["held"], ll["graded"]))
         self.assertEqual(sum(1 for n in self.root.find_all(cls="st") if n.text() == chip), 1)
 
     def script_data(self):
