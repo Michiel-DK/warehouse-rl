@@ -208,5 +208,141 @@
  "platform": {
   "platform": "macOS-14.3.1-arm64-arm-64bit",
   "python": "3.10.6"
+ },
+ "lesson_persist_chance": {
+  "n_lessons": 14,
+  "observed_ok": 4,
+  "observed_rate": 0.2857142857142857,
+  "chance_mean": 0.17911461521496966,
+  "chance_median": 0.1611111111111111,
+  "lift": 1.5951478072929857,
+  "per_lesson": [
+   {
+    "id": "e365ff7ff96107a734d19b5f3b3714889aa24141",
+    "subject": "Z1:cell 11,22",
+    "window_start": 1767225600,
+    "pool_size": 54,
+    "pool_ok": 7,
+    "chance": 0.12962962962962962,
+    "observed": false
+   },
+   {
+    "id": "8fb358ee18a0aa0f8e14490fbbb617554cfdd715",
+    "subject": "Z1:cell 7,10",
+    "window_start": 1767225600,
+    "pool_size": 54,
+    "pool_ok": 7,
+    "chance": 0.12962962962962962,
+    "observed": false
+   },
+   {
+    "id": "6428522b757f7ccf24bbb3eb4d3380af81286a8a",
+    "subject": "Z0:cell 12,16",
+    "window_start": 1767226320,
+    "pool_size": 45,
+    "pool_ok": 7,
+    "chance": 0.15555555555555556,
+    "observed": true
+   },
+   {
+    "id": "c3e1e64e4ba3b4166806496a746de595450222c7",
+    "subject": "Z0:cell 7,23",
+    "window_start": 1767227040,
+    "pool_size": 35,
+    "pool_ok": 6,
+    "chance": 0.17142857142857143,
+    "observed": false
+   },
+   {
+    "id": "6046500f2fc43db4dd0514520a1e093f25679cd2",
+    "subject": "Z0:Z0-12",
+    "window_start": 1767228480,
+    "pool_size": 12,
+    "pool_ok": 6,
+    "chance": 0.5,
+    "observed": false
+   },
+   {
+    "id": "23708e02adfcdc696eaa420935584a94f9c258d9",
+    "subject": "Z0:cell 10,21",
+    "window_start": 1767228480,
+    "pool_size": 55,
+    "pool_ok": 12,
+    "chance": 0.21818181818181817,
+    "observed": false
+   },
+   {
+    "id": "82c2c779eeb23905bf55b681e43fb90c23201692",
+    "subject": "Z0:cell 17,9",
+    "window_start": 1767228480,
+    "pool_size": 55,
+    "pool_ok": 12,
+    "chance": 0.21818181818181817,
+    "observed": false
+   },
+   {
+    "id": "160ebff5cb7d688d72691fdb36814876e6696772",
+    "subject": "Z1:cell 9,17",
+    "window_start": 1767228480,
+    "pool_size": 42,
+    "pool_ok": 5,
+    "chance": 0.11904761904761904,
+    "observed": true
+   },
+   {
+    "id": "8bb798017cb515c8124202ae3ab4a0cf60e74cb4",
+    "subject": "Z2:cell 13,11",
+    "window_start": 1767228480,
+    "pool_size": 35,
+    "pool_ok": 6,
+    "chance": 0.17142857142857143,
+    "observed": false
+   },
+   {
+    "id": "6511559ea5d02c54cae2cb2f4cee3b25dc9ff825",
+    "subject": "Z1:cell 4,2",
+    "window_start": 1767229200,
+    "pool_size": 41,
+    "pool_ok": 4,
+    "chance": 0.0975609756097561,
+    "observed": false
+   },
+   {
+    "id": "8e46e7c20edb16faec604c949302de663015faab",
+    "subject": "Z0:cell 14,20",
+    "window_start": 1767229920,
+    "pool_size": 40,
+    "pool_ok": 6,
+    "chance": 0.15,
+    "observed": false
+   },
+   {
+    "id": "1d5b7610785e3e772e1544387013613234ea9bb5",
+    "subject": "Z1:cell 2,10",
+    "window_start": 1767230640,
+    "pool_size": 48,
+    "pool_ok": 8,
+    "chance": 0.16666666666666666,
+    "observed": true
+   },
+   {
+    "id": "5e8d1fe44e4996c8b022b8c264b8111617833945",
+    "subject": "Z0:cell 12,16",
+    "window_start": 1767231360,
+    "pool_size": 38,
+    "pool_ok": 8,
+    "chance": 0.21052631578947367,
+    "observed": true
+   },
+   {
+    "id": "38f1734618d5f3990e5f718ed778a278b581f73f",
+    "subject": "Z1:cell 11,22",
+    "window_start": 1767231360,
+    "pool_size": 43,
+    "pool_ok": 3,
+    "chance": 0.06976744186046512,
+    "observed": false
+   }
+  ]
  }
 }

@@ -204,5 +204,132 @@
  "platform": {
   "platform": "macOS-14.3.1-arm64-arm-64bit",
   "python": "3.10.6"
+ },
+ "lesson_persist_chance": {
+  "n_lessons": 13,
+  "observed_ok": 12,
+  "observed_rate": 0.9230769230769231,
+  "chance_mean": 0.25636205899363795,
+  "chance_median": 0.25,
+  "lift": 3.6006768189509306,
+  "per_lesson": [
+   {
+    "id": "1619e37bca73f7c534228c3b3ec423c9252d16b8",
+    "subject": "Z0:cell 10,20",
+    "window_start": 1767225600,
+    "pool_size": 136,
+    "pool_ok": 34,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "37e88d9e6b99f2a2158417c98d10d67a7559abe8",
+    "subject": "Z0:cell 12,16",
+    "window_start": 1767225600,
+    "pool_size": 136,
+    "pool_ok": 34,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "807d77c671f58679912b856fa4359b0eec2b6b5f",
+    "subject": "Z0:cell 14,20",
+    "window_start": 1767225600,
+    "pool_size": 136,
+    "pool_ok": 34,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "de15933de29f23fa60fa3258915e345a822aae3b",
+    "subject": "Z0:cell 7,23",
+    "window_start": 1767225600,
+    "pool_size": 136,
+    "pool_ok": 34,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "ac49ad06cd5e244d5aff0e98be546bc16c883ded",
+    "subject": "Z1:cell 19,11",
+    "window_start": 1767225600,
+    "pool_size": 133,
+    "pool_ok": 36,
+    "chance": 0.2706766917293233,
+    "observed": true
+   },
+   {
+    "id": "24592622b6ebed76c99dcaac37e9205464874b7f",
+    "subject": "Z1:cell 20,12",
+    "window_start": 1767225600,
+    "pool_size": 133,
+    "pool_ok": 36,
+    "chance": 0.2706766917293233,
+    "observed": true
+   },
+   {
+    "id": "f0554cecbc28c54a4a525113f99463a96a406cf0",
+    "subject": "Z1:cell 7,10",
+    "window_start": 1767225600,
+    "pool_size": 133,
+    "pool_ok": 36,
+    "chance": 0.2706766917293233,
+    "observed": false
+   },
+   {
+    "id": "160ebff5cb7d688d72691fdb36814876e6696772",
+    "subject": "Z1:cell 9,17",
+    "window_start": 1767225600,
+    "pool_size": 133,
+    "pool_ok": 36,
+    "chance": 0.2706766917293233,
+    "observed": true
+   },
+   {
+    "id": "4d8a9fc6894caa08d6f5238131a269522db61e02",
+    "subject": "Z2:cell 12,11",
+    "window_start": 1767225600,
+    "pool_size": 124,
+    "pool_ok": 31,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "cd0fef41debc3ecb7b64432c9da216c5c3074c87",
+    "subject": "Z2:cell 14,11",
+    "window_start": 1767225600,
+    "pool_size": 124,
+    "pool_ok": 31,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "97130d4e6efb17a7a942776ff474a85e0e1bce1e",
+    "subject": "Z2:cell 3,20",
+    "window_start": 1767225600,
+    "pool_size": 124,
+    "pool_ok": 31,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "ef279aabf89c05a61d90d2bdda41820c8b760a53",
+    "subject": "Z2:cell 6,22",
+    "window_start": 1767225600,
+    "pool_size": 124,
+    "pool_ok": 31,
+    "chance": 0.25,
+    "observed": true
+   },
+   {
+    "id": "5747607498f48ff802c27cd540f4e6f7cc4e3472",
+    "subject": "Z2:cell 7,10",
+    "window_start": 1767225600,
+    "pool_size": 124,
+    "pool_ok": 31,
+    "chance": 0.25,
+    "observed": true
+   }
+  ]
  }
 }

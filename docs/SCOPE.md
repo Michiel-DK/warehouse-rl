@@ -844,6 +844,18 @@ Findings, 2026-10-16 (queue items `wr-s8c-dose-response`, `wr-s8c-long-shift`, `
   transform (alpha 4). It is within noise of the fixed alpha-32 map, with a lower point estimate, so it is not shown to
   beat a plain high alpha on a sticky floor.
 
+Findings, 2026-10-16 evening (alphas 8/16 at p 0.6-0.9 and p 0.8-0.95, guidance tuning on p 0.8-0.95, S8P time to
+detect, S8S lesson_persist chance; README "Sprint 8: sticky floor routing" (a), (c), (d), (e), printed by
+`scripts/sprint8_tables.py`): no one fixed alpha is best across regimes. Alpha 4 has the top mean at p 0.3-0.7 and
+p 0.6-0.9, alpha 32 at p 0.8-0.95 and p 0.9-0.99, and at p 0.8-0.95 alphas 4 to 32 are within noise of each other (paired between-alpha deltas). Guidance tuning
+on p 0.8-0.95 picked a low alpha that held-out is within noise of no map and worse than fixed alpha 32, the opposite
+of the sticky regime, so the tuning search is not shown to beat a fixed alpha 32 on any floor with p >= 0.8. On the
+sticky floor the per-zone top-10 map has shown about a third of the true cells by the end of a 500-step shift and
+under half by 1,500 steps, most of them early. Floors are static, so this is time to see, not time to react.
+lesson_persist sits above its own chance rate at every window (lift 1.6 / 3.0 / 3.6 at 0.2 / 0.5 / 1.0 h). There is
+no CI on the lift and the pools are shared, so it is a direction only. The premise row is unchanged and stays the
+operator's call.
+
 Next layers, listed with no claims. Each would be a later one-lane addition with the four-part contract (ground
 truth preset, blind analyst feature, planner input, graded decision kind):
 - aisle congestion by time of day

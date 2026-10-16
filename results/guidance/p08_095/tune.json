@@ -1,0 +1,1774 @@
+{
+  "phase_a": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/closed_loop_p08_095/phaseA",
+  "source_costmap_sha256": "628d1ac30409e93def3858ecdfa1408f4d404e9cdb62a4158ec6d65627bb39cb",
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "steps": 500,
+  "disturb": "{\"floor\": {\"cells\": 80, \"p\": [0.8, 0.95]}}",
+  "search_seed": 0,
+  "train_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "baseline_none_file": "results/closed_loop_p08_095/none/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout.json",
+  "evaluate_command_template": [
+    "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/.venv/bin/python",
+    "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/scripts/evaluate.py",
+    "--policy",
+    "stuck_aware_cta",
+    "--recovery",
+    "timeout",
+    "--env",
+    "tarware-medium-8agvs-4pickers-globalobs-v1",
+    "--steps",
+    "500",
+    "--disturb",
+    "{\"floor\": {\"cells\": 80, \"p\": [0.8, 0.95]}}",
+    "--seeds",
+    "0,1,2,3,4,5,6,7,8,9",
+    "--costmap",
+    "results/guidance/p08_095/evals/<i>/costmap.json",
+    "--costmap-alpha",
+    "<alpha>",
+    "--results-dir",
+    "results/guidance/p08_095/evals/<i>"
+  ],
+  "evaluations": [
+    {
+      "index": 0,
+      "params": {
+        "alpha": 4.0,
+        "gamma": 1.0,
+        "tau": 0.0,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/0/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-7a44037a74.json",
+      "pick_rates": {
+        "0": 25.92,
+        "1": 31.68,
+        "2": 31.68,
+        "3": 27.36,
+        "4": 25.92,
+        "5": 18.72,
+        "6": 33.12,
+        "7": 27.36,
+        "8": 28.8,
+        "9": 36.0
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 2.16,
+      "wall_s": 5.071221828460693
+    },
+    {
+      "index": 1,
+      "params": {
+        "alpha": 14.140587185320923,
+        "gamma": 1.1744667844096757,
+        "tau": 0.020486761968097345,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/1/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-e4e8ab05d2.json",
+      "pick_rates": {
+        "0": 25.92,
+        "1": 28.8,
+        "2": 25.92,
+        "3": 27.36,
+        "4": 33.12,
+        "5": 21.6,
+        "6": 34.56,
+        "7": 30.24,
+        "8": 30.24,
+        "9": 37.44
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 3.024,
+      "wall_s": 4.982834100723267
+    },
+    {
+      "index": 2,
+      "params": {
+        "alpha": 29.438279168927867,
+        "gamma": 2.7818889431943044,
+        "tau": 0.30331788788358993,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/2/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-85c0753a03.json",
+      "pick_rates": {
+        "0": 30.24,
+        "1": 33.12,
+        "2": 21.6,
+        "3": 23.04,
+        "4": 24.48,
+        "5": 18.72,
+        "6": 33.12,
+        "7": 27.36,
+        "8": 28.8,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.0079999999999998,
+      "wall_s": 4.906728982925415
+    },
+    {
+      "index": 3,
+      "params": {
+        "alpha": 20.777920466062902,
+        "gamma": 1.8590624786635572,
+        "tau": 0.4675362118938841,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/3/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-a3da9cb699.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 37.44,
+        "2": 24.48,
+        "3": 24.48,
+        "4": 27.36,
+        "5": 23.04,
+        "6": 28.8,
+        "7": 25.92,
+        "8": 28.8,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.152,
+      "wall_s": 4.89286470413208
+    },
+    {
+      "index": 4,
+      "params": {
+        "alpha": 1.0114542047731203,
+        "gamma": 2.6435106914689235,
+        "tau": 0.016792787652732177,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/4/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-183b86e247.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 28.8,
+        "2": 28.8,
+        "3": 28.8,
+        "4": 25.92,
+        "5": 21.6,
+        "6": 30.24,
+        "7": 25.92,
+        "8": 25.92,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.7200000000000013,
+      "wall_s": 5.381519794464111
+    },
+    {
+      "index": 5,
+      "params": {
+        "alpha": 20.79165476209299,
+        "gamma": 0.9391390515063975,
+        "tau": 0.4315894611749433,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/5/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-ce77e6a9e7.json",
+      "pick_rates": {
+        "0": 27.36,
+        "1": 34.56,
+        "2": 21.6,
+        "3": 23.04,
+        "4": 27.36,
+        "5": 20.16,
+        "6": 31.68,
+        "7": 28.8,
+        "8": 27.36,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.0080000000000002,
+      "wall_s": 4.958673000335693
+    },
+    {
+      "index": 6,
+      "params": {
+        "alpha": 3.4780323299186824,
+        "gamma": 1.556718052994146,
+        "tau": 0.014159835572731483,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/6/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-41b38e9841.json",
+      "pick_rates": {
+        "0": 25.92,
+        "1": 28.8,
+        "2": 28.8,
+        "3": 24.48,
+        "4": 25.92,
+        "5": 14.4,
+        "6": 33.12,
+        "7": 27.36,
+        "8": 27.36,
+        "9": 40.32
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.1520000000000006,
+      "wall_s": 5.316442012786865
+    },
+    {
+      "index": 7,
+      "params": {
+        "alpha": 1.676787258102162,
+        "gamma": 2.1765610367340757,
+        "tau": 0.32359475578712504,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/7/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-2e5f8a1a8a.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 37.44,
+        "2": 25.92,
+        "3": 27.36,
+        "4": 27.36,
+        "5": 28.8,
+        "6": 27.36,
+        "7": 28.8,
+        "8": 27.36,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 2.1600000000000006,
+      "wall_s": 5.028450012207031
+    },
+    {
+      "index": 8,
+      "params": {
+        "alpha": 4.931632602285593,
+        "gamma": 2.9930248394730277,
+        "tau": 0.49041766938811504,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/8/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-e34f77238d.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 30.24,
+        "2": 24.48,
+        "3": 25.92,
+        "4": 27.36,
+        "5": 20.16,
+        "6": 28.8,
+        "7": 24.48,
+        "8": 30.24,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.2879999999999999,
+      "wall_s": 5.024319887161255
+    },
+    {
+      "index": 9,
+      "params": {
+        "alpha": 17.306617835315393,
+        "gamma": 2.1261481906695407,
+        "tau": 0.34422336528547004,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/9/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-38b048e7bf.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 24.48,
+        "2": 24.48,
+        "3": 27.36,
+        "4": 25.92,
+        "5": 15.84,
+        "6": 28.8,
+        "7": 20.16,
+        "8": 21.6,
+        "9": 37.44
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.8719999999999994,
+      "wall_s": 5.032411098480225
+    },
+    {
+      "index": 10,
+      "params": {
+        "alpha": 1.7539152407149072,
+        "gamma": 2.3037208504852043,
+        "tau": 0.26267716123786294,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/10/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-9ef1aebcf3.json",
+      "pick_rates": {
+        "0": 25.92,
+        "1": 37.44,
+        "2": 25.92,
+        "3": 28.8,
+        "4": 28.8,
+        "5": 24.48,
+        "6": 37.44,
+        "7": 28.8,
+        "8": 27.36,
+        "9": 36.0
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 3.6,
+      "wall_s": 5.026737928390503
+    },
+    {
+      "index": 11,
+      "params": {
+        "alpha": 3.6337300693754777,
+        "gamma": 1.7145883970794726,
+        "tau": 0.4447439171745001,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/11/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-b8bfee9acb.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 33.12,
+        "2": 24.48,
+        "3": 24.48,
+        "4": 28.8,
+        "5": 24.48,
+        "6": 31.68,
+        "7": 28.8,
+        "8": 25.92,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.296,
+      "wall_s": 5.104330062866211
+    },
+    {
+      "index": 12,
+      "params": {
+        "alpha": 4.428355919471985,
+        "gamma": 1.9288245768244023,
+        "tau": 0.16093469553797107,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/12/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-1517a8f340.json",
+      "pick_rates": {
+        "0": 27.36,
+        "1": 25.92,
+        "2": 24.48,
+        "3": 23.04,
+        "4": 28.8,
+        "5": 14.4,
+        "6": 33.12,
+        "7": 25.92,
+        "8": 31.68,
+        "9": 31.68
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.1440000000000003,
+      "wall_s": 5.104846715927124
+    },
+    {
+      "index": 13,
+      "params": {
+        "alpha": 11.841666154190204,
+        "gamma": 1.344778063767833,
+        "tau": 0.19580950026408062,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/13/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-6d80f31625.json",
+      "pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 24.48,
+        "3": 23.04,
+        "4": 34.56,
+        "5": 21.6,
+        "6": 31.68,
+        "7": 30.24,
+        "8": 25.92,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.8720000000000006,
+      "wall_s": 4.986217021942139
+    },
+    {
+      "index": 14,
+      "params": {
+        "alpha": 2.572097909228921,
+        "gamma": 2.057967861715106,
+        "tau": 0.042007671791192414,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/14/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-f7ec79a7f1.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 30.24,
+        "2": 28.8,
+        "3": 24.48,
+        "4": 25.92,
+        "5": 18.72,
+        "6": 33.12,
+        "7": 27.36,
+        "8": 23.04,
+        "9": 40.32
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.72,
+      "wall_s": 5.265784740447998
+    },
+    {
+      "index": 15,
+      "params": {
+        "alpha": 31.908411554758782,
+        "gamma": 2.4677457687217084,
+        "tau": 0.11968472149647608,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/15/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-2bf441a13a.json",
+      "pick_rates": {
+        "0": 18.72,
+        "1": 27.36,
+        "2": 23.04,
+        "3": 24.48,
+        "4": 25.92,
+        "5": 18.72,
+        "6": 30.24,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.5840000000000003,
+      "wall_s": 5.211838006973267
+    },
+    {
+      "index": 16,
+      "params": {
+        "alpha": 1.2758053282000195,
+        "gamma": 1.3402926513641509,
+        "tau": 0.07513973344741953,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/16/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-05885ccc78.json",
+      "pick_rates": {
+        "0": 28.8,
+        "1": 27.36,
+        "2": 23.04,
+        "3": 23.04,
+        "4": 25.92,
+        "5": 24.48,
+        "6": 33.12,
+        "7": 25.92,
+        "8": 25.92,
+        "9": 41.76
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.4400000000000002,
+      "wall_s": 5.662657976150513
+    },
+    {
+      "index": 17,
+      "params": {
+        "alpha": 6.507196860652908,
+        "gamma": 2.490810675718236,
+        "tau": 0.11532110449687372,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/17/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-c1865c03d2.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 30.24,
+        "2": 25.92,
+        "3": 27.36,
+        "4": 27.36,
+        "5": 14.4,
+        "6": 31.68,
+        "7": 24.48,
+        "8": 28.8,
+        "9": 36.0
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.2880000000000004,
+      "wall_s": 5.278702974319458
+    },
+    {
+      "index": 18,
+      "params": {
+        "alpha": 5.378899519522398,
+        "gamma": 0.9962826112731383,
+        "tau": 0.04537652280956095,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/18/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-2e5affaef3.json",
+      "pick_rates": {
+        "0": 25.92,
+        "1": 31.68,
+        "2": 25.92,
+        "3": 28.8,
+        "4": 28.8,
+        "5": 21.6,
+        "6": 34.56,
+        "7": 28.8,
+        "8": 24.48,
+        "9": 38.88
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 2.4480000000000013,
+      "wall_s": 5.1970391273498535
+    },
+    {
+      "index": 19,
+      "params": {
+        "alpha": 11.173384237599466,
+        "gamma": 1.2467403320473065,
+        "tau": 0.3359974389781797,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/19/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-e074635c2c.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 27.36,
+        "2": 25.92,
+        "3": 25.92,
+        "4": 25.92,
+        "5": 15.84,
+        "6": 33.12,
+        "7": 20.16,
+        "8": 23.04,
+        "9": 31.68
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.2959999999999998,
+      "wall_s": 6.061491012573242
+    },
+    {
+      "index": 20,
+      "params": {
+        "alpha": 50.30670044603686,
+        "gamma": 1.4127754206120713,
+        "tau": 0.052747639785114764,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/20/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-880d69478c.json",
+      "pick_rates": {
+        "0": 28.8,
+        "1": 31.68,
+        "2": 23.04,
+        "3": 33.12,
+        "4": 23.04,
+        "5": 21.6,
+        "6": 34.56,
+        "7": 24.48,
+        "8": 27.36,
+        "9": 36.0
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.8720000000000003,
+      "wall_s": 5.812024116516113
+    },
+    {
+      "index": 21,
+      "params": {
+        "alpha": 13.686189367811457,
+        "gamma": 2.8178863826696685,
+        "tau": 0.220188577357892,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/21/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-83311fc0e0.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 36.0,
+        "2": 27.36,
+        "3": 28.8,
+        "4": 24.48,
+        "5": 20.16,
+        "6": 38.88,
+        "7": 27.36,
+        "8": 25.92,
+        "9": 38.88
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 2.4480000000000013,
+      "wall_s": 5.722669839859009
+    },
+    {
+      "index": 22,
+      "params": {
+        "alpha": 7.996534361346869,
+        "gamma": 1.5630715621226887,
+        "tau": 0.3101067260076889,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/22/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-77e1f5980f.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 27.36,
+        "2": 21.6,
+        "3": 25.92,
+        "4": 27.36,
+        "5": 17.28,
+        "6": 27.36,
+        "7": 21.6,
+        "8": 28.8,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.295999999999999,
+      "wall_s": 5.353458881378174
+    },
+    {
+      "index": 23,
+      "params": {
+        "alpha": 62.70806212655413,
+        "gamma": 2.872359187344413,
+        "tau": 0.23002256965454804,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/23/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-e00e5cc730.json",
+      "pick_rates": {
+        "0": 17.28,
+        "1": 27.36,
+        "2": 18.72,
+        "3": 24.48,
+        "4": 17.28,
+        "5": 12.96,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 23.04,
+        "9": 30.24
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -4.32,
+      "wall_s": 6.269285202026367
+    },
+    {
+      "index": 24,
+      "params": {
+        "alpha": 7.914708260136164,
+        "gamma": 1.823280400491926,
+        "tau": 0.39289285035690374,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/24/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-7cd8543dc7.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 30.24,
+        "2": 24.48,
+        "3": 24.48,
+        "4": 25.92,
+        "5": 20.16,
+        "6": 28.8,
+        "7": 25.92,
+        "8": 24.48,
+        "9": 36.0
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -0.43199999999999933,
+      "wall_s": 5.213489055633545
+    },
+    {
+      "index": 25,
+      "params": {
+        "alpha": 5.609744626084559,
+        "gamma": 2.336208929471823,
+        "tau": 0.3555714389948749,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/25/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-80f47beedd.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 30.24,
+        "2": 24.48,
+        "3": 23.04,
+        "4": 25.92,
+        "5": 14.4,
+        "6": 25.92,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.8719999999999994,
+      "wall_s": 5.066364049911499
+    },
+    {
+      "index": 26,
+      "params": {
+        "alpha": 1.6128315876150694,
+        "gamma": 2.3225377926907735,
+        "tau": 0.46371196431227996,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/26/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-4fabbb100d.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 27.36,
+        "2": 28.8,
+        "3": 23.04,
+        "4": 27.36,
+        "5": 18.72,
+        "6": 28.8,
+        "7": 25.92,
+        "8": 24.48,
+        "9": 37.44
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -0.2879999999999999,
+      "wall_s": 5.173459053039551
+    },
+    {
+      "index": 27,
+      "params": {
+        "alpha": 56.00784987319335,
+        "gamma": 0.5367657624134232,
+        "tau": 0.4318200451227879,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/27/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-2421740764.json",
+      "pick_rates": {
+        "0": 27.36,
+        "1": 34.56,
+        "2": 14.4,
+        "3": 18.72,
+        "4": 25.92,
+        "5": 15.84,
+        "6": 30.24,
+        "7": 21.6,
+        "8": 27.36,
+        "9": 28.8
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -2.0159999999999996,
+      "wall_s": 5.010265827178955
+    },
+    {
+      "index": 28,
+      "params": {
+        "alpha": 53.56657234272509,
+        "gamma": 0.8719100305812448,
+        "tau": 0.4863144069114775,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/28/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-30bba67ce4.json",
+      "pick_rates": {
+        "0": 18.72,
+        "1": 23.04,
+        "2": 17.28,
+        "3": 18.72,
+        "4": 17.28,
+        "5": 12.96,
+        "6": 25.92,
+        "7": 18.72,
+        "8": 21.6,
+        "9": 25.92
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -6.4799999999999995,
+      "wall_s": 5.057805061340332
+    },
+    {
+      "index": 29,
+      "params": {
+        "alpha": 40.493356676002406,
+        "gamma": 2.5559345688576762,
+        "tau": 0.2399939619039161,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/29/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-84478a00ec.json",
+      "pick_rates": {
+        "0": 30.24,
+        "1": 33.12,
+        "2": 24.48,
+        "3": 24.48,
+        "4": 33.12,
+        "5": 20.16,
+        "6": 31.68,
+        "7": 28.8,
+        "8": 28.8,
+        "9": 30.24
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 2.0159999999999996,
+      "wall_s": 5.287169933319092
+    },
+    {
+      "index": 30,
+      "params": {
+        "alpha": 28.07634968421097,
+        "gamma": 2.808825399458674,
+        "tau": 0.1330651361461463,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/30/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-1af71d36d0.json",
+      "pick_rates": {
+        "0": 30.24,
+        "1": 31.68,
+        "2": 27.36,
+        "3": 24.48,
+        "4": 24.48,
+        "5": 18.72,
+        "6": 40.32,
+        "7": 28.8,
+        "8": 23.04,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.7279999999999998,
+      "wall_s": 5.523882150650024
+    },
+    {
+      "index": 31,
+      "params": {
+        "alpha": 9.406163735218072,
+        "gamma": 1.6068820724363286,
+        "tau": 0.4655086579905775,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/31/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-3443a2e000.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 28.8,
+        "2": 24.48,
+        "3": 27.36,
+        "4": 21.6,
+        "5": 17.28,
+        "6": 24.48,
+        "7": 23.04,
+        "8": 30.24,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.2959999999999994,
+      "wall_s": 5.7619102001190186
+    },
+    {
+      "index": 32,
+      "params": {
+        "alpha": 20.99592106863603,
+        "gamma": 2.0359331173724917,
+        "tau": 0.014182682556760529,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/32/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-c75e30d92d.json",
+      "pick_rates": {
+        "0": 30.24,
+        "1": 33.12,
+        "2": 25.92,
+        "3": 21.6,
+        "4": 28.8,
+        "5": 21.6,
+        "6": 36.0,
+        "7": 31.68,
+        "8": 28.8,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 2.592,
+      "wall_s": 6.631657838821411
+    },
+    {
+      "index": 33,
+      "params": {
+        "alpha": 19.908583022889548,
+        "gamma": 0.5399793238089299,
+        "tau": 0.37897550117821405,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/33/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-4c787adcf7.json",
+      "pick_rates": {
+        "0": 31.68,
+        "1": 33.12,
+        "2": 20.16,
+        "3": 24.48,
+        "4": 25.92,
+        "5": 20.16,
+        "6": 25.92,
+        "7": 25.92,
+        "8": 27.36,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.4320000000000007,
+      "wall_s": 5.923464059829712
+    },
+    {
+      "index": 34,
+      "params": {
+        "alpha": 47.657300370048716,
+        "gamma": 0.6652062418101868,
+        "tau": 0.4206586398061916,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/34/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-2a5514c680.json",
+      "pick_rates": {
+        "0": 17.28,
+        "1": 21.6,
+        "2": 20.16,
+        "3": 21.6,
+        "4": 18.72,
+        "5": 12.96,
+        "6": 17.28,
+        "7": 21.6,
+        "8": 17.28,
+        "9": 27.36
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -6.911999999999999,
+      "wall_s": 5.381345987319946
+    },
+    {
+      "index": 35,
+      "params": {
+        "alpha": 1.3196360109479586,
+        "gamma": 1.360774947010313,
+        "tau": 0.21514936597391665,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/35/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-ab06c78ce4.json",
+      "pick_rates": {
+        "0": 27.36,
+        "1": 31.68,
+        "2": 27.36,
+        "3": 27.36,
+        "4": 25.92,
+        "5": 18.72,
+        "6": 33.12,
+        "7": 28.8,
+        "8": 24.48,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.4400000000000002,
+      "wall_s": 5.433008909225464
+    },
+    {
+      "index": 36,
+      "params": {
+        "alpha": 10.363152620838362,
+        "gamma": 1.1471614829273307,
+        "tau": 0.12083785704717248,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/36/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-9bed01aa28.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 33.12,
+        "2": 24.48,
+        "3": 27.36,
+        "4": 25.92,
+        "5": 20.16,
+        "6": 36.0,
+        "7": 24.48,
+        "8": 24.48,
+        "9": 36.0
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.8640000000000004,
+      "wall_s": 6.1710100173950195
+    },
+    {
+      "index": 37,
+      "params": {
+        "alpha": 40.18847487270112,
+        "gamma": 1.0646735710433108,
+        "tau": 0.06227735291764175,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/37/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-2dd2bbc297.json",
+      "pick_rates": {
+        "0": 24.48,
+        "1": 30.24,
+        "2": 17.28,
+        "3": 23.04,
+        "4": 28.8,
+        "5": 14.4,
+        "6": 24.48,
+        "7": 24.48,
+        "8": 25.92,
+        "9": 27.36
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -2.4479999999999995,
+      "wall_s": 6.021813869476318
+    },
+    {
+      "index": 38,
+      "params": {
+        "alpha": 11.445736459223834,
+        "gamma": 1.8852262554331696,
+        "tau": 0.40485538795638887,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/38/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-cf3fee7ac4.json",
+      "pick_rates": {
+        "0": 24.48,
+        "1": 36.0,
+        "2": 25.92,
+        "3": 23.04,
+        "4": 21.6,
+        "5": 18.72,
+        "6": 28.8,
+        "7": 27.36,
+        "8": 28.8,
+        "9": 31.68
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.1440000000000005,
+      "wall_s": 5.1779866218566895
+    },
+    {
+      "index": 39,
+      "params": {
+        "alpha": 10.287750909271963,
+        "gamma": 1.2210530360780263,
+        "tau": 0.20644817134044635,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/39/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-6dfc4469f7.json",
+      "pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 24.48,
+        "3": 25.92,
+        "4": 27.36,
+        "5": 21.6,
+        "6": 34.56,
+        "7": 28.8,
+        "8": 25.92,
+        "9": 37.44
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.8720000000000006,
+      "wall_s": 5.989842176437378
+    },
+    {
+      "index": 40,
+      "params": {
+        "alpha": 13.538901418297328,
+        "gamma": 2.8976941067436055,
+        "tau": 0.18470220554584044,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/40/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-54a9cb93da.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 33.12,
+        "2": 24.48,
+        "3": 25.92,
+        "4": 24.48,
+        "5": 17.28,
+        "6": 30.24,
+        "7": 21.6,
+        "8": 28.8,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -0.1439999999999994,
+      "wall_s": 5.785341024398804
+    },
+    {
+      "index": 41,
+      "params": {
+        "alpha": 9.956709671762551,
+        "gamma": 1.9848105040329207,
+        "tau": 0.42414560413753,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/41/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-edd9ac41cb.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 30.24,
+        "2": 24.48,
+        "3": 20.16,
+        "4": 25.92,
+        "5": 17.28,
+        "6": 28.8,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -1.5839999999999992,
+      "wall_s": 5.925895929336548
+    },
+    {
+      "index": 42,
+      "params": {
+        "alpha": 5.422890428598593,
+        "gamma": 2.7748974041557424,
+        "tau": 0.021533444284102088,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/42/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-118b4dc88a.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 30.24,
+        "2": 24.48,
+        "3": 27.36,
+        "4": 25.92,
+        "5": 14.4,
+        "6": 34.56,
+        "7": 30.24,
+        "8": 28.8,
+        "9": 33.12
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.7200000000000001,
+      "wall_s": 5.819101333618164
+    },
+    {
+      "index": 43,
+      "params": {
+        "alpha": 30.616504650663263,
+        "gamma": 1.5384600934280617,
+        "tau": 0.41490199263905136,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/43/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-1fb7186bbb.json",
+      "pick_rates": {
+        "0": 25.92,
+        "1": 34.56,
+        "2": 18.72,
+        "3": 21.6,
+        "4": 27.36,
+        "5": 23.04,
+        "6": 33.12,
+        "7": 28.8,
+        "8": 27.36,
+        "9": 34.56
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.0080000000000005,
+      "wall_s": 5.329061031341553
+    },
+    {
+      "index": 44,
+      "params": {
+        "alpha": 4.563930893103778,
+        "gamma": 0.6965750929140997,
+        "tau": 0.3263072881683192,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/44/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-d9faaca2c5.json",
+      "pick_rates": {
+        "0": 28.8,
+        "1": 28.8,
+        "2": 25.92,
+        "3": 25.92,
+        "4": 28.8,
+        "5": 20.16,
+        "6": 30.24,
+        "7": 31.68,
+        "8": 28.8,
+        "9": 31.68
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 1.5840000000000007,
+      "wall_s": 5.639810085296631
+    },
+    {
+      "index": 45,
+      "params": {
+        "alpha": 3.123350749016006,
+        "gamma": 2.2566301766494656,
+        "tau": 0.4719007134710454,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/45/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-ef4d8e3278.json",
+      "pick_rates": {
+        "0": 23.04,
+        "1": 28.8,
+        "2": 25.92,
+        "3": 24.48,
+        "4": 24.48,
+        "5": 21.6,
+        "6": 27.36,
+        "7": 27.36,
+        "8": 27.36,
+        "9": 37.44
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 0.28800000000000026,
+      "wall_s": 5.620293140411377
+    },
+    {
+      "index": 46,
+      "params": {
+        "alpha": 36.47079573952573,
+        "gamma": 0.6486603790008462,
+        "tau": 0.19038525415544472,
+        "dilate": 0
+      },
+      "results_file": "results/guidance/p08_095/evals/46/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-b647302e3c.json",
+      "pick_rates": {
+        "0": 21.6,
+        "1": 33.12,
+        "2": 17.28,
+        "3": 20.16,
+        "4": 27.36,
+        "5": 12.96,
+        "6": 28.8,
+        "7": 23.04,
+        "8": 21.6,
+        "9": 30.24
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": -2.88,
+      "wall_s": 5.5041399002075195
+    },
+    {
+      "index": 47,
+      "params": {
+        "alpha": 5.9737810742865936,
+        "gamma": 1.7221238670836607,
+        "tau": 0.48823116096802227,
+        "dilate": 1
+      },
+      "results_file": "results/guidance/p08_095/evals/47/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-a4aaa0cd58.json",
+      "pick_rates": {
+        "0": 20.16,
+        "1": 28.8,
+        "2": 27.36,
+        "3": 25.92,
+        "4": 27.36,
+        "5": 20.16,
+        "6": 30.24,
+        "7": 25.92,
+        "8": 27.36,
+        "9": 31.68
+      },
+      "none_pick_rates": {
+        "0": 24.48,
+        "1": 33.12,
+        "2": 28.8,
+        "3": 25.92,
+        "4": 23.04,
+        "5": 24.48,
+        "6": 27.36,
+        "7": 23.04,
+        "8": 24.48,
+        "9": 30.24
+      },
+      "objective": 3.552713678800501e-16,
+      "wall_s": 5.69016170501709
+    }
+  ],
+  "best_index": 10
+}

@@ -10,6 +10,8 @@
   "map_generated_at": "2026-01-01T00:41:35Z",
   "alphas": [
     4.0,
+    8.0,
+    16.0,
     32.0
   ],
   "headline_alpha": 4.0,
@@ -61,6 +63,72 @@
         "ci95": [
           0.09173660753046047,
           0.22348596256684491
+        ],
+        "mean_loss": 15.695999999999996,
+        "n_resamples": 1000,
+        "n_resamples_used": 1000,
+        "bootstrap_seed": 0,
+        "reason": null
+      }
+    },
+    "map_a8": {
+      "alpha": 8.0,
+      "n": 30,
+      "pick_rate_mean": 39.02400000000001,
+      "pick_rate_ci95": [
+        37.1331291511709,
+        40.91487084882912
+      ],
+      "floor_skip_steps_mean": 491.26666666666665,
+      "stuck_busy_agent_steps_mean": 503.7,
+      "routes_changed_by_map_mean": 386.76666666666665,
+      "map_cells_entered_mean": 170.53333333333333,
+      "paired_delta_vs_none": {
+        "mean": 1.056,
+        "ci95": [
+          -0.528460895956032,
+          2.640460895956032
+        ],
+        "n": 30
+      },
+      "share_of_floor_loss_recovered": {
+        "share": 0.06727828746177374,
+        "ci95": [
+          -0.027116698501322298,
+          0.15843692715656085
+        ],
+        "mean_loss": 15.695999999999996,
+        "n_resamples": 1000,
+        "n_resamples_used": 1000,
+        "bootstrap_seed": 0,
+        "reason": null
+      }
+    },
+    "map_a16": {
+      "alpha": 16.0,
+      "n": 30,
+      "pick_rate_mean": 39.024,
+      "pick_rate_ci95": [
+        37.35130258999588,
+        40.69669741000412
+      ],
+      "floor_skip_steps_mean": 404.9,
+      "stuck_busy_agent_steps_mean": 535.9333333333333,
+      "routes_changed_by_map_mean": 439.73333333333335,
+      "map_cells_entered_mean": 126.2,
+      "paired_delta_vs_none": {
+        "mean": 1.0559999999999996,
+        "ci95": [
+          -0.4642511388900694,
+          2.5762511388900684
+        ],
+        "n": 30
+      },
+      "share_of_floor_loss_recovered": {
+        "share": 0.06727828746177368,
+        "ci95": [
+          -0.021220279720279765,
+          0.16208596449422136
         ],
         "mean_loss": 15.695999999999996,
         "n_resamples": 1000,
@@ -149,5 +217,5 @@
       "map_cells_entered_mean": 0.0
     }
   },
-  "wall_s": 102.53777384757996
+  "wall_s": 37.97493362426758
 }

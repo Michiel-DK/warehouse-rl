@@ -1,0 +1,29 @@
+{
+  "params": {
+    "alpha": 1.7539152407149072,
+    "gamma": 2.3037208504852043,
+    "tau": 0.26267716123786294,
+    "dilate": 0
+  },
+  "objective": 3.6,
+  "index": 10,
+  "train_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "source_costmap_path": "results/closed_loop_p08_095/phaseA/costmap.json",
+  "source_costmap_sha256": "628d1ac30409e93def3858ecdfa1408f4d404e9cdb62a4158ec6d65627bb39cb",
+  "eval_costmap_sha256": "9ef1aebcf32df979381a6c4f6ccd051cc28fa823662f37ad46a2a1ddc7f42334",
+  "eval_results_file": "results/guidance/p08_095/evals/10/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-9ef1aebcf3.json",
+  "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "steps": 500,
+  "disturb": "{\"floor\": {\"cells\": 80, \"p\": [0.8, 0.95]}}"
+}

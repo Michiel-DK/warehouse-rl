@@ -602,24 +602,50 @@ The floor loss is undisturbed - none = 6.14 lines/h (11.4%), paired per seed. `n
 
 ## Sprint 8: sticky floor routing, dose-response and guidance tuning (2026-10-16)
 
-The README had no sticky-routing section before this one. The sticky regime (80 cells, p 0.9-0.99) is the default of the live demo (`docs/DEMO.md` section 8). Three follow-ups to the closed loop above, all with `stuck_aware_cta` + `timeout` on the medium map, every arm paired per seed against `none`. Everything between this paragraph and "Reading the numbers" is the output of `.venv/bin/python scripts/sprint8_tables.py`, which reads the JSONs it names. Only its headings were demoted one level. In-sample and held-out are side by side so the gap stays visible. The oracle runs at alpha 4 in every regime. `map_a32` is the cost map at alpha 32, and `map_tuned` is the tuned transform, with its parameters printed in (c).
+The README had no sticky-routing section before this one. The sticky regime (80 cells, p 0.9-0.99) is the default of the live demo (`docs/DEMO.md` section 8). Follow-ups to the closed loop above. The routing ones (a-c) all use `stuck_aware_cta` + `timeout` on the medium map, every arm paired per seed against `none`; (d) and (e) grade the analyser itself. Everything between this paragraph and "Reading the numbers" is the output of `.venv/bin/python scripts/sprint8_tables.py`, which reads the JSONs it names. Only its headings were demoted one level. In-sample and held-out are side by side so the gap stays visible. The oracle runs at alpha 4 in every regime. `map_aN` is the cost map at alpha N, and `map_tuned` is the tuned transform, with its parameters printed in (c). Updated 2026-10-16 (evening) with alphas 8 and 16 at p 0.6-0.9 and p 0.8-0.95, guidance tuning on p 0.8-0.95, time to detect and the lesson_persist chance rate.
 
 #### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)
 
-| floor regime (80 cells) | floor loss (lines/h) | none | map_a4 | map_a4 share | map_a32 | map_a32 share | oracle (alpha 4) | oracle share |
-|---|---|---|---|---|---|---|---|---|
-| p 0.3-0.7 | 6.14 | 47.52 (45.85-49.19) | 48.48 (46.84-50.12) | 15.6% (-11.3% to 45.0%) | 41.86 (39.86-43.85) | -92.2% (-196.5% to -49.7%) | 48.91 (46.79-51.04) | 22.7% (-3.8% to 50.0%) |
-| p 0.6-0.9 | 15.70 | 37.97 (36.22-39.71) | 40.46 (38.92-42.01) | 15.9% (9.2% to 22.3%) | 36.34 (34.57-38.10) | -10.4% (-23.5% to 1.2%) | 40.22 (38.52-41.92) | 14.4% (5.2% to 22.5%) |
-| p 0.8-0.95 | 26.16 | 27.50 (26.31-28.70) | 30.19 (28.39-31.99) | 10.3% (4.3% to 15.7%) | 31.49 (29.82-33.15) | 15.2% (9.2% to 20.7%) | 34.75 (33.11-36.40) | 27.7% (22.0% to 34.1%) |
-| p 0.9-0.99 | 37.54 | 16.13 (14.62-17.63) | 17.52 (15.89-19.15) | 3.7% (0.7% to 7.2%) | 20.30 (18.28-22.33) | 11.1% (6.0% to 15.9%) | 22.08 (19.97-24.19) | 15.9% (11.9% to 20.3%) |
+| floor regime (80 cells) | floor loss (lines/h) | none (lines/h) | map_a4 share | map_a8 share | map_a16 share | map_a32 share | oracle (alpha 4) share |
+|---|---|---|---|---|---|---|---|
+| p 0.3-0.7 | 6.14 | 47.52 (45.85-49.19) | 15.6% (-11.3% to 45.0%) | -13.3% (-62.5% to 20.3%) | - | -92.2% (-196.5% to -49.7%) | 22.7% (-3.8% to 50.0%) |
+| p 0.6-0.9 | 15.70 | 37.97 (36.22-39.71) | 15.9% (9.2% to 22.3%) | 6.7% (-2.7% to 15.8%) | 6.7% (-2.1% to 16.2%) | -10.4% (-23.5% to 1.2%) | 14.4% (5.2% to 22.5%) |
+| p 0.8-0.95 | 26.16 | 27.50 (26.31-28.70) | 10.3% (4.3% to 15.7%) | 14.1% (7.7% to 20.1%) | 14.1% (8.7% to 19.6%) | 15.2% (9.2% to 20.7%) | 27.7% (22.0% to 34.1%) |
+| p 0.9-0.99 | 37.54 | 16.13 (14.62-17.63) | 3.7% (0.7% to 7.2%) | - | 9.1% (5.5% to 12.6%) | 11.1% (6.0% to 15.9%) | 15.9% (11.9% to 20.3%) |
 
-Pick-rate in lines/h, mean (95% CI). Share = mean(arm - none) / mean(undisturbed - none), paired per seed, with a 1000-resample seed-bootstrap CI. Sources: `results/closed_loop/summary.json`, `results/closed_loop_p06_09/summary.json`, `results/closed_loop_p08_095/summary.json`, `results/closed_loop_sticky/summary.json`.
+Pick-rate by arm, lines/h, mean (95% CI):
+
+| floor regime | map_a4 | map_a8 | map_a16 | map_a32 | oracle | undisturbed |
+|---|---|---|---|---|---|---|
+| p 0.3-0.7 | 48.48 (46.84-50.12) | 46.70 (44.61-48.80) | - | 41.86 (39.86-43.85) | 48.91 (46.79-51.04) | 53.66 (51.24-56.09) |
+| p 0.6-0.9 | 40.46 (38.92-42.01) | 39.02 (37.13-40.91) | 39.02 (37.35-40.70) | 36.34 (34.57-38.10) | 40.22 (38.52-41.92) | 53.66 (51.24-56.09) |
+| p 0.8-0.95 | 30.19 (28.39-31.99) | 31.20 (29.24-33.16) | 31.20 (29.52-32.88) | 31.49 (29.82-33.15) | 34.75 (33.11-36.40) | 53.66 (51.24-56.09) |
+| p 0.9-0.99 | 17.52 (15.89-19.15) | - | 19.54 (17.75-21.33) | 20.30 (18.28-22.33) | 22.08 (19.97-24.19) | 53.66 (51.24-56.09) |
+
+Paired between fixed alphas (the arm with the highest mean pick-rate in each regime minus each other fixed alpha, lines/h, 95% CI):
+
+| floor regime | top fixed alpha (point estimate) | minus | delta (95% CI) | verdict |
+|---|---|---|---|---|
+| p 0.3-0.7 | map_a4 | map_a8 | +1.78 (-0.21 to +3.76) | within noise |
+| p 0.3-0.7 | map_a4 | map_a32 | +6.62 (+4.94 to +8.31) | beats |
+| p 0.6-0.9 | map_a4 | map_a8 | +1.44 (+0.18 to +2.70) | beats |
+| p 0.6-0.9 | map_a4 | map_a16 | +1.44 (-0.11 to +2.99) | within noise |
+| p 0.6-0.9 | map_a4 | map_a32 | +4.13 (+2.38 to +5.87) | beats |
+| p 0.8-0.95 | map_a32 | map_a4 | +1.30 (-0.27 to +2.86) | within noise |
+| p 0.8-0.95 | map_a32 | map_a8 | +0.29 (-0.80 to +1.38) | within noise |
+| p 0.8-0.95 | map_a32 | map_a16 | +0.29 (-0.66 to +1.24) | within noise |
+| p 0.9-0.99 | map_a32 | map_a4 | +2.78 (+0.75 to +4.82) | beats |
+| p 0.9-0.99 | map_a32 | map_a16 | +0.77 (-0.95 to +2.48) | within noise |
+
+Share = mean(arm - none) / mean(undisturbed - none), paired per seed, with a 1000-resample seed-bootstrap CI; "-" = the regime's summary has no such arm. Ties in the top-alpha pick use the first in alpha order. Sources: `results/closed_loop/summary.json`, `results/closed_loop_p06_09/summary.json`, `results/closed_loop_p08_095/summary.json`, `results/closed_loop_sticky/summary.json`; the between-alpha rows are computed by `scripts/sprint8_tables.py` from `<regime>/<arm>/*.json` with `evaluate.paired_delta`.
 
 #### (b) Longer shift
 
 **1,500-step shift, sticky regime (p 0.9-0.99, 30 seeds).** Floor loss 37.54 lines/h at 500 steps, 36.64 at 1500. Share of the loss recovered: map_a4 3.7% (0.7% to 7.2%) at 500 -> 4.8% (2.2% to 7.5%) at 1,500; map_a32 11.1% (6.0% to 15.9%) at 500 -> 8.6% (5.7% to 11.5%) at 1,500; oracle 15.9% (11.9% to 20.3%) at 500 -> 16.4% (13.1% to 19.8%) at 1,500. Phase A maps differ (tag `30b4c70868` from a 500-step day, `e773b55cf1` from a 1,500-step day); there is no paired 500-vs-1,500 CI. Sources: `results/closed_loop_sticky/summary.json`, `results/closed_loop_sticky_1500/summary.json`.
 
-#### (c) Guidance tuning (S8M), sticky regime
+#### (c) Guidance tuning (S8M), two regimes
+
+**`results/guidance/sticky`**
 
 **Train (seeds 0-9, 48 evaluations, random search seed 0).** Objective = mean paired pick-rate gain over none on the train seeds. Identity (eval 0, alpha 4, gamma 1, tau 0, dilate 0) +1.440; best (eval 20: alpha 50.3, gamma 1.41, tau 0.053, dilate 0) +2.016 lines/h.
 Check: identity objective +1.440 vs in-sample map_a4 delta +1.440; best objective +2.016 vs in-sample map_tuned delta +2.016.
@@ -638,24 +664,87 @@ Check: identity objective +1.440 vs in-sample map_a4 delta +1.440; best objectiv
 
 Sources: `results/guidance/sticky/tune.json`, `results/guidance/sticky/best_transform.json`, `results/guidance/sticky/heldout.json`; the paired tuned-vs-fixed rows are computed by `scripts/sprint8_tables.py` from `results/guidance/sticky/map_tuned/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-86550f4e27_timeout_cm-c16a06c160.json` (held-out), `results/guidance/sticky/evals/20/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-86550f4e27_timeout_cm-883ecd5387.json` (in-sample) and `results/closed_loop_sticky/{map_a4,map_a32}/*.json` with `evaluate.paired_delta`.
 
+**`results/guidance/p08_095`**
+
+**Train (seeds 0-9, 48 evaluations, random search seed 0).** Objective = mean paired pick-rate gain over none on the train seeds. Identity (eval 0, alpha 4, gamma 1, tau 0, dilate 0) +2.160; best (eval 10: alpha 1.8, gamma 2.30, tau 0.263, dilate 0) +3.600 lines/h.
+Check: identity objective +2.160 vs in-sample map_a4 delta +2.160; best objective +3.600 vs in-sample map_tuned delta +3.600.
+
+| arm | held-out seeds 10-29 (n=20): delta vs none (95% CI) | held-out share (95% CI) | in-sample seeds 0-9 (n=10): delta vs none (95% CI) | verdict vs none, held-out |
+|---|---|---|---|---|
+| map_a4 | +2.95 (+0.76 to +5.14) | 11.7% (4.1% to 18.5%) | +2.16 (-0.37 to +4.69) | beats |
+| map_a32 | +4.32 (+2.16 to +6.48) | 17.1% (9.6% to 23.9%) | +3.31 (+0.32 to +6.31) | beats |
+| map_tuned | +0.72 (-0.82 to +2.26) | 2.8% (-2.4% to 8.7%) | +3.60 (+1.02 to +6.18) | within noise |
+| oracle | +7.42 (+5.11 to +9.72) | 29.3% (21.2% to 38.9%) | +6.91 (+4.54 to +9.28) | beats |
+
+| paired delta | held-out (95% CI) | verdict | in-sample (95% CI) |
+|---|---|---|---|
+| map_tuned - map_a4 | -2.23 (-4.51 to +0.05) | within noise | +1.44 (-1.08 to +3.96) |
+| map_tuned - map_a32 | -3.60 (-5.89 to -1.31) | worse | +0.29 (-1.52 to +2.09) |
+
+Sources: `results/guidance/p08_095/tune.json`, `results/guidance/p08_095/best_transform.json`, `results/guidance/p08_095/heldout.json`; the paired tuned-vs-fixed rows are computed by `scripts/sprint8_tables.py` from `results/guidance/p08_095/map_tuned/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-1be39504d0.json` (held-out), `results/guidance/p08_095/evals/10/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-9e41bd6eef_timeout_cm-9ef1aebcf3.json` (in-sample) and `results/closed_loop_p08_095/{map_a4,map_a32}/*.json` with `evaluate.paired_delta`.
+
+Side by side (map_tuned on held-out seeds 10-29, paired per seed):
+
+| held-out seeds 10-29, paired | p 0.9-0.99 (tuned alpha 50.31) | p 0.8-0.95 (tuned alpha 1.75) |
+|---|---|---|
+| map_tuned - none | +4.18 (+2.30 to +6.06) **beats** (in-sample +2.02 (-1.14 to +5.17)) | +0.72 (-0.82 to +2.26) **within noise** (in-sample +3.60 (+1.02 to +6.18)) |
+| map_tuned - map_a4 | +2.81 (+1.09 to +4.52) **beats** (in-sample +0.58 (-3.37 to +4.53)) | -2.23 (-4.51 to +0.05) **within noise** (in-sample +1.44 (-1.08 to +3.96)) |
+| map_tuned - map_a32 | -1.15 (-2.80 to +0.49) **within noise** (in-sample +0.14 (-0.76 to +1.05)) | -3.60 (-5.89 to -1.31) **worse** (in-sample +0.29 (-1.52 to +2.09)) |
+
+#### (d) Time to detect (S8P), sticky regime
+
+| K (per zone) | 500 steps: truth cells seen by shift end | 500 steps: first detect, min, median (p25-p75) | 500 steps: false flags per publish, 30 zones summed (per zone) | 1500 steps: truth cells seen by shift end | 1500 steps: first detect, min, median (p25-p75) | 1500 steps: false flags per publish, 30 zones summed (per zone) |
+|---|---|---|---|---|---|---|
+| 10 | 32.7% | 10 (5-20) | 10.6 (0.35) | 44.9% | 15 (5-55) | 4.7 (0.16) |
+| 20 | 44.0% | 10 (5-25) | 39.0 (1.30) | 57.5% | 20 (5-50) | 23.1 (0.77) |
+| 40 | 46.9% | 15 (5-25) | 90.9 (3.03) | 66.5% | 25 (10-55) | 140.3 (4.68) |
+
+- `results/fleet/time_to_detect_sticky500.json`: 500 steps = 41.7 simulated min, 30 zones, 2400 truth cells, 9 publishes every 5 min, {"floor": {"cells": 80, "p": [0.9, 0.99]}}, phase A `results/closed_loop_sticky/phaseA`.
+- `results/fleet/time_to_detect_sticky1500.json`: 1500 steps = 125.0 simulated min, 30 zones, 2400 truth cells, 25 publishes every 5 min, {"floor": {"cells": 80, "p": [0.9, 0.99]}}, phase A `results/closed_loop_sticky_1500/phaseA`.
+
+Times are simulated minutes since the zone's first message, over the detected cells only, so they move in steps of the publish cadence; K is the per-zone top-K of the hotspot map; a false flag is a top-K cell that is not a truth cell. Caveat (verbatim from the JSON): "Floors are static from step 0, so this measures time to see what is already there, not reaction to a change."
+
+#### (e) lesson_persist against its chance rate (S8S)
+
+| run tag (lesson window, h) | lessons graded (by kind) | persisted (observed rate) | chance mean (median) | lift |
+|---|---|---|---|---|
+| s8e-long-w0.2 | 14 (hot_cell 4 ok / 9 off, hot_robot 0 ok / 1 off) | 4 (0.286) | 0.179 (0.161) | 1.60 |
+| s8e-long-w0.5 | 25 (hot_cell 18 ok / 7 off) | 18 (0.720) | 0.241 (0.250) | 2.99 |
+| s8e-long-w1.0 | 13 (hot_cell 12 ok / 1 off) | 12 (0.923) | 0.256 (0.250) | 3.60 |
+
+Chance = for each lesson, the share of its own candidate pool (every cell with >= 1 stall, or every robot with >= 1 episode, in the lesson's zone and window) that persists over the next window by the same bar; lift = observed rate / chance mean. Pools are shared between lessons of the same zone and window, and there is no CI on the lift. The window is the `--window-h` named in the run tag. Sources: `results/fleet/hotspot_s8e-long-w0.2.json`, `results/fleet/hotspot_s8e-long-w0.5.json`, `results/fleet/hotspot_s8e-long-w1.0.json` (`lesson_persist_chance`, `lesson_grading.lesson_persist`).
+
 **Reading the numbers.**
-- **Dose-response.** The right alpha depends on how sticky the floor is.
+- **Dose-response.** No one fixed alpha is best across regimes. Alpha 4 has the highest mean at p 0.3-0.7 and p 0.6-0.9 and alpha 32 at p 0.8-0.95 and p 0.9-0.99, but the paired between-alpha table separates them only in places: alpha 4 beats alpha 32 at p 0.3-0.7 and p 0.6-0.9 and beats alpha 8 at p 0.6-0.9, alpha 32 beats alpha 4 at p 0.9-0.99, and at p 0.8-0.95 alphas 4 to 32 are all within noise of each other.
   - At p 0.3-0.7, alpha 32 is clearly worse than no map.
-  - From p 0.8 up, alpha 32 beats no map, and its point estimate is above alpha 4's. There is no paired alpha-32-vs-alpha-4 CI, so "beats alpha 4" is not claimed.
+  - From p 0.8 up, alpha 32 beats no map.
   - The alpha-4 map's share separates from zero from p 0.6 up, but its point estimate shrinks as the floor gets stickier.
+  - Alphas 8 and 16 sit between 4 and 32 and do not clear zero at p 0.6-0.9. Their mean pick-rates are equal to the third decimal in both new regimes. The per-seed rows and the skip/route counts differ (checked against the per-arm JSONs), so this is a tie in the sum on the 1.44 lines/h grid of a 500-step run, not a copied result.
+  - The sticky regime's summary has no alpha-8 arm. A `results/closed_loop_sticky/map_a8/` result exists on disk but was never aggregated into that summary, so it is not shown.
   - The oracle clears zero from p 0.6 up. It runs at alpha 4 only, so it bounds the information at that penalty, not the achievable gain.
 - **Longer shift.** Nothing shows the map's share growing over a 1,500-step shift:
   - The alpha-4 and oracle shares are within each other's CIs at 500 and 1,500 steps.
   - The alpha-32 point estimate is lower at 1,500 steps.
   - The two lengths use different phase-A maps, and there is no paired 500-vs-1,500 CI, so "it shrinks" is not claimed either.
-- **Guidance tuning.**
+- **Guidance tuning, sticky regime (p 0.9-0.99).**
   - On the train seeds the search beat the identity transform (best objective vs eval 0 above), but in-sample no map arm's delta vs none clears zero at n=10.
   - On the held-out seeds 10-29, `map_tuned` **beats** no map and **beats** the identity (`map_a4`). Against the fixed `map_a32` it is **within noise**, and its point estimate is lower.
   - Tuning landed on a high alpha, like `map_a32`, and nothing in these numbers shows it beating that fixed map.
   - On seeds 10-29, `map_a32`, `map_tuned` and the oracle all gain more than on seeds 0-9, while `map_a4` gains about the same. Since an untuned map and the oracle move the same way, the in-sample/held-out gap is a difference between the seed sets, not a tuning effect.
+- **Guidance tuning, p 0.8-0.95.** The opposite of the sticky result.
+  - Tuning landed on a low alpha (below every fixed arm) and beat the identity on the train seeds, where `map_tuned` also clears zero against no map.
+  - On the held-out seeds it is **within noise** of no map, **within noise** of the identity (`map_a4`, point estimate lower) and **worse** than the fixed `map_a32`.
+  - Here the drop from in-sample to held-out is specific to `map_tuned`: `map_a4`, `map_a32` and the oracle all keep or grow their gain on seeds 10-29. That pattern fits a transform selected on 10 seeds that does not carry over, not a seed-set difference.
+  - Across both regimes, the tuning search is not shown to beat a plain fixed alpha 32 on a floor with p >= 0.8.
+- **Time to detect (sticky regime).** Most cells the map ever ranks in its top K show up early in the shift, and a longer shift shows more of them, but never all.
+  - At 500 steps the per-zone top 10 has shown about a third of the truth cells by shift end; at 1,500 steps more, and more again at larger K.
+  - False flags per publish grow with K. At K 10 they are well under one per zone per publish.
+  - The floors are static from step 0 (caveat above), so this is time to see what is already there, not time to react to a new bad cell.
+- **lesson_persist against chance.** At every window the observed persist rate is above the chance mean of the lesson's own candidate pool, and the lift grows with the window. There is no CI on the lift and the pools are shared, so this is a direction, not a significance claim.
+  - At window 0.2 h, the chance block counts 14 lessons (4 ok) because it includes one hot_robot lesson; the hot_cell-only lesson_persist grade is 4 ok / 9 off (the by-kind column).
 
 **Caveats** (on top of the closed-loop ones above):
 - Every phase-A map is in-sample "yesterday's data" from the same seed.
-- The alpha-32 arm was added after alpha 4 had been seen, so it is a check, not a pre-registered headline.
-- `map_tuned` was chosen on 10 seeds out of 48 random draws.
+- The alpha-8, -16 and -32 arms were added after alpha 4 had been seen, so they are checks, not pre-registered headlines. The between-alpha comparison picks the top arm by its point estimate first, then tests it, so its "beats" rows lean optimistic.
+- `map_tuned` was chosen on 10 seeds out of 48 random draws, separately per regime.
 - The numbers are macOS arm64 only.
