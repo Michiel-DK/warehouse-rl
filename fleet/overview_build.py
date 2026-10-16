@@ -187,6 +187,32 @@ def example_rows(inputs):
     return "\n".join(rows)
 
 
+def id_gloss(inputs):
+    """One sentence that decodes the robot ids, built from the id of the first example row."""
+    eps = example_stops(inputs[DATA]["episodes"])
+    if not eps:
+        return ""
+    rid = eps[0]["robot"]
+    m = re.fullmatch(r"Z(\d+)-(\d+)", rid)
+    if not m:
+        raise ValueError("robot id %r does not read Z<zone>-<number>" % rid)
+    return '<p class="idnote"><b>%s</b> = test area %s, robot %s</p>' % (esc(rid), m.group(1), m.group(2))
+
+
+def map_labels(inputs):
+    """{placeholder: aria-label} of the three maps; each count is the length of the array the painting script iterates."""
+    d = inputs[DATA]
+    stuck = len({tuple(e["cell"]) for e in d["episodes"]})
+    top = json.loads(script_data(inputs))["top"]
+    lab = {
+        "map_stuck_label": "Floor plan of the test area: red marks on %d distinct cells where robots got stuck" % stuck,
+        "map_planted_label": "The same floor plan with %d planted cells shown" % len(d["obstacles"]),
+        "map_top_label": "The same floor plan with the analyser's %d ringed cells over the planted ones; its first pick is cell %s"
+                         % (len(top), top[0][0] if top else "none"),
+    }
+    return {k: htmllib.escape(v, quote=True) for k, v in lab.items()}
+
+
 def lesson_items(inputs):
     """Newest lesson per kind, text from the per-kind template (never the raw text), the cell or robot parsed from the data."""
     newest = {}
@@ -247,102 +273,118 @@ TEMPLATE = r"""<!doctype html>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titan+One&display=swap">
 <style>
 :root{
-  --paper:#ffffff; --paper-deep:#f3f5f8; --ink:#141714; --muted:#5c5c5c; --hair:#e4e7ec;
+  --white:#fff; --paper:var(--white); --paper-deep:#f3f5f8; --ink:#141714; --muted:#5c5c5c; --hair:#e4e7ec;
   --accent:#1f5fbf; --card:#13233a; --card-muted:rgba(255,255,255,.72);
   --hw:#eef0f3; --shelf:#b9bfca; --goal:#cfe8d5; --planted:#7a3e00; --stuck:#b3261e;
+  --wm-pink:#fc6c85; --banner-bg:#fff6d6; --banner-line:#e8d79a; --banner-ink:#4a3a00; --ink-soft:#3f4741;
+  --ep-id:#9cc4ff; --tick:#2fbf94; --ink-deep:#0a0a0a; --hilite:#ffd166; --mark:#8fe3c3; --bar:#9db9e6;
+  --st-ok:#1b7a4b; --st-weak:#d98c00; --st-nb:#8a8a8a; --clear:transparent;
+  --white-07:rgba(255,255,255,.07); --white-08:rgba(255,255,255,.08); --white-14:rgba(255,255,255,.14);
+  --white-30:rgba(255,255,255,.3); --white-75:rgba(255,255,255,.75); --white-90:rgba(255,255,255,.9);
+  --card-shadow:rgba(19,35,58,.18);
   --font-logo:'Titan One',Georgia,serif; --font-display:Georgia,'Times New Roman',Times,serif; --font-sans:ui-sans-serif,system-ui,-apple-system,sans-serif; --font-mono:ui-monospace,Menlo,Consolas,monospace;
+  --sp-0:0px; --sp-n1:-1px; --sp-n6:-6px; --sp-2:2px; --sp-4:4px; --sp-5:5px; --sp-6:6px; --sp-8:8px; --sp-9:9px;
+  --sp-10:10px; --sp-11:11px; --sp-12:12px; --sp-13:13px; --sp-14:14px; --sp-16:16px; --sp-18:18px; --sp-20:20px;
+  --sp-22:22px; --sp-24:24px; --sp-26:26px; --sp-28:28px; --sp-36:36px; --sp-40:40px; --sp-44:44px; --sp-48:48px;
+  --sp-56:56px; --sp-64:64px;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-sans);font-size:16px;line-height:1.5}
-.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header.top{background:var(--ink);color:#fff}
-header.top .wrap{display:flex;align-items:center;gap:18px;padding-block:14px}
-.wm{font-family:var(--font-logo);font-size:20px;text-transform:lowercase;display:inline-flex;align-items:baseline;gap:6px}
-.wm .wmn{font-family:var(--font-sans);font-weight:300;font-size:15px;color:#fc6c85}
-.prod{font-family:var(--font-display);font-weight:700;font-size:17px;padding-left:18px;border-left:1px solid rgba(255,255,255,.3)}
-.banner{background:#fff6d6;border-bottom:1px solid #e8d79a;color:#4a3a00}
-.banner .wrap{padding-block:12px;font-size:14px;line-height:1.5;display:grid;gap:4px}
-.hero .wrap{padding-block:64px 40px}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(var(--sp-16),env(safe-area-inset-left,var(--sp-0)));padding-right:max(var(--sp-16),env(safe-area-inset-right,var(--sp-0)))}
+header.top{background:var(--ink);color:var(--white)}
+header.top .wrap{display:flex;align-items:center;gap:var(--sp-18);padding-block:var(--sp-14)}
+.wm{font-family:var(--font-logo);font-size:20px;text-transform:lowercase;display:inline-flex;align-items:baseline;gap:var(--sp-6)}
+.wm .wmn{font-family:var(--font-sans);font-weight:300;font-size:15px;color:var(--wm-pink)}
+.prod{font-family:var(--font-display);font-weight:700;font-size:17px;padding-left:var(--sp-18);border-left:1px solid var(--white-30)}
+.banner{background:var(--banner-bg);border-bottom:1px solid var(--banner-line);color:var(--banner-ink)}
+.banner .wrap{padding-block:var(--sp-12);font-size:14px;line-height:1.5;display:grid;gap:var(--sp-4)}
+.hero .wrap{padding-block:var(--sp-64) var(--sp-40)}
 h1{font-family:var(--font-display);font-weight:700;font-size:clamp(38px,6.5vw,64px);line-height:1.02;margin:0;max-width:14ch;text-wrap:balance}
-.lead{margin:18px 0 0;font-size:19px;line-height:1.5;color:#3f4741;max-width:48ch}
-.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:36px}
-.flow .fb{background:var(--paper-deep);border-radius:12px;padding:10px 16px;font-weight:600;font-size:15px}
+.lead{margin:var(--sp-18) 0 0;font-size:19px;line-height:1.5;color:var(--ink-soft);max-width:48ch}
+.flow{display:flex;align-items:center;gap:var(--sp-10);flex-wrap:wrap;margin-top:var(--sp-36)}
+.flow .fb{background:var(--paper-deep);border-radius:12px;padding:var(--sp-10) var(--sp-16);font-weight:600;font-size:15px}
 .flow .ar{color:var(--muted);font-size:20px}
-.cta{display:inline-block;margin-top:28px;padding:12px 22px;border-radius:999px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
-.steps{display:grid;gap:0;margin-top:24px}
-.step{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:40px;align-items:center;padding-block:56px;border-top:1px solid var(--hair)}
+.cta{display:inline-block;margin-top:var(--sp-28);padding:var(--sp-12) var(--sp-22);border-radius:999px;background:var(--accent);color:var(--white);font-weight:600;text-decoration:none}
+.steps{display:grid;gap:0;margin-top:var(--sp-24)}
+.step{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:var(--sp-40);align-items:center;padding-block:var(--sp-56);border-top:1px solid var(--hair)}
 @media (min-width:801px){.step:nth-child(even) .txt{order:2}}
-.eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+.eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 var(--sp-10)}
 h2{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.2vw,40px);line-height:1.1;margin:0;max-width:18ch;text-wrap:balance}
-.one{margin:14px 0 0;font-size:17px;color:#3f4741;max-width:44ch}
-.prior{margin:12px 0 0;font-size:15px;color:var(--muted);max-width:44ch}
-.big{margin-top:26px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.one{margin:var(--sp-14) 0 0;font-size:17px;color:var(--ink-soft);max-width:44ch}
+.prior{margin:var(--sp-12) 0 0;font-size:15px;color:var(--muted);max-width:44ch}
+.big{margin-top:var(--sp-26);display:flex;align-items:baseline;gap:var(--sp-12);flex-wrap:wrap}
 .big b.num{font-family:var(--font-display);font-size:clamp(44px,6vw,64px);line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
 .big span{font-size:15px;color:var(--muted);max-width:30ch}
 .big .sub{display:block;font-size:13px}
+.pair{margin-top:var(--sp-26);display:flex;align-items:flex-start;gap:var(--sp-12) var(--sp-36);flex-wrap:wrap}
+.fig{display:grid;gap:var(--sp-4);max-width:22ch}
+.fignum{font-family:var(--font-display);font-size:clamp(44px,6vw,64px);line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
+.fignum b.num{font-weight:inherit}
+.figlab{font-size:15px;color:var(--muted)}
 b.num{font-variant-numeric:tabular-nums}
-.pic{display:grid;gap:10px}
-.map{width:100%;height:auto;display:block;border-radius:14px;background:#fff;border:1px solid var(--hair)}
-.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted)}
-.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
-.card{background:var(--card);color:#fff;border-radius:22px;padding:22px 22px 24px;display:grid;gap:12px;box-shadow:0 18px 40px rgba(19,35,58,.18)}
+.pic{display:grid;gap:var(--sp-10)}
+.map{width:100%;height:auto;display:block;border-radius:14px;background:var(--white);border:1px solid var(--hair)}
+.legend{display:flex;flex-wrap:wrap;gap:var(--sp-6) var(--sp-16);font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:var(--sp-6)}
+.card{background:var(--card);color:var(--white);border-radius:22px;padding:var(--sp-22) var(--sp-22) var(--sp-24);display:grid;gap:var(--sp-12);box-shadow:0 18px 40px var(--card-shadow)}
 .card .lbl{font-size:13px;font-weight:600;color:var(--card-muted)}
-.funnel{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:8px}
-.fx{background:rgba(255,255,255,.08);border-radius:14px;padding:14px 12px;min-width:0}
-.fx .h{font-size:12px;color:var(--card-muted)} .fx .v{font-family:var(--font-display);font-size:clamp(20px,2.6vw,28px);line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums} .fx .s{font-size:11.5px;color:var(--card-muted);margin-top:6px;line-height:1.35}
-.fx.drop{margin-top:8px}
-.fxcol{display:grid;gap:8px;align-content:start}
+.funnel{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:var(--sp-8)}
+.fx{background:var(--white-08);border-radius:14px;padding:var(--sp-14) var(--sp-12);min-width:0}
+.fx .h{font-size:12px;color:var(--card-muted)} .fx .v{font-family:var(--font-display);font-size:clamp(20px,2.6vw,28px);line-height:1.1;margin-top:var(--sp-4);font-variant-numeric:tabular-nums} .fx .s{font-size:11.5px;color:var(--card-muted);margin-top:var(--sp-6);line-height:1.35}
+.fx.drop{margin-top:var(--sp-8)}
+.fxcol{display:grid;gap:var(--sp-8);align-content:start}
 .far{align-self:center;color:var(--card-muted);font-size:22px}
-.ep{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:rgba(255,255,255,.07);border-radius:12px;padding:9px 12px;font-size:13.5px}
-.ep .who{font-family:var(--font-mono);font-size:12px;color:#9cc4ff} .ep .tag{font-size:11px;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:2px 9px;white-space:nowrap}
-.eplist{display:grid;gap:8px}
-.ticks{display:grid;gap:8px}
-.tk{display:flex;gap:10px;align-items:center;font-size:14px}
-.tk i{flex:none;width:20px;height:20px;border-radius:50%;background:#2fbf94;color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-size:12px;font-style:normal;font-weight:700}
-.lessons{display:grid;gap:8px}
-.lesson{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;background:rgba(255,255,255,.07);border-radius:12px;padding:11px 13px;font-size:14px;line-height:1.45}
-.lesson .ic{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:13px}
-.lesson b{color:#ffd166;font-weight:600}
-.lesson .mark{display:inline-block;margin-left:6px;color:#8fe3c3;font-weight:600}
-.bars{display:grid;gap:14px}
-.br{display:grid;grid-template-columns:minmax(120px,1fr) 3fr;gap:4px 12px;align-items:center;font-size:14px}
-.br .lab{color:#3f4741}
+.ep{display:grid;grid-template-columns:auto 1fr auto;gap:var(--sp-10);align-items:center;background:var(--white-07);border-radius:12px;padding:var(--sp-9) var(--sp-12);font-size:13.5px}
+.ep .who{font-family:var(--font-mono);font-size:12px;color:var(--ep-id)} .ep .tag{font-size:11px;border:1px solid var(--white-30);border-radius:999px;padding:var(--sp-2) var(--sp-9);white-space:nowrap}
+.eplist{display:grid;gap:var(--sp-8)}
+.idnote{margin:0;font-size:12.5px;color:var(--card-muted)}
+.ticks{display:grid;gap:var(--sp-8)}
+.tk{display:flex;gap:var(--sp-10);align-items:center;font-size:14px}
+.tk i{flex:none;width:20px;height:20px;border-radius:50%;background:var(--tick);color:var(--ink-deep);display:flex;align-items:center;justify-content:center;font-size:12px;font-style:normal;font-weight:700}
+.lessons{display:grid;gap:var(--sp-8)}
+.lesson{display:grid;grid-template-columns:auto 1fr;gap:var(--sp-12);align-items:start;background:var(--white-07);border-radius:12px;padding:var(--sp-11) var(--sp-13);font-size:14px;line-height:1.45}
+.lesson .ic{width:26px;height:26px;border-radius:8px;background:var(--white-14);display:flex;align-items:center;justify-content:center;font-size:13px}
+.lesson b{color:var(--hilite);font-weight:600}
+.lesson .mark{display:inline-block;margin-left:var(--sp-6);color:var(--mark);font-weight:600}
+.bars{display:grid;gap:var(--sp-14)}
+.br{display:grid;grid-template-columns:minmax(120px,1fr) 3fr;gap:var(--sp-4) var(--sp-12);align-items:center;font-size:14px}
+.br .lab{color:var(--ink-soft)}
 .br .tr{position:relative;height:26px;background:var(--paper-deep);border-radius:6px}
-.br .fl{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:#9db9e6}
+.br .fl{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--bar)}
 .br.hi .fl{background:var(--accent)}
-.br .wh{position:absolute;top:50%;height:2px;margin-top:-1px;background:var(--ink)}
-.br .wh::before,.br .wh::after{content:"";position:absolute;top:-6px;width:2px;height:14px;background:var(--ink)}
+.br .wh{position:absolute;top:50%;height:2px;margin-top:var(--sp-n1);background:var(--ink)}
+.br .wh::before,.br .wh::after{content:"";position:absolute;top:var(--sp-n6);width:2px;height:14px;background:var(--ink)}
 .br .wh::before{left:0} .br .wh::after{right:0}
 .br .val{grid-column:2;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .br .ci{font-weight:400;color:var(--muted)}
-.closer{background:var(--paper-deep);margin-top:40px}
-.closer .wrap{padding-block:48px;display:grid;gap:22px}
+.closer{background:var(--paper-deep);margin-top:var(--sp-40)}
+.closer .wrap{padding-block:var(--sp-48);display:grid;gap:var(--sp-22)}
 .closer h2{font-size:clamp(24px,3.4vw,32px);max-width:none}
-.cboxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:22px}
-.closer h3{font-family:var(--font-display);font-size:21px;margin:0 0 6px}
+.cboxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:var(--sp-22)}
+.closer h3{font-family:var(--font-display);font-size:21px;margin:0 0 var(--sp-6)}
 .closer p{margin:0;color:var(--muted);font-size:15px}
-footer{background:#0a0a0a;color:rgba(255,255,255,.75);font-size:12.5px}
-footer .wrap{padding-block:20px;display:grid;gap:8px}
-footer .wm{color:#fff} footer code{font-family:var(--font-mono);font-size:11.5px;color:rgba(255,255,255,.9);overflow-wrap:anywhere}
-.st{display:flex;align-items:flex-start;gap:8px;margin-top:14px;font-size:13px;line-height:1.4;color:var(--muted);max-width:46ch;background:var(--paper-deep);border-radius:10px;padding:8px 11px}
-.st i{flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px}
-.st.ok i{background:#1b7a4b} .st.weak i{background:#d98c00} .st.no i{background:#b3261e} .st.nb i{background:#8a8a8a}
+footer{background:var(--ink-deep);color:var(--white-75);font-size:12.5px}
+footer .wrap{padding-block:var(--sp-20);display:grid;gap:var(--sp-8)}
+footer .wm{color:var(--white)} footer code{font-family:var(--font-mono);font-size:11.5px;color:var(--white-90);overflow-wrap:anywhere}
+.st{display:flex;align-items:flex-start;gap:var(--sp-8);margin-top:var(--sp-14);font-size:13px;line-height:1.4;color:var(--muted);max-width:46ch;background:var(--paper-deep);border-radius:10px;padding:var(--sp-8) var(--sp-11)}
+.st i{flex:none;width:10px;height:10px;border-radius:50%;margin-top:var(--sp-5)}
+.st.ok i{background:var(--st-ok)} .st.weak i{background:var(--st-weak)} .st.no i{background:var(--stuck)} .st.nb i{background:var(--st-nb)}
 .st b{font-weight:700;color:var(--ink)}
-.closer .st{background:#fff;margin-top:10px}
+.closer .st{background:var(--white);margin-top:var(--sp-10)}
 a{color:var(--accent)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
 .pulse{animation:pulse 1.6s ease-in-out infinite}
-.hero .note{margin-top:10px;font-size:14px;color:var(--muted)}
-.closer .again{margin-top:20px}
+.hero .note{margin-top:var(--sp-10);font-size:14px;color:var(--muted)}
+.closer .again{margin-top:var(--sp-20)}
 .closer .again a{color:var(--accent);font-weight:600}
 @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
 @media (max-width:720px){
-  .hero .wrap{padding-block:44px 28px}
-  .step{grid-template-columns:1fr;padding-block:40px;gap:24px}
+  .hero .wrap{padding-block:var(--sp-44) var(--sp-28)}
+  .step{grid-template-columns:1fr;padding-block:var(--sp-40);gap:var(--sp-24)}
   .step:nth-child(even) .txt{order:0}
   .funnel{grid-template-columns:1fr} .far{transform:rotate(90deg);justify-self:center}
-  .flow .ar{display:none} .flow{gap:8px}
+  .flow .ar{display:none} .flow{gap:var(--sp-8)}
   .br{grid-template-columns:1fr} .br .val{grid-column:1}
 }
 @media (max-width:480px){.ep{grid-template-columns:1fr}}
@@ -377,7 +419,7 @@ a{color:var(--accent)}
       <div class="big">{stuck_periods}<span>stuck periods in one shift, {robots} robots</span></div>
       <div class="st weak"><i></i><span><b>Tested, weakly.</b> "Stuck" here means waited over {stuck_after} seconds with a job. Only {precision} of those stops match the simulator's own stuck flag; the others are robots waiting at a shelf by design or robots that broke down while stopped.</span></div>
     </div>
-    <div class="pic"><svg id="m1" class="map" role="img" aria-label="Floor plan with every stuck period marked"></svg>
+    <div class="pic"><svg id="m1" class="map" role="img" aria-label="{map_stuck_label}"></svg>
       <div class="legend"><span><i style="background:var(--hw);border:1px solid var(--hair)"></i>aisle</span><span><i style="background:var(--shelf)"></i>shelves</span><span><i style="background:var(--goal)"></i>pick stations</span><span><i style="background:var(--stuck);border-radius:50%"></i>a robot got stuck here</span></div></div>
   </div>
 
@@ -389,7 +431,7 @@ a{color:var(--accent)}
       <div class="big">{robots}<span>robots in the test area, no hints given to the analyser</span></div>
       <div class="st ok"><i></i><span><b>Tested.</b> The planted cells and the hidden truth are in the run files; the analyser never reads them.</span></div>
     </div>
-    <div class="pic"><svg id="m2" class="map" role="img" aria-label="The same floor plan with the planted bad cells shown"></svg>
+    <div class="pic"><svg id="m2" class="map" role="img" aria-label="{map_planted_label}"></svg>
       <div class="legend"><span><i style="background:var(--planted)"></i>planted bad cell, hidden from the analyser</span></div></div>
   </div>
 
@@ -423,6 +465,7 @@ a{color:var(--accent)}
       <div class="st no"><i></i><span><b>Timing tested, reasons not.</b> The {alert_median} seconds and the {recall} are measured. The cause labels were only compared with a proximity proxy; the simulator does not say which robot blocked which, and most cause claims could not be confirmed either way.</span></div>
     </div>
     <div class="card"><div class="lbl">{n_examples} stuck periods from this shift</div>
+{id_gloss}
 <div class="eplist">
 {ep_rows}
 </div>
@@ -438,8 +481,8 @@ a{color:var(--accent)}
       <div class="big">{hits_top}<span>of 20 right on the latest map of this test area; {map_precision} on average over all test areas</span></div>
       <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
     </div>
-    <div class="pic"><svg id="m3" class="map" role="img" aria-label="Floor plan with the analyser's top 20 cells ringed over the planted bad cells"></svg>
-      <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--ink);box-shadow:0 0 0 2px #fff inset;background:var(--planted)"></i>analyser's top 20</span><span><i style="border:2.5px dashed var(--stuck);background:transparent"></i>flagged, not planted</span><span>it can only find cells robots drive over: {map_ceiling} of them in one shift</span></div></div>
+    <div class="pic"><svg id="m3" class="map" role="img" aria-label="{map_top_label}"></svg>
+      <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--ink);box-shadow:0 0 0 2px var(--white) inset;background:var(--planted)"></i>analyser's top 20</span><span><i style="border:2.5px dashed var(--stuck);background:var(--clear)"></i>flagged, not planted</span><span>it can only find cells robots drive over: {map_ceiling} of them in one shift</span></div></div>
   </div>
 
   <div class="step">
@@ -447,7 +490,7 @@ a{color:var(--accent)}
       <p class="eb">Step 4 · the operator's list</p>
       <h2>Plain sentences. Each one checked afterwards.</h2>
       <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
-      <div class="big">{lt_hit}<span>of {lt_n} flagged cells were real planted cells</span></div>
+      <div class="pair"><div class="fig"><span class="fignum">{lt_hit}/{lt_n}</span><span class="figlab">real on the truth</span></div><div class="fig"><span class="fignum">{held}/{graded}</span><span class="figlab">still above average next window</span></div></div>
       <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.</span></div>
     </div>
     <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
@@ -535,12 +578,12 @@ const COPY = {
     if (o.flagged) {
       D.top.forEach(function (v, i) {
         var key = v[0], xy = key.split(',').map(Number), hit = planted[key] !== undefined;
-        el('rect', { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: '#fff', 'stroke-width': 4.4 });
+        el('rect', { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: 'var(--white)', 'stroke-width': 4.4 });
         var ring = { x: xy[0] * C + 1, y: xy[1] * C + 1, width: C - 3, height: C - 3, rx: 2.5, fill: 'none', stroke: hit ? 'var(--ink)' : 'var(--stuck)', 'stroke-width': 2.2 };
         if (!hit) ring['stroke-dasharray'] = '3 2';
         el('rect', ring, COPY.pick + (i + 1) + COPY.pickCell + key + (hit ? COPY.pickHit : COPY.pickMiss));
         if (i < 10) {
-          var tx = el('text', { x: xy[0] * C + C / 2 - 0.5, y: xy[1] * C + C / 2 + 3, 'text-anchor': 'middle', 'font-size': '8.5', 'font-weight': '700', fill: '#fff', stroke: 'var(--ink)', 'stroke-width': 2, 'paint-order': 'stroke', 'font-family': 'ui-sans-serif,system-ui,sans-serif', 'pointer-events': 'none' });
+          var tx = el('text', { x: xy[0] * C + C / 2 - 0.5, y: xy[1] * C + C / 2 + 3, 'text-anchor': 'middle', 'font-size': '8.5', 'font-weight': '700', fill: 'var(--white)', stroke: 'var(--ink)', 'stroke-width': 2, 'paint-order': 'stroke', 'font-family': 'ui-sans-serif,system-ui,sans-serif', 'pointer-events': 'none' });
           tx.textContent = String(i + 1);
         }
       });
@@ -576,7 +619,11 @@ def build(inputs):
             values[name] = num_element(name, inputs)
         except Exception as e:  # leaves its {name} in the page; main() names the cause and refuses to write
             errors[name] = "%s: %s" % (type(e).__name__, e)
-    for name, fn in (("ep_rows", example_rows), ("lessons_html", lesson_items), ("bars_html", bars_html)):
+    try:
+        values.update(map_labels(inputs))
+    except Exception as e:
+        errors["map_labels"] = "%s: %s" % (type(e).__name__, e)
+    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html)):
         try:
             values[name] = fn(inputs)
         except Exception as e:
