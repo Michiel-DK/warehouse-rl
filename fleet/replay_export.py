@@ -690,6 +690,8 @@ def lessons_long_constant(path):
         counts = _load_json(path, "lessons-long")["grading_counts"]
         truth, lesson = counts["lesson_truth"], counts["lesson"]
         lp = counts.get("lesson_persist")
+        if lp is not None and not isinstance(lp, dict):
+            raise ValueError(f"{path} grading_counts.lesson_persist is {type(lp).__name__}, expected an object")
         persist_held = None if lp is None else lp.get("ok", 0)
         persist_graded = None if lp is None else lp.get("ok", 0) + lp.get("off", 0)
         return dict(truth_hit=truth["hit"], truth_n=sum(truth.values()), held=lesson["ok"], graded=lesson["ok"] + lesson["off"],

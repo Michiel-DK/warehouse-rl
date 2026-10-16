@@ -61,6 +61,11 @@ class TestLessonsLongConstant(unittest.TestCase):
             self.assertIsNone(r["persist_graded"])
             self.assertEqual((r["truth_hit"], r["truth_n"], r["held"], r["graded"]), (27, 27, 9, 31))
 
+    def test_non_object_persist_is_a_value_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(ValueError, "lesson_persist"):
+                rx.lessons_long_constant(counts_file(td, lesson_persist=18))
+
 
 class TestRefreshMode(unittest.TestCase):
     def setUp(self):
