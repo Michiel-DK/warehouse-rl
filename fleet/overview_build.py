@@ -16,6 +16,7 @@ placeholder is left outside <script>/<style>.
 import argparse
 import html as htmllib
 import json
+import math
 import re
 import sys
 from collections import Counter
@@ -129,12 +130,28 @@ def resolve(src, inputs):
     return eval(code, {"__builtins__": {}}, env)  # the expression is built by this module, never read from user input
 
 
+DOSE_FIELD = re.compile(r"run_constants\.dose_response\.\d+\.(p_lo|p_hi|floor_loss|arms\.\w+\.share(?:_ci95\.[01])?)$")
+DOSE_KIND = {"p_lo": "g", "p_hi": "g", "floor_loss": "f1"}
+
+
+def kind_of(src):
+    """The format kind of a data-src: a named NUMS entry, or a run_constants.dose_response.<i>.<field> (any regime index)."""
+    if src in KIND_BY_SRC:
+        return KIND_BY_SRC[src]
+    m = DOSE_FIELD.search(src) if src.startswith(DATA + ":") else None
+    if m:
+        return DOSE_KIND.get(m.group(1), "pct0")
+    raise KeyError(src)
+
+
 def format_value(src, value):
-    kind = KIND_BY_SRC[src]
+    kind = kind_of(src)
     if kind == "int":
         return "{:,}".format(int(round(value)))
     if kind == "f1":
         return "{:.1f}".format(value)
+    if kind == "g":
+        return "{:g}".format(value)
     if kind == "pct0":
         return "{:.0f}%".format(value * 100)
     if kind == "pct1":
@@ -148,10 +165,14 @@ def format_value(src, value):
 
 def num_element(name, inputs):
     f, e, _ = NUMS[name]
-    src = "%s:%s" % (f, e)
+    return num_src("%s:%s" % (f, e), inputs)
+
+
+def num_src(src, inputs):
+    """<b class="num"> for any data-src that format_value knows."""
     value = resolve(src, inputs)
     if value is None:
-        raise ValueError("%s is null in %s" % (e, f))
+        raise ValueError("%s is null in %s" % (src.split(":", 1)[1], src.split(":", 1)[0]))
     return '<b class="num" data-src="%s">%s</b>' % (htmllib.escape(src), htmllib.escape(format_value(src, value)))
 
 
@@ -254,6 +275,140 @@ def bars_html(inputs):
                "%.2f" % ((b["ci95_high"] - b["ci95_low"]) / top * 100),
                num_element("bar%d_m" % i, inputs), num_element("bar%d_lo" % i, inputs), num_element("bar%d_hi" % i, inputs)))
     return "\n        ".join(rows)
+
+
+# ------------------------------------------------------------------------------------------------ S8R: when a map helps
+DOSE = "run_constants.dose_response"
+DOSE_STEP = 0.25          # the scale edges are multiples of this many shares (1 share = 100% of the floor loss)
+DOSE_STYLE = """<style>
+.dosewrap{margin-top:var(--sp-24);display:grid;gap:var(--sp-12)}
+.dose{margin:0;display:grid;gap:var(--sp-10)}
+.dose figcaption{font-weight:700;font-size:15px}
+.dgroups{display:grid;gap:var(--sp-12)}
+.dg{display:grid;gap:var(--sp-6);align-content:start;min-width:0}
+.dgh{font-size:12.5px;line-height:1.3;color:var(--ink-soft)}
+.dplot{position:relative;height:300px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--paper-deep);border-radius:6px}
+.dzero{position:absolute;left:0;right:0;height:2px;margin-bottom:var(--sp-n1);background:var(--ink);z-index:2}
+.dcol{position:relative}
+.dbar{position:absolute;left:14%;right:14%}
+.dbar.k0{background:var(--bar)} .dbar.k1{background:var(--accent)} .dbar.k2{background:var(--ink-soft)}
+.dwh{position:absolute;left:50%;transform:translateX(-50%);width:2px;background:var(--ink);box-shadow:0 0 0 1px var(--white);z-index:1}
+.dwh::before,.dwh::after{content:"";position:absolute;left:50%;transform:translateX(-50%);width:10px;height:2px;background:var(--ink)}
+.dwh::before{bottom:0} .dwh::after{top:0}
+.dvals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));font-size:11.5px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+.dkey{display:flex;flex-wrap:wrap;gap:var(--sp-6) var(--sp-16);font-size:12.5px;color:var(--muted)}
+.dkey i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:var(--sp-6)}
+.dkey i.k0{background:var(--bar)} .dkey i.k1{background:var(--accent)} .dkey i.k2{background:var(--ink-soft)}
+.dose-says{margin:0;font-size:14px;line-height:1.5;color:var(--ink-soft)}
+@media (max-width:480px){.dgroups{grid-template-columns:minmax(0,1fr)!important}}
+</style>"""
+DOSE_KEY_TEXT = ("Left to right in each group: %s. The vertical line on a bar is the 95%% interval, the dark line across is zero, "
+                 "and below it a setting makes the pick-rate worse. One scale for all bars.")
+
+
+def arm_name(key):
+    m = re.fullmatch(r"map_a(\d+)", key)
+    return "map alpha " + m.group(1) if m else key
+
+
+def dose_verdict(ci):
+    """verdict() of scripts/sprint8_tables.py on a share interval: hurts, helps or within noise."""
+    return "hurts" if ci[1] < 0 else ("helps" if ci[0] > 0 else "within noise")
+
+
+def dose_scale(entries, arms):
+    """(min, max) in shares: the common vertical scale, edges at multiples of DOSE_STEP, wide enough for every bar and whisker."""
+    pts = [0.0]
+    for e in entries:
+        for a in arms:
+            pts += [e["arms"][a]["share"], *e["arms"][a]["share_ci95"]]
+    return math.floor(min(pts) / DOSE_STEP) * DOSE_STEP, math.ceil(max(pts) / DOSE_STEP) * DOSE_STEP
+
+
+def _join(items):
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def dose_html(inputs):
+    """The 'When a map helps' figure and its two sentences, read only from run_constants.dose_response of data.js."""
+    entries = inputs[DATA]["run_constants"].get("dose_response")
+    if not entries:
+        raise ValueError("run_constants.dose_response is missing or empty in %s" % DATA)
+    arms = [a for a in entries[0]["arms"] if a != "none"]
+    maps = [a for a in arms if a.startswith("map_a")]
+    smin, smax = dose_scale(entries, arms)
+    span = smax - smin
+    pct = lambda v: (v - smin) / span * 100
+    src = lambda i, path: "%s:%s.%d.%s" % (DATA, DOSE, i, path)
+    n = lambda i, path: num_src(src(i, path), inputs)
+    fmt = lambda i, path: format_value(src(i, path), resolve(src(i, path), inputs))
+    groups, aria = [], []
+    for i, e in enumerate(entries):
+        cols, vals = [], []
+        for k, a in enumerate(arms):
+            sh, (lo, hi) = e["arms"][a]["share"], e["arms"][a]["share_ci95"]
+            cols.append(
+                '<div class="dcol"><span class="dbar k%d" data-regime="%s" data-arm="%s" data-share="%r" data-lo="%r" data-hi="%r" '
+                'style="bottom:%.3f%%;height:%.3f%%"></span><span class="dwh" style="bottom:%.3f%%;height:%.3f%%"></span></div>'
+                % (k, esc(e["label"]), esc(a), sh, lo, hi, pct(min(0.0, sh)), abs(sh) / span * 100, pct(lo), (hi - lo) / span * 100))
+            vals.append("<span>%s</span>" % n(i, "arms.%s.share" % a))
+        groups.append(
+            '<div class="dg" data-regime="%s"><div class="dgh">%s lines/h lost, p %s-%s</div>'
+            '<div class="dplot"><span class="dzero" style="bottom:%.3f%%"></span>%s</div><div class="dvals">%s</div></div>'
+            % (esc(e["label"]), n(i, "floor_loss"), n(i, "p_lo"), n(i, "p_hi"), pct(0), "".join(cols), "".join(vals)))
+        aria.append("%s, %s lines per hour lost: %s" % (
+            e["label"], fmt(i, "floor_loss"), ", ".join("%s %s" % (arm_name(a), fmt(i, "arms.%s.share" % a)) for a in arms)))
+    label = htmllib.escape("When a map helps. Share of the lost pick-rate won back, by how bad the floor is. " + "; ".join(aria) + ".",
+                           quote=True)
+    key = '<div class="dkey">%s</div>' % "".join('<span><i class="k%d"></i>%s</span>' % (k, esc(arm_name(a))) for k, a in enumerate(arms))
+    note = '<div class="legend"><span>%s</span></div>' % esc(DOSE_KEY_TEXT % ", ".join(arm_name(a) for a in arms))
+    figure = ('<figure class="dose" role="img" aria-label="%s" data-scale-min="%g" data-scale-max="%g" data-scale-unit="share" '
+              'data-scale-note="1 = 100%% of the floor loss"><figcaption>When a map helps</figcaption>'
+              '<div class="dgroups" style="grid-template-columns:repeat(%d,minmax(0,1fr))">%s</div>%s%s</figure>'
+              % (label, smin, smax, len(entries), "".join(groups), key, note))
+
+    # sentence 1: the verdict of the strongest penalty (map_a32) per regime; a run of equal verdicts shares one verb
+    target = "map_a32"
+    runs = []
+    for i, e in enumerate(entries):
+        v = dose_verdict(e["arms"][target]["share_ci95"])
+        part = '<span class="dv" data-verdict="%s" data-regime="%s">p %s-%s (share %s' % (
+            v, esc(e["label"]), n(i, "p_lo"), n(i, "p_hi"), n(i, "arms.%s.share" % target))
+        if v == "within noise":
+            part += ", interval %s to %s" % (n(i, "arms.%s.share_ci95.0" % target), n(i, "arms.%s.share_ci95.1" % target))
+        part += ")</span>"
+        if runs and runs[-1][0] == v:
+            runs[-1][1].append(part)
+        else:
+            runs.append((v, [part]))
+    verb = {"hurts": "hurts at", "helps": "helps at", "within noise": "is within noise at"}
+    name = arm_name(target)
+    s1 = "%s %s." % (esc(name[0].upper() + name[1:]), _join(["%s %s" % (verb[v], " and ".join(parts)) for v, parts in runs]))
+
+    # sentence 2: a map setting beats the oracle only where its interval lies wholly above the oracle's
+    beats, level = [], []
+    for i, e in enumerate(entries):
+        o = e["arms"]["oracle"]
+        for a in maps:
+            m = e["arms"][a]
+            if m["share_ci95"][0] > o["share_ci95"][1]:
+                beats.append((i, a))
+            elif m["share"] >= o["share"]:
+                level.append((i, a))
+    if beats:
+        head = _join(["%s beats the oracle at p %s-%s (share %s, interval %s to %s, against %s, interval %s to %s)" % (
+            esc(arm_name(a)), n(i, "p_lo"), n(i, "p_hi"), n(i, "arms.%s.share" % a), n(i, "arms.%s.share_ci95.0" % a),
+            n(i, "arms.%s.share_ci95.1" % a), n(i, "arms.oracle.share"), n(i, "arms.oracle.share_ci95.0"),
+            n(i, "arms.oracle.share_ci95.1")) for i, a in beats])
+    else:
+        head = "No map setting beats the oracle beyond noise"
+    s2 = head[0].upper() + head[1:]
+    if level:
+        s2 += (";" if beats else ":") + " " + _join(["%s at p %s-%s has the higher point share (%s against %s) but the intervals overlap" % (
+            esc(arm_name(a)), n(i, "p_lo"), n(i, "p_hi"), n(i, "arms.%s.share" % a), n(i, "arms.oracle.share")) for i, a in level])
+    s2 += "."
+    return ('<!-- dose-start --><div class="dosewrap">%s%s<p class="dose-says" data-says="target">%s</p>'
+            '<p class="dose-says" data-says="oracle">%s</p></div><!-- dose-end -->' % (DOSE_STYLE, figure, s1, s2))
 
 
 def script_data(inputs):
@@ -517,6 +672,7 @@ a{color:var(--accent)}
         {bars_html}
       </div>
       <div class="legend"><span>Order lines per hour, mean of {n_seeds} shifts. The bars come from a test on a floor that traps robots, not from the shift above. Bars start at zero; the line is the 95% interval.</span></div>
+{dose_html}
     </div>
   </div>
 
@@ -628,7 +784,7 @@ def build(inputs):
         values.update(map_labels(inputs))
     except Exception as e:
         errors["map_labels"] = "%s: %s" % (type(e).__name__, e)
-    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html)):
+    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html), ("dose_html", dose_html)):
         try:
             values[name] = fn(inputs)
         except Exception as e:

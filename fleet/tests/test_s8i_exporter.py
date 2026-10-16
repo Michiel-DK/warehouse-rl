@@ -58,8 +58,8 @@ class TestRunConstants(tre.Fixture):
     def test_without_the_optional_args_the_file_entries_are_null_and_the_export_succeeds(self):
         rc = self.payload["run_constants"]
         self.assertEqual(set(rc), {"ingest_msgs_per_s", "benchmark_msgs_per_s", "kept", "hotspot", "closed_loop", "audit", "header",
-                                   "speed", "lessons_long", "worth"})  # S8J: five more entries
-        for key in ("benchmark_msgs_per_s", "hotspot", "closed_loop", "speed", "lessons_long", "worth"):
+                                   "speed", "lessons_long", "worth", "dose_response"})  # S8J: five more entries; S8R: dose_response
+        for key in ("benchmark_msgs_per_s", "hotspot", "closed_loop", "speed", "lessons_long", "worth", "dose_response"):
             self.assertIsNone(rc[key], key)
 
     def test_file_entries_copy_the_files_and_name_the_path_as_given(self):
