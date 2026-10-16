@@ -15,8 +15,9 @@ one of the zone's floor_cells else "false_alarm"; the decision and decision_grad
 in a zone truth.json does not list raises. This file is the only place the grading path reads truth.json.
 Lesson decisions (fleet/lessons.py) are graded in every cycle too (fleet_analyser/lessons.py grade_lessons): an open
 lesson whose zone stream reached window_end + W gets a forecast_grades row "lesson" (ok / off against the next window of
-the same length) and then its stamp. --truth also writes a "lesson_truth" row (hit / false_alarm) for every hot_cell
-lesson; the lesson decision is never stamped by truth. counts["lesson"] = dict(graded, open[, truth]).
+the same length) and then its stamp. hot_cell and hot_robot lessons also get a "lesson_persist" row (ok iff the subject
+is still at or above the next window's own average stalled cell / robot; the decision is never touched by it). --truth also writes a "lesson_truth" row (hit / false_alarm) for every hot_cell
+lesson; the lesson decision is never stamped by truth. counts["lesson"] = dict(graded, open, persist = dict(graded, open)[, truth]).
 """
 import argparse
 import json
@@ -79,6 +80,7 @@ def cycle(spec, run, now=None, min_horizon_s=forecast_grade.DEFAULT_MIN_HORIZON_
         counts = grade.grade_run(st, run, grade.batch_now(st, run) if now is None else now)
         fc = dict(outcome=forecast_grade.grade_outcomes(st, run, min_horizon_s, tolerance, exclude_occupied))
         counts["lesson"] = lessons.grade_lessons(st, run)
+        counts["lesson"]["persist"] = lessons.grade_lessons_persist(st, run)
         if truth_path is not None:
             with open(truth_path) as f:  # the only read of the emitter's ground truth on the grading path
                 truth = json.load(f)

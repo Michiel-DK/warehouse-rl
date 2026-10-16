@@ -54,6 +54,13 @@ is e + 86400 as well. The same lesson_kind and subject is recomputed over that w
 support minimum (a subject with no events has value 0); verdict "ok" iff the threshold still holds, else "off". The
 forecast_grades row (grade_source "lesson") is written first, then the decision is stamped. Not eligible: nothing is
 written, the lesson stays open.
+
+Grading (grade_lessons_persist): hot_cell and hot_robot lessons ONLY get a second next-window grade, grade_source
+"lesson_persist": "still at or above the zone's average stalled cell (robot) in the next window". Same window and
+eligibility as grade_lessons ([e, e + W), stream_end(zone) >= e + W), but the ratio is the subject's k / (n / d) over the
+NEXT window's own n and d (never the claim's baseline), 0 when the subject or the zone is absent there; verdict "ok" iff
+ratio >= PERSIST_RATIO (1.0), else "off"; outcome = ratio (4 places), expected = 1.0. It walks every lesson of those kinds
+whatever the decision status (idempotency is write_once on (id, grade_source)) and never stamps or edits the decision.
 """
 import datetime
 import json
@@ -80,6 +87,9 @@ SUPPORT_ON_N = ("cause_mix", "avoidable_share")  # support = n; for every other 
 CLAIM_KEYS = ("text", "lesson_kind", "subject", "zone", "metric", "value", "baseline", "ratio", "n", "k", "confidence",
               "threshold", "n_min", "window_start", "window_end")
 UNKNOWN = "unknown"
+PERSIST_KINDS = ("hot_cell", "hot_robot")
+PERSIST_SOURCE = "lesson_persist"
+PERSIST_RATIO = 1.0
 
 
 # ------------------------------------------------------------------------------------------------ confidence
@@ -417,4 +427,33 @@ def grade_lessons(store, run):
                                               graded_at=end, window_end=e + span))
         if decisions.stamp_grade(store, d["id"], st["value"], None, verdict, end):
             graded += 1
+    return dict(graded=graded, open=still_open)
+
+
+def grade_lessons_persist(store, run):
+    """Write a lesson_persist row for every eligible hot_cell / hot_robot lesson (see module docstring). The decision is
+    never touched. Returns dict(graded = new rows, open = lessons whose next window is not yet fully observed)."""
+    data = None
+    ends = {}
+    graded = still_open = 0
+    for d in lessons(store, run):
+        claim = claim_of(d)
+        if claim["lesson_kind"] not in PERSIST_KINDS:
+            continue
+        zone, e = claim["zone"], claim["window_end"]
+        span = e - claim["window_start"]
+        if zone not in ends:
+            ends[zone] = forecast_grade.stream_end(store, run, zone)
+        end = ends[zone]
+        if end is None or end < e + span:
+            still_open += 1
+            continue
+        if data is None:
+            data = Data(store, run)
+        st, _ = next_value(data, claim)
+        ratio = st["ratio"] or 0
+        verdict = "ok" if ratio >= PERSIST_RATIO else "off"
+        graded += forecast_grade.write_once(store, dict(
+            id=d["id"], run=run, grade_source=PERSIST_SOURCE, outcome=_r4(ratio), expected=PERSIST_RATIO, error=None,
+            verdict=verdict, horizon_s=span, graded_at=end, window_end=e + span))
     return dict(graded=graded, open=still_open)

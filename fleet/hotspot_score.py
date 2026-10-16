@@ -10,7 +10,9 @@ cells) over the flagged cells, null below 3 flagged cells or when either side is
 the zone's floor cells with no stall of any kind in the store. Also: forecast_grades counts by (grade_source, verdict) as grading_counts: "outcome" = the
 rank grade (cell still in the zone's top K at window_end), "outcome_count" = the count grade (stall count within
 tolerance), "truth", and, when the store holds lessons (S8E), "lesson" (next-window grade) and "lesson_truth"
-(hot_cell lessons against the floor); lesson rows enter nothing else; rank_grading = {top_k: sorted K values seen, rank_graded: n forecasts with an "outcome" row,
+(hot_cell lessons against the floor); "lesson_persist" (S8L: hot_cell / hot_robot lessons still at or above the next window's average); lesson_grading =
+{grade_source: {lesson_kind: {verdict: n}}} for those three sources, from the rows joined by id to the run's lesson
+decisions (always present, {} without lesson decisions, a source with no rows omitted); lesson rows enter nothing else; rank_grading = {top_k: sorted K values seen, rank_graded: n forecasts with an "outcome" row,
 unranked: n forecasts with an "outcome_count" row but no "outcome" row (rank > K or a v1 claim)};
 stall_in_episode counts by detector cause, platform.
 """
@@ -25,9 +27,10 @@ REPO = FLEET.parent
 if str(FLEET) not in sys.path:
     sys.path.insert(0, str(FLEET))
 
-from fleet_analyser import store as store_mod  # noqa: E402
+from fleet_analyser import lessons, store as store_mod  # noqa: E402
 
 KS = (20, 40, 80, 120)
+LESSON_SOURCES = ("lesson", "lesson_persist", "lesson_truth")
 
 
 def ranked_cells(costmap_zone):
@@ -86,7 +89,7 @@ def _mean(vals):
     return sum(vals) / len(vals) if vals else None
 
 
-def score_run(truth, costmap, stalls, grades, ks=KS):
+def score_run(truth, costmap, stalls, grades, ks=KS, lesson_decisions=()):
     zones = {}
     for z in sorted(truth["zones"], key=lambda s: int(s) if s.isdigit() else s):
         floor = truth["zones"][z]["floor_cells"]
@@ -105,13 +108,20 @@ def score_run(truth, costmap, stalls, grades, ks=KS):
     count_ids = {g["id"] for g in grades if g["grade_source"] == "outcome_count"}
     rank_grading = dict(top_k=sorted({g["expected"] for g in grades if g["grade_source"] == "outcome"}),
                         rank_graded=len(outcome_ids), unranked=len(count_ids - outcome_ids))
+    kind_of = {d["id"]: lessons.claim_of(d)["lesson_kind"] for d in lesson_decisions}
+    lesson_grading = {}
+    for g in grades:
+        if g["grade_source"] in LESSON_SOURCES and g["id"] in kind_of:
+            by_verdict = lesson_grading.setdefault(g["grade_source"], {}).setdefault(kind_of[g["id"]], {})
+            by_verdict[g["verdict"]] = by_verdict.get(g["verdict"], 0) + 1
     in_episode = {}
     for s in stalls:
         if s["in_episode"] is not None:
             in_episode[s["in_episode"]] = in_episode.get(s["in_episode"], 0) + 1
     return dict(zones=zones, mean=mean, grading_counts=grading, rank_grading=rank_grading,
                 stall_in_episode=dict(total_stalls=len(stalls), in_episode=sum(in_episode.values()),
-                                      by_cause=dict(sorted(in_episode.items()))))
+                                      by_cause=dict(sorted(in_episode.items()))),
+                lesson_grading=lesson_grading)
 
 
 def main(argv=None):
@@ -134,8 +144,9 @@ def main(argv=None):
         p.error(str(e))
     stalls = st.select("stalls", {"run": run})
     grades = st.select("forecast_grades", {"run": run})
+    lesson_decisions = st.select("decisions", {"run": run, "kind": "lesson"})
     st.close()
-    res = score_run(truth, costmap, stalls, grades)
+    res = score_run(truth, costmap, stalls, grades, lesson_decisions=lesson_decisions)
     res.update(tag=a.tag, run=run,
                config=dict(env_id=truth["env_id"], disturb_tag=truth["disturb_tag"], disturb=truth["disturb"],
                            steps=truth["steps"], seed_base=truth["seed_base"], zones=len(truth["zones"]),
@@ -155,6 +166,7 @@ def main(argv=None):
         print(f"  K={k}: precision {m['k'][str(k)]['precision']:.3f} recall {'n/a' if rec is None else format(rec, '.3f')}")
     print(f"  grading {res['grading_counts']}; rank_grading {res['rank_grading']}; "
           f"stall_in_episode {res['stall_in_episode']}")
+    print(f"  lessons {res['lesson_grading']}")
     print(f"-> {out}")
     return 0
 
