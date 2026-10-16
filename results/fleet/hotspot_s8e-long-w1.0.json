@@ -128,6 +128,10 @@
   "lesson_truth": {
    "hit": 28,
    "false_alarm": 1
+  },
+  "lesson_persist": {
+   "ok": 12,
+   "off": 1
   }
  },
  "rank_grading": {
@@ -144,6 +148,30 @@
    "blocked_by_stuck": 18,
    "traffic": 24,
    "unknown": 74
+  }
+ },
+ "lesson_grading": {
+  "lesson": {
+   "hot_cell": {
+    "off": 10,
+    "ok": 3
+   },
+   "cause_mix": {
+    "ok": 1,
+    "off": 1
+   }
+  },
+  "lesson_truth": {
+   "hot_cell": {
+    "hit": 28,
+    "false_alarm": 1
+   }
+  },
+  "lesson_persist": {
+   "hot_cell": {
+    "ok": 12,
+    "off": 1
+   }
   }
  },
  "tag": "s8e-long-w1.0",
