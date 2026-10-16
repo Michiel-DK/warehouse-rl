@@ -381,8 +381,10 @@ class TestGrading(unittest.TestCase):
             checkpoint(st, BASE + 2 * W)
             st.close()
             counts = grade.cycle(f"jsonl:{Path(d) / 'store'}", RUN)
-            self.assertEqual(counts["lesson"], dict(graded=1, open=0))
-            self.assertIn("lessons {'graded': 1, 'open': 0}", grade.show(RUN, counts))
+            # S8L: cycle adds the lesson_persist counts under "persist"
+            self.assertEqual(counts["lesson"], dict(graded=1, open=0, persist=dict(graded=1, open=0)))
+            self.assertIn("lessons {'graded': 1, 'open': 0, 'persist': {'graded': 1, 'open': 0}}",
+                          grade.show(RUN, counts))
 
 
 class TestLessonTruth(unittest.TestCase):
