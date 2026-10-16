@@ -206,7 +206,7 @@
     noPublish: 'No publishes, so nothing to grade.',
     noMapTop: 'no map published yet',
     noFlag: 'the latest map flags no cell',
-    pubName: 'Publish at {time}: {calls} calls, top-{k} hit rate {p} ({hits}/{k})',
+    pubName: 'Publish at {time}: {calls} calls, top-{n} hit rate {p} ({hits}/{k})',
     outcomeLine: '{ok} {okText}, {off} {offText}',
     openLine: '{n} open: the horizon ends after the stream',
     knownAt: 'outcome known at {time}',
@@ -216,7 +216,7 @@
     topFlagNo: '  [not on one]',
     topLive: '{cell}  cost {cost}{flag}',
     topLiveMine: '  [placed by you]',
-    notes: ['Top-{k} hit rate: of the {k} most-flagged cells, how many sit on a hidden floor problem.',
+    notes: ['Top-{n} hit rate: of the {k} most-flagged cells, how many sit on a hidden floor problem.',
             'The map is rules plus a decayed count of stalls per cell, and nothing is trained.',
             'Every call is graded afterwards, the count and rank grades against what happened next and the truth grade against the hidden layout, which the analyser never reads.',
             'Cells nobody drives over cannot be found, because a stall needs a robot to try to enter the cell.'],
@@ -958,7 +958,7 @@
     graded.forEach(function (g) {
       var box = el('div', 'pub');
       var pr = pubs[GRADES.indexOf(g)];
-      box.appendChild(el('div', 'name', fill(DETAILS_COPY.pubName, { time: clockAt(g.t), calls: g.forecasts, p: pr.precision_at_20.toFixed(2), hits: topHits(pr), k: topK(pr) })));
+      box.appendChild(el('div', 'name', fill(DETAILS_COPY.pubName, { time: clockAt(g.t), calls: g.forecasts, p: pr.precision_at_20.toFixed(2), hits: topHits(pr), k: topK(pr), n: TOP_N })));
       var outcomeKnown = g.window_end_step !== null && g.window_end_step <= step;
       var w = wording(g.outcome_kind);
       var r1 = el('div', 'row');
@@ -1012,7 +1012,7 @@
         flag: obstacleSet[r[0]] ? DETAILS_COPY.topFlagYes : DETAILS_COPY.topFlagNo })));
     });
   }
-  function notesText(k) { return DETAILS_COPY.notes.map(function (n) { return fill(n, { k: k }); }).join(' '); }
+  function notesText(k) { return DETAILS_COPY.notes.map(function (n) { return fill(n, { k: k, n: TOP_N }); }).join(' '); }
   $('detail-notes').textContent = notesText(TOP_N);
 
   // ---- panel 4: lines for the operators (replay adapter) ----
@@ -1536,22 +1536,22 @@
     function liveAnalyser(s) {
       var cells = s.costmap ? s.costmap.cells : {};
       var ranked = Object.keys(cells).sort(function (a, b) { return cells[b] - cells[a] || (a < b ? -1 : 1); });
-      var right = null, found = null, topN = null;
+      var right = null, found = null, topN = null, k = s.costmap ? Math.min(TOP_N, ranked.length) : TOP_N;
       if (s.truth) {
         var planted = {};
         [s.truth.scheduled, s.truth.injected].forEach(function (m) { Object.keys(m || {}).forEach(function (k) { planted[k] = true; }); });
         var n = Object.keys(planted).length;
-        topN = ranked.slice(0, TOP_N).filter(function (k) { return planted[k]; }).length;
-        right = topN / TOP_N;
+        topN = ranked.slice(0, k).filter(function (c) { return planted[c]; }).length;
+        right = k ? topN / k : 0;
         found = n ? ranked.slice(0, n).filter(function (k) { return planted[k]; }).length / n : null;
       }
       var at = s.costmap ? s.costmap.generated_at : null;
       if (right !== null && at !== seriesAt) { seriesAt = at; series.push(right); }
       var g = s.grades.forecasts, total = g.ok + g.off + g.pending + g.not_gradable;
-      return { top: topN, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
+      return { top: topN, k: k, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
         note: !s.costmap ? VISIBLE_COPY.analyser.noMap : (s.truth === null ? VISIBLE_COPY.analyser.needTruth : ''),
         series: series.map(function (p, i) { return { x: series.length > 1 ? i / (series.length - 1) : 0, p: p }; }),
-        hover: { right: s.truth ? fill(HOVER_COPY.rightLive, { k: TOP_N }) : '', found: s.truth ? HOVER_COPY.foundLive : '',
+        hover: { right: s.truth ? fill(HOVER_COPY.rightLive, { k: k }) : '', found: s.truth ? HOVER_COPY.foundLive : '',
                  checks: fill(HOVER_COPY.checksLive, { ok: g.ok, off: g.off, pending: g.pending, na: g.not_gradable }) } };
     }
     // panel 4: state.lessons, newest first (the server sorts them)

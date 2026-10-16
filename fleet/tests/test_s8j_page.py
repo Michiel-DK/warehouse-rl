@@ -594,18 +594,40 @@ class TestS8NReplay(unittest.TestCase):
         self.assertIn("Of the 12 cells flagged most strongly", last["hovers"]["s-right"])
         self.assertIn("({}/12)".format(n), last["hovers"]["s-right"])
         self.assertNotIn("/20)", last["hovers"]["s-right"])
-        self.assertIn("top-12 hit rate", text_of(last, "grades") if "grades" in last["ids"] else "")
+        self.assertIn("top-20 hit rate", text_of(last, "grades"))  # the stored field is precision_at_20 (hits / 20)
+        self.assertIn(f"({n}/12)", text_of(last, "grades"))
         self.assertIn("of the 12 most-flagged cells", text_of(last, "detail-notes"))
 
     def test_the_committed_data_keeps_k_at_20(self):
-        out = run_page(self, dict(steps=[0, 499], ids=IDS + ["detail-notes", "grades"], hover_ids=["s-right"]), DOCS / "data.js")
+        out = run_page(self, dict(steps=[0, 499], ids=IDS + ["detail-notes", "grades", "big-k-lead", "big-k-tail"], hover_ids=["s-right"]),
+                       DOCS / "data.js")
         last = out[-1]["snap"]
+        for snap in (out[0]["snap"], last):  # the two K slots are filled by the page, and read 20 on the committed data
+            self.assertEqual((text_of(snap, "big-k-lead"), text_of(snap, "big-k-tail")), ("20", "20"))
         self.assertEqual(text_of(out[0]["snap"], "s-right"), "Its 20 strongest picks: — of 20 real.")
         self.assertEqual(text_of(last, "s-right"), "Its 20 strongest picks: 20 of 20 real.")
         self.assertIn("Of the 20 cells flagged most strongly", last["hovers"]["s-right"])
         self.assertIn("of the 20 most-flagged cells", text_of(last, "detail-notes"))
         self.assertIn("top-20 hit rate", text_of(last, "grades"))
         self.assertIn("(20/20)", text_of(last, "grades"))
+
+    def test_live_mode_reads_k_from_the_costmap_when_it_has_fewer_than_20_cells(self):
+        grid = dict(width=6, height=4, highway=["111111"] * 4, goals=[[0, 3]], agvs=2)
+        state = dict(
+            step=40, sim_time="2026-01-01T00:03:20Z",
+            robots=[dict(id="Z0-01", x=1, y=1, raw="moving", state="moving", job="o1", waiting_s=0, call=None)],
+            ledger=dict(pgid=1, run="live", emit_status="running", messages_emitted=480, expected_messages=None, steps_done=41,
+                        injections_applied=0, injections_posted=0, messages_parsed=470, messages_rejected=6, duplicates=4,
+                        bytes_read=250000, bytes_emitted_uncompressed=260000, messages_per_s=47.9),
+            costmap=dict(cells={"2,2": 0.9, "3,1": 0.4}, generated_at="2026-01-01T00:03:00Z"),
+            top10=[dict(cell="2,2", cost=0.9), dict(cell="3,1", cost=0.4)], lessons=[],
+            grades=dict(lessons=dict(ok=0, off=0, pending=0, not_gradable=0), forecasts=dict(ok=1, off=0, pending=3, not_gradable=0)),
+            injections=[], truth=dict(scheduled={"2,2": 0.5}, injected={}))
+        out = run_page(self, dict(search="?live=http://127.0.0.1:8765", ids=IDS + ["big-k-lead"], hover_ids=["s-right"],
+                                  fetch={"/grid": grid, "/state": state}))
+        snap = out[0]["snap"]
+        self.assertEqual(text_of(snap, "s-right"), "Its 2 strongest picks: 1 of 2 real.")
+        self.assertIn("Of the 2 cells flagged most strongly", snap["hovers"]["s-right"])
 
     def test_no_copy_table_types_the_20_of_the_strongest_picks_sentence_any_more(self):
         js = (DOCS / "replay.js").read_text(encoding="utf-8")
