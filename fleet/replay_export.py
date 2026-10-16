@@ -113,8 +113,11 @@ kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) 
                                    robot_rate = ledger zones[Z].messages / (meta.steps * STEP_SECONDS), ingest_rate =
                                    benchmark batch.msgs_per_s, ratio = floor(ingest_rate / robot_rate). Null without
                                    --benchmark or the ledger count.
-                lessons_long       {truth_hit, truth_n, held, graded, source} from --lessons-long: grading_counts.lesson_truth.hit,
-                                   sum(grading_counts.lesson_truth.values()), grading_counts.lesson.ok, lesson.ok + lesson.off.
+                lessons_long       {truth_hit, truth_n, held, graded, persist_held, persist_graded, source} from --lessons-long:
+                                   grading_counts.lesson_truth.hit, sum(grading_counts.lesson_truth.values()),
+                                   grading_counts.lesson.ok, lesson.ok + lesson.off, and persist_held = lesson_persist.ok,
+                                   persist_graded = lesson_persist.ok + lesson_persist.off (both null when the JSON has no
+                                   lesson_persist; zero-count keys are omitted from grading_counts, hence .get).
                                    Context from a longer independent run, not from this shift.
                 worth              {bars [{key, mean, ci95_low, ci95_high, source}] in the order none, map_a32, oracle_a32,
                                    undisturbed, map_share, map_share_ci95, oracle_share, oracle_share_ci95, n_seeds, label,
@@ -686,8 +689,11 @@ def lessons_long_constant(path):
     try:
         counts = _load_json(path, "lessons-long")["grading_counts"]
         truth, lesson = counts["lesson_truth"], counts["lesson"]
+        lp = counts.get("lesson_persist")
+        persist_held = None if lp is None else lp.get("ok", 0)
+        persist_graded = None if lp is None else lp.get("ok", 0) + lp.get("off", 0)
         return dict(truth_hit=truth["hit"], truth_n=sum(truth.values()), held=lesson["ok"], graded=lesson["ok"] + lesson["off"],
-                    source=path)
+                    persist_held=persist_held, persist_graded=persist_graded, source=path)
     except (KeyError, TypeError) as e:
         raise ValueError(f"{path} lacks grading_counts.lesson / lesson_truth ({e})") from e
 
@@ -967,10 +973,45 @@ def read_data_js(path):
     return json.loads(text[len(PREFIX):].rstrip().removesuffix(";"))
 
 
+def refresh_constants(out, lessons_long_path, max_bytes=MAX_BYTES):
+    """Rewrite only run_constants.lessons_long of an existing data.js by text splice. Returns the new byte size."""
+    out = Path(out)
+    if not out.is_file():
+        raise ValueError(f"--out {out} does not exist (refresh mode never creates a file)")
+    text = out.read_text(encoding="utf-8")
+    if not text.startswith(PREFIX):
+        raise ValueError(f"{out} does not start with {PREFIX!r}")
+    key = '"lessons_long":'
+    if text.count(key) != 1:
+        raise ValueError(f'{out}: {key} occurs {text.count(key)} times, expected exactly once')
+    start = text.index(key) + len(key)
+    _, end = json.JSONDecoder().raw_decode(text, start)
+    new_value = json.dumps(lessons_long_constant(lessons_long_path), separators=(",", ":"), allow_nan=False)
+    new_text = text[:start] + new_value + text[end:]
+    before = json.loads(text[len(PREFIX):].rstrip().removesuffix(";"))
+    after = json.loads(new_text[len(PREFIX):].rstrip().removesuffix(";"))
+    before["run_constants"].pop("lessons_long")
+    after["run_constants"].pop("lessons_long")
+    if before != after:
+        raise ValueError("refresh would change keys other than run_constants.lessons_long")
+    data = new_text.encode("utf-8")
+    if len(data) > max_bytes:
+        raise ValueError(f"replay payload is {len(data)} bytes, over the {max_bytes} byte cap")
+    tmp = out.with_name(out.name + ".tmp")
+    with open(tmp, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, out)
+    return len(data)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--run-dir", required=True)
-    p.add_argument("--store", required=True, help="jsonl:<dir> or clickhouse://host[:port]/db (read only)")
+    p.add_argument("--refresh-constants-only", action="store_true",
+                   help="rewrite only run_constants.lessons_long of the existing --out from --lessons-long (no re-simulation)")
+    p.add_argument("--run-dir", default=None)
+    p.add_argument("--store", default=None, help="jsonl:<dir> or clickhouse://host[:port]/db (read only)")
     p.add_argument("--zone", default="0")
     p.add_argument("--out", required=True)
     p.add_argument("--closed-loop", default=None, metavar="DIR", help="results/closed_loop: adds the with_map layer")
@@ -984,6 +1025,18 @@ def main(argv=None):
         p.add_argument("--sticky-" + arm.replace("_", "-"), default=None, metavar="PATH",
                        help=f"results/closed_loop_sticky/{arm}/*.json (one row file): a bar of run_constants.worth")
     a = p.parse_args(argv)
+    if a.refresh_constants_only:
+        if a.lessons_long is None:
+            p.error("--refresh-constants-only requires --lessons-long")
+        try:
+            n = refresh_constants(a.out, a.lessons_long)
+        except (ValueError, OSError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print(f"refreshed run_constants.lessons_long, {n} bytes -> {a.out}")
+        return 0
+    if a.run_dir is None or a.store is None:
+        p.error("--run-dir and --store are required (unless --refresh-constants-only)")
     try:
         payload = build_payload(a.run_dir, a.store, a.zone, a.closed_loop, run_dir_arg=a.run_dir,
                                 closed_loop_arg=a.closed_loop, benchmark=a.benchmark, hotspot_file=a.hotspot,
