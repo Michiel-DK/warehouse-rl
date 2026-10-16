@@ -841,8 +841,8 @@ Findings, 2026-10-16 (queue items `wr-s8c-dose-response`, `wr-s8c-long-shift`, `
   than no map at p 0.3-0.7 and beats no map from p 0.8 up. The headline regime p 0.3-0.7 remains "does not".
 - **Longer shift.** Running the sticky regime at 1,500 steps instead of 500 shows no growth in the map's share.
 - **Guidance tuning (S8M).** On held-out seeds 10-29 the tuned map->weight transform beats no map and beats the identity
-  transform (alpha 4). It is within noise of the fixed alpha-32 map, with a lower point estimate. So tuning bought
-  nothing beyond "use a high alpha on a sticky floor".
+  transform (alpha 4). It is within noise of the fixed alpha-32 map, with a lower point estimate, so it is not shown to
+  beat a plain high alpha on a sticky floor.
 
 Next layers, listed with no claims. Each would be a later one-lane addition with the four-part contract (ground
 truth preset, blind analyst feature, planner input, graded decision kind):
