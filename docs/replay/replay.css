@@ -141,8 +141,12 @@ details[data-details] > summary { cursor: pointer; color: var(--accent); font-we
 .foot p { margin: 4px 0; max-width: 110ch; }
 .foot ul { margin: 4px 0; padding-left: 1.2em; overflow-wrap: anywhere; }
 #htip { white-space: pre-line; max-width: min(340px, calc(100vw - 16px)); }
-/* the funnel stacks while panel 2 is half the page or narrower, so a long Arrived number never overflows its box */
-@media (max-width: 1400px) {
+/* the funnel stays side by side down to 900px and stacks below it. Side by side the boxes can shrink (min-width 0), the
+   number scales with the viewport (26px from 1400px up, 16.7px at 901px) and wraps anywhere, so a long Arrived number
+   never overflows its box. */
+.funnel > .fbox { min-width: 0; }
+@media (min-width: 901px) { .fbox .big { font-size: clamp(16px, 1.857vw, var(--fs-big)); } }
+@media (max-width: 900px) {
   .funnel { grid-template-columns: 1fr; }
   .farrow { flex-direction: row; gap: 8px; max-width: none; justify-content: flex-start; }
   .farrow .glyph { transform: rotate(90deg); }

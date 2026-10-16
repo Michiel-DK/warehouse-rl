@@ -593,5 +593,181 @@ class TestLinksAndShell(Committed):
             self.assertIn(needle, t)
 
 
+# ------------------------------------------------------------------------------------------------ S8N-PAGE-NITS (overview: 1 to 5)
+NAMED = set("""aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue
+chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey
+darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray
+darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia
+gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender
+lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey
+lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen
+magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen
+mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange
+orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple
+rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray
+slategrey snow springgreen steelblue tan teal thistle tomato transparent turquoise violet wheat white whitesmoke yellow
+yellowgreen""".split())
+HEX = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])")
+FUNC = re.compile(r"\b(?:rgb|rgba|hsl|hsla)\(")
+SPACING = re.compile(r"(?:^|[;{\s])(margin[\w-]*|padding[\w-]*|gap|row-gap|column-gap|inset[\w-]*|top|left|right|bottom)\s*:\s*([^;}]*)")
+ROOT_BLOCK = re.compile(r":root\s*\{[^}]*\}")
+
+
+def style_text(html_text):
+    return "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", html_text, re.S))
+
+
+def outside_root(css):
+    return ROOT_BLOCK.sub(" ", css)
+
+
+def declarations(css):
+    """[(property, value)] of every `prop: value` in a style block or style attribute (selectors and @media conditions are not matched)."""
+    return [(m.group(1), m.group(2)) for m in re.finditer(r"(?:^|[;{])\s*([a-z-]+)\s*:\s*([^;{}]*)", css)]
+
+
+def colour_findings(text):
+    text = re.sub(r"url\(#[^)]*\)", " ", text)
+    return HEX.findall(text) + FUNC.findall(text)
+
+
+class TestS8NColoursAndSpacing(Committed):
+    def sources(self):
+        """(label, css text) for the style block (outside :root) and every style attribute."""
+        out = [("style block", outside_root(style_text(self.html)))]
+        for n in self.root.walk():
+            if n.attrs.get("style"):
+                out.append(("style attribute", n.attrs["style"]))
+        return out
+
+    def script(self):
+        return "\n".join("".join(n.kids) for n in self.root.walk() if n.tag == "script" and not n.attrs.get("src"))
+
+    def test_no_colour_value_outside_root_in_style_attributes_or_script(self):
+        for label, css in self.sources():
+            self.assertEqual(colour_findings(css), [], label)
+            for prop, value in declarations(css):
+                if prop in ("font-family", "content", "font"):
+                    continue
+                words = set(re.findall(r"[a-zA-Z]+", re.sub(r"var\([^)]*\)|'[^']*'|\"[^\"]*\"", " ", value)))
+                self.assertEqual(sorted(w for w in words if w.lower() in NAMED), [], "%s: %s: %s" % (label, prop, value))
+        js = self.script()
+        self.assertEqual(colour_findings(js), [])
+        quoted = re.findall(r"'([^'\\]*)'", js)
+        self.assertEqual([q for q in quoted if q.strip().lower() in NAMED], [])
+
+    def test_root_defines_every_colour_once(self):
+        root = ROOT_BLOCK.search(style_text(self.html)).group(0)
+        values = {}
+        for name, value in re.findall(r"(--[\w-]+)\s*:\s*([^;}]+)", root):
+            v = value.strip()
+            if HEX.fullmatch(v) or FUNC.match(v) or v.lower() in NAMED:
+                if HEX.fullmatch(v) and len(v) == 4:
+                    v = "#" + "".join(c * 2 for c in v[1:])
+                key = re.sub(r"\s+", "", v.lower())
+                self.assertNotIn(key, values, "%s and %s define the same colour %s" % (name, values.get(key), v))
+                values[key] = name
+        self.assertGreater(len(values), 20)
+        for name in set(re.findall(r"var\((--[\w-]+)\)", self.html)):
+            self.assertIn(name + ":", root, name)
+
+    def test_no_px_rem_em_literal_in_a_spacing_declaration_outside_root(self):
+        seen = 0
+        for label, css in self.sources():
+            for m in SPACING.finditer(css):
+                seen += 1
+                self.assertIsNone(re.search(r"\d(?:px|rem|em)\b", m.group(2)), "%s: %s: %s" % (label, m.group(1), m.group(2)))
+        self.assertGreater(seen, 60)
+
+    def test_each_spacing_token_is_named_after_its_value(self):
+        root = ROOT_BLOCK.search(style_text(self.html)).group(0)
+        toks = re.findall(r"(--sp-(n?)([\d_]+))\s*:\s*([^;}\s]+)", root)
+        self.assertGreater(len(toks), 20)
+        for name, neg, num, value in toks:
+            self.assertEqual(value, "%s%spx" % ("-" if neg else "", num.replace("_", ".")), name)
+
+    def test_the_logo_font_and_display_swap_are_kept(self):  # keep-invariant: true on master
+        link = re.search(r'<link rel="stylesheet" href="([^"]*fonts\.googleapis\.com[^"]*)"', self.html)
+        self.assertIn("display=swap", link.group(1))
+        stack = re.search(r"--font-logo\s*:\s*([^;}]+)", style_text(self.html)).group(1)
+        parts = [x.strip() for x in stack.split(",")]
+        self.assertEqual(parts[0], "'Titan One'")
+        self.assertIn(parts[-1], ("serif", "sans-serif", "monospace", "cursive", "system-ui"))
+        self.assertIn("var(--font-logo)", self.html)
+
+
+class TestS8NGlossStepFourAndMapLabels(Committed):
+    def test_robot_id_gloss_once_before_the_first_example_row(self):
+        notes = self.root.find_all(cls="idnote")
+        self.assertEqual(len(notes), 1)
+        rows = self.root.find_all("div", "ep")
+        first = rows[0].find_all("span", "who")[0].text()
+        m = re.fullmatch(r"Z(\d+)-(\d+)", first)
+        self.assertTrue(m, first)
+        self.assertEqual(notes[0].text(), "%s = test area %s, robot %s" % (first, m.group(1), m.group(2)))
+        self.assertLess(self.html.index('class="idnote"'), self.html.index('class="who"'))
+        leaves = [n for n in self.root.walk() if n.tag not in ("html", "body", "main", "#root") and "= test area" in n.text()
+                  and not any(isinstance(k, Node) and "= test area" in k.text() for k in n.kids)]
+        self.assertEqual(len(leaves), 1)
+
+    def test_the_gloss_is_built_from_the_first_row_of_a_changed_fixture(self):
+        def mutate(name, doc):
+            if name == D:
+                for e in doc["episodes"]:
+                    e["robot"] = "Z3-" + e["robot"].split("-")[1]
+        with tempfile.TemporaryDirectory() as td:
+            fx = write_fixture(Path(td) / "fx", mutate=mutate)
+            out = Path(td) / "o.html"
+            rc, err = run_builder(fx, out)
+            self.assertEqual(rc, 0, err)
+            root = parse(out.read_text(encoding="utf-8"))
+        first = root.find_all("div", "ep")[0].find_all("span", "who")[0].text()
+        self.assertTrue(first.startswith("Z3-"))
+        self.assertEqual(root.find_all(cls="idnote")[0].text(), "%s = test area 3, robot %s" % (first, first.split("-")[1]))
+
+    def test_step_four_shows_both_figures_at_one_size_each_with_its_label(self):
+        ll = self.inputs[D]["run_constants"]["lessons_long"]
+        figs = self.root.find_all(cls="fignum")
+        self.assertEqual([f.text() for f in figs], ["%d/%d" % (ll["truth_hit"], ll["truth_n"]), "%d/%d" % (ll["held"], ll["graded"])])
+        labels = []
+        for f in figs:
+            sib = [k for k in f.parent.kids if isinstance(k, Node)]
+            nxt = sib[sib.index(f) + 1]
+            self.assertIn("figlab", nxt.classes)
+            labels.append(nxt.text())
+        self.assertEqual(labels, ["real on the truth", "still above average next window"])
+        self.assertEqual(len({tuple(f.classes) for f in figs}), 1)
+        self.assertNotIn("flagged cells were real planted cells", self.html)
+        chip = ("Tested, weakly. Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times, "
+                "but only %d of %d calls repeated in the next half hour; the repeat test is being reworked."
+                % (ll["truth_hit"], ll["truth_n"], ll["held"], ll["graded"]))
+        self.assertEqual(sum(1 for n in self.root.find_all(cls="st") if n.text() == chip), 1)
+
+    def script_data(self):
+        js = "\n".join("".join(n.kids) for n in self.root.walk() if n.tag == "script")
+        return json.loads(re.search(r"const D = (\{.*?\});\nconst COPY", js, re.S).group(1))
+
+    def test_each_map_has_role_img_and_exactly_one_aria_label_built_from_the_data(self):
+        d = self.inputs[D]
+        js_data = self.script_data()
+        distinct = {tuple(e["cell"]) for e in d["episodes"]}
+        self.assertEqual(len({tuple(c) for c in js_data["stuck_cells"]}), len(distinct))
+        top = d["publishes"][-1]["cells"][:ob.TOP_K]
+        want = {"m1": (len(distinct), "distinct cells"), "m2": (len(d["obstacles"]), "planted cells"), "m3": (len(top), "ringed cells")}
+        self.assertEqual(len(js_data["obstacles"]), want["m2"][0])
+        self.assertEqual(len(js_data["top"]), want["m3"][0])
+        svgs = {n.attrs.get("id"): n for n in self.root.find_all("svg")}
+        for mid, (count, unit) in want.items():
+            tags = re.findall(r'<svg id="%s"[^>]*>' % mid, self.html)
+            self.assertEqual(len(tags), 1, mid)
+            self.assertEqual(len(re.findall(r"aria-label=", tags[0])), 1, mid)
+            self.assertNotIn("aria-labelledby", tags[0])
+            self.assertIn('role="img"', tags[0])
+            self.assertEqual([k for k in svgs[mid].kids if isinstance(k, Node) and k.tag == "title"], [])
+            self.assertRegex(svgs[mid].attrs["aria-label"], r"(?<![\d,])%d %s\b" % (count, unit), mid)
+        self.assertIn(top[0][0], svgs["m3"].attrs["aria-label"])
+        self.assertNotIn("every stuck period marked", self.html)
+
+
 if __name__ == "__main__":
     unittest.main()

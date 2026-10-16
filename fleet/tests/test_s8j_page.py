@@ -505,5 +505,137 @@ class TestRender(unittest.TestCase):
         self.assertEqual(text_of(snap, "big-dropped"), "—")
 
 
+# ------------------------------------------------------------------------------------------------ S8N-PAGE-NITS (replay: 6, 7, 8)
+def css_rules(css):
+    """[(context, selector, body)]: context is None at top level, else the normalised @media condition of the block."""
+    css = re.sub(r"/\*.*?\*/", " ", css, flags=re.S)
+    out, i = [], 0
+    while i < len(css):
+        j = css.find("{", i)
+        if j < 0:
+            break
+        head = " ".join(css[i:j].split())
+        depth, k = 1, j + 1
+        while depth:
+            depth += {"{": 1, "}": -1}.get(css[k], 0)
+            k += 1
+        body = css[j + 1:k - 1]
+        if head.startswith("@media"):
+            for ctx, sel, b in css_rules(body):
+                out.append((" ".join(head[len("@media"):].split()), sel, b))
+        else:
+            out.append((None, head, " ".join(body.split())))
+        i = k
+    return out
+
+
+class TestS8NReplay(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.d = read_data()
+        cls.rules = css_rules((DOCS / "replay.css").read_text(encoding="utf-8"))
+
+    def rule(self, selector, needle):
+        return [ctx for ctx, sel, body in self.rules if sel == selector and needle in body]
+
+    # nit 6: the funnel stacks at 900px, not at 1400px
+    def test_the_funnel_stacking_rules_sit_only_under_max_width_900(self):
+        for selector, needle in ((".funnel", "grid-template-columns: 1fr;"), (".farrow", "flex-direction: row"),
+                                 (".farrow .glyph", "rotate(90deg)")):
+            self.assertEqual(self.rule(selector, needle), ["(max-width: 900px)"], selector)
+
+    def test_no_funnel_rule_is_left_in_a_1400_block_and_the_wide_layout_is_side_by_side(self):
+        for ctx, sel, body in self.rules:
+            if ctx and "1400" in ctx:
+                self.assertIsNone(re.search(r"\.(funnel|farrow)\b", sel), (ctx, sel))
+        top = {sel: body for ctx, sel, body in self.rules if ctx is None}
+        self.assertEqual(top[".funnel"].count("auto"), 3)  # seven columns: box arrow box arrow box arrow box
+        self.assertIn("flex-direction: column", top[".farrow"])
+
+    def test_the_900_to_1400_band_has_its_overflow_handling_outside_any_1400_block(self):
+        self.assertTrue(self.rule(".funnel > .fbox", "min-width: 0"))
+        self.assertEqual(self.rule(".fbox .big", "clamp("), ["(min-width: 901px)"])
+        self.assertTrue(self.rule(".fbox .big", "overflow-wrap: anywhere"))
+
+    # nit 7: the rows of panel 5 are named groups
+    def test_each_worth_bar_is_a_group_named_by_its_visible_arm_label(self):
+        out = run_page(self, dict(steps=[499], ids=IDS), DOCS / "data.js")
+        bars = out[-1]["snap"]["bars"]
+        rows = [b for b in bars if "wbar" in b["cls"].split()]
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(len([b for b in bars if b["role"] == "group"]), len(rows))
+        for b in rows:
+            self.assertEqual(b["role"], "group", b["key"])
+            self.assertEqual(b["aria"], b["label"], b["key"])
+        self.assertEqual([b["aria"] for b in rows], BAR_LABELS)
+
+    # nit 8: K = min(20, cells of the rendered map)
+    def cut_to_12(self):
+        d = copy.deepcopy(self.d)
+        for p in d["publishes"]:
+            p["cells"] = p["cells"][:12]
+        last = d["publishes"][-1]["cells"]
+        planted = [o["cell"] for o in d["obstacles"]]
+        drop = [c[0] for c in last if c[0] in planted][:3]
+        d["obstacles"] = [o for o in d["obstacles"] if o["cell"] not in drop]
+        n = sum(1 for c in last if c[0] in {o["cell"] for o in d["obstacles"]})
+        return d, n
+
+    def test_a_map_cut_to_12_cells_reads_its_12_strongest_picks_n_of_12_real(self):
+        d, n = self.cut_to_12()
+        self.assertTrue(0 < n < 12, n)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.js"
+            path.write_text("window.REPLAY = " + json.dumps(d, separators=(",", ":")) + ";\n", encoding="utf-8")
+            out = run_page(self, dict(steps=[0, 499], ids=IDS + ["detail-notes", "grades"], hover_ids=["s-right"]), path)
+        self.assertEqual(text_of(out[0]["snap"], "s-right"), "Its 20 strongest picks: — of 20 real.")
+        last = out[-1]["snap"]
+        self.assertEqual(text_of(last, "s-right"), f"Its 12 strongest picks: {n} of 12 real.")
+        self.assertIn("Of the 12 cells flagged most strongly", last["hovers"]["s-right"])
+        self.assertIn("({}/12)".format(n), last["hovers"]["s-right"])
+        self.assertNotIn("/20)", last["hovers"]["s-right"])
+        self.assertIn("top-20 hit rate", text_of(last, "grades"))  # the stored field is precision_at_20 (hits / 20)
+        self.assertIn(f"({n}/12)", text_of(last, "grades"))
+        self.assertIn("of the 12 most-flagged cells", text_of(last, "detail-notes"))
+
+    def test_the_committed_data_keeps_k_at_20(self):
+        out = run_page(self, dict(steps=[0, 499], ids=IDS + ["detail-notes", "grades", "big-k-lead", "big-k-tail"], hover_ids=["s-right"]),
+                       DOCS / "data.js")
+        last = out[-1]["snap"]
+        for snap in (out[0]["snap"], last):  # the two K slots are filled by the page, and read 20 on the committed data
+            self.assertEqual((text_of(snap, "big-k-lead"), text_of(snap, "big-k-tail")), ("20", "20"))
+        self.assertEqual(text_of(out[0]["snap"], "s-right"), "Its 20 strongest picks: — of 20 real.")
+        self.assertEqual(text_of(last, "s-right"), "Its 20 strongest picks: 20 of 20 real.")
+        self.assertIn("Of the 20 cells flagged most strongly", last["hovers"]["s-right"])
+        self.assertIn("of the 20 most-flagged cells", text_of(last, "detail-notes"))
+        self.assertIn("top-20 hit rate", text_of(last, "grades"))
+        self.assertIn("(20/20)", text_of(last, "grades"))
+
+    def test_live_mode_reads_k_from_the_costmap_when_it_has_fewer_than_20_cells(self):
+        grid = dict(width=6, height=4, highway=["111111"] * 4, goals=[[0, 3]], agvs=2)
+        state = dict(
+            step=40, sim_time="2026-01-01T00:03:20Z",
+            robots=[dict(id="Z0-01", x=1, y=1, raw="moving", state="moving", job="o1", waiting_s=0, call=None)],
+            ledger=dict(pgid=1, run="live", emit_status="running", messages_emitted=480, expected_messages=None, steps_done=41,
+                        injections_applied=0, injections_posted=0, messages_parsed=470, messages_rejected=6, duplicates=4,
+                        bytes_read=250000, bytes_emitted_uncompressed=260000, messages_per_s=47.9),
+            costmap=dict(cells={"2,2": 0.9, "3,1": 0.4}, generated_at="2026-01-01T00:03:00Z"),
+            top10=[dict(cell="2,2", cost=0.9), dict(cell="3,1", cost=0.4)], lessons=[],
+            grades=dict(lessons=dict(ok=0, off=0, pending=0, not_gradable=0), forecasts=dict(ok=1, off=0, pending=3, not_gradable=0)),
+            injections=[], truth=dict(scheduled={"2,2": 0.5}, injected={}))
+        out = run_page(self, dict(search="?live=http://127.0.0.1:8765", ids=IDS + ["big-k-lead"], hover_ids=["s-right"],
+                                  fetch={"/grid": grid, "/state": state}))
+        snap = out[0]["snap"]
+        self.assertEqual(text_of(snap, "s-right"), "Its 2 strongest picks: 1 of 2 real.")
+        self.assertIn("Of the 2 cells flagged most strongly", snap["hovers"]["s-right"])
+
+    def test_no_copy_table_types_the_20_of_the_strongest_picks_sentence_any_more(self):
+        js = (DOCS / "replay.js").read_text(encoding="utf-8")
+        for table in ("VISIBLE_COPY", "HOVER_COPY", "DETAILS_COPY"):
+            for lit in table_literals(js, table):
+                for bad in ("20 strongest", "/20)", "the 20 cells", "20 most-flagged", "top-20"):
+                    self.assertNotIn(bad, lit, table)
+
+
 if __name__ == "__main__":
     sys.exit(unittest.main())

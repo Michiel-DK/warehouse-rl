@@ -2,6 +2,7 @@
   'use strict';
   var R = window.REPLAY;
   var $ = function (id) { return document.getElementById(id); };
+  var TOP_N = 20; // the most cells a "strongest picks" sentence is about (the stored field is precision_at_20)
 
   // ---- the words of the page ----
   // VISIBLE_COPY: every sentence the page writes into a visible element outside a closed details block (header strip, log
@@ -25,7 +26,7 @@
       calls: 'Robots held up so far: {n}; still waiting: {open}.',
       drawError: 'The page hit an error while drawing: {why}',
       summary: 'Step {step} of {last}, fleet time {time}. Robots: {robots}. Log: {usable} usable, {rejected} rejected, {dups} duplicates. {map}',
-      summaryMap: 'Latest map at {time}, {hits} of its 20 strongest picks real.',
+      summaryMap: 'Latest map at {time}, {hits} of its {k} strongest picks real.',
       summaryNoMap: 'No map yet.',
       announce: 'Step {step} of {last}, fleet time {time}. Robots: {robots}.',
       scrub: 'step {step} of {last}, fleet time {time}',
@@ -52,10 +53,10 @@
       none: '—',
       noMap: 'no map yet',
       needTruth: 'not scored: the planted spots are hidden in this live run',
-      spark: 'How many of its 20 strongest picks were real, after each new map: {list}',
+      spark: 'How many of its {k} strongest picks were real, after each new map: {list}',
       sparkNone: 'No map yet.',
       sparkBetter: 'gets better as it watches',
-      sparkFlat: 'how many of its 20 strongest picks were real, after each new map'
+      sparkFlat: 'how many of its {k} strongest picks were real, after each new map'
     },
     lesson: {
       hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
@@ -130,7 +131,7 @@
            waiting: 'Waiting: {s} s', notMoving: 'Not moving: {s} s' },
     rateOf: '{rate} msgs/s',
     rateUnknown: 'unknown',
-    mapItem: '{time} {p} ({hits}/20)',
+    mapItem: '{time} {p} ({hits}/{k})',
     reasons: ' ({list})',
     raw: { moving: 'changed cell', loading: 'at a shelf or station', stalled: 'tried to move and did not',
            stuck: 'inside a stuck call', frozen: 'reported an error', idle: 'no job, not moving' },
@@ -149,8 +150,8 @@
     worth: 'Share of the lost throughput recovered = mean over seeds of (arm - bad floor) / mean over seeds of (clean floor - bad floor), paired on seed. Analyser map {mlo} to {mhi}%, perfect knowledge {olo} to {ohi}% (95% range, seed bootstrap). Source: {source}.',
     worthBar: '{label}: mean {mean} lines an hour over {n} seeds, 95% range {lo} to {hi}. Router weight alpha 32 for the two map bars. Source: {source}.',
     keptNone: 'No kept figure: the store has no ingest ledger for this run.',
-    right: 'Of the 20 cells flagged most strongly, how many sit on a planted bad cell. Per map: {list}.',
-    rightLive: 'Of the 20 cells flagged most strongly, how many sit on a revealed roadblock. Scored only while the hidden layout is revealed.',
+    right: 'Of the {k} cells flagged most strongly, how many sit on a planted bad cell. Per map: {list}.',
+    rightLive: 'Of the {k} cells flagged most strongly, how many sit on a revealed roadblock. Scored only while the hidden layout is revealed.',
     found: '{share} of the planted cells saw no stall at all in this shift (run_constants.hotspot.zero_stall_share, {source}). Recall at k = {k}: {recall}.',
     foundLive: 'Revealed roadblocks that are among the most strongly flagged cells (as many cells as there are roadblocks).',
     checks: '{calls} calls were made by this map. {hits} sit on a planted bad cell (truth grade), {wrong} do not.{outcome}',
@@ -205,7 +206,7 @@
     noPublish: 'No publishes, so nothing to grade.',
     noMapTop: 'no map published yet',
     noFlag: 'the latest map flags no cell',
-    pubName: 'Publish at {time}: {calls} calls, top-20 hit rate {p} ({hits}/20)',
+    pubName: 'Publish at {time}: {calls} calls, top-{n} hit rate {p} ({hits}/{k})',
     outcomeLine: '{ok} {okText}, {off} {offText}',
     openLine: '{n} open: the horizon ends after the stream',
     knownAt: 'outcome known at {time}',
@@ -215,7 +216,7 @@
     topFlagNo: '  [not on one]',
     topLive: '{cell}  cost {cost}{flag}',
     topLiveMine: '  [placed by you]',
-    notes: ['Top-20 hit rate: of the 20 most-flagged cells, how many sit on a hidden floor problem.',
+    notes: ['Top-{n} hit rate: of the {k} most-flagged cells, how many sit on a hidden floor problem.',
             'The map is rules plus a decayed count of stalls per cell, and nothing is trained.',
             'Every call is graded afterwards, the count and rank grades against what happened next and the truth grade against the hidden layout, which the analyser never reads.',
             'Cells nobody drives over cannot be found, because a stall needs a robot to try to enter the cell.'],
@@ -337,10 +338,13 @@
     setHover('f-dropped', v.hover.dropped);
   }
 
-  // v = { top|null (of the 20 strongest picks, how many are real), found|null, calls|null, hits|null, wrong|null,
+  // v = { top|null (of the k strongest picks, how many are real), found|null, calls|null, hits|null, wrong|null,
   //       series: [{x (0-1), p}], hover: { right, found, checks } }
   function paintAnalyser(v) {
     function put(id, x, fmtFn) { setText(id, x === null ? DASH : fmtFn(x)); }
+    var k = v.k === undefined ? TOP_N : v.k;
+    setText('big-k-lead', fmt(k));
+    setText('big-k-tail', fmt(k));
     put('big-right', v.top, fmt);
     put('big-found', v.found, pct);
     put('big-calls', v.calls, fmt);
@@ -350,21 +354,23 @@
     setHover('s-right', v.hover.right);
     setHover('s-found', v.hover.found);
     setHover('s-checks', v.hover.checks);
-    drawSpark(v.series);
+    drawSpark(v.series, k);
+    var nt = $('detail-notes');
+    if (nt) nt.textContent = notesText(k);
     // the caption follows the data: "gets better" only when the right-rate of the latest map is above the first one
     var cap = $('sparkcap'), sv = v.series;
     if (cap) {
       cap.hidden = !sv.length;
-      cap.textContent = sv.length >= 2 && sv[sv.length - 1].p > sv[0].p ? VISIBLE_COPY.analyser.sparkBetter : VISIBLE_COPY.analyser.sparkFlat;
+      cap.textContent = sv.length >= 2 && sv[sv.length - 1].p > sv[0].p ? VISIBLE_COPY.analyser.sparkBetter : fill(VISIBLE_COPY.analyser.sparkFlat, { k: k });
     }
   }
 
   var sparkSig = null;
-  function drawSpark(series) {
+  function drawSpark(series, k) {
     var cv = $('spark');
     if (!cv) return;
     var d = Math.max(1, window.devicePixelRatio || 1), W = 300, H = 70;
-    var sig = JSON.stringify([series, d, css('--accent'), css('--ink')]);
+    var sig = JSON.stringify([series, k, d, css('--accent'), css('--ink')]);
     if (sig === sparkSig) return;
     sparkSig = sig;
     cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px';
@@ -380,7 +386,7 @@
       c.beginPath(); c.moveTo(padL, py(g)); c.lineTo(padL + w, py(g)); c.stroke();
       c.fillText(pct(g), padL - 6, py(g));
     });
-    cv.setAttribute('aria-label', series.length ? fill(VISIBLE_COPY.analyser.spark, { list: series.map(function (s) { return pct(s.p); }).join(', ') })
+    cv.setAttribute('aria-label', series.length ? fill(VISIBLE_COPY.analyser.spark, { k: k, list: series.map(function (s) { return pct(s.p); }).join(', ') })
       : VISIBLE_COPY.analyser.sparkNone);
     if (!series.length) return;
     c.strokeStyle = css('--accent'); c.lineWidth = 2.5;
@@ -884,14 +890,16 @@
     return kind === 'rank' ? w.rank : (kind === 'count' ? w.count : w.other);
   }
   // of the 20 most strongly flagged cells of a map, how many sit on a planted bad cell
+  // K: how many cells the sentence is about, min(TOP_N, the cells of that map); TOP_N while no map is shown
+  function topK(pub) { return pub ? Math.min(TOP_N, pub.cells.length) : TOP_N; }
   function topHits(pub) {
-    return pub.cells.slice(0, 20).filter(function (r) { return obstacleSet[r[0]]; }).length;
+    return pub.cells.slice(0, topK(pub)).filter(function (r) { return obstacleSet[r[0]]; }).length;
   }
   function replayAnalyser(step) {
     var lp = latestPublish(step), idx = pubs.indexOf(lp), g = lp ? GRADES[idx] : null;
     var shown = pubs.filter(function (p) { return p.step <= step; });
     var hot = RC.hotspot;
-    var list = shown.map(function (p) { return fill(HOVER_COPY.mapItem, { time: clock(p.step), p: pct(p.precision_at_20), hits: p.hits_at_20 }); }).join('; ');
+    var list = shown.map(function (p) { return fill(HOVER_COPY.mapItem, { time: clock(p.step), p: pct(p.precision_at_20), hits: topHits(p), k: topK(p) }); }).join('; ');
     var outcome = '';
     if (g && g.window_end_step !== null && g.window_end_step <= step) {
       [[g.outcome_kind, g.outcome], ['count', g.outcome_count]].forEach(function (pair, k) {
@@ -901,13 +909,13 @@
       });
     }
     return {
-      top: lp ? topHits(lp) : null,
+      top: lp ? topHits(lp) : null, k: topK(lp),
       found: lp && typeof lp.recall_at_k === 'number' ? lp.recall_at_k : null,
       calls: g ? g.forecasts : null, hits: g ? g.truth.hit : null, wrong: g ? g.truth.false_alarm : null,
       note: lp ? '' : (pubs.length ? fill(VISIBLE_COPY.floor.mapLater, { time: clock(pubs[0].step) }) : VISIBLE_COPY.analyser.noMap),
       series: shown.map(function (p) { return { x: p.step / Math.max(1, STEPS - 1), p: p.precision_at_20 }; }),
       hover: {
-        right: lp ? fill(HOVER_COPY.right, { list: list }) : '',
+        right: lp ? fill(HOVER_COPY.right, { list: list, k: topK(lp) }) : '',
         found: lp && hot ? fill(HOVER_COPY.found, { share: pct(hot.zero_stall_share), source: hot.source, k: hot.k, recall: pct(hot.recall_at_k) }) : '',
         checks: g ? fill(HOVER_COPY.checks, { calls: g.forecasts, hits: g.truth.hit, wrong: g.truth.false_alarm, outcome: outcome }) : ''
       }
@@ -950,7 +958,7 @@
     graded.forEach(function (g) {
       var box = el('div', 'pub');
       var pr = pubs[GRADES.indexOf(g)];
-      box.appendChild(el('div', 'name', fill(DETAILS_COPY.pubName, { time: clockAt(g.t), calls: g.forecasts, p: pr.precision_at_20.toFixed(2), hits: pr.hits_at_20 })));
+      box.appendChild(el('div', 'name', fill(DETAILS_COPY.pubName, { time: clockAt(g.t), calls: g.forecasts, p: pr.precision_at_20.toFixed(2), hits: topHits(pr), k: topK(pr), n: TOP_N })));
       var outcomeKnown = g.window_end_step !== null && g.window_end_step <= step;
       var w = wording(g.outcome_kind);
       var r1 = el('div', 'row');
@@ -1004,7 +1012,8 @@
         flag: obstacleSet[r[0]] ? DETAILS_COPY.topFlagYes : DETAILS_COPY.topFlagNo })));
     });
   }
-  $('detail-notes').textContent = DETAILS_COPY.notes.join(' ');
+  function notesText(k) { return DETAILS_COPY.notes.map(function (n) { return fill(n, { k: k, n: TOP_N }); }).join(' '); }
+  $('detail-notes').textContent = notesText(TOP_N);
 
   // ---- panel 4: lines for the operators (replay adapter) ----
   var HAS_LESSONS = R.lessons !== undefined;
@@ -1080,6 +1089,8 @@
       row.id = 'wbar-' + b.key;
       row.tabIndex = 0;
       row.setAttribute('data-key', b.key);
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', VISIBLE_COPY.worth[b.key]);
       row.setAttribute('data-hover', '');
       var lab = el('span', 'wlab', VISIBLE_COPY.worth[b.key]);
       lab.id = 'wlab-' + b.key;
@@ -1142,7 +1153,7 @@
     var pub = latestPublish(step);
     return fill(VISIBLE_COPY.floor.summary, { step: step, last: STEPS - 1, time: clock(step), robots: counts(step), usable: fmt(S.accepted[step]),
       rejected: fmt(S.rejected[step]), dups: fmt(S.duplicates[step]),
-      map: pub ? fill(VISIBLE_COPY.floor.summaryMap, { time: clock(pub.step), hits: topHits(pub) }) : VISIBLE_COPY.floor.summaryNoMap });
+      map: pub ? fill(VISIBLE_COPY.floor.summaryMap, { time: clock(pub.step), hits: topHits(pub), k: topK(pub) }) : VISIBLE_COPY.floor.summaryNoMap });
   }
   function curStep() { return Math.min(STEPS - 1, Math.max(0, Math.floor(pos))); }
   // The live region is written only when playback is not running: on pause, on a step, after a scrub settles.
@@ -1525,22 +1536,22 @@
     function liveAnalyser(s) {
       var cells = s.costmap ? s.costmap.cells : {};
       var ranked = Object.keys(cells).sort(function (a, b) { return cells[b] - cells[a] || (a < b ? -1 : 1); });
-      var right = null, found = null, topN = null;
+      var right = null, found = null, topN = null, k = s.costmap ? Math.min(TOP_N, ranked.length) : TOP_N;
       if (s.truth) {
         var planted = {};
         [s.truth.scheduled, s.truth.injected].forEach(function (m) { Object.keys(m || {}).forEach(function (k) { planted[k] = true; }); });
         var n = Object.keys(planted).length;
-        topN = ranked.slice(0, 20).filter(function (k) { return planted[k]; }).length;
-        right = topN / 20;
+        topN = ranked.slice(0, k).filter(function (c) { return planted[c]; }).length;
+        right = k ? topN / k : 0;
         found = n ? ranked.slice(0, n).filter(function (k) { return planted[k]; }).length / n : null;
       }
       var at = s.costmap ? s.costmap.generated_at : null;
       if (right !== null && at !== seriesAt) { seriesAt = at; series.push(right); }
       var g = s.grades.forecasts, total = g.ok + g.off + g.pending + g.not_gradable;
-      return { top: topN, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
+      return { top: topN, k: k, found: found, calls: total ? total : null, hits: total ? g.ok : null, wrong: total ? g.off : null,
         note: !s.costmap ? VISIBLE_COPY.analyser.noMap : (s.truth === null ? VISIBLE_COPY.analyser.needTruth : ''),
         series: series.map(function (p, i) { return { x: series.length > 1 ? i / (series.length - 1) : 0, p: p }; }),
-        hover: { right: s.truth ? HOVER_COPY.rightLive : '', found: s.truth ? HOVER_COPY.foundLive : '',
+        hover: { right: s.truth ? fill(HOVER_COPY.rightLive, { k: k }) : '', found: s.truth ? HOVER_COPY.foundLive : '',
                  checks: fill(HOVER_COPY.checksLive, { ok: g.ok, off: g.off, pending: g.pending, na: g.not_gradable }) } };
     }
     // panel 4: state.lessons, newest first (the server sorts them)
