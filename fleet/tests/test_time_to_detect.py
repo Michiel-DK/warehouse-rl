@@ -220,6 +220,29 @@ class TestStoreAndCli(unittest.TestCase):
             self.assertFalse(Path(out).exists())
             self.assertFalse((d / f"store-ttd-{EVERY}").exists())
 
+    def test_rerun_rows_replace_phase_a_stream_end_rows_under_real_dedup(self):
+        # inject: drop the strip_forecasts(copy) call in run() -> record_decision dedups the stream-end publish onto
+        # phase A's row (window_hours 2.0), the selected rows mix window 1.0 and 2.0 and analyse raises
+        from fleet_analyser import decisions
+        from fleet_analyser.parse import iso
+        with tempfile.TemporaryDirectory() as d:
+            orig = row("0", "1,1", END, 7, window=2.0)
+            orig["dedup_key"] = decisions.dedup_key("hotspot_forecast", "Z0:1,1", iso(END))
+            make_phase_a(d, orig_extra=[orig])
+
+            def real_dedup_rerun(phase_a, copy, every):
+                st = JsonlStore(copy)
+                for t in PUB:
+                    decisions.record_decision(
+                        st, run="closed_loop", kind="hotspot_forecast", subject="Z0:1,1", start_iso=iso(t), decided_at=t,
+                        claim=dict(rank=1, window_hours=1.0, half_life_h=1.0, top_k=20), rationale="", expected=1.0,
+                        grade_after=t + 3600)
+                st.close()
+            doc = ttd.run(d, EVERY, [1], Path(d) / "o.json", rerun=real_dedup_rerun, span=span())
+            self.assertEqual(doc["meta"]["window_hours"], 1.0)
+            self.assertEqual(doc["by_k"]["1"]["cells"]["0"]["1,1"]["first_detect_s"], 100)
+            self.assertEqual(sum(1 for ln in (Path(d) / "store" / "decisions.jsonl").read_text().splitlines() if ln), 1)
+
     def test_copy_dir_removed_unless_keep_store(self):
         # inject: never remove the copy / always remove it
         with tempfile.TemporaryDirectory() as t:

@@ -163,6 +163,27 @@ def read_span(glob):
     return t0, min(m.ts for m in messages), max(m.ts for m in messages)
 
 
+def strip_forecasts(copy):
+    """Drop the copy's hotspot_forecast rows of RUN before the rerun. costmap.py dedups decisions on (kind, subject,
+    publish ISO) and its last publish is always the stream end, which phase A already published: without this the
+    stream-end rows would stay phase A's own (built with phase A's map parameters), not the rerun's. Returns n dropped."""
+    path = Path(copy) / "decisions.jsonl"
+    if not path.exists():
+        return 0
+    keep, dropped = [], 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                r = json.loads(line)
+                if r.get("kind") == "hotspot_forecast" and r.get("run") == RUN:
+                    dropped += 1
+                    continue
+            keep.append(line)
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(keep)
+    return dropped
+
+
 def rerun_costmap(phase_a, copy, every):
     """The one costmap rerun: by subprocess on the store copy. Same pattern as scripts/closed_loop._run."""
     cmd = [sys.executable, str(FLEET / "costmap.py"), "--glob", str(Path(phase_a) / "*.jsonl.gz"), "--run", RUN,
@@ -187,6 +208,7 @@ def run(phase_a, every, ks, out, keep_store=False, rerun=rerun_costmap, span=rea
         shutil.rmtree(copy)
     try:
         shutil.copytree(phase_a / "store", copy)
+        strip_forecasts(copy)
         rerun(phase_a, copy, every)
         hash_after = sha256_file(orig)
         if hash_after != hash_before:
