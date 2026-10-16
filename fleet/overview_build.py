@@ -63,6 +63,8 @@ NUMS = {
     "lt_n": (DATA, "run_constants.lessons_long.truth_n", "int"),
     "held": (DATA, "run_constants.lessons_long.held", "int"),
     "graded": (DATA, "run_constants.lessons_long.graded", "int"),
+    "persist_held": (DATA, "run_constants.lessons_long.persist_held", "int"),
+    "persist_graded": (DATA, "run_constants.lessons_long.persist_graded", "int"),
     "n_seeds": (DATA, W + ".n_seeds", "int"),
     "map_share": (DATA, W + ".map_share", "pct1"),
     "map_share_lo": (DATA, W + ".map_share_ci95.0", "pct1"),
@@ -147,7 +149,10 @@ def format_value(src, value):
 def num_element(name, inputs):
     f, e, _ = NUMS[name]
     src = "%s:%s" % (f, e)
-    return '<b class="num" data-src="%s">%s</b>' % (htmllib.escape(src), htmllib.escape(format_value(src, resolve(src, inputs))))
+    value = resolve(src, inputs)
+    if value is None:
+        raise ValueError("%s is null in %s" % (e, f))
+    return '<b class="num" data-src="%s">%s</b>' % (htmllib.escape(src), htmllib.escape(format_value(src, value)))
 
 
 # ------------------------------------------------------------------------------------------------ generated rows
@@ -490,8 +495,8 @@ a{color:var(--accent)}
       <p class="eb">Step 4 · the operator's list</p>
       <h2>Plain sentences. Each one checked afterwards.</h2>
       <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
-      <div class="pair"><div class="fig"><span class="fignum">{lt_hit}/{lt_n}</span><span class="figlab">real on the truth</span></div><div class="fig"><span class="fignum">{held}/{graded}</span><span class="figlab">still above average next window</span></div></div>
-      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times, but only {held} of {graded} calls repeated in the next half hour; the repeat test is being reworked.</span></div>
+      <div class="pair"><div class="fig"><span class="fignum">{lt_hit}/{lt_n}</span><span class="figlab">real on the truth</span></div><div class="fig"><span class="fignum">{persist_held}/{persist_graded}</span><span class="figlab">still above the zone average next window</span></div></div>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times; {persist_held} of {persist_graded} were still above their zone's average in the next half hour; only {held} of {graded} repeated their own peak, the bar the first version used.</span></div>
     </div>
     <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
 {lessons_html}
