@@ -480,11 +480,14 @@ class TestPage(unittest.TestCase):
         html = k.PAGE.read_text(encoding="utf-8")
         self.assertEqual(html.count("<!-- dose-start -->"), 1)
         self.assertEqual(html.count("<!-- dose-end -->"), 1)
+        self.assertEqual(html.count("<!-- explorer-start -->"), 1)  # S11A: the explorer block is generated, so it is stripped too
+        self.assertEqual(html.count("<!-- explorer-end -->"), 1)
         rest = re.sub(r"<!-- dose-start -->.*<!-- dose-end -->\n?", "", html, flags=re.S)
+        rest = re.sub(r"<!-- explorer-start -->.*<!-- explorer-end -->\n?", "", rest, flags=re.S)
         self.assertNotIn("dosewrap", rest)
         self.assertEqual(dict(Counter(re.findall(r"\d", rest))), MASTER_DIGITS)
         self.assertIn("results/closed_loop_sticky/summary.json", rest)  # footer source list unchanged
-        self.assertNotIn("closed_loop_p0", html)
+        self.assertNotIn("closed_loop_p0", rest)
 
     def test_dose_response_is_in_the_committed_data_in_the_asked_order(self):
         dose = rx.read_data_js(DATA)["run_constants"]["dose_response"]

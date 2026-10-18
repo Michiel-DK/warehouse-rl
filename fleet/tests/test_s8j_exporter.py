@@ -136,7 +136,7 @@ class TestSchemaAndFields(Base):
     def test_the_run_constants_keys(self):
         self.assertEqual(set(self.payload["run_constants"]), {"ingest_msgs_per_s", "benchmark_msgs_per_s", "kept", "hotspot",
                                                               "closed_loop", "audit", "header", "speed", "lessons_long", "worth",
-                                                              "dose_response"})  # S8R
+                                                              "dose_response", "explorer"})  # S8R; S11A: explorer
 
     def test_every_source_is_a_passed_path_or_store_or_emit_ledger(self):
         passed = {self.bench, self.long, *self.rows.values()}

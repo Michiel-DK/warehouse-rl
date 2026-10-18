@@ -1150,6 +1150,24 @@ def read_data_js(path):
     return json.loads(text[len(PREFIX):].rstrip().removesuffix(";"))
 
 
+RUN_CONSTANTS_ORDER = ("ingest_msgs_per_s", "benchmark_msgs_per_s", "kept", "hotspot", "closed_loop", "audit", "header", "speed",
+                       "lessons_long", "worth", "dose_response", "explorer")  # the key order of build_payload's run_constants
+
+
+def _insertion_point(text, start, end, name):
+    """Offset of the first member of the run_constants object text[start:end] that comes after `name` in RUN_CONSTANTS_ORDER,
+    where a missing key is spliced in so a refresh writes the keys in the order a full export does; None when there is none."""
+    dec, pos, later = json.JSONDecoder(), start + 1, RUN_CONSTANTS_ORDER[RUN_CONSTANTS_ORDER.index(name) + 1:]
+    while pos < end - 1:
+        while text[pos] in " ,\n":
+            pos += 1
+        k, key_end = dec.raw_decode(text, pos)
+        if k in later:
+            return pos
+        _, pos = dec.raw_decode(text, key_end + 1)
+    return None
+
+
 def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES, explorer=False):
     """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response, explorer) of an existing data.js by text
     splice; a key that is not in the file yet is appended to run_constants. Returns the new byte size."""
@@ -1185,8 +1203,12 @@ def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes
                 raise ValueError(f'{out}: {rc_key} occurs {new_text.count(rc_key)} times, expected exactly once')
             rc_start = new_text.index(rc_key) + len(rc_key)
             _, rc_end = json.JSONDecoder().raw_decode(new_text, rc_start)
-            sep = "" if new_text[rc_end - 2] == "{" else ","
-            new_text = new_text[:rc_end - 1] + f'{sep}{key}{enc}' + new_text[rc_end - 1:]
+            at = _insertion_point(new_text, rc_start, rc_end, name)
+            if at is None:
+                sep = "" if new_text[rc_end - 2] == "{" else ","
+                new_text = new_text[:rc_end - 1] + f'{sep}{key}{enc}' + new_text[rc_end - 1:]
+            else:
+                new_text = new_text[:at] + f'{key}{enc},' + new_text[at:]
     after = json.loads(new_text[len(PREFIX):].rstrip().removesuffix(";"))
     for name in new_values:
         if after["run_constants"].get(name) != new_values[name]:
