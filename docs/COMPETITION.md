@@ -1,8 +1,10 @@
 # Competition sweep: does anyone else ship what the fleet stuck analyser does? (2026-10-18)
 
-Scope: eight vendors, nine capabilities each. Checked on 2026-10-18 with WebFetch/WebSearch only (no browser, no
-logins), at most 12 fetches per vendor. The search log (every URL fetched, with its result, and the count per vendor)
-is in `laptop-scheduler/reports/wr-dev-competition-sweep.md`, not here. Rules: `~/.claude/skills/outward-claim-discipline`.
+Scope: fourteen vendors, nine capabilities each, in two passes on 2026-10-18 (eight vendors, then AutoStore,
+Symbotic, Körber/Infios, Zebra/Fetch, 6 River Systems and GreyOrange). WebFetch/WebSearch only (no browser, no
+logins), at most 12 fetches per vendor. The search logs (every URL fetched, with its result, and the count per vendor)
+are in `laptop-scheduler/reports/wr-dev-competition-sweep.md` and `wr-dev-competition-sweep-2.md`, not here. Rules:
+`~/.claude/skills/outward-claim-discipline`.
 
 ## How to read a cell
 
@@ -31,7 +33,8 @@ quote goes in the evidence column. Quotes are short and verbatim from the page n
    drawn by hand or derived from incident data.
 9. **Log upload for a client's own fleet**: vendor-agnostic ingest of another fleet's data for analysis.
 
-Borderline cells were scored toward presence, i.e. against us (see the direction test at the end).
+Borderline cells were scored toward presence, i.e. against us, except three in the second pass that a precedent or
+the bar ruled out; all are listed in the direction test at the end.
 
 ## Summary matrix
 
@@ -49,6 +52,12 @@ docs (A), `?` = UNTESTED. All cells verified@2026-10-18.
 | Geek+ | partner portal | ? | ? | ? | ? | ? | ? | ? | ? | ? |
 | Exotec | none | ? | ? | ? | ? | ? | ? | ? | ? | ? |
 | Dematic (iQ) | login | ? | ? | ? | ? | ? | ? | ? | ? | B |
+| AutoStore (CubeAnalytics) | none public | ? | ? | ? | ? | ? | ? | ? | ? | B |
+| Symbotic | none public | ? | ? | ? | ? | ? | ? | ? | ? | ? |
+| Körber (Infios) | login | ? | ? | ? | ? | ? | ? | ? | ? | ? |
+| Zebra / Fetch | none found | ? | ? | ? | ? | ? | ? | ? | ? | ? |
+| 6 River Systems (Ocado IA) | none public | ? | ? | ? | ? | ? | ? | ? | B | ? |
+| GreyOrange (GreyMatter) | login | ? | ? | ? | ? | ? | ? | ? | ? | ? |
 
 ## Per vendor
 
@@ -195,6 +204,127 @@ current product page; a web search for it returned trade press only. Every absen
 | Avoid-zones to routing | UNTESTED verified@2026-10-18 | same | docs behind login |
 | Log upload | yes (B) verified@2026-10-18 | https://www.dematic.com/en-us/software/command-center/ | "Dematic Command Center is vendor-agnostic."; "collects scattered data into a unified view". Multi-vendor data, not a log upload as such; scored yes |
 
+### AutoStore (CubeAnalytics, CubeVerse)
+Surfaces read: home page header and footer https://www.autostoresystem.com/ (no docs, support, help or changelog link;
+closest are "Solution FAQs" and contact); https://www.autostoresystem.com/sitemap.xml (over 10 MB, not read); the
+CubeAnalytics product page, its FAQ https://www.autostoresystem.com/faq/cube-analytics and the product sheet
+https://www.autostoresystem.com/hubfs/04%20Website%20Docs/01%20Spec%20Sheets/AutoStore-CubeAnalytics-Product-Sheet-EN.pdf
+(marketing, rank B). A web search found no docs portal, manual or release notes. No public doc tree, so every absence
+is UNTESTED. 5 fetches, 1 search.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Heatmap | UNTESTED verified@2026-10-18 | https://www.autostoresystem.com/system/cube-analytics | marketing: "Ranks Grids by mean time between failures (MTBF)." A Grid is a whole installation, so this ranks sites, not floor locations; the sheet lists "module behavior across the Grid" without a map. Scored away from presence (see direction test) |
+| Recurring-location trend | UNTESTED verified@2026-10-18 | same | marketing: "Spot recurring fleet issues."; location not stated |
+| Forecast | UNTESTED verified@2026-10-18 | same; product sheet | marketing: "predict issues, surface sites most in need of attention"; sheet: "AI-powered anomaly detection identifies unusual system behavior and emerging issues before they affect operations." Sites, not floor locations |
+| Forecast grading | UNTESTED verified@2026-10-18 | same | no public docs; no accuracy figure in marketing |
+| Graded lessons | UNTESTED verified@2026-10-18 | https://www.autostoresystem.com/system/cube-analytics | marketing: "AI insights that surface what matters most and recommend clear actions for your team."; grading not stated |
+| Time-to-detect | UNTESTED verified@2026-10-18 | same | marketing: "Data updates every 5 minutes; critical system stop events flagged almost instantly in Actions Needed." Product latency, not MTTD reporting |
+| Decision ledger | UNTESTED verified@2026-10-18 | same | no public docs; "Actions Needed" is an alert list as described |
+| Avoid-zones to routing | UNTESTED verified@2026-10-18 | same | no public docs; routing not mentioned |
+| Log upload | yes (B) verified@2026-10-18 | https://www.autostoresystem.com/system/cube-analytics | "Open API options to integrate with third-party data sources". Third-party data, not another fleet's logs; scored yes, same rule as Dematic. The FAQ's API "Allows access to raw real-time AutoStore log data." is export |
+
+### Symbotic
+Surfaces read: home page header and footer https://www.symbotic.com/ (no docs, developer, support, help or changelog
+link); https://www.symbotic.com/resources/ (news and events hub); https://www.symbotic.com/news-and-events/blog/ (no
+posts listed in the fetch); AI & Software and Robots product pages. A web search for a customer portal, docs or
+release notes found none. No public doc tree; every cell UNTESTED. 5 fetches, 1 search.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Heatmap | UNTESTED verified@2026-10-18 | https://www.symbotic.com/solutions/ai-and-software/ | no public docs; nothing in marketing |
+| Recurring-location trend | UNTESTED verified@2026-10-18 | same | no public docs |
+| Forecast | UNTESTED verified@2026-10-18 | https://www.symbotic.com/solutions/robots/ | marketing: "AI supports continuous improvements through pattern recognition and human-lead training."; no forecast stated |
+| Forecast grading | UNTESTED verified@2026-10-18 | https://www.symbotic.com/solutions/ai-and-software/ | no public docs |
+| Graded lessons | UNTESTED verified@2026-10-18 | same | no public docs |
+| Time-to-detect | UNTESTED verified@2026-10-18 | same | marketing: "informing facilities immediately of potential damage"; no latency figure |
+| Decision ledger | UNTESTED verified@2026-10-18 | same | no public docs |
+| Avoid-zones to routing | UNTESTED verified@2026-10-18 | same | marketing names "complex bot routing"; zones or costs not stated |
+| Log upload | UNTESTED verified@2026-10-18 | same | marketing: "integrates seamlessly with existing WMS or ERP systems"; no fleet-data ingest |
+
+### Körber (now Infios)
+Surfaces read: home page footer https://www.infios.com/ (Customer Support and Knowledge Center; no docs link);
+support https://www.infios.com/en/customer-support, which sends cases to a ServiceNow portal
+(https://infios.service-now.com/csm?id=csm_login, login) and links release-notes PDFs for the transportation product
+only (not read: out of scope); training https://www.infios.com/en/knowledge-center/training-certification (Infios
+Academy, https://theacademy.infios.com/learn, "for customer and partner users that have purchased a subscription");
+AMR and Infios AI product pages. Doc tree behind a login; every cell UNTESTED. 5 fetches, 1 search (it returned a
+different vendor's docs and is not used).
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Heatmap | UNTESTED verified@2026-10-18 | https://www.infios.com/en/supply-chain-solutions/autonomous-mobile-robots | docs behind login; marketing: "feed a continuous stream of data about the warehouse operation back into the WMS" |
+| Recurring-location trend | UNTESTED verified@2026-10-18 | https://infios.service-now.com/csm?id=csm_login | docs behind login |
+| Forecast | UNTESTED verified@2026-10-18 | https://www.infios.com/en/supply-chain-solutions/infios-ai | marketing: "Predicts what's likely to happen and where it will hit."; supply-chain events, not robot stalls |
+| Forecast grading | UNTESTED verified@2026-10-18 | same | marketing gives no accuracy figure; docs behind login |
+| Graded lessons | UNTESTED verified@2026-10-18 | same | marketing: "Infios AI recommends. You approve. Every decision is explained."; grading not stated |
+| Time-to-detect | UNTESTED verified@2026-10-18 | same | marketing: "responds faster than your team can act on its own"; no MTTD |
+| Decision ledger | UNTESTED verified@2026-10-18 | same | marketing, Automated stage: "every action is tracked and auditable". An audit trail of AI actions, no outcome grade, scoped to orders and transport. Scored away from presence (see direction test) |
+| Avoid-zones to routing | UNTESTED verified@2026-10-18 | https://infios.service-now.com/csm?id=csm_login | docs behind login |
+| Log upload | UNTESTED verified@2026-10-18 | same | docs behind login |
+
+### Zebra Technologies (Fetch Robotics, FetchCore, Symmetry)
+Surfaces read: the AMR product page https://www.zebra.com/us/en/products/autonomous-mobile-robots.html (links to
+TechDocs and https://support.zebra.com, no robot-software page); footer docs tree https://techdocs.zebra.com/ (no
+robotics, AMR, FetchCore or Symmetry section); the product's own tree https://docs.fetchrobotics.com does not resolve
+(DNS); https://support.zebra.com was not searched. The 2021 press release on FetchCore features was not reachable (the
+English URL returned the newsroom index, the mirrored copy returned 404), so its "pick heatmap" wording, seen only in a
+search snippet, is unverified and unused. Context (press, C): The Robot Report, 12 Dec 2025, "Zebra Technologies is
+winding down its autonomous mobile robot (AMR) division."
+(https://www.therobotreport.com/zebra-technologies-winding-down-fetch-based-mobile-robot-group/). Every cell UNTESTED.
+6 fetches, 4 searches.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Heatmap | UNTESTED verified@2026-10-18 | https://techdocs.zebra.com/ | no robotics docs in TechDocs; Fetch docs domain gone; support.zebra.com not searched |
+| Recurring-location trend | UNTESTED verified@2026-10-18 | same | same |
+| Forecast | UNTESTED verified@2026-10-18 | same | same |
+| Forecast grading | UNTESTED verified@2026-10-18 | same | same |
+| Graded lessons | UNTESTED verified@2026-10-18 | same | same |
+| Time-to-detect | UNTESTED verified@2026-10-18 | same | same |
+| Decision ledger | UNTESTED verified@2026-10-18 | same | same |
+| Avoid-zones to routing | UNTESTED verified@2026-10-18 | same | same |
+| Log upload | UNTESTED verified@2026-10-18 | same | same |
+
+### 6 River Systems (Chuck; now Ocado Intelligent Automation)
+Surfaces read: https://6river.com/ and https://6river.com/support/ (both returned empty pages); Ocado Intelligent
+Automation home https://ocadointelligentautomation.com/ (footer: FAQ, glossary and "Ocado Developer Platform"; no
+docs, support, help or changelog link); the developer platform domain (www.ocadodeveloperplatform.com and the bare
+domain) does not resolve; Chuck AMR and Ocado IQ product pages. The Ocado IQ page describes the OMRS software and the
+site navigation lists Chuck under OMRS. "Ocado IQ routinely releases software updates" but no release notes are
+linked. No public doc tree; every absence UNTESTED. 7 fetches, 2 searches.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Heatmap | UNTESTED verified@2026-10-18 | https://ocadointelligentautomation.com/ocado-iq?hsLang=en | no public docs; no fault or stall locations in marketing |
+| Recurring-location trend | UNTESTED verified@2026-10-18 | same | no public docs |
+| Forecast | UNTESTED verified@2026-10-18 | same | marketing: "leveraging detailed real-time analytics and forecasting dashboards."; operational forecasting, location of stalls not stated |
+| Forecast grading | UNTESTED verified@2026-10-18 | same | no public docs |
+| Graded lessons | UNTESTED verified@2026-10-18 | same | marketing: "Gives you uplift results, visible with real-time analytics."; recommendations and their grading not stated |
+| Time-to-detect | UNTESTED verified@2026-10-18 | same | marketing: "It spots errors in real-time and takes action instantly."; no latency figure |
+| Decision ledger | UNTESTED verified@2026-10-18 | same | no public docs |
+| Avoid-zones to routing | yes (B), derived from live congestion, verified@2026-10-18 | https://ocadointelligentautomation.com/ocado-iq?hsLang=en | "Zones adjust in real-time based on task volume, urgency, and congestion."; routing is "factoring in aisle activity, congestion, and task urgency to avoid slowdowns". Work zones and routing fed by live congestion, not by stall history; scored yes |
+| Log upload | UNTESTED verified@2026-10-18 | same | marketing: "tech-agnostic, supporting diverse software, tools, and accessories."; ingest of another fleet's data not stated |
+
+### GreyOrange (GreyMatter)
+Surfaces read: home page header and footer https://www.greyorange.com/ (no docs, support, help or changelog link);
+knowledge centre https://docs.greyorange.com/ ("user manuals, release notes, training videos", behind "GO Customer
+Login"); GreyMatter technology and solutions pages. A site: search on docs.greyorange.com returned no indexed pages,
+and a search for release notes returned trade press only. Doc tree behind a login; every cell UNTESTED. 4 fetches, 2
+searches.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Heatmap | UNTESTED verified@2026-10-18 | https://docs.greyorange.com/ | docs behind login |
+| Recurring-location trend | UNTESTED verified@2026-10-18 | same | docs behind login |
+| Forecast | UNTESTED verified@2026-10-18 | https://www.greyorange.com/greymatter/technology/ | marketing: "Predictive analytics for anticipating bottlenecks and future demands"; location not stated |
+| Forecast grading | UNTESTED verified@2026-10-18 | https://docs.greyorange.com/ | docs behind login |
+| Graded lessons | UNTESTED verified@2026-10-18 | same | docs behind login |
+| Time-to-detect | UNTESTED verified@2026-10-18 | same | docs behind login |
+| Decision ledger | UNTESTED verified@2026-10-18 | same | docs behind login |
+| Avoid-zones to routing | UNTESTED verified@2026-10-18 | https://www.greyorange.com/greymatter/solutions/ | marketing: "predicting demand and dynamically assigning resources" is task allocation, not routing |
+| Log upload | UNTESTED verified@2026-10-18 | https://www.greyorange.com/greymatter/technology/ | marketing: "A hardware-agnostic protocol layer for interoperability with a wide range of certified devices". Control interop, same rule as OTTO's VDA 5050; scored away from presence (see direction test) |
+
 ## What changed against the README's 13 Oct note
 
 - "Formant sells ... trend analysis of recurring problems" came from a marketing read. The docs show a heatmap
@@ -204,24 +334,37 @@ current product page; a web search for it returned trade press only. Every absen
   not found, so the vendor-agnostic half of that sentence is contradicted and is dropped from the README.
 - The 15 Oct InOrbit facts (Incidents overlay, SEV levels) were re-confirmed at rank A on 2026-10-18.
 
+## What changed in the second pass
+
+- No new rank-A presence: none of the six added vendors publishes a public doc tree, so all four rank-A columns still
+  rest on Formant, InOrbit and OTTO.
+- Ocado's congestion-fed zones are the first zones found that are derived from data rather than drawn by hand (rank B,
+  live congestion, not stall history), so "zones derived from incident data were not found" now needs that qualifier.
+
 ## What this means for our claim
 
-Four of our nine capabilities are documented at rank A by at least one vendor: a stall or incident map (Formant,
-InOrbit, OTTO; MiR in marketing), a recurring-location view (Formant, InOrbit and OTTO, all within one chosen window),
-hand-drawn avoid or cost zones used by routing (InOrbit, OTTO), and vendor-agnostic live ingest (Formant, InOrbit;
-Dematic in marketing). Five were not found in any doc tree searched: a location forecast, forecast grading,
-persistence-graded lessons, time-to-detect reporting and a graded decision ledger; zones derived from incident data,
-not drawn by hand, were not found either. That absence rests on two fully searchable doc trees (Formant, InOrbit);
-OTTO's public tech docs show none of the five either, but its help centre is behind a login, so its rows are UNTESTED,
-as are all absence rows for MiR, Locus, Geek+, Exotec and Dematic, which keep their docs behind a login or publish none. An empty Forecast column reflects that gap and the scope cut, not the market: anticipation of failures
-or bottlenecks is claimed in press by Exotec (2023) and in marketing by Geek+ ("Predictive alerts") and Dematic.
-So "nobody grades their forecasts" holds for two vendors and is unknown for six. Direction test: the borderline cells
-we scored (Formant's and InOrbit's within-window repeat locations as a trend, OTTO's place filter as a heatmap and
-recurring events as a trend, Dematic's consolidated data as log upload) all lean against us. The errors that could
-still flatter us are the Formant absences resting on page titles, and the six walled trees (OTTO's help centre
-included), which need a demo account before the pitch says "not on the shelf".
+Across fourteen vendors, four of our nine capabilities are documented at rank A by at least one vendor: a stall or
+incident map (Formant, InOrbit, OTTO), a recurring-location view within one chosen window (the same three),
+hand-drawn avoid or cost zones used by routing (InOrbit, OTTO) and vendor-agnostic live ingest (Formant, InOrbit);
+marketing adds MiR's heatmap, Dematic's and AutoStore's third-party data and Ocado's congestion-fed zones. Five were
+not found in any doc tree searched: a location forecast, forecast grading, persistence-graded lessons, time-to-detect
+reporting and a graded decision ledger. That absence still rests on the two fully searchable trees (Formant, InOrbit):
+none of the six vendors added in this pass has a public doc tree (GreyOrange and Körber keep theirs behind a customer
+login, AutoStore, Symbotic and Ocado/6 River publish none, and Zebra's Fetch docs domain no longer resolves), so twelve
+of fourteen vendors are UNTESTED on all five. The near-misses a demo account could turn into presence are failure or
+bottleneck anticipation (Exotec in press; Geek+, Dematic, AutoStore and GreyOrange in marketing), none stating a floor
+location or a hit rate; Infios AI's "every action is tracked and auditable", the nearest thing to a decision ledger
+found, with no outcome grade and scoped to orders and transport; and Ocado's zones that adjust to live congestion.
+So "nobody grades their forecasts" holds for two vendors and is unknown for twelve, and "not on the shelf" is a claim
+about Formant and InOrbit, not the market. Direction test, against us: Formant's and InOrbit's within-window repeats
+counted as a trend, OTTO's place filter as a heatmap, Dematic's and AutoStore's third-party data as log upload, and
+Ocado's live-congestion zones as avoid-zones. Direction test, in our favour: AutoStore's MTBF ranking of whole Grids
+not counted as a heatmap, GreyOrange's hardware-agnostic robot control not counted as log upload (the OTTO VDA 5050
+rule), and Infios's auditable actions not counted as a ledger. Those three calls, the Formant absences resting on page
+titles, and the twelve walled or missing trees are where the errors could still flatter us, so the walled trees need
+demo accounts before a pitch says "not on the shelf".
 
 ## Not checked
 
-AutoStore, Symbotic, Körber (now Infios), Zebra/Fetch, 6 River Systems (now Ocado Intelligent Automation) and
-GreyOrange are outside this sweep's eight. No cell is claimed for them here.
+Every vendor named in the brief is now in the matrix. Vendors outside it (for example Amazon Robotics, Hai Robotics,
+Brightpick, Vecna, Seegrid) were not checked, and no cell is claimed for them.
