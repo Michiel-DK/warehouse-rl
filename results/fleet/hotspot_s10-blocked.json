@@ -1,0 +1,495 @@
+{
+ "zones": {
+  "0": {
+   "n_flagged": 27,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "1": {
+   "n_flagged": 29,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "2": {
+   "n_flagged": 28,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "3": {
+   "n_flagged": 23,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "4": {
+   "n_flagged": 21,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "5": {
+   "n_flagged": 19,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "6": {
+   "n_flagged": 27,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "7": {
+   "n_flagged": 31,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "8": {
+   "n_flagged": 28,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "9": {
+   "n_flagged": 34,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  }
+ },
+ "mean": {
+  "n_flagged": 26.7,
+  "spearman": null,
+  "zero_stall_share": null,
+  "k": {
+   "20": {
+    "precision": 0.0,
+    "recall": null
+   },
+   "40": {
+    "precision": 0.0,
+    "recall": null
+   },
+   "80": {
+    "precision": 0.0,
+    "recall": null
+   },
+   "120": {
+    "precision": 0.0,
+    "recall": null
+   }
+  }
+ },
+ "grading_counts": {
+  "outcome_count": {
+   "off": 284,
+   "ok": 15
+  },
+  "outcome": {
+   "ok": 185,
+   "off": 114
+  },
+  "truth": {
+   "false_alarm": 1386,
+   "hit": 23
+  },
+  "lesson_truth": {
+   "false_alarm": 5
+  }
+ },
+ "rank_grading": {
+  "top_k": [
+   20
+  ],
+  "rank_graded": 299,
+  "unranked": 0
+ },
+ "stall_in_episode": {
+  "total_stalls": 961,
+  "in_episode": 73,
+  "by_cause": {
+   "blocked_by_stuck": 45,
+   "traffic": 16,
+   "unknown": 12
+  }
+ },
+ "lesson_grading": {
+  "lesson_truth": {
+   "hot_cell": {
+    "false_alarm": 3
+   },
+   "hot_robot": {
+    "false_alarm": 2
+   }
+  }
+ },
+ "tag": "s10-blocked",
+ "run": "s10-blocked",
+ "config": {
+  "env_id": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "disturb_tag": "cfg-1f8829517b",
+  "disturb": {
+   "blocked_cell": {
+    "rate_per_hour": 8.0,
+    "duration": [
+     60,
+     240
+    ]
+   }
+  },
+  "steps": 500,
+  "seed_base": 0,
+  "zones": 10,
+  "emit_status": "complete",
+  "emit_schema": "fleet-state/2"
+ },
+ "costmap": {
+  "generated_at": "2026-01-01T00:41:35Z",
+  "window_hours": 1.0,
+  "half_life_h": 1.0,
+  "min_stalls": 1,
+  "exclude_occupied": true
+ },
+ "platform": {
+  "platform": "macOS-14.3.1-arm64-arm-64bit",
+  "python": "3.10.6"
+ },
+ "lesson_persist_chance": {
+  "n_lessons": 0,
+  "observed_ok": 0,
+  "observed_rate": null,
+  "chance_mean": null,
+  "chance_median": null,
+  "lift": null,
+  "per_lesson": []
+ },
+ "truth_kinds": {
+  "floor": {
+   "positives": 0,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "blocked": {
+   "positives": 50,
+   "k": {
+    "20": {
+     "precision": 0.02,
+     "recall": 0.08,
+     "hits": 4
+    },
+    "40": {
+     "precision": 0.0175,
+     "recall": 0.14,
+     "hits": 7
+    },
+    "80": {
+     "precision": 0.00875,
+     "recall": 0.14,
+     "hits": 7
+    },
+    "120": {
+     "precision": 0.005833333333333334,
+     "recall": 0.14,
+     "hits": 7
+    }
+   }
+  },
+  "outage": {
+   "positives": 0,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "any": {
+   "positives": 50,
+   "k": {
+    "20": {
+     "precision": 0.02,
+     "recall": 0.08,
+     "hits": 4
+    },
+    "40": {
+     "precision": 0.0175,
+     "recall": 0.14,
+     "hits": 7
+    },
+    "80": {
+     "precision": 0.00875,
+     "recall": 0.14,
+     "hits": 7
+    },
+    "120": {
+     "precision": 0.005833333333333334,
+     "recall": 0.14,
+     "hits": 7
+    }
+   }
+  },
+  "frozen": {
+   "positives": 0
+  }
+ }
+}
