@@ -1,8 +1,9 @@
 """The one place a truth.json is asked "is this subject a real problem in this time range?" (S10A, fleet-truth/2).
 
-Truth readers: only grade.py and hotspot_score.py import this module (enforced by a test); nothing under
-fleet_analyser/ does. Other truth readers (score.py, replay_export.py, time_to_detect.py, overview_build.py) read the
-file directly and keep the v1 rules (floor_cells only); that is deliberate and out of scope here.
+Truth readers: only grade.py, hotspot_score.py and time_to_detect.py (its blocked / outage window kinds, S10B) import
+this module (enforced by a test); nothing under fleet_analyser/ does. Other truth readers (score.py, replay_export.py,
+overview_build.py) read the file directly and keep the v1 rules (floor_cells only); that is deliberate and out of scope
+here.
 
 truth_positive(truth, zone, subject, step_from, step_to) -> frozenset of matched kinds (truthy = positive):
   cell "x,y"       "floor" iff in the zone's floor_cells (time-free); "blocked" / "outage" iff some window [a, b) of

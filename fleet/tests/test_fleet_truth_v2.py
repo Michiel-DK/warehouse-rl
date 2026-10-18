@@ -401,7 +401,8 @@ class TestImportFence(unittest.TestCase):
         # inject: import truth from an analyser module or a viewer script
         importers = {p.relative_to(ROOT / "fleet").as_posix() for p in (ROOT / "fleet").rglob("*.py")
                      if "tests" not in p.parts and self.IMPORT.search(p.read_text())}
-        self.assertLessEqual(importers, {"grade.py", "hotspot_score.py"})
+        # time_to_detect.py (S10B) is declared: its window kinds decide truth with truth.truth_positive
+        self.assertLessEqual(importers, {"grade.py", "hotspot_score.py", "time_to_detect.py"})
         self.assertIn("grade.py", importers)
         for p in (ROOT / "fleet" / "fleet_analyser").glob("*.py"):
             self.assertNotRegex(p.read_text(), self.IMPORT, p.name)

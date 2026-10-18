@@ -2,6 +2,7 @@
 needed except in the one end-to-end `--smoke` subprocess test. Each case names its red demonstration in an `# inject:`
 comment. None skipped. NOTE: the operator fixed this file name; tests/test_fleet_collect.py collects it explicitly."""
 import contextlib
+import hashlib
 import importlib
 import io
 import json
@@ -21,6 +22,8 @@ for _p in (ROOT, ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
         sys.path.insert(0, str(_p))
 
 import time_to_detect as ttd  # noqa: E402
+import costmap  # noqa: E402
+import truth as truth_mod  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
 FIRST = 1000
@@ -64,10 +67,11 @@ class FakeRerun:
     """Stands in for the costmap subprocess: appends `rows` to the store copy and records the calls."""
 
     def __init__(self, rows, also=None):
-        self.rows, self.calls, self.also = rows, [], also
+        self.rows, self.calls, self.also, self.runs = rows, [], also, []
 
-    def __call__(self, phase_a, copy, every):
+    def __call__(self, phase_a, copy, every, run=None):
         self.calls.append((Path(phase_a), Path(copy), every))
+        self.runs.append(run)
         st = JsonlStore(copy)
         st.insert("decisions", self.rows)
         st.close()
@@ -322,6 +326,283 @@ class TestStoreAndCli(unittest.TestCase):
         p = ttd.build_parser()
         ttd.validate(p, p.parse_args(["--smoke"]))
         ttd.validate(p, p.parse_args(["--smoke", "--out", str(Path(tempfile.gettempdir()) / "x.json")]))
+
+
+# ------------------------------------------------------------------------------------------------ S10B windows
+# Floor output golden: sha256 of the S8P-fixture output (ROWS / TRUTH / FakeRerun, --top-k 1,2) with meta.phase_a_dir
+# set to "FIXED" and re-written by costmap.write_json. Produced by the UNMODIFIED master code (24cb0b7), by running
+# /tmp/ttd_golden.py (builds make_phase_a(t), run_main(d, FakeRerun(ROWS), ks="1,2"), normalises, hashes).
+FLOOR_GOLDEN = "fb551df1996d49235ada54c3cff9df1a8621ddad3f0345fb0d6635efd8a65bb2"
+WRUN = "s10-x"
+WT0 = "2026-01-01T00:00:00Z"
+WF = int(truth_mod.epoch_of(WT0))  # first message of every zone
+WPUB = [WF + 100, WF + 200, WF + 300]  # steps 20, 40, 60 at step_seconds 5
+
+
+def wtruth(zone_windows, key="blocked_windows", v2=True):
+    """zone_windows {zone: [(cell, start, end)]} -> truth doc (v2 unless v2=False -> v1 with floor_cells only)."""
+    zones = {z: ({key: [dict(cell=c, start_step=a, end_step=b) for c, a, b in ws], "floor_cells": {}})
+             for z, ws in zone_windows.items()}
+    doc = dict(schema_version="fleet-truth/2", env_id="E", disturb={}, steps=60, step_seconds=5, t0=WT0, zones=zones)
+    if not v2:
+        doc = dict(schema_version="fleet-truth/1", env_id="E", disturb={}, steps=60,
+                   zones={z: dict(floor_cells={}) for z in zone_windows})
+    return doc
+
+
+def wrow(zone, cell, step, rank, run=WRUN):
+    return row(zone, cell, WF + 5 * step, rank, run=run)
+
+
+def make_window_phase_a(d, truth_doc, runs=(WRUN,), orig_extra=()):
+    d = Path(d)
+    st = JsonlStore(d / "store")
+    st.insert("decisions", list(orig_extra))
+    st.close()
+    (d / "store" / "decisions.jsonl").touch()
+    if runs is not None:
+        (d / "store" / "ingest_runs.jsonl").write_text("".join(json.dumps(dict(run=r, glob="g")) + "\n" for r in runs))
+    (d / "truth.json").write_text(json.dumps(truth_doc))
+    return d
+
+
+# two zones, two blocked windows, three publishes (steps 20, 40, 60), K=2 unless noted. Hand-computed:
+#   Z0 1,1 [30,50): r1@20 (preflag; window not open yet -> false flag), r2@40 (detected, 10 steps = 50 s, rank 2),
+#                   r1@60 (only post-end publish, still flagged -> cleared_s null, stale_at_end; false flag at 60)
+#   Z1 3,3 [10,45): r3@20 (not in top 2), r1@40 (detected, 30 steps = 150 s, rank 1, flag on an OPEN window: not false),
+#                   r5@60 (first post-end publish unflagged -> cleared_s (60-45)*5 = 75)
+#   Z0 9,9 r2@20 (no window: false flag). False flags per publish: 20 -> 2, 40 -> 0, 60 -> 1 (mean 1.0).
+WWIN = {"0": [("1,1", 30, 50)], "1": [("3,3", 10, 45)]}
+WROWS = [wrow("0", "1,1", 20, 1), wrow("0", "9,9", 20, 2), wrow("1", "3,3", 20, 3),
+         wrow("0", "1,1", 40, 2), wrow("1", "3,3", 40, 1),
+         wrow("0", "1,1", 60, 1), wrow("1", "3,3", 60, 5)]
+
+
+def wanalyse(rows, windows, ks=(2,), kind="blocked", pub=WPUB, key="blocked_windows"):
+    doc = wtruth(windows, key=key)
+    by_k, w, h = ttd.analyse_windows(rows, doc, kind, WF, pub, list(ks), WRUN)
+    return by_k, doc
+
+
+def only(by_k, k, zone, i=0):
+    return by_k[str(k)]["windows"][zone][i]
+
+
+class TestWindowAnalysis(unittest.TestCase):
+    def test_exact_windows_preflag_stale_and_false_flags(self):
+        # inject: measure from end instead of start, count rank < K, drop the start<=s<end guard, or use forecast_steps
+        by_k, _ = wanalyse(WROWS, WWIN)
+        a, b = only(by_k, 2, "0"), only(by_k, 2, "1")
+        self.assertEqual((a["first_detect_s"], a["rank_at_detect"], a["cleared_s"]), (50, 2, None))
+        self.assertEqual((a["preflag"], a["stale_at_end"], a["open_at_end"], a["missed"], a["detected"]),
+                         (True, True, False, False, True))
+        self.assertEqual((b["first_detect_s"], b["rank_at_detect"], b["cleared_s"]), (150, 1, 75))
+        self.assertEqual((b["preflag"], b["stale_at_end"], b["open_at_end"], b["missed"], b["detected"]),
+                         (False, False, False, False, True))
+        s = by_k["2"]["summary"]
+        self.assertEqual((s["n_windows"], s["n_detected"], s["share_detected"]), (2, 2, 1.0))
+        self.assertEqual((s["preflag"], s["stale_at_end"], s["open_at_end"], s["missed"]), (1, 1, 0, 0))
+        self.assertEqual(s["first_detect_s"], dict(p25=75.0, median=100.0, p75=125.0))
+        self.assertEqual(s["cleared_s"], dict(p25=75, median=75, p75=75))
+        self.assertEqual(s["false_flags_per_publish_mean"], 1.0)
+        self.assertEqual(by_k["2"]["false_flag_cells"], {"100": {"0": ["1,1", "9,9"]}, "200": {}, "300": {"0": ["1,1"]}})
+
+    def test_flag_on_open_window_is_not_false_and_flag_off_window_is(self):
+        # inject: score false flags with truth.forecast_steps (3600 s horizon) or ignore the window span
+        by_k, _ = wanalyse(WROWS, WWIN)
+        ff = by_k["2"]["false_flag_cells"]
+        self.assertNotIn("3,3", ff["200"].get("1", []))
+        self.assertEqual(ff["200"], {})
+        self.assertIn("1,1", ff["100"]["0"])  # flagged before its window opened
+        self.assertIn("1,1", ff["300"]["0"])  # flagged after its window closed
+
+    def test_matched_kind_of_any_type_is_not_false(self):
+        # inject: only accept the measured kind as a positive
+        doc = wtruth({"0": [("1,1", 30, 50)]})
+        doc["zones"]["0"]["floor_cells"] = {"5,5": 0.9}
+        doc["zones"]["0"]["outage_windows"] = [dict(cell="6,6", start_step=0, end_step=60)]
+        rows = [wrow("0", "5,5", 40, 1), wrow("0", "6,6", 40, 2), wrow("0", "7,7", 40, 3), wrow("0", "1,1", 20, 1),
+                wrow("0", "1,1", 60, 1)]
+        by_k, _, _ = ttd.analyse_windows(rows, doc, "blocked", WF, WPUB, [3], WRUN)
+        self.assertEqual(by_k["3"]["false_flag_cells"]["200"], {"0": ["7,7"]})
+
+    def test_k_uses_rank_only(self):
+        # inject: filter rows by a fixed K
+        by_k, _ = wanalyse(WROWS, WWIN, ks=(1, 2))
+        a = only(by_k, 1, "0")
+        self.assertEqual((a["detected"], a["missed"], a["preflag"], a["first_detect_s"]), (False, True, True, None))
+        self.assertTrue(only(by_k, 1, "1")["detected"])
+        self.assertTrue(only(by_k, 2, "0")["detected"])
+
+    def test_window_ending_before_first_publish_is_missed(self):
+        # inject: allow detection after the window ended, or flag missed windows stale_at_end / open_at_end
+        rows = [wrow("0", "4,4", s, 1) for s in (20, 40, 60)]
+        by_k, _ = wanalyse(rows, {"0": [("4,4", 5, 15)]})
+        w = only(by_k, 2, "0")
+        self.assertEqual((w["first_detect_s"], w["cleared_s"], w["detected"], w["open_at_end"], w["stale_at_end"],
+                          w["missed"]), (None, None, False, False, False, True))
+        s = by_k["2"]["summary"]
+        self.assertEqual((s["missed"], s["n_detected"], s["stale_at_end"], s["open_at_end"]), (1, 0, 0, 0))
+        self.assertEqual(s["first_detect_s"], dict(p25=None, median=None, p75=None))
+
+    def test_detected_window_without_post_end_publish_is_open_not_stale(self):
+        # inject: report such a window as stale_at_end or as cleared
+        rows = [wrow("0", "1,1", 40, 1), wrow("0", "1,1", 60, 1)]
+        by_k, _ = wanalyse(rows, {"0": [("1,1", 30, 70)]})
+        w = only(by_k, 2, "0")
+        self.assertEqual((w["detected"], w["first_detect_s"], w["cleared_s"], w["open_at_end"], w["stale_at_end"]),
+                         (True, 50, None, True, False))
+
+    def test_missed_window_without_post_end_publish_is_not_open(self):
+        # inject: set open_at_end for every window with no post-end publish
+        rows = [wrow("0", "1,1", 20, 1), wrow("0", "1,1", 40, 1)]
+        by_k, _ = wanalyse(rows, {"0": [("1,1", 50, 80)]})  # not flagged at the one in-window publish (step 60)
+        w = only(by_k, 2, "0")
+        self.assertEqual((w["missed"], w["open_at_end"], w["stale_at_end"], w["cleared_s"]), (True, False, False, None))
+
+    def test_flag_only_after_the_window_ended_is_missed_and_not_stale(self):
+        # inject: let a post-end flag count as detection
+        rows = [wrow("0", "1,1", 60, 1)]
+        by_k, _ = wanalyse(rows, {"0": [("1,1", 30, 50)]})
+        w = only(by_k, 2, "0")
+        self.assertEqual((w["missed"], w["stale_at_end"], w["open_at_end"], w["first_detect_s"]), (True, False, False, None))
+
+    def test_reflag_after_a_clear_still_counts_as_cleared(self):
+        # inject: require the cell to stay unflagged at every later publish
+        pub = [WF + 100, WF + 200, WF + 250, WF + 300]  # steps 20, 40, 50, 60
+        rows = [wrow("0", "1,1", 40, 1), wrow("0", "1,1", 60, 1), wrow("0", "9,9", 50, 1)]
+        by_k, _ = wanalyse(rows, {"0": [("1,1", 30, 45)]}, pub=pub)
+        w = only(by_k, 2, "0")
+        self.assertEqual((w["cleared_s"], w["stale_at_end"]), (25, False))  # first unflagged publish: step 50
+
+    def test_outage_kind_reads_outage_windows(self):
+        # inject: read blocked_windows for every kind
+        doc = wtruth({"0": [("2,2", 30, 50)]}, key="outage_windows")
+        doc["zones"]["0"]["blocked_windows"] = [dict(cell="1,1", start_step=0, end_step=60)]
+        by_k, _, _ = ttd.analyse_windows([wrow("0", "2,2", 40, 1), wrow("0", "2,2", 60, 9)], doc, "outage", WF, WPUB, [2],
+                                         WRUN)
+        self.assertEqual(by_k["2"]["summary"]["n_windows"], 1)
+        self.assertEqual(only(by_k, 2, "0")["cell"], "2,2")
+
+
+def norm_sha(out):
+    doc = json.loads(Path(out).read_text())
+    doc["meta"]["phase_a_dir"] = "FIXED"
+    n = Path(out).with_name("norm.json")
+    costmap.write_json(n, doc)
+    return hashlib.sha256(n.read_bytes()).hexdigest()
+
+
+class TestFloorByteIdentity(unittest.TestCase):
+    def test_floor_output_bytes_match_the_pre_change_golden(self):
+        # inject: add a meta key, change the key order or schema_version, or let --truth-kind floor take another path
+        for extra in ((), ("--truth-kind", "floor")):
+            with tempfile.TemporaryDirectory() as t:
+                d = make_phase_a(t)
+                _, text, out = run_main(d, FakeRerun(ROWS), extra=extra, ks="1,2")
+                self.assertEqual(norm_sha(out), FLOOR_GOLDEN, extra)
+                self.assertIn(f"CAVEAT: {ttd.CAVEAT}", text)
+
+    def test_floor_meta_keys_are_exactly_the_existing_ones(self):
+        # inject: add truth_kind / run to the floor meta
+        with tempfile.TemporaryDirectory() as t:
+            d = make_phase_a(t)
+            fake = FakeRerun(ROWS)
+            _, _, out = run_main(d, fake, extra=("--truth-kind", "floor"))
+            self.assertEqual(set(json.loads(Path(out).read_text())["meta"]), set(ttd.META_KEYS))
+            self.assertEqual(fake.runs, [None])  # floor calls the rerun with the old three-argument signature
+
+
+class TestWindowRunAndMeta(unittest.TestCase):
+    def run_w(self, d, rows, kind="blocked", ks="2", fake=None):
+        fake = fake or FakeRerun(rows)
+        return fake, run_main(d, fake, extra=("--truth-kind", kind), ks=ks,
+                              sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+
+    def test_window_run_end_to_end_meta_and_stdout(self):
+        # inject: drop a window meta key, print the floor caveat, or change the caveat text
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN))
+            fake, (code, text, out) = self.run_w(d, WROWS)
+            doc = json.loads(Path(out).read_text())
+            self.assertEqual(set(doc["meta"]),
+                             set(ttd.META_KEYS) | {"truth_kind", "run", "n_windows", "window_len_steps_median"})
+            m = doc["meta"]
+            self.assertEqual((m["truth_kind"], m["run"], m["n_windows"], m["window_len_steps_median"]),
+                             ("blocked", WRUN, 2, 27.5))
+            self.assertEqual(m["caveat"], "Windows have a start and an end; detection is measured from the start, "
+                                          "clearing from the end.")
+            self.assertEqual(text.splitlines()[-2], f"CAVEAT: {m['caveat']}")
+            self.assertEqual(doc["by_k"]["2"]["summary"]["stale_at_end"], 1)
+            self.assertFalse((d / f"store-ttd-{EVERY}").exists())
+
+    def test_inferred_run_is_used_for_select_strip_and_rerun(self):
+        # inject: use the constant RUN in select_forecasts, strip_forecasts or the rerun call
+        other = [wrow("1", "3,3", 20, 1, run="closed_loop"), wrow("0", "1,1", 20, 1, run="closed_loop")]
+        with tempfile.TemporaryDirectory() as t:
+            stale = wrow("0", "9,9", 60, 1)  # phase A's own row of the inferred run: must be stripped before the rerun
+            d = make_window_phase_a(t, wtruth(WWIN), orig_extra=[stale])
+            fake, (_, _, out) = self.run_w(d, WROWS + other)
+            self.assertEqual(fake.runs, [WRUN])
+            ref = json.loads(Path(out).read_text())["by_k"]
+            with tempfile.TemporaryDirectory() as t2:
+                d2 = make_window_phase_a(t2, wtruth(WWIN))
+                _, (_, _, out2) = self.run_w(d2, WROWS)
+                self.assertEqual(json.loads(Path(out2).read_text())["by_k"], ref)  # rows of another run ignored
+            self.assertEqual(ref["2"]["false_flag_cells"]["300"], {"0": ["1,1"]})  # stale 9,9@60 not kept
+            copy = Path(t) / "copy"
+            shutil.copytree(d / "store", copy)
+            self.assertEqual(ttd.strip_forecasts(copy), 0)
+            self.assertEqual(ttd.strip_forecasts(copy, WRUN), 1)
+
+    def test_run_inference_errors(self):
+        # inject: take the first run, default to closed_loop, or return None for a missing file
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN), runs=("a", "b", "a"))
+            with self.assertRaisesRegex(ValueError, r"\['a', 'b'\]"):
+                self.run_w(d, WROWS)
+            self.assertFalse((d / f"store-ttd-{EVERY}").exists())
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN), runs=None)
+            with self.assertRaisesRegex(ValueError, "ingest_runs.jsonl"):
+                self.run_w(d, WROWS)
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN), runs=())
+            (d / "store" / "ingest_runs.jsonl").write_text("\n")
+            with self.assertRaisesRegex(ValueError, "no run"):
+                self.run_w(d, WROWS)
+
+    def test_v1_truth_with_a_window_kind_raises(self):
+        # inject: fall through to floor_cells for a v1 file
+        for kind in ("blocked", "outage"):
+            with tempfile.TemporaryDirectory() as t:
+                d = make_window_phase_a(t, wtruth(WWIN, v2=False))
+                with self.assertRaisesRegex(ValueError, "v2"):
+                    self.run_w(d, WROWS, kind=kind)
+
+    def test_truth_t0_must_equal_the_zone_first_message(self):
+        # inject: drop the one-clock assertion
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN))
+            with self.assertRaisesRegex(ValueError, "first message"):
+                run_main(d, FakeRerun(WROWS), extra=("--truth-kind", "blocked"),
+                         sp=span(t0={"0": WF + 5, "1": WF}, first=WF, end=WF + 300))
+
+    def test_queue_item_argvs_validate(self):
+        # inject: drop --truth-kind from the parser
+        base = ["--publish-every", "300", "--top-k", "10,20,40"]
+        for kind in ("blocked", "outage"):
+            p = ttd.build_parser()
+            a = p.parse_args(["--phase-a", f"fleet/data/s10-{kind}", "--truth-kind", kind, *base, "--out",
+                              f"results/fleet/time_to_detect_{kind}.json"])
+            self.assertEqual(ttd.validate(p, a), [10, 20, 40])
+            self.assertEqual(a.truth_kind, kind)
+        p = ttd.build_parser()
+        self.assertEqual(p.parse_args([]).truth_kind, "floor")
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            p.parse_args(["--truth-kind", "frozen"])
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            ttd.validate(p, p.parse_args(["--smoke", "--truth-kind", "blocked"]))
 
 
 class TestIsolation(unittest.TestCase):
