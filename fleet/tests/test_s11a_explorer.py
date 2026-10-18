@@ -392,11 +392,25 @@ class TestSection(Committed):
             elif src.endswith(".n"):
                 self.assertRegex(t, r"^\d+$", src)
 
+    def data_numbers(self):
+        """Every number of the explorer data as the page writes it: a digit in a title or aria value must be one of these."""
+        out = set()
+
+        def walk(x):
+            if isinstance(x, dict):
+                [walk(v) for v in x.values()]
+            elif isinstance(x, list):
+                [walk(v) for v in x]
+            elif isinstance(x, (int, float)) and not isinstance(x, bool):
+                out.update(("{:g}".format(x), "{:,}".format(int(round(x)))))
+        walk({a: b for a, b in self.ex.items() if a != "floor"})
+        return out
+
     def test_attributes_and_script_literals_carry_no_digit_and_no_banned_word(self):
         for n in self.sec.walk():
             for a, v in n.attrs.items():
                 if a in ("title", "label") or a.startswith("aria-"):
-                    self.assertIsNone(re.search(r"\d", v), (a, v))
+                    self.assertEqual([t for t in re.findall(r"\d+(?:\.\d+)?", v) if t not in self.data_numbers()], [], (a, v))
                     self.assertIsNone(s8i.BANNED.search(v), (a, v))
         visible = " ".join(self.sec.text_nodes())
         self.assertIsNone(s8i.BANNED.search(visible), s8i.BANNED.search(visible))
@@ -456,10 +470,10 @@ class TestSection(Committed):
         steps = [n for n in self.sec.find_all("input") if n.attrs.get("name") == "xp-steps"]
         self.assertEqual([n.attrs["value"] for n in steps if "checked" in n.attrs], [str(self.ex["axes"]["steps"][0])])
         reg = self.sec.find_all("input")[0]
-        self.assertEqual((reg.attrs["type"], reg.attrs["value"], reg.attrs["aria-valuetext"]), ("range", "0", "mild"))
+        self.assertEqual((reg.attrs["type"], reg.attrs["value"], reg.attrs["aria-valuetext"]), ("range", "0", "mild, p 0.3\u20130.7"))
         self.assertEqual(len([n for n in self.sec.find_all("li") if "data-tick" in n.attrs]), 4)
         ticks = [re.sub(r"\s+", "", li.text()) for li in self.sec.find_all("ul")[0].find_all("li")]
-        self.assertEqual(ticks, ["mildp0.3-0.7", "mediump0.6-0.9", "stickyp0.8-0.95", "verystickyp0.9-0.99"])
+        self.assertEqual(ticks, ["mildp0.3\u20130.7", "mediump0.6\u20130.9", "stickyp0.8\u20130.95", "verystickyp0.9\u20130.99"])
         verdict = self.sec.find_all("p", "xp-verdict")[0]
         self.assertEqual(verdict.attrs["data-verdict"], "reference")
         self.assertIn("reference", verdict.text())
@@ -525,7 +539,9 @@ function snap() {
   const ctl = function (name) {
     return query(sec, 'input[name=' + name + ']', false).map(function (e) {
       return { value: e.value, disabled: e.disabled, attr: e.hasAttribute('disabled'), title: e.getAttribute('title'),
-               label_title: e.parentNode.getAttribute('title'), checked: e.checked };
+               label_title: e.parentNode.getAttribute('title'), checked: e.checked,
+               nm_text: (query(e.parentNode, '.xp-nm', false)[0] || { textContent: null }).textContent,
+               nm_hidden: (query(e.parentNode, '.xp-nm', false)[0] || { hidden: null }).hidden };
     });
   };
   const style = function (id) { const e = document.getElementById(id); return { left: e.style.left || null, width: e.style.width || null, hidden: e.hidden }; };
@@ -535,6 +551,12 @@ function snap() {
     share_hidden: document.getElementById('xp-share').hidden,
     fill: style('xp-fill'), ci: style('xp-cibar'), ref_u: style('xp-ref-undisturbed'), ref_n: style('xp-ref-none'),
     valuetext: document.getElementById('xp-regime').getAttribute('aria-valuetext'),
+    vt_dens: document.getElementById('xp-dens').getAttribute('aria-valuetext'),
+    vt_brk: document.getElementById('xp-brk').getAttribute('aria-valuetext'),
+    live: query(sec, '[aria-live]', false).map(function (e) { return { live: e.getAttribute('aria-live'), text: e.textContent.replace(/\s+/g, ' ').trim() }; }),
+    refs: query(sec, '[data-ref]', false).map(function (e) {
+      return { ref: e.getAttribute('data-ref'), text: e.textContent, src: e.getAttribute('data-src'), slot: e.getAttribute('data-slot') };
+    }),
     ticks: query(sec, 'li', false).map(function (e) { return e.className; }) };
 }
 const out = [{ action: null, snap: snap() }];
@@ -554,13 +576,13 @@ STUB_HEAD = HARNESS.split("vm.createContext(sandbox);")[0] + "vm.createContext(s
 EXPLORER_HARNESS = STUB_HEAD + TAIL
 
 
-def run_explorer(case, actions):
+def run_explorer(case, actions, page=None):
     node = need_node(case)
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         (tmp / "harness.js").write_text(EXPLORER_HARNESS, encoding="utf-8")
         (tmp / "scenario.json").write_text(json.dumps(dict(actions=actions)), encoding="utf-8")
-        r = subprocess.run([node, str(tmp / "harness.js"), str(k.PAGE), "-", "-", str(tmp / "scenario.json")],
+        r = subprocess.run([node, str(tmp / "harness.js"), str(page or k.PAGE), "-", "-", str(tmp / "scenario.json")],
                            capture_output=True, text=True, timeout=120)
     if r.returncode != 0:
         case.fail("the explorer script failed under the stub DOM: " + r.stderr[-1500:])
@@ -580,6 +602,10 @@ class TestDom(Committed):
     def shown(self, src):
         return ob.format_value(self.D + src, ob.resolve(self.D + src, self.inputs))
 
+    def vt_regime(self, ri):
+        r = self.ex["axes"]["regimes"][ri]
+        return "%s, p %s\u2013%s" % (r["word"], self.shown("axes.regimes.%d.p_lo" % ri), self.shown("axes.regimes.%d.p_hi" % ri))
+
     def check_a(self, snap, ri, steps, arm):
         regime = self.ex["axes"]["regimes"][ri]["key"]
         idx = self.index(regime, steps, arm)
@@ -597,7 +623,7 @@ class TestDom(Committed):
             has = self.index(regime, int(s["value"]), "none") >= 0
             self.assertEqual((s["disabled"], s["title"]), (not has, None if has else "not measured"), (label, s["value"]))
             self.assertEqual(s["checked"], int(s["value"]) == steps, (label, s["value"]))
-        self.assertEqual(snap["valuetext"], self.ex["axes"]["regimes"][ri]["word"])
+        self.assertEqual(snap["valuetext"], self.vt_regime(ri))
         self.assertEqual([i for i, c in enumerate(snap["ticks"]) if "xp-on" in c.split()], [ri])
         # the data-src spans and their text are the selected entry's values
         slots = {}
@@ -626,7 +652,7 @@ class TestDom(Committed):
             kind = ob.dose_verdict([e["share_ci_lo"], e["share_ci_hi"]])
             self.assertEqual(snap["verdict"]["kind"], kind, label)
             word = {"helps": "beats", "hurts": "worse", "within noise": "within noise"}[kind]
-            self.assertTrue(snap["verdict"]["text"].startswith("Against none, this setting "), snap["verdict"]["text"])
+            self.assertTrue(snap["verdict"]["text"].startswith("Against no map, this setting "), snap["verdict"]["text"])
             self.assertIn(word, snap["verdict"]["text"])
             self.assertEqual(sum(w in snap["verdict"]["text"] for w in ("beats", "worse", "within noise")), 1)
         # bar geometry: fixed scale per (regime, steps), reference lines do not depend on the arm
@@ -732,6 +758,227 @@ class TestDom(Committed):
         self.assertEqual(len(a), 2)
         self.assertNotEqual([s["text"] for s in a[0]["snap"]["spans"] if "breakdown.policies" in s["src"]],
                             [s["text"] for s in a[1]["snap"]["spans"] if "breakdown.policies" in s["src"]])
+
+
+# ------------------------------------------------------------------------------------------------ (f) pass 2: design-audit fixes
+def hide_entries(html, drop):
+    """A copy of the page whose embedded explorer data lacks the floor entries for which drop(entry) is true."""
+    m = re.search(r'(id="xp-data">)(.*?)(</script>)', html, re.S)
+    data = json.loads(m.group(2).replace("<\\/", "</"))
+    data["floor"] = [e for e in data["floor"] if not drop(e)]
+    return html[:m.start(2)] + json.dumps(data, separators=(",", ":")).replace("</", "<\\/") + html[m.end(2):]
+
+
+def box_of(sec, legend):
+    return next(b for b in sec.find_all("fieldset") if "xp-box" in b.classes and b.find_all("legend")[0].text() == legend)
+
+
+def lum(hexcol):
+    c = [int(hexcol[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def contrast(a, b):
+    la, lb = sorted((lum(a), lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+class TestPass2(Committed):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.inputs = ob.load_inputs(DATA, ROOT)
+        cls.D = "docs/replay/data.js:run_constants.explorer."
+
+    index = TestDom.index
+    shown = TestDom.shown
+    vt_regime = TestDom.vt_regime
+
+    def setUp(self):
+        self.block = section_text(self.html)
+        self.sec = k.parse(self.block).find_all("section")[0]
+
+    def box_a(self):
+        return box_of(self.sec, "Does the map help?")
+
+    def box_b(self):
+        return box_of(self.sec, "Robots and breakdowns")
+
+    # F1 ---------------------------------------------------------------------------------------------------------------------
+    def vt_dens(self, i):
+        return "%s carrying robots" % self.shown("axes.density.%d" % i)
+
+    def vt_brk(self, i):
+        return "%s breakdowns per robot per hour" % self.shown("axes.breakdown.%d" % i)
+
+    def test_f1_static_valuetext_on_all_three_sliders_comes_from_the_data(self):
+        by = {n.attrs["id"]: n for n in self.sec.find_all("input") if n.attrs.get("type") == "range"}
+        self.assertEqual(sorted(by), ["xp-brk", "xp-dens", "xp-regime"])
+        self.assertEqual(by["xp-regime"].attrs["aria-valuetext"], self.vt_regime(0))
+        self.assertEqual(by["xp-dens"].attrs["aria-valuetext"], self.vt_dens(0))
+        self.assertEqual(by["xp-brk"].attrs["aria-valuetext"], self.vt_brk(0))
+
+    def test_f1_input_event_and_stickiness_reset_update_valuetext(self):
+        nd, nb = len(self.ex["axes"]["density"]), len(self.ex["axes"]["breakdown"])
+        acts = [dict(range="xp-dens", value=i) for i in range(nd)] + [dict(range="xp-brk", value=i) for i in range(nb)]
+        out = run_explorer(self, acts)
+        for i in range(nd):  # path 1: the input event of the density slider
+            self.assertEqual(out[1 + i]["snap"]["vt_dens"], self.vt_dens(i))
+        for i in range(nb):  # path 1: the input event of the breakdown slider
+            self.assertEqual(out[1 + nd + i]["snap"]["vt_brk"], self.vt_brk(i))
+        # path 2: a stickiness change resets shift length and steering, and the slider text follows
+        out = run_explorer(self, [dict(range="xp-regime", value=3), dict(radio="xp-steps", value=1500), dict(radio="xp-arm", value="map_a32"),
+                                  dict(range="xp-regime", value=1)])
+        for step, ri in zip(out[1:], (3, 3, 3, 1)):
+            self.assertEqual(step["snap"]["valuetext"], self.vt_regime(ri))
+
+    # F2 ---------------------------------------------------------------------------------------------------------------------
+    def test_f2_one_polite_summary_per_group_and_no_detail_row_inside(self):
+        for box in (self.box_a(), self.box_b()):
+            live = [n for n in box.walk() if "aria-live" in n.attrs]
+            self.assertEqual([n.attrs["aria-live"] for n in live], ["polite"])
+            self.assertEqual(live[0].attrs.get("aria-atomic"), "true")
+            self.assertNotIn("interval", live[0].text())
+            self.assertNotIn("Mean of", live[0].text())
+        self.assertEqual(len([n for n in self.sec.walk() if "aria-live" in n.attrs]), 2)
+
+    def test_f2_group_a_summary_says_value_verdict_steering_and_shift_length(self):
+        a = [n for n in self.box_a().walk() if "aria-live" in n.attrs][0]
+        text = " ".join(a.text(" ").split())
+        for want in (self.shown("floor.0.mean"), "no map", self.shown("axes.steps.0"), "reference"):
+            self.assertIn(want, text)
+        out = run_explorer(self, [dict(range="xp-regime", value=3), dict(radio="xp-steps", value=1500), dict(radio="xp-arm", value="map_a32"),
+                                  dict(range="xp-regime", value=1)])
+        idx = self.index("very_sticky", 1500, "map_a32")
+        live = out[3]["snap"]["live"][0]["text"]
+        self.assertIn(self.shown("floor.%d.mean" % idx), live)
+        self.assertIn("map, steering strength " + self.shown("axes.arms.4.alpha"), live)
+        self.assertIn(self.shown("axes.steps.1"), live)
+        self.assertIn("Against no map", live)
+        # the stickiness change resets shift length: the announcement carries the new shift length and the same steering
+        reset = out[4]["snap"]["live"][0]["text"]
+        j = self.index("medium", 500, "map_a32")
+        self.assertIn(self.shown("axes.steps.0"), reset)
+        self.assertIn("map, steering strength " + self.shown("axes.arms.4.alpha"), reset)
+        self.assertIn(self.shown("floor.%d.mean" % j), reset)
+        self.assertNotIn(self.shown("floor.%d.mean" % idx), reset)
+
+    def test_f2_group_b_summary_holds_one_value_per_output(self):
+        out = run_explorer(self, [dict(range="xp-dens", value=3), dict(radio="xp-pol", value="stuck_aware_cta"), dict(range="xp-brk", value=2)])
+        for step, (di, bi, pol) in zip(out[1:], ((3, 0, "cta"), (3, 0, "stuck_aware_cta"), (3, 2, "stuck_aware_cta"))):
+            live = [x for x in step["snap"]["live"] if x["live"] == "polite"][1]["text"]
+            d = self.shown("sweeps.density.points.%d.mean" % di)
+            b = self.shown("sweeps.breakdown.policies.%s.%d.mean" % (pol, bi))
+            self.assertEqual(re.findall(r"\d+\.\d", live), [d, b], live)
+            self.assertNotIn("interval", live)
+
+    # F3 ---------------------------------------------------------------------------------------------------------------------
+    def test_f3_disabled_stops_say_not_measured_in_visible_text_and_one_help_line(self):
+        labels = [n for n in self.sec.find_all("label") if "xp-opt" in n.classes and n.find_all("input")[0].attrs.get("name") in ("xp-arm", "xp-steps")]
+        disabled = 0
+        for lab in labels:
+            nm = [x for x in lab.find_all("span") if "xp-nm" in x.classes]
+            self.assertEqual(len(nm), 1)
+            off = "disabled" in lab.find_all("input")[0].attrs
+            self.assertEqual("hidden" in nm[0].attrs, not off)
+            if off:
+                disabled += 1
+                self.assertEqual(nm[0].text().strip(), "not measured")
+                self.assertEqual(lab.attrs["title"], "not measured")
+        self.assertGreater(disabled, 0)
+        helps = [p for p in self.sec.find_all("p") if "greyed-out" in p.text().lower()]
+        self.assertEqual(len(helps), 1)
+        self.assertIn("not measured", helps[0].text())
+
+    def test_f3_script_toggles_the_visible_text_with_the_disabled_state(self):
+        out = run_explorer(self, [dict(range="xp-regime", value=3), dict(range="xp-regime", value=0)])
+        for step in out:
+            for c in step["snap"]["arms"] + step["snap"]["steps"]:
+                self.assertEqual(c["nm_hidden"], not c["disabled"], c)
+                if c["disabled"]:
+                    self.assertEqual(c["nm_text"].strip(), "not measured")
+        self.assertTrue(any(c["disabled"] for step in out for c in step["snap"]["arms"]))
+
+    # F4 ---------------------------------------------------------------------------------------------------------------------
+    def test_f4_reference_spans_do_not_share_the_selected_slot(self):
+        refs = [n for n in self.sec.walk() if "data-ref" in n.attrs]
+        self.assertEqual(sorted(n.attrs["data-ref"] for n in refs), ["none", "undisturbed"])
+        for n in refs:
+            self.assertNotIn("data-slot", n.attrs)
+
+    def test_f4_a_missing_reference_entry_shows_not_measured_never_the_selected_value(self):
+        def fixture(drop, ri=1, arm="map_a8"):
+            with tempfile.TemporaryDirectory() as td:
+                page = Path(td) / "fixture.html"
+                page.write_text(hide_entries(self.html, drop), encoding="utf-8")
+                return run_explorer(self, [dict(range="xp-regime", value=ri), dict(radio="xp-arm", value=arm)], page=page)
+        # undisturbed removed for (medium, 500): the reference reads not measured at that stop, whatever arm is selected
+        reg, steps = self.ex["axes"]["regimes"][1]["key"], 500
+        out = fixture(lambda e: (e["regime"], e["steps"], e["arm"]) == (reg, steps, "undisturbed"))
+        for step in out[1:]:
+            snap = step["snap"]
+            r = {x["ref"]: x for x in snap["refs"]}
+            self.assertEqual((r["undisturbed"]["text"], r["undisturbed"]["src"]), ("not measured", None))
+            self.assertEqual(r["none"]["text"], self.shown("floor.%d.mean" % self.index(reg, steps, "none")))
+            self.assertTrue(snap["ref_u"]["hidden"])
+            sel = next(sp for sp in snap["spans"] if sp["slot"] == "mean" and ".floor." in sp["src"])
+            self.assertNotEqual(r["undisturbed"]["text"], sel["text"])
+        # none removed for (very sticky, 1500): that shift length is then not selectable, so the reference is never drawn from the
+        # selected entry; the surviving reference spans still read their own entries
+        out = fixture(lambda e: (e["regime"], e["steps"], e["arm"]) == ("very_sticky", 1500, "none"), 3, "map_a4")
+        for step in out[1:]:
+            snap = step["snap"]
+            self.assertTrue(next(s for s in snap["steps"] if s["value"] == "1500")["disabled"])
+            for r in snap["refs"]:
+                self.assertIsNone(r["slot"])
+                if r["src"] is None:
+                    self.assertEqual(r["text"], "not measured")
+                else:
+                    self.assertEqual(r["text"], self.shown(r["src"][len(self.D):]))
+                    self.assertIn(".mean", r["src"])
+
+    # F5 ---------------------------------------------------------------------------------------------------------------------
+    def css(self):
+        return re.search(r"<style>(.*?)</style>", self.block, re.S).group(1)
+
+    def test_f5_reference_lines_differ_by_style_and_have_text_labels(self):
+        css = self.css()
+        u = re.search(r"\.xp-ref\.xp-u\{([^}]*)\}", css).group(1)
+        z = re.search(r"\.xp-ref\.xp-z\{([^}]*)\}", css).group(1)
+        self.assertIn("solid", u)
+        self.assertIn("dashed", z)
+        self.assertNotIn("dashed", u)
+        keys = {n.attrs["id"]: n.text() for n in self.sec.find_all("span") if n.attrs.get("id", "").startswith("xp-ref-key-")}
+        self.assertIn("undisturbed floor", keys["xp-ref-key-undisturbed"])
+        self.assertIn("solid", keys["xp-ref-key-undisturbed"])
+        self.assertIn("no map", keys["xp-ref-key-none"])
+        self.assertIn("dashed", keys["xp-ref-key-none"])
+
+    def test_f5_the_bar_is_distinguishable_from_its_track(self):
+        css = self.css()
+        root = k.ROOT_BLOCK.search(k.style_text(self.html)).group(0)
+        tok = lambda name: re.search(re.escape(name) + r":\s*(#[0-9a-fA-F]{6})", root).group(1)
+        fill = re.search(r"\.xp-fill\{[^}]*background:var\((--[\w-]+)\)", css).group(1)
+        bar = re.search(r"\.xp-bar\{([^}]*)\}", css).group(1)
+        track = re.search(r"background:var\((--[\w-]+)\)", bar).group(1)
+        ratio = contrast(tok(fill), tok(track))
+        self.assertTrue(ratio >= 3 or "border:1px solid var(--ink)" in bar, (ratio, bar))
+
+    # F6 ---------------------------------------------------------------------------------------------------------------------
+    def test_f6_one_vocabulary(self):
+        text = " ".join(" ".join(self.sec.text_nodes()).split())
+        text = re.sub(r"\s*\u2013\s*", "\u2013", text)
+        for word in ("none", "oracle", "alpha", "AGVs", "AGV"):
+            self.assertIsNone(re.search(r"\b%s\b" % word, text, re.I), word)
+        self.assertIsNone(s8i.BANNED.search(text))
+        for stop in ("no map", "perfect knowledge", "carrying robots"):
+            self.assertIn(stop, text)
+        self.assertIn("map, steering strength " + self.shown("axes.arms.1.alpha"), text)
+        self.assertEqual(len(re.findall(r"\bp is the chance\b", text)), 1)
+        lo, hi = self.shown("axes.regimes.0.p_lo"), self.shown("axes.regimes.0.p_hi")
+        self.assertIn("p %s–%s" % (lo, hi), text)
+        self.assertIsNone(re.search(r"\d-\d", text))  # an en dash, never a hyphen, between range ends
 
 
 if __name__ == "__main__":

@@ -772,8 +772,8 @@ EXPLORER_FILES = (  # (regime key, word, summary path); the order is the page or
     ("sticky", "sticky", "results/closed_loop_p08_095/summary.json"),
     ("very_sticky", "very sticky", "results/closed_loop_sticky/summary.json"),
     ("very_sticky", "very sticky", "results/closed_loop_sticky_1500/summary.json"))
-EXPLORER_ARMS = (("none", "no map"), ("map_a4", "map, alpha"), ("map_a8", "map, alpha"), ("map_a16", "map, alpha"),
-                 ("map_a32", "map, alpha"), ("oracle", "perfect knowledge"))
+EXPLORER_ARMS = (("none", "no map"), ("map_a4", "map, steering strength"), ("map_a8", "map, steering strength"), ("map_a16", "map, steering strength"),
+                 ("map_a32", "map, steering strength"), ("oracle", "perfect knowledge"))
 EXPLORER_KEPT = tuple(k for k, _ in EXPLORER_ARMS) + ("undisturbed",)
 CI_KEY = "pick_rate_ci95"
 EXPLORER_DENSITY ="results/sweeps/density.json"
