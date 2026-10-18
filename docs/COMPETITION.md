@@ -308,8 +308,8 @@ linked. No public doc tree; every absence UNTESTED. 7 fetches, 2 searches.
 
 ### GreyOrange (GreyMatter)
 Surfaces read: home page header and footer https://www.greyorange.com/ (no docs, support, help or changelog link);
-knowledge centre https://docs.greyorange.com/ ("user manuals, release notes, training videos", behind "GO Customer
-Login"); GreyMatter technology and solutions pages. A site: search on docs.greyorange.com returned no indexed pages,
+knowledge centre https://docs.greyorange.com/ (described as holding user manuals, release notes and training videos,
+behind "GO Customer Login"); GreyMatter technology and solutions pages. A site: search on docs.greyorange.com returned no indexed pages,
 and a search for release notes returned trade press only. Doc tree behind a login; every cell UNTESTED. 4 fetches, 2
 searches.
 
