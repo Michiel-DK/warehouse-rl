@@ -12,12 +12,14 @@ claimed rank <= top_k still holds at window_end) for a claim with rank <= top_k,
 rank grade, or verdict "unranked" when there is no rank claim to grade). --truth PATH additionally truth-grades every
 forecast against that run's truth.json: forecast_grades rows with grade_source "truth", verdict "hit" iff the cell is
 one of the zone's floor_cells else "false_alarm"; the decision and decision_grades are never touched, and a forecast
-in a zone truth.json does not list raises. This file is the only place the grading path reads truth.json.
+in a zone truth.json does not list raises. With a fleet-truth/2 file (S10A) the verdict is truth.truth_positive over the steps [decided_at, decided_at + horizon_s]
+(floor cells time-free, blocked / outage cell windows); a v1 file keeps the floor-only rule. This file is the only place the
+grading path reads truth.json.
 Lesson decisions (fleet/lessons.py) are graded in every cycle too (fleet_analyser/lessons.py grade_lessons): an open
 lesson whose zone stream reached window_end + W gets a forecast_grades row "lesson" (ok / off against the next window of
 the same length) and then its stamp. hot_cell and hot_robot lessons also get a "lesson_persist" row (ok iff the subject
 is still at or above the next window's own average stalled cell / robot; the decision is never touched by it). --truth also writes a "lesson_truth" row (hit / false_alarm) for every hot_cell
-lesson; the lesson decision is never stamped by truth. counts["lesson"] = dict(graded, open, persist = dict(graded, open)[, truth]).
+lesson, and with a v2 file for every hot_robot lesson too (frozen windows; a v1 file writes no robot rows); the lesson decision is never stamped by truth. counts["lesson"] = dict(graded, open, persist = dict(graded, open)[, truth]).
 """
 import argparse
 import json
@@ -33,6 +35,7 @@ if str(FLEET) not in sys.path:
 
 from fleet_analyser import forecast_grade, grade, lessons, store as store_mod  # noqa: E402
 from fleet_analyser.forecast_grade import split_subject, write_once  # noqa: E402
+import truth as truth_mod  # noqa: E402
 
 
 def grade_truth(store, run, truth):
@@ -45,7 +48,8 @@ def grade_truth(store, run, truth):
     n = 0
     for d in fcs:
         zone, cell = split_subject(d["subject"])
-        verdict = "hit" if cell in truth["zones"][zone].get("floor_cells", {}) else "false_alarm"
+        s0, s1 = truth_mod.forecast_steps(truth, d["decided_at"], lessons.claim_of(d)["horizon_s"])
+        verdict = "hit" if truth_mod.truth_positive(truth, zone, cell, s0, s1) else "false_alarm"
         n += write_once(store, dict(id=d["id"], run=run, grade_source="truth", outcome=None, expected=None,
                                     error=None, verdict=verdict, horizon_s=None, graded_at=None,
                                     window_end=None))
@@ -57,14 +61,16 @@ def grade_lesson_truth(store, run, truth):
     else "false_alarm". The decision is never stamped by truth. A lesson in a zone truth.json does not list raises
     ValueError before any row is written. Returns dict(graded) = new rows."""
     hot = [(d, lessons.claim_of(d)) for d in lessons.lessons(store, run)]
-    hot = [(d, c) for d, c in hot if c["lesson_kind"] == "hot_cell"]
+    hot = [(d, c) for d, c in hot if c["lesson_kind"] == "hot_cell"
+           or (c["lesson_kind"] == "hot_robot" and not truth_mod.is_v1(truth))]
     missing = sorted({c["zone"] for _, c in hot} - set(truth.get("zones", {})))
     if missing:
         raise ValueError(f"truth.json has no zone {', '.join(missing)} (hot_cell lessons exist for it)")
     n = 0
     for d, c in hot:
-        cell = split_subject(c["subject"])[1].removeprefix("cell ")
-        verdict = "hit" if cell in truth["zones"][c["zone"]].get("floor_cells", {}) else "false_alarm"
+        subject = split_subject(c["subject"])[1].removeprefix("cell ")
+        s0, s1 = truth_mod.lesson_steps(truth, c.get("window_start"), c["window_end"])
+        verdict = "hit" if truth_mod.truth_positive(truth, c["zone"], subject, s0, s1) else "false_alarm"
         n += write_once(store, dict(id=d["id"], run=run, grade_source="lesson_truth", outcome=None, expected=None,
                                     error=None, verdict=verdict, horizon_s=None, graded_at=None, window_end=None))
     return dict(graded=n)

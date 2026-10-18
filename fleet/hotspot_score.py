@@ -1,11 +1,16 @@
-"""Score a published cost map against the emitter's floor ground truth (the only module besides grade.py that reads it).
+"""Score a published cost map against the emitter's ground truth (the only module besides grade.py that reads it).
 
 Usage: python fleet/hotspot_score.py --run-dir DIR --store jsonl:DIR|clickhouse://... --tag NAME
        [--costmap DIR/costmap.json] [--out results/fleet/hotspot_<tag>.json] [--window-h W]
+Smoke: python fleet/hotspot_score.py --smoke [--out-dir DIR] (all five disturbance kinds, 2 zones x 200 steps, tmp dir).
 DIR holds truth.json and emit_ledger.json (the emitter's output). Per zone and as the mean over zones, for K in
 {20, 40, 80, 120}: precision@K = floor cells among the K most expensive flagged cells / K (a map with fewer than K
 flagged cells counts the missing slots as misses; n_flagged is reported) and recall@K = those hits / |floor cells of the
-zone|. Cost ties break on the cell string. Spearman (average ranks on ties) between cost and true p (0 for non-floor
+zone|. Cost ties break on the cell string. S10A: the summary also carries truth_kinds = {kind: {positives, k: {K: {precision, recall, hits}}}} for floor / blocked
+/ outage / any (cells; a cell is positive for a kind iff truth lists it for that kind anywhere in the run, "any" = union,
+pooled over zones: precision = hits / (K * zones), recall = hits / positives) and frozen = {positives: distinct robot serials}
+(no per-K, the map ranks cells). A burst-only run has no positive cells, so precision is 0 at every K.
+Spearman (average ranks on ties) between cost and true p (0 for non-floor
 cells) over the flagged cells, null below 3 flagged cells or when either side is constant. zero_stall_share = share of
 the zone's floor cells with no stall of any kind in the store. Also: forecast_grades counts by (grade_source, verdict) as grading_counts: "outcome" = the
 rank grade (cell still in the zone's top K at window_end), "outcome_count" = the count grade (stall count within
@@ -29,7 +34,10 @@ import argparse
 import json
 import platform
 import statistics
+import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 FLEET = Path(__file__).resolve().parent
@@ -40,6 +48,13 @@ if str(FLEET) not in sys.path:
 from fleet_analyser import lessons, store as store_mod  # noqa: E402
 
 KS = (20, 40, 80, 120)
+SMOKE_ENV = "tarware-small-4agvs-2pickers-globalobs-v1"
+SMOKE_ZONES, SMOKE_STEPS, SMOKE_SEED_BASE = 2, 200, 0
+SMOKE_DISTURB = {"floor": {"cells": 6, "p": [0.3, 0.7]},
+                 "blocked_cell": {"rate_per_hour": 90.0, "duration": [20, 60]},
+                 "outage": {"rate_per_hour": 90.0, "duration": [20, 60]},
+                 "breakdown": {"rate_per_hour": 30.0, "duration": [10, 30]},
+                 "burst": {"start": 50, "end": 150, "extra": 4}}
 LESSON_SOURCES = ("lesson", "lesson_persist", "lesson_truth")
 
 
@@ -99,6 +114,35 @@ def _mean(vals):
     return sum(vals) / len(vals) if vals else None
 
 
+def truth_kinds(truth, costmap, ks=KS):
+    """Per-kind positives and pooled precision/recall (S10A). A cell is positive for a kind iff the zone's truth lists
+    it for that kind anywhere in the run (floor_cells, blocked_windows, outage_windows; a cell in two kinds counts in
+    each; "any" = the union, each cell once). Pooled over zones: hits = sum of top-K hits, precision = hits /
+    (K * zones), recall = hits / positives (null at 0 positives). frozen = distinct robot serials, no per-K (the map
+    ranks cells). A v1 truth has only floor positives; a burst-only run has none, so precision is 0 at every K."""
+    zones = sorted(truth["zones"], key=lambda s: int(s) if s.isdigit() else s)
+    per_zone = []
+    for z in zones:
+        zt = truth["zones"][z]
+        cells = dict(floor=set(zt["floor_cells"]),
+                     blocked={w["cell"] for w in zt.get("blocked_windows", ())},
+                     outage={w["cell"] for w in zt.get("outage_windows", ())})
+        cells["any"] = cells["floor"] | cells["blocked"] | cells["outage"]
+        per_zone.append((ranked_cells(costmap["zones"].get(z, {})), cells,
+                         {w["serial"] for w in zt.get("frozen_windows", ())}))
+    out = {}
+    for kind in ("floor", "blocked", "outage", "any"):
+        pos = sum(len(cells[kind]) for _, cells, _ in per_zone)
+        k_out = {}
+        for k in ks:
+            hits = sum(1 for order, cells, _ in per_zone for c in order[:k] if c in cells[kind])
+            k_out[str(k)] = dict(precision=hits / (k * len(per_zone)) if per_zone else 0.0,
+                                 recall=hits / pos if pos else None, hits=hits)
+        out[kind] = dict(positives=pos, k=k_out)
+    out["frozen"] = dict(positives=sum(len(f) for _, _, f in per_zone))
+    return out
+
+
 def score_run(truth, costmap, stalls, grades, ks=KS, lesson_decisions=()):
     zones = {}
     for z in sorted(truth["zones"], key=lambda s: int(s) if s.isdigit() else s):
@@ -128,7 +172,7 @@ def score_run(truth, costmap, stalls, grades, ks=KS, lesson_decisions=()):
     for s in stalls:
         if s["in_episode"] is not None:
             in_episode[s["in_episode"]] = in_episode.get(s["in_episode"], 0) + 1
-    return dict(zones=zones, mean=mean, grading_counts=grading, rank_grading=rank_grading,
+    return dict(zones=zones, mean=mean, truth_kinds=truth_kinds(truth, costmap, ks), grading_counts=grading, rank_grading=rank_grading,
                 stall_in_episode=dict(total_stalls=len(stalls), in_episode=sum(in_episode.values()),
                                       by_cause=dict(sorted(in_episode.items()))),
                 lesson_grading=lesson_grading)
@@ -184,15 +228,77 @@ def persist_chance(store, run, window_h=None):
                 lift=rate / mean if n and mean else None, per_lesson=per)
 
 
+def smoke_problems(truth):
+    """Why a smoke truth.json is not an all-five-kinds run: [] when every zone has non-empty blocked, outage and frozen
+    windows and a non-null burst."""
+    problems = []
+    for z, zt in sorted(truth["zones"].items()):
+        for key in ("blocked_windows", "outage_windows", "frozen_windows"):
+            if not zt.get(key):
+                problems.append(f"zone {z}: {key} is empty")
+        if not zt.get("burst"):
+            problems.append(f"zone {z}: burst is null")
+    return problems
+
+
+def smoke(out_dir=None, log=print):
+    """2 zones x 200 steps on the small map with all five disturbance kinds: emit, check the truth lists, ingest,
+    costmap, grade --truth, score. Subprocesses of the existing CLIs; everything lives in out_dir (a fresh tmp dir by
+    default), never under results/. Returns the exit code (0 only when every step succeeded and the lists are full)."""
+    with tempfile.TemporaryDirectory(prefix="hotspot_smoke_") as tmp:
+        base = Path(out_dir) if out_dir else Path(tmp)
+        base.mkdir(parents=True, exist_ok=True)
+        run_dir, store = base / "run", base / "store"
+        glob = str(run_dir / "zone*-*.jsonl.gz")
+        t0 = time.monotonic()
+
+        def sh(script, *args):
+            r = subprocess.run([sys.executable, str(FLEET / script), *map(str, args)], capture_output=True, text=True)
+            if r.returncode:
+                log(f"smoke: {script} failed ({r.returncode}): {r.stderr.strip()[-400:]}")
+            return r.returncode
+
+        if sh("emit.py", "--zones", SMOKE_ZONES, "--steps", SMOKE_STEPS, "--env", SMOKE_ENV, "--seed-base",
+              SMOKE_SEED_BASE, "--disturb", json.dumps(SMOKE_DISTURB), "--speed", 0, "--workers", SMOKE_ZONES,
+              "--dir", run_dir):
+            return 1
+        problems = smoke_problems(json.loads((run_dir / "truth.json").read_text()))
+        for pr in problems:
+            log(f"smoke: {pr}")
+        if problems:
+            return 1
+        spec = f"jsonl:{store}"
+        steps = (("ingest.py", "--source", "file", "--glob", glob, "--run", "smoke", "--store", spec, "--once"),
+                 ("costmap.py", "--glob", glob, "--run", "smoke", "--store", spec, "--publish-every", 250,
+                  "--out", base / "costmap.json"),
+                 ("grade.py", "--run", "smoke", "--store", spec, "--once", "--truth", run_dir / "truth.json"))
+        for step in steps:
+            if sh(*step):
+                return 1
+        if main(["--run-dir", run_dir, "--costmap", base / "costmap.json", "--store", spec, "--tag", "smoke",
+                 "--out", base / "hotspot_smoke.json"]):
+            return 1
+        log(f"smoke ok in {time.monotonic() - t0:.1f}s")
+        return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--run-dir", required=True)
+    p.add_argument("--run-dir", default=None)
     p.add_argument("--costmap", default=None)
     p.add_argument("--store", default=None)
-    p.add_argument("--tag", required=True)
+    p.add_argument("--tag", default=None)
     p.add_argument("--out", default=None)
     p.add_argument("--window-h", type=float, default=None)
-    a = p.parse_args(argv)
+    p.add_argument("--smoke", action="store_true",
+                   help="self-check: 2 zones x 200 steps with all five disturbance kinds through emit, ingest, costmap, "
+                        "grade --truth and score in a tmp dir (or --out-dir); exit nonzero if a truth list is empty")
+    p.add_argument("--out-dir", default=None, help="--smoke only: keep the smoke run here instead of a tmp dir")
+    a = p.parse_args([str(x) for x in argv] if argv is not None else None)
+    if a.smoke:
+        return smoke(a.out_dir)
+    if a.run_dir is None or a.tag is None:
+        p.error("--run-dir and --tag are required (unless --smoke)")
     run_dir = Path(a.run_dir)
     truth = json.loads((run_dir / "truth.json").read_text())
     ledger_path = run_dir / "emit_ledger.json"

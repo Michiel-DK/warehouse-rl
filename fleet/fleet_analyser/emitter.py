@@ -74,8 +74,9 @@ from . import sinks as _sinks  # noqa: E402
 from .emit_ledger import EmitLedger  # noqa: E402
 
 SCHEMA_VERSION = "fleet-state/2"
-TRUTH_SCHEMA_VERSION = "fleet-truth/1"
+TRUTH_SCHEMA_VERSION = "fleet-truth/2"
 TRUTH_FILE = "truth.json"
+WINDOW_KEYS = ("blocked_windows", "outage_windows", "frozen_windows", "burst")
 DEFAULT_ENV = "tarware-medium-8agvs-4pickers-globalobs-v1"
 DEFAULT_STEPS = 720
 DEFAULT_T0 = "2026-01-01T00:00:00Z"
@@ -107,6 +108,45 @@ def resolve_t0(spec):
 def timestamp_at(t0, step, step_seconds):
     base = _dt.datetime.strptime(t0, _TS_FORMAT)
     return (base + _dt.timedelta(seconds=step * step_seconds)).strftime(_TS_FORMAT)
+
+
+# ------------------------------------------------------------------------------------------------ truth windows
+def windows_from_steps(per_step):
+    """per_step: a sequence (one entry per step) of iterables of hashable keys. Returns [(key, start, end)] with one
+    entry per maximal run of consecutive steps in which the key is present, end exclusive, sorted (start, key)."""
+    open_runs, out = {}, []
+    for t, keys in enumerate(per_step):
+        now = set(keys)
+        for k in [k for k in open_runs if k not in now]:
+            out.append((k, open_runs.pop(k), t))
+        for k in now:
+            open_runs.setdefault(k, t)
+    out.extend((k, a, len(per_step)) for k, a in open_runs.items())
+    return sorted(out, key=lambda w: (w[1], w[0]))
+
+
+def windows_from_mask(mask):
+    """mask: a (rows, steps) boolean matrix. Returns [(row, start, end)] maximal True runs, end exclusive, sorted
+    (start, row)."""
+    rows = [list(r) for r in mask]
+    steps = len(rows[0]) if rows else 0
+    return windows_from_steps([[r for r, row in enumerate(rows) if row[t]] for t in range(steps)])
+
+
+def truth_windows(hook, zone, disturb):
+    """The time-resolved ground truth of one finished zone (sidecar only; nothing here reaches a message). Read after
+    the episode, so demo injections that write into frozen_schedule are included."""
+    cell = lambda c: f"{c[0]},{c[1]}"  # noqa: E731
+    blocked = [dict(cell=cell(c), start_step=a, end_step=b)
+               for c, a, b in windows_from_steps(hook._blocked_by_step)]
+    outage = [dict(goal_index=g, cell=cell(hook.goals[g]), start_step=a, end_step=b)
+              for g, a, b in windows_from_steps(hook._out_goals_by_step)]
+    frozen = [dict(agent_index=r, serial=f"Z{zone}-{hook.agents[r].id:02d}", start_step=a, end_step=b)
+              for r, a, b in windows_from_mask(hook.frozen_schedule)]
+    burst = disturb.get("burst")
+    return dict(blocked_windows=blocked, outage_windows=outage, frozen_windows=frozen,
+                burst=None if not burst else dict(start_step=burst["start"], end_step=burst["end"],
+                                                  extra=burst["extra"]))
 
 
 # ------------------------------------------------------------------------------------------------ orders
@@ -546,6 +586,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             if report and clock() - last_report >= interval:
                 report(snapshot())
                 last_report = clock()
+        windows = truth_windows(hook, zone, cfg["disturb"])
     finally:
         env.close()
         sink.close()
@@ -554,7 +595,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         report(final)
     result = dict(zone=zone, seed=seed, steps=steps, deliveries=deliveries,
                   pick_rate=deliveries * 3600 / (STEP_SECONDS * steps), snapshot=final, floor_cells=floor_cells,
-                  floor_skips=floor_skips)
+                  floor_skips=floor_skips, **windows)
     if demo:
         result.update(injections=control.injections, malformed_commands=control.malformed,
                       unapplied_commands=control.unapplied)
@@ -578,11 +619,15 @@ def _zone_main(cfg, sink_spec, q):
 # ------------------------------------------------------------------------------------------------ fleet
 def write_truth(path, run, results):
     """The ground-truth sidecar, atomically (tmp + os.replace). Returns its exact size in bytes. Completed zones only."""
+    from warehouse_rl.disturb import STEP_SECONDS
+
     demo_keys = ("injections", "malformed_commands", "unapplied_commands") if run.get("demo_mode") else ()
     doc = dict(schema_version=TRUTH_SCHEMA_VERSION, env_id=run["env_id"], disturb_tag=run["disturb_tag"],
-               disturb=run["disturb"], steps=run["steps"], seed_base=run["seed_base"],
+               disturb=run["disturb"], steps=run["steps"], seed_base=run["seed_base"], t0=run["t0"],
+               step_seconds=STEP_SECONDS,
                zones={str(z): dict(seed=r["seed"], floor_cells=r["floor_cells"], floor_skips=r["floor_skips"],
-                                   floor_skips_total=sum(r["floor_skips"]), **{k: r[k] for k in demo_keys})
+                                   floor_skips_total=sum(r["floor_skips"]),
+                                   **{k: r[k] for k in WINDOW_KEYS}, **{k: r[k] for k in demo_keys})
                       for z, r in sorted(results.items())})
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
