@@ -59,7 +59,7 @@ https://docs.formant.io/llms.txt plus the pages below; /docs pages /docs/inciden
 support: https://formant.ai/support (contact page only, no help centre); changelog:
 https://docs.formant.io/reference/sdk-versions-distributions-changelogs-and-licensing.md is an SDK changelog with no
 entries on these topics, and no product changelog was found (a web search found none). Limit: absences rest on page
-titles in llms.txt plus the pages above, not a full-text read of every page. 11 fetches.
+titles in llms.txt plus the pages above, not a full-text read of every page. 10 fetches.
 
 | capability | cell | source | evidence |
 |---|---|---|---|
