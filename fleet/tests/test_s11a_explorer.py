@@ -25,6 +25,7 @@ from fleet import overview_build as ob  # noqa: E402
 from fleet import replay_export as rx  # noqa: E402
 from fleet.tests import test_s8i_page as s8i  # noqa: E402
 from fleet.tests import test_s8k_overview as k  # noqa: E402
+from fleet.tests import test_replay_export as tre  # noqa: E402
 from fleet.tests.test_s8j_dom import HARNESS, need_node  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("evaluate_script", ROOT / "scripts" / "evaluate.py")
@@ -287,12 +288,20 @@ class TestFlag(unittest.TestCase):
         self.assertEqual(keys, [x for x in rx.RUN_CONSTANTS_ORDER if x in keys])
         self.assertEqual(keys[-2:], ["dose_response", "explorer"])
 
-    def test_full_export_writes_null_without_the_flag(self):
-        p = rx.build_payload.__code__.co_varnames
-        self.assertIn("explorer", p)
-        src = (ROOT / "fleet" / "replay_export.py").read_text(encoding="utf-8")
-        self.assertIn("explorer=explorer_constant() if explorer else None", src)
-        self.assertIn('"--explorer", action="store_true"', src)
+    def test_the_flag_is_a_store_true_option(self):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            rx.main(["--help"])
+        self.assertIn("--explorer", out.getvalue())
+
+
+class TestFullExport(tre.Fixture):
+    def test_a_full_export_writes_the_key_with_the_flag_and_null_without(self):
+        self.assertIsNone(self.payload["run_constants"]["explorer"])
+        p = rx.build_payload(self.dir, self.spec, "0", env_runner=tre.fake_env, run_dir_arg=str(self.dir), explorer=True)
+        self.assertEqual(p["run_constants"]["explorer"], rx.explorer_constant())
+        self.assertEqual(list(p["run_constants"])[-1], "explorer")
+        self.assertEqual(list(p["run_constants"]), list(rx.RUN_CONSTANTS_ORDER))
 
 
 # ------------------------------------------------------------------------------------------------ (d) the section
@@ -418,7 +427,11 @@ class TestSection(Committed):
         emb = json.loads(m.group(1))
         strip = lambda d: {a: b for a, b in d.items() if a != "src"}
         self.assertEqual(emb["axes"], self.ex["axes"])
-        self.assertEqual(emb["floor"], [strip(e) for e in self.ex["floor"]])
+        self.assertEqual([strip({a: b for a, b in e.items() if a != "verdict"}) for e in emb["floor"]],
+                         [strip(e) for e in self.ex["floor"]])
+        for e, src in zip(emb["floor"], self.ex["floor"]):  # the verdict is dose_verdict of the share interval
+            want = None if src["share"] is None else ob.dose_verdict([src["share_ci_lo"], src["share_ci_hi"]])
+            self.assertEqual(e["verdict"], want, src["src"])
         self.assertEqual(emb["sweeps"]["density"], strip(self.ex["sweeps"]["density"]))
         self.assertEqual(emb["sweeps"]["breakdown"], strip(self.ex["sweeps"]["breakdown"]))
 

@@ -498,7 +498,6 @@ XP_SCRIPT = r"""<script>
     if (kind === 'int') return Math.round(v).toLocaleString('en-US');
     return String(v);
   }
-  function verdict(lo, hi) { return hi < 0 ? 'hurts' : (lo > 0 ? 'helps' : 'within noise'); }
   function fill(box, base, rec) {
     box.querySelectorAll('[data-slot]').forEach(function (el) {
       var f = el.getAttribute('data-slot');
@@ -568,7 +567,7 @@ XP_SCRIPT = r"""<script>
       v.setAttribute('data-verdict', 'reference');
       v.textContent = v.getAttribute('data-ref-text');
     } else {
-      var k = verdict(e.share_ci_lo, e.share_ci_hi);
+      var k = e.verdict;
       v.setAttribute('data-verdict', k);
       v.textContent = v.getAttribute('data-lead') + VERB[k] + '.';
     }
@@ -612,11 +611,13 @@ def _xp_num(path, inputs, slot=None, extra=""):
 
 
 def explorer_data(ex):
-    """The data the explorer script reads: run_constants.explorer without the provenance `src` strings. floor keeps its order, so
+    """The data the explorer script reads: run_constants.explorer without the provenance `src` strings, and with the verdict of
+    dose_verdict() on each share interval added to every floor entry (null for none and undisturbed). floor keeps its order, so
     floor index i here is floor.<i> in data.js."""
     strip = lambda d: {k: v for k, v in d.items() if k != "src"}
     sw = ex["sweeps"]
-    return json.dumps(dict(axes=ex["axes"], floor=[strip(e) for e in ex["floor"]],
+    verdict = lambda e: None if e["share"] is None else dose_verdict([e["share_ci_lo"], e["share_ci_hi"]])
+    return json.dumps(dict(axes=ex["axes"], floor=[dict(strip(e), verdict=verdict(e)) for e in ex["floor"]],
                            sweeps=dict(density=strip(sw["density"]), breakdown=strip(sw["breakdown"]))),
                       separators=(",", ":"), allow_nan=False).replace("</", "<\\/")
 
@@ -703,7 +704,7 @@ def explorer_html(inputs):
         '<div class="xp-ends"><span>%s</span><span>%s</span></div>'
         '<div class="xp-out" id="xp-dens-out" aria-live="polite">'
         '<p class="xp-big">%s<span class="xp-unit">order lines per hour</span></p>'
-        '<p class="xp-row">%s AGVs and %s pickers. %s%% interval %s to %s. Mean of %s shifts.</p></div></div>'
+        '<p class="xp-row">AGVs: %s, pickers: %s. %s%% interval %s to %s. Mean of %s shifts.</p></div></div>'
         '<div class="xp-ctl"><label class="xp-name" for="xp-brk">Breakdowns per robot per hour</label>'
         '<input type="range" id="xp-brk" min="0" max="%d" step="1" value="0">'
         '<div class="xp-ends"><span>%s</span><span>%s</span></div>'

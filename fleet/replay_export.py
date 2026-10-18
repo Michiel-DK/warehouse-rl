@@ -1170,7 +1170,8 @@ def _insertion_point(text, start, end, name):
 
 def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES, explorer=False):
     """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response, explorer) of an existing data.js by text
-    splice; a key that is not in the file yet is appended to run_constants. Returns the new byte size."""
+    splice; a key that is not in the file yet is inserted into run_constants before the first existing key that follows it in
+    RUN_CONSTANTS_ORDER (the order of a full export), or appended when none does. Returns the new byte size."""
     out = Path(out)
     if not out.is_file():
         raise ValueError(f"--out {out} does not exist (refresh mode never creates a file)")
