@@ -180,6 +180,35 @@ Gaps found in the review, now folded into S2 and S3:
 - Realism limits to state up front: grid moves, no kinematics, no batteries or charging, unlimited shelf capacity,
   "stuck" modelled as a freeze (symptom, not cause). Relative comparisons only.
 
+## Mechanism audit: what each disturbance does to a robot (2026-10-18)
+
+Written after the S10 measurement scored the analyser on blocked aisles and outages and found recall 0.05-0.14. Read
+this before writing any measurement brief: the truth cell is only worth scoring if robots stall there.
+
+| kind (`disturb.py`) | does the planner know? | what the robot physically does | where the stall message lands (analyser) | StuckCounter / replan | detectable by the stall map? |
+|---|---|---|---|---|---|
+| `floor` | no (never an obstacle) | move INTO the cell is NOOPed with p_c, retried next step (`resolve_move_conflict`, ENTER semantics) | robot stays one cell before, heading in; `hotspot.py` attributes the stall to the cell in front ("next") = the floor cell, exact | hidden (`_suppressed`): the counter never advances, the robot never reroutes, so the stall repeats for as long as the coins say | yes: long, repeated stalls at one cell (precision@20 0.97) |
+| `blocked_cell` | yes: active cells are obstacles in `find_path` (disturb.py:446-470) | a stored path that crosses a cell blocked after planning is NOOPed at the cell before (disturb.py:538, "stored paths ignore the mask until replan") | "next" = the blocked cell | NOT hidden: the vendor counter advances and replans after `_STUCK_THRESHOLD` = 5 steps (warehouse.py:15, 494) with the obstacle known, so the robot goes around | barely: one stall of about 5 steps per robot per window, below or at the detector's `DEFAULT_STUCK_AFTER` = 30 s (6 steps); measured 7/50 windows at K 20 |
+| `outage` | yes: the out goal is an obstacle and a blocked target yields an empty path | as `blocked_cell`, plus tasks to that goal are not plannable | "next" = the goal cell, when a stored path still points at it | as `blocked_cell` | barely: 1/20 windows |
+| `breakdown` (frozen) | the frozen robot: all actions NOOPed, `errors` BREAKDOWN in its messages. Others: agent positions are obstacles only when `care_for_agents` is true (replans at warehouse.py:464, 497; the macro-action path at 366 uses False) | the frozen robot sits still; followers stall behind it until their own counter replans around it | frozen robot: `faulted_self` at its own cell. Followers: "next" = the frozen robot's cell (`blocked_by_faulted`) | followers replan after 5 steps | the frozen robot's cell is a hotspot for the breakdown duration (20-60 steps). The S10 truth lists robot serials, not cells, so `truth_kinds` scored 0 cells: the fair truth is (cell of the frozen robot, window) |
+| `delay` | n/a | random execution skips, NOOP at the current cell, hidden from the counter | current cell, no spatial pattern | hidden | noise source, no truth |
+| `burst` | n/a | extra orders, more traffic | wherever congestion forms | normal | no truth cells; the run measures the map's false-alarm floor (about 20 flagged cells per zone per publish on every S10 run) |
+
+Consequences:
+- Only `floor` is a planner-blind, recurring, spatially fixed fault, which is exactly what the decayed stall-count map
+  is built to find. The S10 blocked and outage runs did not test the analyser; they tested whether robots stall at
+  cells they route around. They do not.
+- A fair "new blockage mid-shift" test needs a planner-blind blockage: `blocked_cell` with `known: false` (not added
+  to the obstacle set, enforced at move time like a floor with p = 1 while the window is open, hidden from the
+  counter like a floor so the robot keeps trying), or equivalently a floor cell with a start and an end. That is
+  S10C. Both views are defensible for a real fleet: a known blockage is a planned closure, an unknown one is a spill.
+- Breakdowns are measurable today if the truth maps each frozen window to the robot's cell at freeze time.
+- The 30 s episode threshold in the detector and the vendor's 5-step replan interact: any stall the vendor can
+  reroute away from is at most 5 steps and therefore at most borderline for an episode. Floors escape this because
+  the layer hides them from the counter. Any future disturbance must say which side of that line it is on.
+- The false-alarm floor (about 20 cells per zone per publish regardless of truth) is the analyser's own problem and
+  is independent of this audit.
+
 ## Where to focus (decision log, 2026-10-10)
 
 Motivating scenario: a company whose warehouse robots "get stuck". Question: how to model that without their data.
