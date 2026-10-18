@@ -49,3 +49,19 @@ breakdown run: 426 frozen windows over 120 robots means nearly every robot is a 
 lesson precision against truth is close to trivially high there; read it next to the positives count. The stall-share
 band [0.05, 0.40] is unreachable with this definition on this map; changing the definition is the operator's call.
 The definition was not changed to fit the band.
+
+## Other readings of "stall share" (main loop check, 18 Oct, after the merge)
+
+The band test above uses one reading (stuck_episodes, open episode = to stream end). Same 2 zones x 500 steps, three
+configs, five readings (zone-steps with >= 1 robot inside the interval, except the last column = mean share of
+robot-steps inside a `stalls` row):
+
+| config | episodes (as above) | closed episodes only | `stalls` rows | `stalls` with in_episode | robot-steps stalled |
+|---|---|---|---|---|---|
+| `{}` | 0.982 | 0.972 | 0.334 | 0.099 | 0.038 |
+| blocked 8/h [60,240] | 0.977 | 0.954 | 0.323 | 0.109 | 0.034 |
+| breakdown-heavy | 0.996 | 0.961 | 0.236 | 0.190 | 0.025 |
+
+Under the `stalls` reading the baseline itself is inside the band and the disturbances LOWER it; only breakdown separates
+from the baseline, and only on the in_episode reading. No reading turns the config into a knob for the band, so the
+configs stay chosen by truth coverage (table above). Two zones are a small sample; these are smoke-level numbers.
