@@ -5,6 +5,7 @@ Usage: python fleet/replay_export.py --run-dir DIR --store jsonl:DIR/store --zon
        [--hotspot results/fleet/hotspot_<tag>.json] [--closed-loop-summary results/closed_loop_sticky/summary.json]
        [--lessons-long results/fleet/hotspot_s8e-long-w0.5.json]
        [--dose-response "p 0.3-0.7=results/closed_loop/summary.json" ...]   (repeatable, order kept)
+       [--explorer]   (run_constants.explorer from the five closed-loop summaries and the density and breakdown sweeps)
        [--sticky-none PATH --sticky-map-a32 PATH --sticky-oracle-a32 PATH --sticky-undisturbed PATH]
 DIR holds the zone files zone<Z>-<nnn>.jsonl.gz, truth.json, emit_ledger.json and costmap.json (the run name is
 costmap.json["run"], as fleet/hotspot_score.py reads it). The store is only READ (every table through
@@ -74,7 +75,7 @@ Payload (every key is always present unless marked optional):
               timeline: cumulative counts by event time [{t, step, outcome_ok, outcome_off, truth_hit, truth_false_alarm}],
               a grade at its window_end (truth rows, which have none, at the publish t).
   run_constants  {ingest_msgs_per_s, benchmark_msgs_per_s, kept, hotspot, closed_loop, audit, header, speed, lessons_long,
-              worth, dose_response}: the numbers the page shows that
+              worth, dose_response, explorer}: the numbers the page shows that
               are not per-step, each an object with a `source` (the path exactly as given, or a "store:..." name for
               store-derived ones) or null when its source is absent. The page types none of them.
                 ingest_msgs_per_s  {value, source "store:ingest_ledger", formula}: over the run's ingest_ledger rows with a
@@ -140,6 +141,18 @@ kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) 
                                    share/share_ci95 = share_of_floor_loss_recovered of the arm (null for "none"); source =
                                    PATH as given. Raises, naming the file, when a summary lacks one of the four arms or
                                    "undisturbed". Null without --dose-response. Context from other runs than the replay.
+                explorer           {axes, floor, sweeps, source_note} from --explorer (null without; a refresh without it leaves
+                                   an existing key untouched). Paths are fixed and resolved from the repo root. axes {regimes
+                                   [{key, word, p_lo, p_hi}], arms [{key, alpha or null, label}] (none, map_a4, map_a8, map_a16,
+                                   map_a32, oracle), steps, density, breakdown (the grid points), ci_level}. floor = one entry per
+                                   (regime, arm, steps) that exists: the arms of results/closed_loop{,_p06_09,_p08_095,_sticky,
+                                   _sticky_1500}/summary.json that are in {none, map_a4, map_a8, map_a16, map_a32, oracle,
+                                   undisturbed}; a missing triple is absent. Each {regime, p_lo, p_hi, steps, arm, mean, ci_lo,
+                                   ci_hi, n, share, share_ci_lo, share_ci_hi, src}; share is null for none and undisturbed.
+                                   sweeps.density {src, policy cta, pickers_per_agv, steps, points [{point (AGVs), pickers, mean,
+                                   ci_lo, ci_hi, n}]} and sweeps.breakdown {src, robots, steps, policies {cta, stuck_aware_cta:
+                                   [{point (onsets per robot-hour), mean, ci_lo, ci_hi, n}]}}: pick_rate over the per-seed rows,
+                                   scripts/evaluate.summarise. Context from other runs than the replay.
   lessons     every lesson decision of the run and of the exported zone (S8E, kind "lesson"), sorted by
               (decided_at, int(zone), claim subject, lesson_kind): [{run, decided_at_step, zone, text, lesson_kind,
               confidence, verdict, graded_at_step, truth}], zone = the claim's zone string. verdict "ok" / "off"
@@ -171,6 +184,7 @@ import json
 import multiprocessing as mp
 import os
 import posixpath
+import re
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -751,6 +765,114 @@ def dose_response_constant(specs):
     return out
 
 
+# S11A: the explorer's data. Paths are resolved from the repo root, never from the cwd.
+EXPLORER_FILES = (  # (regime key, word, summary path); the order is the page order
+    ("mild", "mild", "results/closed_loop/summary.json"),
+    ("medium", "medium", "results/closed_loop_p06_09/summary.json"),
+    ("sticky", "sticky", "results/closed_loop_p08_095/summary.json"),
+    ("very_sticky", "very sticky", "results/closed_loop_sticky/summary.json"),
+    ("very_sticky", "very sticky", "results/closed_loop_sticky_1500/summary.json"))
+EXPLORER_ARMS = (("none", "no map"), ("map_a4", "map, alpha"), ("map_a8", "map, alpha"), ("map_a16", "map, alpha"),
+                 ("map_a32", "map, alpha"), ("oracle", "perfect knowledge"))
+EXPLORER_KEPT = tuple(k for k, _ in EXPLORER_ARMS) + ("undisturbed",)
+CI_KEY = "pick_rate_ci95"
+EXPLORER_DENSITY ="results/sweeps/density.json"
+EXPLORER_BREAKDOWN = "results/sweeps/breakdown.json"
+EXPLORER_NOTE = ("Every figure is the mean over the recorded shifts in one results file. Nothing is estimated between the "
+                 "measured settings, so a setting that was not measured cannot be picked.")
+
+
+def _whole(x):
+    """4.0 -> 4 so a whole-number setting is written without a decimal point; anything else unchanged."""
+    return int(x) if isinstance(x, float) and x == int(x) else x
+
+
+def sweep_points(path, filt, point_key="point"):
+    """(doc, [{point, mean, ci_lo, ci_hi, n, rows}]) of pick_rate per grid point over the per-seed rows that pass `filt`, in the
+    order of the file's own definition.grid. Stats are scripts/evaluate.summarise (ci95_low/ci95_high renamed)."""
+    import evaluate as ev
+    doc = _load_json(path, "sweep")
+    rows = [r for r in doc["rows"] if filt(r)]
+    out = []
+    for g in doc["definition"]["grid"]:
+        at = [r for r in rows if r[point_key] == g]
+        if not at:
+            raise ValueError(f"{path} has no rows at grid point {g}")
+        s = ev.summarise([r["pick_rate"] for r in at])
+        out.append(dict(point=g, mean=s["mean"], ci_lo=s["ci95_low"], ci_hi=s["ci95_high"], n=s["n"], rows=at))
+    return doc, out
+
+
+def explorer_constant(repo=None):
+    """run_constants.explorer (see the module docstring). Reads only the five closed-loop summaries and the two sweeps."""
+    repo = Path(repo) if repo is not None else REPO
+    rel = lambda p: str(repo / p)
+    regimes, floor, steps_seen, alpha_of = [], [], [], {}
+    for key, word, path in EXPLORER_FILES:
+        doc = _load_json(rel(path), "explorer")
+        try:
+            p_lo, p_hi = (json.loads(doc["disturb"]) if isinstance(doc["disturb"], str) else doc["disturb"])["floor"]["p"]
+            steps = doc["steps"]
+            arms = doc["arms"]
+            prev = next((r for r in regimes if r["key"] == key), None)
+            if prev is None:
+                regimes.append(dict(key=key, word=word, p_lo=p_lo, p_hi=p_hi))
+            elif (prev["p_lo"], prev["p_hi"]) != (p_lo, p_hi):
+                raise ValueError(f"{path} p range {(p_lo, p_hi)} differs from {(prev['p_lo'], prev['p_hi'])} of regime {key}")
+            if steps not in steps_seen:
+                steps_seen.append(steps)
+            for arm in EXPLORER_KEPT:
+                if arm not in arms:
+                    continue
+                row = arms[arm]
+                alpha = _whole(row.get("alpha"))
+                if arm in alpha_of and alpha_of[arm] != alpha:
+                    raise ValueError(f"{path} arm {arm} alpha {alpha} differs from another file's {alpha_of[arm]}")
+                alpha_of[arm] = alpha
+                sh = row.get("share_of_floor_loss_recovered")
+                if arm in ("none", "undisturbed"):
+                    share = ci = None
+                else:
+                    if not isinstance(sh, dict):
+                        raise ValueError(f"{path} arm {arm} lacks share_of_floor_loss_recovered")
+                    share, ci = sh["share"], sh["ci95"]
+                floor.append(dict(regime=key, p_lo=p_lo, p_hi=p_hi, steps=steps, arm=arm, mean=row["pick_rate_mean"],
+                                  ci_lo=row[CI_KEY][0], ci_hi=row[CI_KEY][1], n=row["n"], share=share,
+                                  share_ci_lo=None if ci is None else ci[0], share_ci_hi=None if ci is None else ci[1],
+                                  src=f"{path}:arms.{arm}"))
+        except (KeyError, TypeError, IndexError) as e:
+            raise ValueError(f"{path} is not a closed-loop summary with the fields the explorer needs ({type(e).__name__}: {e})") from e
+    for arm, _ in EXPLORER_ARMS:
+        if arm not in alpha_of:
+            raise ValueError(f"no summary has arm {arm}")
+    ddoc, dpts = sweep_points(rel(EXPLORER_DENSITY), lambda r: r["policy"] == "cta")
+    ratios = {(r["n_agents"] - p["point"]) / p["point"] for p in dpts for r in p["rows"]}
+    if len(ratios) != 1:
+        raise ValueError(f"{EXPLORER_DENSITY}: pickers per AGV is not one value ({sorted(ratios)})")
+    density = dict(src=f"{EXPLORER_DENSITY}:rows[policy=cta].pick_rate by point (AGVs)", policy="cta", pickers_per_agv=ratios.pop(),
+                   steps=ddoc["definition"]["steps"],
+                   points=[dict(point=p["point"], pickers=p["rows"][0]["n_agents"] - p["point"], mean=p["mean"], ci_lo=p["ci_lo"],
+                                ci_hi=p["ci_hi"], n=p["n"]) for p in dpts])
+    bdoc = _load_json(rel(EXPLORER_BREAKDOWN), "sweep")
+    policies, robots = {}, set()
+    for pol in ("cta", "stuck_aware_cta"):
+        _, pts = sweep_points(rel(EXPLORER_BREAKDOWN), lambda r, pol=pol: r["policy"] == pol)
+        policies[pol] = [dict(point=p["point"], mean=p["mean"], ci_lo=p["ci_lo"], ci_hi=p["ci_hi"], n=p["n"]) for p in pts]
+        robots |= {r["n_agents"] for p in pts for r in p["rows"]}
+    if len(robots) != 1:
+        raise ValueError(f"{EXPLORER_BREAKDOWN}: robot count is not one value ({sorted(robots)})")
+    breakdown = dict(src=f"{EXPLORER_BREAKDOWN}:rows[policy=cta|stuck_aware_cta].pick_rate by point (onsets per robot-hour)",
+                     robots=robots.pop(), steps=bdoc["definition"]["steps"], policies=policies)
+    axes = dict(
+        regimes=regimes,
+        arms=[dict(key=k, alpha=alpha_of[k], label=lab) for k, lab in EXPLORER_ARMS],
+        steps=sorted(steps_seen),
+        density=[p["point"] for p in dpts],
+        breakdown=[p["point"] for p in policies["cta"]],
+        ci_level=int(re.search(r"ci(\d+)", CI_KEY).group(1)))
+    return dict(axes=axes, floor=floor, sweeps=dict(density=density, breakdown=breakdown), source_note=EXPLORER_NOTE)
+
+
 def zone_ledger(emit, zone):
     """The emit ledger's entry of the exported zone, or {}."""
     return next((z for z in emit.get("zones", []) if str(z.get("zone")) == str(zone)), {})
@@ -882,7 +1004,7 @@ def assert_single_run(payload):
 # ------------------------------------------------------------------------------------------------ assembly
 def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, log=print,
                   run_dir_arg=None, closed_loop_arg=None, benchmark=None, hotspot_file=None, closed_loop_summary=None,
-                  lessons_long=None, sticky=None, dose_response=None):
+                  lessons_long=None, sticky=None, dose_response=None, explorer=False):
     zone = str(zone)
     run_dir = Path(run_dir)
     truth = json.loads((run_dir / "truth.json").read_text())
@@ -960,7 +1082,8 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         speed=speed_constant(bench, zrow, steps, zone),
         lessons_long=lessons_long_constant(lessons_long),
         worth=worth_constant(sticky),
-        dose_response=dose_response_constant(dose_response))
+        dose_response=dose_response_constant(dose_response),
+        explorer=explorer_constant() if explorer else None)
     if check is not None:
         cov = ledger.coverage(check["messages_accepted"], expected)
         check = dict(check, coverage=None if cov is None else round(cov, 6))
@@ -1027,8 +1150,8 @@ def read_data_js(path):
     return json.loads(text[len(PREFIX):].rstrip().removesuffix(";"))
 
 
-def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES):
-    """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response) of an existing data.js by text
+def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES, explorer=False):
+    """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response, explorer) of an existing data.js by text
     splice; a key that is not in the file yet is appended to run_constants. Returns the new byte size."""
     out = Path(out)
     if not out.is_file():
@@ -1038,8 +1161,10 @@ def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes
         new_values["lessons_long"] = lessons_long_constant(lessons_long_path)
     if dose_response:
         new_values["dose_response"] = dose_response_constant(dose_response)
+    if explorer:
+        new_values["explorer"] = explorer_constant()
     if not new_values:
-        raise ValueError("nothing to refresh: give --lessons-long and/or --dose-response")
+        raise ValueError("nothing to refresh: give --lessons-long, --dose-response and/or --explorer")
     text = out.read_text(encoding="utf-8")
     if not text.startswith(PREFIX):
         raise ValueError(f"{out} does not start with {PREFIX!r}")
@@ -1085,7 +1210,7 @@ def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--refresh-constants-only", action="store_true",
-                   help="rewrite only the run_constants keys given by --lessons-long and/or --dose-response of the existing --out (no re-simulation)")
+                   help="rewrite only the run_constants keys given by --lessons-long, --dose-response and/or --explorer of the existing --out (no re-simulation)")
     p.add_argument("--run-dir", default=None)
     p.add_argument("--store", default=None, help="jsonl:<dir> or clickhouse://host[:port]/db (read only)")
     p.add_argument("--zone", default="0")
@@ -1099,19 +1224,22 @@ def main(argv=None):
                    help="results/fleet/hotspot_s8e-long-w0.5.json: run_constants.lessons_long (context from a longer run)")
     p.add_argument("--dose-response", action="append", default=None, metavar="LABEL=PATH",
                    help="repeatable: a closed-loop summary.json and its label, in page order: run_constants.dose_response")
+    p.add_argument("--explorer", action="store_true",
+                   help="run_constants.explorer: the five closed-loop summaries and the density and breakdown sweeps under results/ "
+                        "(resolved from the repo root); without it a full export writes explorer = null and a refresh leaves the key alone")
     for arm in WORTH_ARMS:
         p.add_argument("--sticky-" + arm.replace("_", "-"), default=None, metavar="PATH",
                        help=f"results/closed_loop_sticky/{arm}/*.json (one row file): a bar of run_constants.worth")
     a = p.parse_args(argv)
     if a.refresh_constants_only:
-        if a.lessons_long is None and not a.dose_response:
-            p.error("--refresh-constants-only requires --lessons-long and/or --dose-response")
+        if a.lessons_long is None and not a.dose_response and not a.explorer:
+            p.error("--refresh-constants-only requires --lessons-long, --dose-response and/or --explorer")
         try:
-            n = refresh_constants(a.out, a.lessons_long, a.dose_response)
+            n = refresh_constants(a.out, a.lessons_long, a.dose_response, explorer=a.explorer)
         except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
-        names = [k for k, v in (("lessons_long", a.lessons_long), ("dose_response", a.dose_response)) if v]
+        names = [k for k, v in (("lessons_long", a.lessons_long), ("dose_response", a.dose_response), ("explorer", a.explorer)) if v]
         print(f"refreshed run_constants.{' and '.join(names)}, {n} bytes -> {a.out}")
         return 0
     if a.run_dir is None or a.store is None:
@@ -1119,7 +1247,7 @@ def main(argv=None):
     try:
         payload = build_payload(a.run_dir, a.store, a.zone, a.closed_loop, run_dir_arg=a.run_dir,
                                 closed_loop_arg=a.closed_loop, benchmark=a.benchmark, hotspot_file=a.hotspot,
-                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long, dose_response=a.dose_response,
+                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long, dose_response=a.dose_response, explorer=a.explorer,
                                 sticky={arm: getattr(a, "sticky_" + arm) for arm in WORTH_ARMS})
         n = write_data_js(payload, a.out)
     except (ValueError, OSError) as e:
