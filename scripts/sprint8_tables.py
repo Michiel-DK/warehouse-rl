@@ -12,6 +12,9 @@ Reads:
   baseline map_a4 / map_a32 arms               -> (c) guidance tuning, held-out verdict, per regime
   results/fleet/time_to_detect_sticky{500,1500}.json -> (d) time to detect per top-K
   results/fleet/hotspot_s8e-long-w{0.2,0.5,1.0}.json -> (e) lesson_persist against its chance rate
+  results/fleet/hotspot_s10-{blocked,outage,breakdown,burst}.json -> (f) the analyser on other disturbances
+                                                  (`truth_kinds`, flagged cells per zone, `lesson_persist_chance`)
+  results/fleet/time_to_detect_{blocked,outage}.json -> (g) time to detect and time to clear per window kind
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -36,6 +39,10 @@ ARMS = ["map_a4", "map_a32", "oracle"]
 ALPHA_ARMS = ["map_a4", "map_a8", "map_a16", "map_a32"]
 TTD = ["results/fleet/time_to_detect_sticky500.json", "results/fleet/time_to_detect_sticky1500.json"]
 LESSONS = [f"results/fleet/hotspot_s8e-long-w{w}.json" for w in ("0.2", "0.5", "1.0")]
+S10 = [f"results/fleet/hotspot_s10-{k}.json" for k in ("blocked", "outage", "breakdown", "burst")]
+TTD_WINDOWS = ["results/fleet/time_to_detect_blocked.json", "results/fleet/time_to_detect_outage.json"]
+CELL_KINDS = ("floor", "blocked", "outage")
+S10_KS = ("20", "40")
 SECONDS_PER_STEP = 5
 
 
@@ -282,6 +289,152 @@ def lesson_persist_chance():
           + ", ".join(f"`{r}`" for r in LESSONS) + " (`lesson_persist_chance`, `lesson_grading.lesson_persist`).")
 
 
+def _s10_docs():
+    docs = []
+    for rel in S10:
+        d = load(rel)
+        if d is None:
+            print(f"S10: `{rel}` MISSING")
+        else:
+            docs.append((rel, d))
+    return docs
+
+
+def _flagged(d, k):
+    """Top-K cells summed over zones, and the zones that flag fewer than K cells (the precision denominator is still
+    K * zones)."""
+    n = [z["n_flagged"] for z in d["zones"].values()]
+    return sum(min(int(k), x) for x in n), sum(1 for x in n if x < int(k))
+
+
+def other_disturbances():
+    docs = _s10_docs()
+    if not docs:
+        return
+    print("Truth positives per run (cells are counted once per kind over the whole run, robots by distinct serial):\n")
+    print("| run | disturbance | floor cells | blocked cells | outage cells | frozen robots | flagged cells per zone, "
+          "mean |")
+    print("|---|---|---|---|---|---|---|")
+    for _, d in docs:
+        tk = d["truth_kinds"]
+        print(f"| {d['tag']} | `{json.dumps(d['config']['disturb'])}` | "
+              + " | ".join(str(tk[k]["positives"]) for k in CELL_KINDS)
+              + f" | {tk['frozen']['positives']} | {d['mean']['n_flagged']:.1f} |")
+    print()
+    print("Precision and recall at K, split by kind (only kinds with positives in the run; pooled over zones):\n")
+    print("| run | kind | positives | " + " | ".join(f"K {k}: hits, precision, recall" for k in S10_KS)
+          + " | zones flagging fewer than K cells (" + " / ".join(f"K {k}" for k in S10_KS) + ") |")
+    print("|---|---|---|" + "---|" * len(S10_KS) + "---|")
+    for _, d in docs:
+        tk = d["truth_kinds"]
+        short = " / ".join(str(_flagged(d, k)[1]) for k in S10_KS)
+        kinds = [k for k in CELL_KINDS if tk[k]["positives"] > 0]
+        for kind in kinds:
+            cells = []
+            for k in S10_KS:
+                e = tk[kind]["k"][k]
+                cells.append(f"{e['hits']}, {e['precision']:.4f}, {e['recall']:.2f}")
+            print(f"| {d['tag']} | {kind} | {tk[kind]['positives']} | " + " | ".join(cells) + f" | {short} |")
+        if not kinds:
+            why = (f"{tk['frozen']['positives']} frozen robots; the map ranks cells" if tk["frozen"]["positives"]
+                   else "the run has no truth cells")
+            print(f"| {d['tag']} | none | 0 cells ({why}) | " + " | ".join("n/a" for _ in S10_KS) + f" | {short} |")
+    print()
+    print("False flags (top-K cells that are not a truth cell of any kind, summed over 10 zones, on the final map) and "
+          "the forecast truth grades:\n")
+    print("| run | " + " | ".join(f"K {k}: false flags (per zone)" for k in S10_KS)
+          + " | hotspot_forecast truth grades: false_alarm / graded |")
+    print("|---|" + "---|" * len(S10_KS) + "---|")
+    for _, d in docs:
+        nz = len(d["zones"])
+        cells = []
+        for k in S10_KS:
+            flagged, _ = _flagged(d, k)
+            ff = flagged - d["truth_kinds"]["any"]["k"][k]["hits"]
+            cells.append(f"{ff} ({ff / nz:.1f})")
+        t = d["grading_counts"].get("truth", {})
+        print(f"| {d['tag']} | " + " | ".join(cells) + f" | {t.get('false_alarm', 0)} / {sum(t.values())} |")
+    print()
+    print("lesson_persist and its chance rate:\n")
+    print("| run | stream length (s) | lesson_truth grades (by lesson kind) | lesson_persist graded | observed rate "
+          "| chance mean | lift |")
+    print("|---|---|---|---|---|---|---|")
+    for _, d in docs:
+        c = d["lesson_persist_chance"]
+        lt = d["lesson_grading"].get("lesson_truth", {})
+        by_kind = ", ".join(f"{k} " + ", ".join(f"{n} {v}" for v, n in sorted(vs.items()))
+                            for k, vs in sorted(lt.items())) or "none"
+        rate = "n/a" if c["observed_rate"] is None else f"{c['observed_rate']:.3f}"
+        chance = "n/a" if c["chance_mean"] is None else f"{c['chance_mean']:.3f}"
+        lift = "n/a" if c["lift"] is None else f"{c['lift']:.2f}"
+        print(f"| {d['tag']} | {d['config']['steps'] * SECONDS_PER_STEP} | {by_kind} | {c['n_lessons']} | {rate} "
+              f"| {chance} | {lift} |")
+    print()
+    print("`truth_kinds` is run-level: a cell is positive for a kind if the truth lists it at any time in the run, "
+          "and the map is the final one, so a hit does not mean the cell was flagged while it was blocked (time is in "
+          "(g)). Precision = hits / (K x zones), so zones that flag fewer than K cells still count K. false flags = "
+          "sum over zones of min(K, flagged cells) minus the `any` hits. The floor-based `mean.k` block of these JSONs "
+          "is not used: no S10 run has floor cells. lesson_persist grades a lesson with window [s, e) over [e, e + W) "
+          "only when the zone's stream reaches e + W (`fleet/fleet_analyser/lessons.py` docstring); the queue item "
+          "`wr-s10-disturbance-measure` ran lessons with `--window-h 0.5` (1800 s), so a 2500 s stream allows no "
+          "graded lesson. Sources: " + ", ".join(f"`{r}`" for r, _ in docs)
+          + " (`truth_kinds`, `zones.*.n_flagged`, `grading_counts.truth`, `lesson_grading`, "
+          "`lesson_persist_chance`).")
+
+
+def _q(f):
+    if f["median"] is None:
+        return "none"
+    return f"{f['median']:g} ({f['p25']:g}-{f['p75']:g})"
+
+
+def detect_and_clear():
+    docs = []
+    for rel in TTD_WINDOWS:
+        d = load(rel)
+        if d is None:
+            print(f"Time to detect and clear: `{rel}` MISSING")
+        else:
+            docs.append((rel, d))
+    if not docs:
+        return
+    print("| kind | K (per zone) | windows | detected (share) | missed | preflag | first detect, s, median (p25-p75) "
+          "| cleared | cleared, s after end, median (p25-p75) | stale_at_end | open_at_end | false flags per publish, "
+          "10 zones summed (per zone) |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for _, d in docs:
+        m = d["meta"]
+        nz = len(m["zones"])
+        for k in m["top_k"]:
+            e = d["by_k"][str(k)]
+            sm = e["summary"]
+            wins = [w for ws in e["windows"].values() for w in ws]
+            assert len(wins) == sm["n_windows"], (m["truth_kind"], k)
+            n_cleared = sum(1 for w in wins if w["cleared_s"] is not None)
+            assert n_cleared == sm["n_detected"] - sm["stale_at_end"] - sm["open_at_end"], (m["truth_kind"], k)
+            assert sum(1 for w in wins if w["detected"]) == sm["n_detected"], (m["truth_kind"], k)
+            ff = sm["false_flags_per_publish_mean"]
+            print(f"| {m['truth_kind']} | {k} | {sm['n_windows']} | {sm['n_detected']} ({sm['share_detected']:.2f}) "
+                  f"| {sm['missed']} | {sm['preflag']} | {_q(sm['first_detect_s'])} | {n_cleared} "
+                  f"| {_q(sm['cleared_s'])} | {sm['stale_at_end']} | {sm['open_at_end']} | {ff:.1f} ({ff / nz:.2f}) |")
+    print()
+    for rel, d in docs:
+        m = d["meta"]
+        print(f"- `{rel}`: {m['truth_kind']}, run `{m['run']}`, {m['steps']} steps = "
+              f"{m['steps'] * SECONDS_PER_STEP / 60:.1f} simulated min, {len(m['zones'])} zones, {m['n_windows']} "
+              f"windows (median length {m['window_len_steps_median']:g} steps), {m['n_publishes']} publishes every "
+              f"{m['publish_every_s'] / 60:g} min, `{json.dumps(m['disturb'])}`, phase A `{m['phase_a_dir']}`.")
+    print()
+    print("Per window: detected = the cell is in the zone's top K at a publish while the window is open; preflag = in "
+          "the top K at the last publish before the window opened (not a detection); first detect is seconds from "
+          "the window's start. Over detected windows only: cleared = the first publish at or after the end where the "
+          "cell is out of the top K (seconds from the end); stale_at_end = still in the top K at every publish after "
+          "the end; open_at_end = no publish after the end, so clearing is not observed. cleared = detected - "
+          "stale_at_end - open_at_end (asserted here). \"none\" = no window to take a median over. A flag counts as "
+          "false only when the cell matches no truth window of any kind at that publish. Caveat (verbatim from the "
+          "JSON): \"" + docs[0][1]["meta"]["caveat"] + "\"")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -299,6 +452,10 @@ def main():
     time_to_detect()
     print("\n### (e) lesson_persist against its chance rate (S8S)\n")
     lesson_persist_chance()
+    print("\n### (f) Analyser on other disturbances (S10A truth v2, 10 zones x 500 steps)\n")
+    other_disturbances()
+    print("\n### (g) Time to detect and time to clear (S10B)\n")
+    detect_and_clear()
 
 
 if __name__ == "__main__":

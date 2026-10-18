@@ -748,3 +748,80 @@ Chance = for each lesson, the share of its own candidate pool (every cell with >
 - The alpha-8, -16 and -32 arms were added after alpha 4 had been seen, so they are checks, not pre-registered headlines. The between-alpha comparison picks the top arm by its point estimate first, then tests it, so its "beats" rows lean optimistic.
 - `map_tuned` was chosen on 10 seeds out of 48 random draws, separately per regime.
 - The numbers are macOS arm64 only.
+
+## Sprint 10: the analyser on other disturbances, time to detect and time to clear (2026-10-18)
+
+S10A (PR #36) gave the ground truth time windows (`fleet-truth/2`: blocked, outage and frozen windows per zone, burst per zone). The queue item `wr-s10-disturbance-measure` ran the analyser chain (emit, ingest, costmap, lessons, grade, hotspot_score) on four presets, 10 zones x 500 steps on the medium map, seeds 0-9. The presets were chosen by truth coverage (report `wr-lane-s10a-truth-v2.md`). S10B (PR #38) added `--truth-kind blocked|outage` to `fleet/time_to_detect.py`. Everything between this paragraph and "Reading the numbers" is the output of sections (f) and (g) of `.venv/bin/python scripts/sprint8_tables.py`, which reads the JSONs it names. Only its headings were demoted one level.
+
+#### (f) Analyser on other disturbances (S10A truth v2, 10 zones x 500 steps)
+
+Truth positives per run (cells are counted once per kind over the whole run, robots by distinct serial):
+
+| run | disturbance | floor cells | blocked cells | outage cells | frozen robots | flagged cells per zone, mean |
+|---|---|---|---|---|---|---|
+| s10-blocked | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240]}}` | 0 | 50 | 0 | 0 | 26.7 |
+| s10-outage | `{"outage": {"rate_per_hour": 4.0, "duration": [120, 360]}}` | 0 | 0 | 20 | 0 | 26.8 |
+| s10-breakdown | `{"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}` | 0 | 0 | 0 | 119 | 8.9 |
+| s10-burst | `{"burst": {"start": 100, "end": 300, "extra": 20}}` | 0 | 0 | 0 | 0 | 25.7 |
+
+Precision and recall at K, split by kind (only kinds with positives in the run; pooled over zones):
+
+| run | kind | positives | K 20: hits, precision, recall | K 40: hits, precision, recall | zones flagging fewer than K cells (K 20 / K 40) |
+|---|---|---|---|---|---|
+| s10-blocked | blocked | 50 | 4, 0.0200, 0.08 | 7, 0.0175, 0.14 | 1 / 10 |
+| s10-outage | outage | 20 | 1, 0.0050, 0.05 | 1, 0.0025, 0.05 | 0 / 10 |
+| s10-breakdown | none | 0 cells (119 frozen robots; the map ranks cells) | n/a | n/a | 10 / 10 |
+| s10-burst | none | 0 cells (the run has no truth cells) | n/a | n/a | 1 / 10 |
+
+False flags (top-K cells that are not a truth cell of any kind, summed over 10 zones, on the final map) and the forecast truth grades:
+
+| run | K 20: false flags (per zone) | K 40: false flags (per zone) | hotspot_forecast truth grades: false_alarm / graded |
+|---|---|---|---|
+| s10-blocked | 195 (19.5) | 260 (26.0) | 1386 / 1409 |
+| s10-outage | 199 (19.9) | 267 (26.7) | 1414 / 1417 |
+| s10-breakdown | 89 (8.9) | 89 (8.9) | 488 / 488 |
+| s10-burst | 195 (19.5) | 257 (25.7) | 1388 / 1388 |
+
+lesson_persist and its chance rate:
+
+| run | stream length (s) | lesson_truth grades (by lesson kind) | lesson_persist graded | observed rate | chance mean | lift |
+|---|---|---|---|---|---|---|
+| s10-blocked | 2500 | hot_cell 3 false_alarm, hot_robot 2 false_alarm | 0 | n/a | n/a | n/a |
+| s10-outage | 2500 | hot_cell 4 false_alarm, hot_robot 2 false_alarm | 0 | n/a | n/a | n/a |
+| s10-breakdown | 2500 | none | 0 | n/a | n/a | n/a |
+| s10-burst | 2500 | hot_cell 6 false_alarm, hot_robot 2 false_alarm | 0 | n/a | n/a | n/a |
+
+`truth_kinds` is run-level: a cell is positive for a kind if the truth lists it at any time in the run, and the map is the final one, so a hit does not mean the cell was flagged while it was blocked (time is in (g)). Precision = hits / (K x zones), so zones that flag fewer than K cells still count K. false flags = sum over zones of min(K, flagged cells) minus the `any` hits. The floor-based `mean.k` block of these JSONs is not used: no S10 run has floor cells. lesson_persist grades a lesson with window [s, e) over [e, e + W) only when the zone's stream reaches e + W (`fleet/fleet_analyser/lessons.py` docstring); the queue item `wr-s10-disturbance-measure` ran lessons with `--window-h 0.5` (1800 s), so a 2500 s stream allows no graded lesson. Sources: `results/fleet/hotspot_s10-blocked.json`, `results/fleet/hotspot_s10-outage.json`, `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-burst.json` (`truth_kinds`, `zones.*.n_flagged`, `grading_counts.truth`, `lesson_grading`, `lesson_persist_chance`).
+
+#### (g) Time to detect and time to clear (S10B)
+
+| kind | K (per zone) | windows | detected (share) | missed | preflag | first detect, s, median (p25-p75) | cleared | cleared, s after end, median (p25-p75) | stale_at_end | open_at_end | false flags per publish, 10 zones summed (per zone) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| blocked | 10 | 50 | 6 (0.12) | 44 | 1 | 187.5 (117.5-242.5) | 3 | 155 (95-172.5) | 1 | 2 | 83.0 (8.30) |
+| blocked | 20 | 50 | 7 (0.14) | 43 | 2 | 190 (140-232.5) | 2 | 970 (910-1030) | 2 | 3 | 135.8 (13.58) |
+| blocked | 40 | 50 | 7 (0.14) | 43 | 2 | 190 (140-232.5) | 0 | none | 4 | 3 | 154.6 (15.46) |
+| outage | 10 | 20 | 1 (0.05) | 19 | 0 | 280 (280-280) | 0 | none | 0 | 1 | 85.0 (8.50) |
+| outage | 20 | 20 | 1 (0.05) | 19 | 0 | 280 (280-280) | 0 | none | 0 | 1 | 139.0 (13.90) |
+| outage | 40 | 20 | 1 (0.05) | 19 | 0 | 280 (280-280) | 0 | none | 0 | 1 | 157.1 (15.71) |
+
+- `results/fleet/time_to_detect_blocked.json`: blocked, run `s10-blocked`, 500 steps = 41.7 simulated min, 10 zones, 50 windows (median length 132 steps), 9 publishes every 5 min, `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240]}}`, phase A `fleet/data/s10-blocked`.
+- `results/fleet/time_to_detect_outage.json`: outage, run `s10-outage`, 500 steps = 41.7 simulated min, 10 zones, 20 windows (median length 171.5 steps), 9 publishes every 5 min, `{"outage": {"rate_per_hour": 4.0, "duration": [120, 360]}}`, phase A `fleet/data/s10-outage`.
+
+Per window: detected = the cell is in the zone's top K at a publish while the window is open; preflag = in the top K at the last publish before the window opened (not a detection); first detect is seconds from the window's start. Over detected windows only: cleared = the first publish at or after the end where the cell is out of the top K (seconds from the end); stale_at_end = still in the top K at every publish after the end; open_at_end = no publish after the end, so clearing is not observed. cleared = detected - stale_at_end - open_at_end (asserted here). "none" = no window to take a median over. A flag counts as false only when the cell matches no truth window of any kind at that publish. Caveat (verbatim from the JSON): "Windows have a start and an end; detection is measured from the start, clearing from the end."
+
+**Reading the numbers.**
+- **Blocked cells.** In the final map, 4 of the 50 blocked cells are in a zone's top 20 (recall 0.08) and 7 are in a zone's top 40 (recall 0.14). Precision is 0.02 or lower at both K. Over time (g), 7 of the 50 windows were in the top 20 at some publish while they were open; 43 were missed and 2 were preflagged. The median first detection is 190 s after the window opened, which is less than one publish interval (300 s).
+- **Outages.** 1 of the 20 outage cells is in the final top 20 and top 40 (recall 0.05). Over time, 1 of 20 windows was detected, at 280 s. That window was still open at the last publish, so whether it cleared is not observed.
+- **Clearing.** Of the 7 detected blocked windows at K 20, 2 cleared (median 970 s after the window ended), 2 were stale at the end and 3 were open at the end. At K 40, none cleared: 4 were stale and 3 were open. At K 10, 3 of the 6 detected windows cleared, median 155 s after the end. All of these counts are 3 or fewer, so the medians rest on 0 to 3 windows.
+- **False flags.** The burst run has no truth cells, so all its flagged cells are false: 195 in the top 20 over 10 zones (19.5 per zone) and 257 in the top 40. The blocked and outage runs have 195 and 199 false flags in the top 20, and 260 and 267 in the top 40. That is within 4 (K 20) and 10 (K 40) of the burst run, which has no truth at all. Per publish (g), the blocked and outage maps carry 83 to 157 false flags over 10 zones, and the count rises with K.
+- **Forecast grades.** 23 of 1,409 `hotspot_forecast` truth grades are hits on the blocked run and 3 of 1,417 on the outage run. All 488 on the breakdown run and all 1,388 on the burst run are false alarms.
+- **Breakdown.** The run has 119 frozen robots and no truth cells. The map ranks cells, so frozen robots get no per-K score; the map flags 8.9 cells per zone on average, and none of them is a truth cell.
+- **Lessons.** No run graded any lesson_persist row, so this section has no persist rate and no chance rate. A 0.5 h lesson window needs 3,600 s of stream to be graded over its next window, and each zone streams 2,500 s. Against truth, all 13 hot_cell lessons and all 6 hot_robot lessons across the blocked, outage and burst runs are false alarms. The breakdown run has no graded lessons.
+- **Against the sticky floor (d).** On the sticky floor the per-zone top 20 had shown 44.0% of the truth cells by the end of a 500-step shift. Here it caught 14% of blocked windows and 5% of outage windows. These are different units (static cells there, time windows here), so the comparison is about scale only.
+
+**Caveats.**
+- One seed set (0-9) and one 500-step shift per preset, with no CI on any count here.
+- There is no undisturbed hotspot run next to these, so nothing here says why the map misses blocked cells.
+- The (f) hits are run-level (final map, truth at any time). Only (g) is time-resolved.
+- In (g) a flag matching a truth window of any kind counts as not false. Each S10 run holds only its own kind, so this does not move these numbers.
+- The numbers are macOS arm64 only.

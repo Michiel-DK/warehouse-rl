@@ -868,6 +868,30 @@ truth preset, blind analyst feature, planner input, graded decision kind):
 The learned planner (Sprint 4, parked) comes after this loop shows a gain with the rule-based router. It has not
 shown one yet.
 
+### Sprint 10: the analyser on other disturbances (2026-10-18)
+
+Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) and (g). Reports are in
+laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md` and
+`wr-dev-s10-readme.md`.
+
+- [x] S10A truth v2 (PR #36, 46e9872). `fleet-truth/2` blocked/outage/frozen windows, `fleet/truth.py`, and
+      `truth_kinds` in `hotspot_score.py`. The stall-share calibration band was unreachable (baseline 0.982), so the
+      presets were picked by truth coverage.
+- [x] S10 measure (queue item `wr-s10-disturbance-measure`, no PR; results committed in 9970ebe as
+      `results/fleet/hotspot_s10-{blocked,outage,breakdown,burst}.json`). In the final map, 4 of 50 blocked cells are
+      in the top 20 (7 in the top 40). For outages it is 1 of 20 at both K. The burst run, with no truth cells, has
+      195 top-20 false flags. lesson_persist graded 0 lessons: a 0.5 h window needs 3,600 s and the stream is 2,500 s.
+- [x] S10B time to detect / clear (PR #38, 6ae3e00; run `wr-s10b-ttd-change-run`, results
+      `results/fleet/time_to_detect_{blocked,outage}.json`). At K 20, 7 of 50 blocked windows were detected, with a
+      median of 190 s. 2 cleared, 2 were stale at the end and 3 were open at the end. For outages, 1 of 20 was
+      detected, and it was open at the end.
+- [x] S11A explorer (PR #37, d655d96). "Try it" section over the recorded measurements.
+- Open:
+  - No lesson_persist reading exists on any S10 preset. A shift longer than 3,600 s, or a shorter window, would be
+    needed.
+  - There is no undisturbed hotspot run to set the S10 false-flag counts against.
+  - `hotspot_score.py` still counts window cells itself instead of importing `truth.py` (S10A deviation 3).
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are
