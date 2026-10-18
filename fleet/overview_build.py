@@ -9,7 +9,9 @@ Reads exactly four tracked files and nothing else:
 Every number on the page is a <b class="num" data-src="<file>:<expression>"> element. resolve() turns a data-src into a
 value, format_value() turns the value into the text shown. The template contains no typed number; per-item rows (example
 stops, the lesson) are generated here from data. A build is deterministic (no clock) and refuses to write when a {name}
-placeholder is left outside <script>/<style>.
+placeholder is left outside <script>/<style>. S11A: the 'Try it' section (explorer_html, between the explorer-start/explorer-end
+markers) reads only run_constants.explorer of data.js; its numbers are <span class="xp-n" data-src="docs/replay/data.js:run_constants.explorer.<path>">
+resolved by the same resolve() / kind_of() / format_value(), and its script rewrites value and data-src when a control changes.
 
     .venv/bin/python fleet/overview_build.py [--data F] [--results-root DIR] [--out F]
 """
@@ -141,6 +143,9 @@ def kind_of(src):
     m = DOSE_FIELD.search(src) if src.startswith(DATA + ":") else None
     if m:
         return DOSE_KIND.get(m.group(1), "pct0")
+    x = XP_FIELD.fullmatch(src[len(DATA) + 1:]) if src.startswith(DATA + ":") else None
+    if x:
+        return XP_KIND.get(src.rsplit(".", 1)[1], "g")
     raise KeyError(src)
 
 
@@ -423,6 +428,342 @@ def script_data(inputs):
     return json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
 
 
+# ------------------------------------------------------------------------------------------------ S11A: the 'Try it' explorer
+XP = "run_constants.explorer"
+XP_FIELD = re.compile(
+    XP.replace(".", r"\.") + r"\.(?:axes\.regimes\.\d+\.(?P<p>p_lo|p_hi)|axes\.arms\.\d+\.(?P<alpha>alpha)|axes\.steps\.\d+|axes\.ci_level"
+    r"|axes\.(?:density|breakdown)\.\d+|floor\.\d+\.(?P<f>mean|ci_lo|ci_hi|share|share_ci_lo|share_ci_hi|n)"
+    r"|sweeps\.density\.points\.\d+\.(?P<d>point|pickers|mean|ci_lo|ci_hi|n)"
+    r"|sweeps\.breakdown\.(?:robots|policies\.(?:cta|stuck_aware_cta)\.\d+\.(?P<b>point|mean|ci_lo|ci_hi|n)))$")
+XP_KIND = {"mean": "f1", "ci_lo": "f1", "ci_hi": "f1", "share": "pct0", "share_ci_lo": "pct0", "share_ci_hi": "pct0",
+           "n": "int", "pickers": "int", "robots": "int"}
+XP_NM = "not measured"
+XP_POLICIES = (("cta", "Standard dispatch"), ("stuck_aware_cta", "Stuck-aware dispatch"))
+XP_REFERENCE = "This is the reference: robots ignore the map. Every other setting is compared with it."
+XP_OPEN = ("These are recorded measurements of a simulated warehouse, not a live simulation.", "The operator can change that later.")
+XP_STYLE = """<style>
+.xp{background:var(--paper-deep);margin-top:var(--sp-40)}
+.xp .wrap{padding-block:var(--sp-48);display:grid;gap:var(--sp-18)}
+.xp h2{max-width:none}
+.xp h3{font-family:var(--font-display);font-size:21px;margin:0}
+.xp p{margin:0}
+.xp-lead{font-size:17px;color:var(--ink-soft);max-width:60ch}
+.xp-small{font-size:13px;color:var(--muted);max-width:70ch}
+.xp [hidden]{display:none}
+.xp-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:var(--sp-20);align-items:start}
+.xp-box{background:var(--white);border:1px solid var(--hair);border-radius:14px;padding:var(--sp-18);display:grid;gap:var(--sp-16);min-width:0;margin:0}
+.xp-box>legend{padding:0;font-family:var(--font-display);font-size:21px;font-weight:700}
+.xp-ctl{display:grid;gap:var(--sp-6);min-width:0;margin:0;padding:0;border:0}
+.xp-ctl>legend,.xp-ctl>label.xp-name{padding:0;font-weight:700;font-size:15px}
+.xp-help{font-size:13px;color:var(--muted)}
+.xp input[type=range]{width:100%;margin:0;accent-color:var(--accent);min-height:28px}
+.xp input[type=radio]{accent-color:var(--accent);width:18px;height:18px;margin:0;flex:none}
+.xp-ticks{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);font-size:12.5px;color:var(--muted);text-align:center}
+.xp-ticks li{display:grid;gap:var(--sp-2);overflow-wrap:anywhere}
+.xp-ticks li.xp-on{color:var(--ink);font-weight:700}
+.xp-ends{display:flex;justify-content:space-between;gap:var(--sp-8);font-size:12.5px;color:var(--muted)}
+.xp-opts{display:flex;flex-wrap:wrap;gap:var(--sp-8) var(--sp-16)}
+.xp-opt{display:inline-flex;align-items:center;gap:var(--sp-8);font-size:15px;min-height:32px}
+.xp-opt:has(input:disabled){color:var(--muted)}
+.xp input:disabled{cursor:not-allowed}
+.xp-out{display:grid;gap:var(--sp-10);border-top:1px solid var(--hair);padding-top:var(--sp-14)}
+.xp-big{font-family:var(--font-display);font-size:clamp(34px,5vw,48px);line-height:1.05;color:var(--accent);font-variant-numeric:tabular-nums}
+.xp-big .xp-unit{font-family:var(--font-sans);font-size:14px;color:var(--muted);margin-left:var(--sp-8)}
+.xp-row{font-size:14px;color:var(--ink-soft);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.xp-n{font-weight:700;color:var(--ink)}
+.xp-bar{position:relative;height:26px;background:var(--paper-deep);border:1px solid var(--ink);border-radius:6px}
+.xp-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--bar)}
+.xp-ci{position:absolute;top:50%;height:2px;margin-top:var(--sp-n1);background:var(--ink)}
+.xp-ref{position:absolute;top:0;bottom:0;width:0;margin-left:var(--sp-n1);border-left:3px solid}
+.xp-ref.xp-u{border-left-style:solid;border-left-color:var(--st-ok)} .xp-ref.xp-z{border-left-style:dashed;border-left-color:var(--stuck)}
+.xp-key{display:flex;flex-wrap:wrap;gap:var(--sp-4) var(--sp-16);font-size:12.5px;color:var(--muted)}
+.xp-key i{display:inline-block;width:20px;height:0;border-top:3px solid;vertical-align:middle;margin-right:var(--sp-6)}
+.xp-key i.xp-u{border-top-style:solid;border-top-color:var(--st-ok)} .xp-key i.xp-z{border-top-style:dashed;border-top-color:var(--stuck)}
+.xp-nm{font-size:12.5px;color:var(--muted)}
+.xp-sum{display:grid;gap:var(--sp-6)}
+.xp-verdict{font-size:15px;font-weight:600}
+.xp-live{display:grid;gap:var(--sp-6)}
+.xp input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:480px){.xp .wrap{padding-block:var(--sp-36)} .xp-box{padding:var(--sp-14)} .xp-ticks{font-size:12px}}
+</style>"""
+XP_SCRIPT = r"""<script>
+(function () {
+  var X = JSON.parse(document.getElementById('xp-data').textContent);
+  var P = 'docs/replay/data.js:run_constants.explorer.';
+  var NM = 'not measured';
+  var VERB = { helps: 'beats it', hurts: 'is worse', 'within noise': 'is within noise' };
+  var KIND = { mean: 'one', ci_lo: 'one', ci_hi: 'one', share: 'pct', share_ci_lo: 'pct', share_ci_hi: 'pct', n: 'int', pickers: 'int', point: 'plain' };
+  var st = { reg: 0, steps: X.axes.steps[0], arm: 'none', pol: 'cta' };
+  function g(id) { return document.getElementById(id); }
+  function fmt(kind, v) {
+    if (kind === 'one') return v.toFixed(1);
+    if (kind === 'pct') return (v * 100).toFixed(0) + '%';
+    if (kind === 'int') return Math.round(v).toLocaleString('en-US');
+    return String(v);
+  }
+  function fill(box, base, rec) {
+    box.querySelectorAll('[data-slot]').forEach(function (el) {
+      var f = el.getAttribute('data-slot');
+      if (rec[f] === null) { el.removeAttribute('data-src'); el.textContent = ''; return; }
+      el.setAttribute('data-src', P + base + '.' + f);
+      el.textContent = fmt(KIND[f], rec[f]);
+    });
+  }
+  function dis(input, on) {
+    input.disabled = on;
+    var lab = input.parentNode, nm = lab.querySelectorAll('.xp-nm')[0];
+    if (nm) nm.hidden = !on;
+    if (on) { input.setAttribute('disabled', ''); input.setAttribute('title', NM); lab.setAttribute('title', NM); }
+    else { input.removeAttribute('disabled'); input.removeAttribute('title'); lab.removeAttribute('title'); }
+  }
+  function find(reg, steps, arm) {
+    for (var i = 0; i < X.floor.length; i++) {
+      var e = X.floor[i];
+      if (e.regime === reg && e.steps === steps && e.arm === arm) return i;
+    }
+    return -1;
+  }
+  function pos(el, left, width, scale) {
+    if (left !== null) el.style.left = (left / scale * 100).toFixed(2) + '%';
+    if (width !== null) el.style.width = (width / scale * 100).toFixed(2) + '%';
+  }
+  function renderA() {
+    var reg = X.axes.regimes[st.reg].key, rng = g('xp-regime');
+    var stepIn = document.querySelectorAll('input[name=xp-steps]'), armIn = document.querySelectorAll('input[name=xp-arm]');
+    rng.value = String(st.reg);
+    g('xp-ticks').querySelectorAll('li').forEach(function (li, i) {
+      li.classList.toggle('xp-on', i === st.reg);
+      if (i === st.reg) rng.setAttribute('aria-valuetext', li.getAttribute('data-vt'));
+    });
+    var ok = false;
+    stepIn.forEach(function (el) {
+      var has = find(reg, +el.value, 'none') >= 0;
+      dis(el, !has);
+      if (has && +el.value === st.steps) ok = true;
+    });
+    if (!ok) { stepIn.forEach(function (el) { if (!el.disabled && !ok) { st.steps = +el.value; ok = true; } }); }
+    stepIn.forEach(function (el) { el.checked = +el.value === st.steps; });
+    if (find(reg, st.steps, st.arm) < 0) st.arm = 'none';
+    armIn.forEach(function (el) {
+      dis(el, find(reg, st.steps, el.value) < 0);
+      el.checked = el.value === st.arm;
+    });
+    var out = g('xp-out'), i = find(reg, st.steps, st.arm), e = X.floor[i];
+    fill(out, 'floor.' + i, e);
+    out.querySelectorAll('[data-ref]').forEach(function (el) {
+      var j = find(reg, st.steps, el.getAttribute('data-ref'));
+      if (j < 0) { el.removeAttribute('data-src'); el.textContent = NM; return; }
+      el.setAttribute('data-src', P + 'floor.' + j + '.mean');
+      el.textContent = fmt('one', X.floor[j].mean);
+    });
+    var ai = 0, lab = g('xp-cur-lab'), al = g('xp-cur-al'), cs = g('xp-cur-steps'), si = X.axes.steps.indexOf(st.steps);
+    X.axes.arms.forEach(function (a, n) { if (a.key === st.arm) ai = n; });
+    var am = X.axes.arms[ai];
+    al.hidden = am.key.indexOf('map_a') !== 0;
+    lab.textContent = am.label + (al.hidden ? '' : ' ');
+    if (al.hidden) { al.removeAttribute('data-src'); al.textContent = ''; }
+    else { al.setAttribute('data-src', P + 'axes.arms.' + ai + '.alpha'); al.textContent = fmt('plain', am.alpha); }
+    cs.setAttribute('data-src', P + 'axes.steps.' + si);
+    cs.textContent = fmt('plain', st.steps);
+    var top = 0;
+    X.floor.forEach(function (f) { if (f.regime === reg && f.steps === st.steps && f.ci_hi > top) top = f.ci_hi; });
+    top = top * 1.05;
+    pos(g('xp-fill'), null, e.mean, top);
+    pos(g('xp-cibar'), e.ci_lo, e.ci_hi - e.ci_lo, top);
+    ['undisturbed', 'none'].forEach(function (a) {
+      var j = find(reg, st.steps, a), r = g('xp-ref-' + a);
+      r.hidden = j < 0;
+      if (j >= 0) pos(r, X.floor[j].mean, null, top);
+    });
+    var isRef = e.share === null;
+    g('xp-share').hidden = isRef;
+    var v = g('xp-verdict');
+    if (isRef) {
+      v.setAttribute('data-verdict', 'reference');
+      v.textContent = v.getAttribute('data-ref-text');
+    } else {
+      var k = e.verdict;
+      v.setAttribute('data-verdict', k);
+      v.textContent = v.getAttribute('data-lead') + VERB[k] + '.';
+    }
+  }
+  function renderB() {
+    var di = +g('xp-dens').value, bi = +g('xp-brk').value;
+    g('xp-dens').setAttribute('aria-valuetext', fmt('plain', X.axes.density[di]) + ' carrying robots');
+    g('xp-brk').setAttribute('aria-valuetext', fmt('plain', X.axes.breakdown[bi]) + ' breakdowns per robot per hour');
+    fill(g('xp-dens-sum'), 'sweeps.density.points.' + di, X.sweeps.density.points[di]);
+    fill(g('xp-brk-sum'), 'sweeps.breakdown.policies.' + st.pol + '.' + bi, X.sweeps.breakdown.policies[st.pol][bi]);
+    fill(g('xp-dens-out'), 'sweeps.density.points.' + di, X.sweeps.density.points[di]);
+    fill(g('xp-brk-out'), 'sweeps.breakdown.policies.' + st.pol + '.' + bi, X.sweeps.breakdown.policies[st.pol][bi]);
+    document.querySelectorAll('input[name=xp-pol]').forEach(function (el) { el.checked = el.value === st.pol; });
+  }
+  g('xp-regime').addEventListener('input', function () { st.reg = +g('xp-regime').value; renderA(); });
+  document.querySelectorAll('input[name=xp-steps]').forEach(function (el) {
+    el.addEventListener('change', function (ev) { st.steps = +ev.target.value; renderA(); });
+  });
+  document.querySelectorAll('input[name=xp-arm]').forEach(function (el) {
+    el.addEventListener('change', function (ev) { st.arm = ev.target.value; renderA(); });
+  });
+  g('xp-dens').addEventListener('input', renderB);
+  g('xp-brk').addEventListener('input', renderB);
+  document.querySelectorAll('input[name=xp-pol]').forEach(function (el) {
+    el.addEventListener('change', function (ev) { st.pol = ev.target.value; renderB(); });
+  });
+  renderA();
+  renderB();
+})();
+</script>"""
+
+
+def _xp_src(path):
+    return "%s:%s.%s" % (DATA, XP, path)
+
+
+def _xp_num(path, inputs, slot=None, extra=""):
+    """<span class="xp-n"> for a data-src inside run_constants.explorer; value and text come from resolve and format_value."""
+    src = _xp_src(path)
+    value = resolve(src, inputs)
+    if value is None:
+        raise ValueError("%s is null in %s" % (src.split(":", 1)[1], DATA))
+    return '<span class="xp-n"%s%s data-src="%s">%s</span>' % (
+        ' data-slot="%s"' % slot if slot else "", extra, htmllib.escape(src), htmllib.escape(format_value(src, value)))
+
+
+def _xp_txt(path, inputs):
+    """The text a data-src span of this path shows, for attribute values that cannot hold a span."""
+    src = _xp_src(path)
+    return format_value(src, resolve(src, inputs))
+
+
+def explorer_data(ex):
+    """The data the explorer script reads: run_constants.explorer without the provenance `src` strings, and with the verdict of
+    dose_verdict() on each share interval added to every floor entry (null for none and undisturbed). floor keeps its order, so
+    floor index i here is floor.<i> in data.js."""
+    strip = lambda d: {k: v for k, v in d.items() if k != "src"}
+    sw = ex["sweeps"]
+    verdict = lambda e: None if e["share"] is None else dose_verdict([e["share_ci_lo"], e["share_ci_hi"]])
+    return json.dumps(dict(axes=ex["axes"], floor=[dict(strip(e), verdict=verdict(e)) for e in ex["floor"]],
+                           sweeps=dict(density=strip(sw["density"]), breakdown=strip(sw["breakdown"]))),
+                      separators=(",", ":"), allow_nan=False).replace("</", "<\\/")
+
+
+def explorer_html(inputs):
+    """The 'Try it' section: markup, style, data and script, all between one explorer-start/explorer-end pair. Reads only
+    run_constants.explorer of data.js. The static markup is the default state (first regime, none, first shift length, first
+    density and breakdown points, standard dispatch) so the page reads without JS."""
+    ex = inputs[DATA]["run_constants"].get("explorer")
+    if not ex:
+        raise ValueError("run_constants.explorer is missing or null in %s" % DATA)
+    axes, floor, sw = ex["axes"], ex["floor"], ex["sweeps"]
+    regs, arms, steps_list = axes["regimes"], axes["arms"], axes["steps"]
+    reg0, steps0 = regs[0]["key"], steps_list[0]
+    idx = lambda reg, steps, arm: next((i for i, e in enumerate(floor) if (e["regime"], e["steps"], e["arm"]) == (reg, steps, arm)), -1)
+    n = lambda path, slot=None, extra="": _xp_num(path, inputs, slot, extra)
+    cur = idx(reg0, steps0, "none")
+    if cur < 0 or floor[cur]["share"] is not None:
+        raise ValueError("explorer.floor has no none entry for %s at %s steps" % (reg0, steps0))
+    e = floor[cur]
+
+    en = "\u2013"
+    vt = lambda i, r: "%s, p %s%s%s" % (r["word"], _xp_txt("axes.regimes.%d.p_lo" % i, inputs), en, _xp_txt("axes.regimes.%d.p_hi" % i, inputs))
+    ticks = "".join('<li data-tick="%d"%s data-vt="%s"><span>%s</span><span>p %s%s%s</span></li>' % (
+        i, ' class="xp-on"' if i == 0 else "", esc(vt(i, r)), esc(r["word"]), n("axes.regimes.%d.p_lo" % i), en,
+        n("axes.regimes.%d.p_hi" % i)) for i, r in enumerate(regs))
+    nm_span = lambda missing: '<span class="xp-nm"%s> %s</span>' % ("" if missing else " hidden", XP_NM)
+    arm_opts = []
+    for i, a in enumerate(arms):
+        missing = idx(reg0, steps0, a["key"]) < 0
+        alpha = " " + n("axes.arms.%d.alpha" % i) if a["key"].startswith("map_a") else ""
+        arm_opts.append('<label class="xp-opt"%s><input type="radio" name="xp-arm" value="%s"%s%s> <span>%s%s</span>%s</label>' % (
+            ' title="%s"' % XP_NM if missing else "", esc(a["key"]), " checked" if a["key"] == "none" else "",
+            ' disabled title="%s"' % XP_NM if missing else "", esc(a["label"]), alpha, nm_span(missing)))
+    step_opts = []
+    for i, s in enumerate(steps_list):
+        missing = idx(reg0, s, "none") < 0
+        step_opts.append('<label class="xp-opt"%s><input type="radio" name="xp-steps" value="%d"%s%s> <span>%s</span>%s</label>' % (
+            ' title="%s"' % XP_NM if missing else "", s, " checked" if s == steps0 else "",
+            ' disabled title="%s"' % XP_NM if missing else "", n("axes.steps.%d" % i), nm_span(missing)))
+
+    top = max(f["ci_hi"] for f in floor if f["regime"] == reg0 and f["steps"] == steps0) * 1.05
+    pc = lambda v: "%.2f" % (v / top * 100)
+    ref = lambda a: floor[idx(reg0, steps0, a)]
+    refs = ""
+    for a, cls, text in (("undisturbed", "xp-u", "undisturbed floor, solid line"), ("none", "xp-z", "no map, dashed line")):
+        j = idx(reg0, steps0, a)
+        refs += '<span id="xp-ref-key-%s"><i class="%s"></i>%s %s</span>' % (a, cls, text, n("floor.%d.mean" % j, None, ' data-ref="%s"' % a))
+    ref_marks = "".join('<span class="xp-ref %s" id="xp-ref-%s" style="left:%s%%"></span>' % (cls, a, pc(ref(a)["mean"]))
+                        for a, cls in (("undisturbed", "xp-u"), ("none", "xp-z")))
+
+    group_a = (
+        '<fieldset class="xp-box"><legend>Does the map help?</legend>'
+        '<div class="xp-ctl"><label class="xp-name" for="xp-regime">Stickiness of the floor</label>'
+        '<input type="range" id="xp-regime" min="0" max="%d" step="1" value="0" aria-valuetext="%s">'
+        '<ul class="xp-ticks" id="xp-ticks">%s</ul>'
+        '<p class="xp-help">p is the chance that a move into a bad cell fails. A stickier floor traps robots more often.</p></div>'
+        '<fieldset class="xp-ctl"><legend>Steering</legend><div class="xp-opts">%s</div>'
+        '<p class="xp-help">No map: robots ignore the map. Map, steering strength: robots use the map, and a higher strength '
+        'steers harder. Perfect knowledge: robots know every bad cell.</p></fieldset>'
+        '<fieldset class="xp-ctl"><legend>Shift length (steps)</legend><div class="xp-opts">%s</div></fieldset>'
+        '<div class="xp-out" id="xp-out">'
+        '<div class="xp-sum" aria-live="polite" aria-atomic="true">'
+        '<p class="xp-row">Showing <span id="xp-cur-lab">%s</span><span id="xp-cur-al" hidden></span>, shift of %s steps.</p>'
+        '<p class="xp-big">%s<span class="xp-unit">order lines per hour</span></p>'
+        '<p class="xp-verdict" id="xp-verdict" data-verdict="reference" data-lead="Against no map, this setting " data-ref-text="%s">%s</p>'
+        '</div>'
+        '<p class="xp-row">%s%% interval %s to %s. Mean of %s shifts.</p>'
+        '<div class="xp-bar" aria-hidden="true"><span class="xp-fill" id="xp-fill" style="width:%s%%"></span>'
+        '<span class="xp-ci" id="xp-cibar" style="left:%s%%;width:%s%%"></span>%s</div>'
+        '<div class="xp-key">%s</div>'
+        '<p class="xp-row" id="xp-share" hidden>Share of the lost pick-rate won back: '
+        '<span class="xp-n" data-slot="share"></span>, interval <span class="xp-n" data-slot="share_ci_lo"></span> to '
+        '<span class="xp-n" data-slot="share_ci_hi"></span>.</p>'
+        '</div></fieldset>'
+        % (len(regs) - 1, esc(vt(0, regs[0])), ticks, "".join(arm_opts), "".join(step_opts),
+           esc(arms[0]["label"]), n("axes.steps.0", None, ' id="xp-cur-steps"'),
+           n("floor.%d.mean" % cur, "mean"), esc(XP_REFERENCE), esc(XP_REFERENCE),
+           n("axes.ci_level"), n("floor.%d.ci_lo" % cur, "ci_lo"), n("floor.%d.ci_hi" % cur, "ci_hi"),
+           n("floor.%d.n" % cur, "n"),
+           pc(e["mean"]), pc(e["ci_lo"]), "%.2f" % ((e["ci_hi"] - e["ci_lo"]) / top * 100), ref_marks, refs))
+
+    d0, b0 = sw["density"]["points"][0], sw["breakdown"]["policies"]["cta"][0]
+    nd, nb = len(sw["density"]["points"]), len(sw["breakdown"]["policies"]["cta"])
+    pol_opts = "".join('<label class="xp-opt"><input type="radio" name="xp-pol" value="%s"%s> <span>%s</span></label>' % (
+        k, " checked" if k == "cta" else "", esc(label)) for k, label in XP_POLICIES)
+    unit = '<span class="xp-unit">order lines per hour</span>'
+    group_b = (
+        '<fieldset class="xp-box"><legend>Robots and breakdowns</legend>'
+        '<div class="xp-sum" aria-live="polite" aria-atomic="true">'
+        '<p class="xp-row" id="xp-dens-sum">Carrying robots: <span class="xp-big">%s%s</span></p>'
+        '<p class="xp-row" id="xp-brk-sum">Breakdowns: <span class="xp-big">%s%s</span></p></div>'
+        '<div class="xp-ctl"><label class="xp-name" for="xp-dens">Number of carrying robots</label>'
+        '<input type="range" id="xp-dens" min="0" max="%d" step="1" value="0" aria-valuetext="%s">'
+        '<div class="xp-ends"><span>%s</span><span>%s</span></div>'
+        '<p class="xp-row" id="xp-dens-out">Carrying robots: %s, pickers: %s. %s%% interval %s to %s. Mean of %s shifts.</p></div>'
+        '<div class="xp-ctl"><label class="xp-name" for="xp-brk">Breakdowns per robot per hour</label>'
+        '<input type="range" id="xp-brk" min="0" max="%d" step="1" value="0" aria-valuetext="%s">'
+        '<div class="xp-ends"><span>%s</span><span>%s</span></div>'
+        '<fieldset class="xp-ctl"><legend>Dispatch</legend><div class="xp-opts">%s</div></fieldset>'
+        '<p class="xp-row" id="xp-brk-out">%s breakdowns per robot per hour, %s robots. %s%% interval %s to %s. Mean of %s shifts.</p></div>'
+        '</fieldset>'
+        % (n("sweeps.density.points.0.mean", "mean"), unit, n("sweeps.breakdown.policies.cta.0.mean", "mean"), unit,
+           nd - 1, esc(_xp_txt("axes.density.0", inputs) + " carrying robots"),
+           n("axes.density.0"), n("axes.density.%d" % (nd - 1)),
+           n("sweeps.density.points.0.point", "point"), n("sweeps.density.points.0.pickers", "pickers"), n("axes.ci_level"),
+           n("sweeps.density.points.0.ci_lo", "ci_lo"), n("sweeps.density.points.0.ci_hi", "ci_hi"), n("sweeps.density.points.0.n", "n"),
+           nb - 1, esc(_xp_txt("axes.breakdown.0", inputs) + " breakdowns per robot per hour"),
+           n("axes.breakdown.0"), n("axes.breakdown.%d" % (nb - 1)), pol_opts,
+           n("sweeps.breakdown.policies.cta.0.point", "point"), n("sweeps.breakdown.robots"), n("axes.ci_level"),
+           n("sweeps.breakdown.policies.cta.0.ci_lo", "ci_lo"), n("sweeps.breakdown.policies.cta.0.ci_hi", "ci_hi"),
+           n("sweeps.breakdown.policies.cta.0.n", "n")))
+
+    return ('<!-- explorer-start -->%s<section class="xp" id="xp"><div class="wrap">'
+            '<h2>Try it</h2><p class="xp-lead">%s</p><p class="xp-lead">%s</p><p class="xp-small">%s</p>'
+            '<p class="xp-small">Greyed-out settings were %s.</p>'
+            '<div class="xp-groups">%s%s</div></div></section>'
+            '<script type="application/json" id="xp-data">%s</script>%s<!-- explorer-end -->'
+            % (XP_STYLE, esc(XP_OPEN[0]), esc(XP_OPEN[1]), esc(ex["source_note"]), XP_NM, group_a, group_b, explorer_data(ex), XP_SCRIPT))
+
+
 # ------------------------------------------------------------------------------------------------ template
 TEMPLATE = r"""<!doctype html>
 <html lang="en">
@@ -678,6 +1019,8 @@ a{color:var(--accent)}
 
 </div></div>
 
+{explorer_html}
+
 <section class="closer"><div class="wrap">
   <h2>What it would take on your floor</h2>
   <div class="cboxes">
@@ -784,7 +1127,7 @@ def build(inputs):
         values.update(map_labels(inputs))
     except Exception as e:
         errors["map_labels"] = "%s: %s" % (type(e).__name__, e)
-    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html), ("dose_html", dose_html)):
+    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html), ("dose_html", dose_html), ("explorer_html", explorer_html)):
         try:
             values[name] = fn(inputs)
         except Exception as e:
