@@ -9,7 +9,9 @@ Reads exactly four tracked files and nothing else:
 Every number on the page is a <b class="num" data-src="<file>:<expression>"> element. resolve() turns a data-src into a
 value, format_value() turns the value into the text shown. The template contains no typed number; per-item rows (example
 stops, the lesson) are generated here from data. A build is deterministic (no clock) and refuses to write when a {name}
-placeholder is left outside <script>/<style>.
+placeholder is left outside <script>/<style>. S11A: the 'Try it' section (explorer_html, between the explorer-start/explorer-end
+markers) reads only run_constants.explorer of data.js; its numbers are <span class="xp-n" data-src="docs/replay/data.js:run_constants.explorer.<path>">
+resolved by the same resolve() / kind_of() / format_value(), and its script rewrites value and data-src when a control changes.
 
     .venv/bin/python fleet/overview_build.py [--data F] [--results-root DIR] [--out F]
 """
@@ -428,7 +430,6 @@ def script_data(inputs):
 
 # ------------------------------------------------------------------------------------------------ S11A: the 'Try it' explorer
 XP = "run_constants.explorer"
-XP_STEP_FIELD = r"(?:mean|ci_lo|ci_hi|n)"
 XP_FIELD = re.compile(
     XP.replace(".", r"\.") + r"\.(?:axes\.regimes\.\d+\.(?P<p>p_lo|p_hi)|axes\.arms\.\d+\.(?P<alpha>alpha)|axes\.steps\.\d+|axes\.ci_level"
     r"|axes\.(?:density|breakdown)\.\d+|floor\.\d+\.(?P<f>mean|ci_lo|ci_hi|share|share_ci_lo|share_ci_hi|n)"
@@ -501,6 +502,7 @@ XP_SCRIPT = r"""<script>
   function fill(box, base, rec) {
     box.querySelectorAll('[data-slot]').forEach(function (el) {
       var f = el.getAttribute('data-slot');
+      if (rec[f] === null) { el.removeAttribute('data-src'); el.textContent = ''; return; }
       el.setAttribute('data-src', P + base + '.' + f);
       el.textContent = fmt(KIND[f], rec[f]);
     });

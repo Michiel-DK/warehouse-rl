@@ -339,6 +339,7 @@ a{color:var(--accent)}
   function fill(box, base, rec) {
     box.querySelectorAll('[data-slot]').forEach(function (el) {
       var f = el.getAttribute('data-slot');
+      if (rec[f] === null) { el.removeAttribute('data-src'); el.textContent = ''; return; }
       el.setAttribute('data-src', P + base + '.' + f);
       el.textContent = fmt(KIND[f], rec[f]);
     });
