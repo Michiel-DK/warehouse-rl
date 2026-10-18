@@ -2,8 +2,8 @@
 
 Scope: the academic side of what the fleet stuck analyser does (README "Sprint 5" to "Sprint 10"). The vendor side is
 [COMPETITION.md](COMPETITION.md). Five questions, one research pass each on 2026-10-18, WebSearch/WebFetch only, no
-browser. Rules: `~/.claude/skills/outward-claim-discipline` (source ranks, provenance per claim). The search log with
-every query and its outcome is in `laptop-scheduler/reports/wr-dev-lit-stall-detection.md`. The queries behind each
+browser. Rules: `~/.claude/skills/outward-claim-discipline` (source ranks, provenance per claim). A condensed
+query log is in `laptop-scheduler/reports/wr-dev-lit-stall-detection.md`. The queries behind each
 absence claim are listed at the end of this page.
 
 **Search coverage, read this first.** The Semantic Scholar API answered HTTP 429 (rate limited) to every request in
@@ -22,9 +22,10 @@ In the AGV and multi-robot papers found, a stall is detected at runtime in one o
 threshold, or a cycle search on a graph. ROS 2 Nav2's shipped progress checker flags a robot that moves less than
 0.5 m in 10 s by default (Nav2 `simple_progress_checker.cpp`), the same shape as our rule "active order and no cell
 change for 30 s". Graph methods build a wait-for or precedence graph and search it for cycles (Cho, Kumaran & Wysk
-1995 for manufacturing; Bonetti et al. 2026 for AGV fleets, adding nested acyclic deadlocks), and both read the
-edges from the traffic planner's internal state, not from telemetry. Most Petri-net AGV work (Wu & Zhou 2005;
-Fanti et al. 2015) is about avoiding deadlock by design, not detecting it in logs. Learned detectors appear for
+1995 for manufacturing, title only; Bonetti et al. 2026 for AGV fleets, adding nested acyclic deadlocks), and
+Bonetti et al. read the edges from the traffic planner's internal state, not from telemetry. The Petri-net AGV
+papers found (Wu & Zhou 2005; Fanti et al. 2015) are, by their titles, about avoiding deadlock by design rather than
+detecting it in logs. Learned detectors appear for
 single robots, swarms and predictive maintenance: outliers on groups of correlated sensors (Khalastchi et al.
 2015), immune-inspired classifiers over neighbouring robots' behaviour (Tarapore et al. 2017), and LSTM and GRU
 power forecasting on one real AGV (Benecki et al. 2024). Their ground truth is almost always faults the authors
@@ -46,15 +47,16 @@ captured events n by n\*, the most the same area could have captured (Hunt 2016 
 2018). The usual baselines are kernel density (best of five methods in Chainey et al.), the prospective hotspot map
 of Bowers, Johnson & Pease 2004, crime analysts' daily maps in a field trial (Mohler et al. 2015), and random cells
 drawn only from cells that ever had an event (Adepeju, Rosser & Cheng 2016). Our score, a sum of 2^(-age /
-half-life) per cell (`fleet/fleet_analyser/hotspot.py:148-163`), is the ETAS intensity λ = μ + Σ θω e^(-ω(t - tᵢ)) of
-Mohler et al. 2015 with the background rate μ = 0 and the decay fixed, which is the prospective-hotspot family that
+half-life) per cell (`fleet/fleet_analyser/hotspot.py:148-163`), is the per-box ETAS intensity λ = μ + Σ θω e^(-ω(t - tᵢ))
+of Mohler et al. 2015 with the background rate μ = 0 and the decay fixed, i.e. the prospective-hotspot family
+without Bowers' spatial spread, that
 Mohler et al. 2011 found loses to ETAS because it ignores "the background rate of crime". With our defaults (1 h
 window, 1 h half-life) the weights only fall from 1 to 0.5, so the map is close to a plain one-hour count. Mapping:
 our recall@K is their hit rate counted in cells against hidden truth instead of next-period events, and precision@K
 divided by our chance rate (positives / 380) equals recall@K divided by K/380, which is PAI's form in cells, so at
 fixed K and positives precision and recall are one result, not two. Our rank grade (is the cell in the top K of the
 map recomputed at the horizon end, `fleet/fleet_analyser/forecast_grade.py` docstring) is a cell-count cousin of
-PEI, and our chance line draws from all 380 candidate cells, the lenient null that Adepeju et al. reject as
+PEI. Our chance line draws from all 380 candidate cells, the lenient null that Adepeju et al. reject as
 "unfairly simplistic".
 
 ## 3. Grading location forecasts on the next window against chance, and persistence of flagged places
@@ -65,7 +67,7 @@ threat or Gilbert score subtracts the hits expected by chance, (hits+misses)(hit
 verification pages) and earthquake testing (Molchan diagrams, where a random alarm scores an area skill of 0.5,
 Zechar & Jordan 2008). Hits divided by chance hits equals precision divided by the base rate, which is our lift when
 "total" is the lesson's candidate pool, so the ETS chance term is the closest analogue found. Persistence of flagged
-places is measured too: Hunt 2016 (via NIJ) defines stability as the share of grid cells hot in two adjacent
+places is measured too: Hunt 2016 (OJP abstract) defines stability as the share of grid cells hot in two adjacent
 intervals, Adepeju et al. 2016 report the share of hotspots that are new each day (DVI), and Platt et al. 2018 find a
 relative risk of 1.77 that a hotspot household is in a hotspot again the next season. What was not found in the
 queries listed is our chance rate computed per lesson over that lesson's own zone-and-window pool and then averaged,
@@ -104,7 +106,8 @@ fails with delay probability pᵢ" and the robot stays in its vertex, but there 
 to the planner, while ours belongs to the cell and is unknown. The knowledge gap is that of MAPF under Obstacle
 Uncertainty (Shofer, Shani & Stern 2023), where potential obstacles "can only be sensed once the agent reaches the
 proximity", and of MAPF in inaccurate maps (Malka, Shani & Stern 2024), but in both a cell is simply blocked or
-open. The Canadian Traveller problem (Papadimitriou & Yannakakis 1991) reveals blocked edges on arrival, and ours is
+open. The Canadian Traveller problem (Papadimitriou & Yannakakis 1991; description from the record and a search snippet,
+paper not read) reveals blocked edges on arrival, and ours is
 the stochastic, partly passable case where one failed try does not settle the cell. Execution-robustness work absorbs
 delays without locating them (k-robust plans, Atzmon et al. 2020; action dependency graphs, Hönig et al. 2019). Only
 `floor` is planner-blind in our setup, since active blocked cells and outages are passed to the planner as obstacles
@@ -124,21 +127,30 @@ plus a fitted decay, scored with the same metrics on held-out seeds. Two cheaper
 chance line only from cells that ever had a stall (Adepeju et al. 2016), and add a persistence forecast as the
 reference, because verification practice treats persistence, not chance, as the bar to beat. Grading location
 forecasts on the next window against chance is standard in crime mapping (PAI), meteorology (ETS) and earthquake
-testing (Molchan), and our lift has the form of the ETS chance term, so "graded forecasts" is not a novelty claim we
-can make. What was not found, in the queries listed, is our per-lesson pool chance rate and a persistence grade on
-generated lessons, which is a variation on a standard idea, not a new kind of score. Time to detect should be
+testing (Molchan), our lift has the form of the ETS chance term, and our hot_cell lesson_persist is Hunt's (2016)
+hotspot stability measure, so neither "graded forecasts" nor "persistence-graded lessons" is a novelty claim we can
+make. Only the per-lesson, pool-conditioned chance rate was not found in the queries listed, a variation on a
+standard idea, not a new kind of score. Time to detect should be
 reported as an AMOC curve: delay against false alarms per hour, swept over K or a cost threshold, with misses
 counted and false alarms measured on an undisturbed run that does not exist yet. The floor setting has a name and a
 precedent, the freespace assumption plus MAPF delay probabilities indexed by cell and unknown, and the closest
 analyser-to-planner loop is the MAGIC preprint. This check is limited by its search: no Semantic Scholar or Google
 Scholar query ran.
 
+## Contradiction sweep (2026-10-18)
+
+README, `docs/SCOPE.md`, `docs/DEMO.md`, `docs/overview` and `docs/replay`
+were grepped for novelty wording. One line is affected: `docs/overview/index.html:152` says "trend tools exist, this
+one grades its own calls". It is scoped to products (fleet managers, trend tools), which COMPETITION.md covers, and
+this page does not contradict it for vendors. Read as a general claim, though, it is not new in the academic
+literature (section 3). Whether to reword it is the operator's call; it was not edited here.
+
 ## Papers
 
-Ranks follow outward-claim-discipline: A = the paper's own text, read this session; A- = abstract or publisher record
-read; M = metadata only (authors, year and venue confirmed, content not read). All rows verified@2026-10-18.
+Read depth (not the skill's source ranks): A = the paper's own text, read this session; A- = abstract, publisher
+record or a hosted summary page read; M = metadata only (authors, year and venue confirmed, content not read). All rows verified@2026-10-18.
 
-| Q | Authors, year | Title (short) | Venue | URL | Read | Used for |
+| Q | Authors, year | Title (short) | Venue | URL | Read depth | Used for |
 |---|---|---|---|---|---|---|
 | 1 | Bonetti, Proia, Guidetti, Sabattini 2026 | Deadlock detection and resolution for AGV fleets | Int. J. Robotics Research | https://doi.org/10.1177/02783649261470035 (arXiv 2609.10400) | A | graph cycle detection, self-scored |
 | 1 | Bonetti, Guidetti, Sabattini 2024 | Efficient deadlock detection and resolution for AGV fleet management | European Robotics Forum 2024 (Springer SPAR) | https://doi.org/10.1007/978-3-031-76428-8_50 | M | precursor |
@@ -162,13 +174,14 @@ read; M = metadata only (authors, year and venue confirmed, content not read). A
 | 2 | Mohler, Porter, Carter, LaFree 2020 | Learning to rank spatio-temporal event hotspots | Crime Science 9 | https://doi.org/10.1186/s40163-020-00112-x | A- | PAI = area-normalised recall@k |
 | 3 | Hu, Wang, Guin, Zhu 2018 | Spatio-temporal KDE for crime hotspots | Applied Geography 99 | https://doi.org/10.1016/j.apgeog.2018.08.001 | A (arXiv 2006.00272) | Time 1 / Time 2 protocol |
 | 3 | Joshi, D'Ath, Curtis-Ham, Searle 2020 | Crime forecast accuracy measures | arXiv preprint | https://arxiv.org/abs/2006.08008 | A | stability indices, chance test |
+| 2,3 | Hunt (Joel M.) 2016 | Do crime hot spots move? MAUP, MTUP and crime hot spot stability | dissertation, NCJ 250376 (OJP library abstract) | https://www.ojp.gov/library/publications/do-crime-hot-spots-move-exploring-effects-modifiable-areal-unit-problem-and | A- | stability = share of cells hot in two adjacent intervals, PEI |
 | 3 | Levine 2008 | The "hottest" part of a hotspot | Security Journal 21 | https://doi.org/10.1057/sj.2008.5 | M | RRI (formula not obtained) |
 | 3 | JWGFVR (WMO joint working group) | Forecast verification: methods (web resource) | web | https://jwgfvr.github.io/forecastverification | A (summarised fetch) | ETS chance term, persistence reference |
 | 3 | Zechar, Jordan 2008 | Testing alarm-based earthquake predictions | Geophysical J. International 172 | https://doi.org/10.1111/j.1365-246X.2007.03676.x | A- | Molchan, random = 0.5 |
 | 3 | Holliday, Nanjo, Tiampo, Rundle, Turcotte 2005 | Earthquake forecasting and its verification | Nonlinear Processes in Geophysics 12 | https://arxiv.org/abs/cond-mat/0508476 | A- | RI = persistence reference |
 | 3 | Platt, Obala, MacIntyre, Otsyula, O'Meara 2018 | Malaria hotspot stability | Scientific Reports 8 | https://doi.org/10.1038/s41598-017-13801-6 | A- | recurrence ratio |
 | 3 | Weisburd, Bushway, Lum, Yang 2004 | Trajectories of crime at places | Criminology 42 | https://doi.org/10.1111/j.1745-9125.2004.tb00521.x | M | place stability |
-| 3 | Roberts, Lean 2008 | Fractions skill score | Monthly Weather Review 136 | https://doi.org/10.1175/2007MWR2123.1 | M | spatial verification |
+| 3 | Roberts, Lean 2008 | Scale-selective verification of rainfall accumulations from high-resolution forecasts of convective events | Monthly Weather Review 136 | https://doi.org/10.1175/2007MWR2123.1 | M | spatial verification |
 | 3 | Gilleland, Ahijevych, Brown, Casati, Ebert 2009 | Spatial forecast verification intercomparison | Weather and Forecasting 24 | https://doi.org/10.1175/2009WAF2222269.1 | M | spatial verification |
 | 4 | Page 1954 | Continuous inspection schemes | Biometrika 41 | https://doi.org/10.1093/biomet/41.1-2.100 | M | CUSUM |
 | 4 | Lorden 1971 | Procedures for reacting to a change in distribution | Ann. Math. Statist. 42 | https://doi.org/10.1214/aoms/1177693055 | A- | change detection |
@@ -197,9 +210,12 @@ read; M = metadata only (authors, year and venue confirmed, content not read). A
 | 5 | Krnjaic et al. 2024 | Scalable MARL for warehouse logistics with robotic and human co-workers (TA-RWARE) | IROS 2024 per the arXiv comment | https://arxiv.org/abs/2212.11498 | A- | our simulator |
 
 Not verified and kept out of the text: the RRI formula (Levine 2008), the difference between PEI and PEI\*, the
-contents of Hunt 2016 (a dissertation, known only through NIJ), Lorden's worst-case delay formula, and the
+full text of Hunt 2016 (only the OJP abstract was read), Lorden's worst-case delay formula, and the
 Fawcett & Provost AMOC wording in their own paper (taken second-hand from Jiang et al. 2009). The Weisburd, Roberts &
-Lean, Gilleland, Page, Papadimitriou and RHCR rows are metadata only and back no content claim above. The DOIs of
+Lean, Gilleland, Page and RHCR rows are metadata only and back no content claim above. Three M rows do back a
+claim, and the text marks each one: Cho et al. 1995 and Wu & Zhou 2005 / Fanti et al. 2015 back statements made from
+their titles, and Papadimitriou & Yannakakis 1991 backs the Canadian Traveller description, which comes from the
+bibliography record and a search snippet. The DOIs of
 the Tarapore, Roberts & Lean, Gilleland, Papadimitriou, Stentz, Koenig & Smirnov and Malka rows were resolved on
 Crossref in the main session after the passes.
 
