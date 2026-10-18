@@ -48,7 +48,7 @@ def grade_truth(store, run, truth):
     n = 0
     for d in fcs:
         zone, cell = split_subject(d["subject"])
-        s0, s1 = truth_mod.forecast_steps(truth, d["decided_at"], lessons.claim_of(d)["horizon_s"])
+        s0, s1 = truth_mod.forecast_steps(truth, d["decided_at"], lessons.claim_of(d))
         verdict = "hit" if truth_mod.truth_positive(truth, zone, cell, s0, s1) else "false_alarm"
         n += write_once(store, dict(id=d["id"], run=run, grade_source="truth", outcome=None, expected=None,
                                     error=None, verdict=verdict, horizon_s=None, graded_at=None,

@@ -172,8 +172,9 @@ class TestControlParsing(ReaderCase):
 
 
 class TestTruthAndLedger(unittest.TestCase):
-    RUN = dict(env_id="e", disturb_tag="none", disturb={}, steps=5, seed_base=0)
-    RES = {0: dict(seed=0, floor_cells={}, floor_skips=[0] * 5, injections=[dict(step=1, kind="floor", payload={"1,1": 1.0})],
+    RUN = dict(env_id="e", disturb_tag="none", disturb={}, steps=5, seed_base=0, t0=em.DEFAULT_T0)
+    RES = {0: dict(seed=0, floor_cells={}, floor_skips=[0] * 5, blocked_windows=[], outage_windows=[], frozen_windows=[],
+                   burst=None, injections=[dict(step=1, kind="floor", payload={"1,1": 1.0})],
                    malformed_commands=2, unapplied_commands=1)}
 
     def truth(self, run):
@@ -187,7 +188,7 @@ class TestTruthAndLedger(unittest.TestCase):
         self.assertEqual((demo["malformed_commands"], demo["unapplied_commands"]), (2, 1))
         plain = self.truth(self.RUN)
         self.assertEqual(list(plain["zones"]["0"]),
-                         ["seed", "floor_cells", "floor_skips", "floor_skips_total"])  # exactly master's keys
+                         ["seed", "floor_cells", "floor_skips", "floor_skips_total"] + list(em.WINDOW_KEYS))  # S10A keys
 
     def test_ledger_keys_and_live_injections(self):
         cfg = dict(seed_base=0)
@@ -350,7 +351,7 @@ class TestCli(unittest.TestCase):
             self.assertNotIn("demo_mode", doc["config"])
             self.assertNotIn("control_file", doc["config"])
             tz = json.loads((d / "plain" / "truth.json").read_text())["zones"]["0"]
-            self.assertEqual(list(tz), ["seed", "floor_cells", "floor_skips", "floor_skips_total"])
+            self.assertEqual(list(tz), ["seed", "floor_cells", "floor_skips", "floor_skips_total"] + list(em.WINDOW_KEYS))
 
 
 if __name__ == "__main__":

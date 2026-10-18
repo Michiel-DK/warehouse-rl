@@ -172,7 +172,7 @@ def score_run(truth, costmap, stalls, grades, ks=KS, lesson_decisions=()):
     for s in stalls:
         if s["in_episode"] is not None:
             in_episode[s["in_episode"]] = in_episode.get(s["in_episode"], 0) + 1
-    return dict(zones=zones, mean=mean, truth_kinds=truth_kinds(truth, costmap, ks), grading_counts=grading, rank_grading=rank_grading,
+    return dict(zones=zones, mean=mean, grading_counts=grading, rank_grading=rank_grading,
                 stall_in_episode=dict(total_stalls=len(stalls), in_episode=sum(in_episode.values()),
                                       by_cause=dict(sorted(in_episode.items()))),
                 lesson_grading=lesson_grading)
@@ -327,6 +327,7 @@ def main(argv=None):
                             exclude_occupied=costmap["exclude_occupied"]),
                platform=dict(platform=platform.platform(), python=sys.version.split()[0]))
     res["lesson_persist_chance"] = chance
+    res["truth_kinds"] = truth_kinds(truth, costmap)
     out = Path(a.out) if a.out else REPO / "results" / "fleet" / f"hotspot_{a.tag}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(res, indent=1))

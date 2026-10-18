@@ -1145,8 +1145,11 @@ class TestAnalystIsolation(unittest.TestCase):
                   # truth_hit / floor_skip_steps_mean by name; a viewer, nothing in the analyser imports it
                   # time_to_detect.py (S8P): an evaluation script like hotspot_score.py; reads truth.json on purpose;
                   # nothing in the analyser imports it
+                  # truth.py (S10A): the one truth_positive rule, read by grade.py and hotspot_score.py only; it reads the
+                  # window keys of truth.json on purpose (the import fence is test_fleet_truth_v2.TestImportFence)
                   if p.name not in ("emit.py", "grade.py", "hotspot_score.py", "__init__.py", "score.py", "report.py",
-                                    "alert.py", "replay_export.py", "overview_build.py", "time_to_detect.py")]
+                                    "alert.py", "replay_export.py", "overview_build.py", "time_to_detect.py",
+                                    "truth.py")]
         return files
 
     def test_no_analyser_module_imports_replay_export(self):

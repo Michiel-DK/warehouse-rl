@@ -126,7 +126,8 @@ class TestSidecar(unittest.TestCase):
         # inject: write (y, x) keys, drop a step from floor_skips, or write floor_cells without floor configured
         with tempfile.TemporaryDirectory() as d:
             ledger, truth = emit_cli(d, json.dumps(FLOOR))
-            self.assertEqual(truth["schema_version"], "fleet-truth/1")
+            self.assertEqual(truth["schema_version"], "fleet-truth/2")
+            self.assertEqual((truth["t0"], truth["step_seconds"]), (em.DEFAULT_T0, 5))  # resolved, never "now"
             self.assertEqual((truth["env_id"], truth["steps"], truth["seed_base"]), (SMALL, 60, 3))
             self.assertEqual(sorted(truth["zones"]), ["0", "1"])
             for z in (0, 1):
@@ -140,6 +141,8 @@ class TestSidecar(unittest.TestCase):
                 self.assertEqual(len(zt["floor_skips"]), 60)
                 self.assertEqual(sum(zt["floor_skips"]), sum(int(s.sum()) for s in seen["skipped"]))
                 self.assertEqual(zt["floor_skips_total"], sum(zt["floor_skips"]))
+                self.assertEqual((zt["blocked_windows"], zt["outage_windows"], zt["frozen_windows"], zt["burst"]),
+                                 ([], [], [], None))  # none of these kinds configured
             self.assertGreater(sum(truth["zones"]["0"]["floor_skips"]) + sum(truth["zones"]["1"]["floor_skips"]), 0)
 
     def test_without_floor_the_map_is_empty(self):

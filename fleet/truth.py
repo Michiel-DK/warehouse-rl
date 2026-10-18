@@ -34,12 +34,13 @@ def step_of(truth, ts):
     return (ts - epoch_of(truth["t0"])) / truth["step_seconds"]
 
 
-def forecast_steps(truth, decided_at, horizon_s):
-    """(step_from, step_to) of a forecast issued at epoch decided_at claiming horizon_s; (None, None) for v1."""
+def forecast_steps(truth, decided_at, claim):
+    """(step_from, step_to) of a forecast issued at epoch decided_at whose claim holds horizon_s; (None, None) for v1
+    (the claim is not read)."""
     if is_v1(truth):
         return None, None
     s = step_of(truth, decided_at)
-    return s, s + horizon_s / truth["step_seconds"]
+    return s, s + claim["horizon_s"] / truth["step_seconds"]
 
 
 def lesson_steps(truth, window_start, window_end):
