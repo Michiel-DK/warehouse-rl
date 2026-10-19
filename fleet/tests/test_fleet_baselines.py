@@ -349,6 +349,35 @@ class TestHotspotScoreFlag(unittest.TestCase):
         self.assertEqual(with_flag["baselines"]["params"]["horizon_s"], H)
         self.assertEqual(with_flag["baselines"]["n_units_outcome"], 1)
 
+    def test_truth_window_is_t_to_t_plus_h_through_main(self):
+        # inject: the step window collapsed (s1 = s0), shifted, or the positives not drawn from truth_positive over the
+        # candidates. v2 truth, step_seconds 1 and t0 at epoch 0, so step = epoch: the window is [T, T + H].
+        # 1,1 floor (time-free) and 3,3 blocked strictly inside (T, T + H] are positive; 4,4 blocked ended before T,
+        # 5,5 outage starts after T + H, 2,2 has nothing. Map top-20 = the 3 flagged cells 1,1 2,2 3,3.
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = self.make(tmp)
+            truth = json.loads((run_dir / "truth.json").read_text())
+            truth.update(schema_version="fleet-truth/2", t0="1970-01-01T00:00:00Z", step_seconds=1)
+            truth["zones"]["0"].update(
+                floor_cells={"1,1": 0.5},
+                blocked_windows=[dict(cell="3,3", start_step=T + 300, end_step=T + 400),
+                                 dict(cell="4,4", start_step=T - 100, end_step=T - 10)],
+                outage_windows=[dict(cell="5,5", start_step=T + H + 1, end_step=T + H + 50)], frozen_windows=[])
+            (run_dir / "truth.json").write_text(json.dumps(truth))
+            b = self.run_main(run_dir, tmp, "flag.json", "--baselines")["baselines"]
+        m = b["k"]["20"]["map"]
+        self.assertEqual(b["n_units_truth"], 1)
+        self.assertEqual(m["hits"]["truth"], 2)
+        self.assertEqual(m["hits"]["positives"], 2)
+        self.assertAlmostEqual(m["truth_precision"], 2 / 20)
+        self.assertAlmostEqual(m["truth_recall"], 1.0)
+        self.assertAlmostEqual(m["pai"], (2 / 2) / (20 / 10))
+        self.assertAlmostEqual(b["chance"]["all"], 2 / 10)
+        self.assertAlmostEqual(b["chance"]["ever"], 2 / 3)  # ever pool = the 3 stalled cells, 2 of them positive
+        self.assertAlmostEqual(m["lift_all"], (2 / 20) / (2 / 10))
+        self.assertAlmostEqual(m["lift_ever"], (2 / 20) / (2 / 3))
+        self.assertEqual(b["k"]["20"]["persistence"]["hits"]["truth"], 2)
+
     def test_baselines_module_does_not_import_or_read_truth(self):
         # inject: baselines.py imports truth or opens truth.json
         src = (ROOT / "fleet" / "baselines.py").read_text()
