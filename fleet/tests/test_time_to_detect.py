@@ -645,7 +645,7 @@ def refrow(zone, cell, step, rank):
 
 
 # measured costmap rows (run WRUN), by publish step 20 / 40 / 60
-WCM = [cmrow("0", "1,1", 20, 0.9), cmrow("0", "9,9", 20, 0.5), cmrow("1", "3,3", 20, 0.3),
+WCM = [cmrow("0", "1,1", 20, 0.9), cmrow("0", "9,9", 20, 0.5),
        cmrow("0", "1,1", 40, 0.7), cmrow("1", "3,3", 40, 0.9), cmrow("0", "7,7", 40, 0.25),
        cmrow("0", "1,1", 60, 0.8), cmrow("1", "3,3", 60, 0.1),
        cmrow("0", "1,1", 30, 0.99)]  # step 30 is not a publish time: ignored
@@ -876,7 +876,9 @@ class TestAmoc(unittest.TestCase):
 
     def test_stale_phase_a_costmap_row_is_not_counted(self):
         # inject: drop the strip_costmap call in rerun_on_copy
-        stale = cmrow("0", "1,1", 40, 0.99)  # phase A's row: would detect Z0 1,1 at c=0.95 if it survived into the copy
+        # phase A's row at a key the rerun does not produce (an upsert would overwrite a shared key): it would detect the
+        # Z1 3,3 window at step 20 for c=0.95 if it survived into the copy
+        stale = cmrow("1", "3,3", 20, 0.99)
         with tempfile.TemporaryDirectory() as t:
             d, ref, fakes, code, text, doc, _ = self.amoc_run(t, sweep=("--sweep-cost", "0.95"), stale_cm=[stale])
             self.assertEqual(doc["amoc"]["cost"][0]["miss_share"], 1.0)
