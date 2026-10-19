@@ -926,11 +926,12 @@ shown one yet.
 
 ### Sprint 10: the analyser on other disturbances (2026-10-18)
 
-Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) to (m). Reports are in
+Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) to (n). Reports are in
 laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md`,
 `wr-dev-s10-readme.md`, `wr-lane-s10c-blind-blockage.md`, `wr-lane-s10d-persistence-baseline.md`,
 `wr-lane-s10d-pass2.md`, `wr-lane-s10e-amoc.md`, `wr-dev-s10c-readme.md`, `wr-lane-s10f-false-alarm-floor.md`,
-`wr-lane-s10g-frozen-truth-cells.md`, `wr-lane-s10h-persistence-on-pages.md` and `wr-dev-s10f-readme.md`.
+`wr-lane-s10g-frozen-truth-cells.md`, `wr-lane-s10h-persistence-on-pages.md`, `wr-dev-s10f-readme.md`,
+`wr-lane-s10i-fast-detector.md` and `wr-dev-s10i-readme.md`.
 
 - [x] S10A truth v2 (PR #36, 46e9872). `fleet-truth/2` blocked/outage/frozen windows, `fleet/truth.py`, and
       `truth_kinds` in `hotspot_score.py`. The stall-share calibration band was unreachable (baseline 0.982), so the
@@ -966,6 +967,13 @@ laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md
       from 15.46 to 0.02 (baseline) and 0.06 (persistence), max 1. Blind: 16 truth hits of 1,363 became 1 of 5 and
       1 of 9, and 1 of 50 blocked cells was hit. Breakdown re-emit bit-identical: 19 of 89 flagged cells are frozen
       cells (283 in all), and 25 of 488 forecasts are truth hits (was 0).
+- [x] S10I fast detector (PR #45, 9417ea2). `fleet/fastmap.py`: a per-cell CUSUM published every 60 s, counting a
+      stall in every bin it overlaps (`--count active`), plus `time_to_detect.py --store-suffix`.
+- [x] Run (queue item `wr-s10i-fast-run`, exit 0 on 2026-10-19; no PR; results `results/fleet/amoc_fast.json` and
+      `amoc_shortmap.json`, README (n)). On the blind run at the defaults (k 1, h 3) the CUSUM detects 2 of 50
+      windows at 0.000 false alarms per zone-hour on the reference. The maps detect 3 to 6 of 50 at 59.2 to 451.9,
+      and no map row reaches 0, so the two are never compared at the same false-alarm rate. The short-memory map at
+      60 s detects the same 6 of 50 as the decayed map at K 20, at 451.9 false alarms against 177.8.
 - Open:
   - lesson_persist: s10c-blind and s10-none ran lessons with `--window-h 0.2` and graded 5 and 6 rows (2 and 3
     hot_cell lessons in the `baselines` block), too few to read. Of the four 2026-10-18 presets, only the
@@ -977,6 +985,9 @@ laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md
     blockages last 60-240 steps (300-1,200 s), not the "60-240 s" of the S10F lane report.
   - Which stalls put the 19 frozen cells on the breakdown map, given that `counted()` drops faulted-episode stalls
     and occupied-cell stalls, was not examined. There is no chance line for frozen cells.
+  - S10I: the in-sample (k, h) pairs in the lane report detect more windows, but they need a held-out run. The map
+    with the active counting rule (S10I's finding: the map's end-time count cannot see a blockage while it is
+    open) was not measured.
 
 ## Compute and timing
 

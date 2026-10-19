@@ -25,6 +25,9 @@ Reads:
   results/fleet/hotspot_{s10-none,s10c-blind,closed-loop-sticky}-gate-{baseline,persistence}.json, with the ungated
   results/fleet/hotspot_{s10-none,s10c-blind}.json -> (l) the false-alarm gate (S10F, `gate_grading`)
   results/fleet/hotspot_s10-breakdown.json     -> (m) frozen truth cells on the breakdown run (S10G, `truth_kinds.frozen`)
+  results/fleet/amoc_{blind,shortmap,fast}.json -> (n) fast detector (S10I per-cell CUSUM) vs the decayed map, with the
+                                                  short-memory map published at the CUSUM's 60 s as cadence control
+                                                  (CUSUM parameters from fleet/data/s10c-blind/fastmap.json if present)
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -55,6 +58,9 @@ BLIND, KNOWN = "results/fleet/hotspot_s10c-blind.json", "results/fleet/hotspot_s
 TTD_BLIND = "results/fleet/time_to_detect_blind.json"
 NONE = "results/fleet/hotspot_s10-none.json"
 AMOC = "results/fleet/amoc_blind.json"
+AMOC_ARMS = [("decayed map (S10E)", AMOC), ("short-memory map", "results/fleet/amoc_shortmap.json"),
+             ("CUSUM (S10I)", "results/fleet/amoc_fast.json")]
+FASTMAP_PARAMS = "fleet/data/s10c-blind/fastmap.json"
 BASELINES = [f"results/fleet/baselines_{t}.json" for t in ("s8b-medium-80-p03-07", "closed-loop-sticky", "s8e-long-w0.5",
                                                            "s10c-blind", "s10-none")]
 S8B_COMMITTED = "results/fleet/hotspot_s8b-medium-80-p03-07.json"
@@ -708,22 +714,27 @@ def map_vs_persistence():
           + note + " Sources: " + ", ".join(f"`{r}`" for r, _ in docs) + " (`baselines`, `rank_grading`, `config`).")
 
 
+def _amoc_row(dial, r, fa_fmt=".1f"):
+    q = "none" if r["median_delay_s"] is None else f"{r['median_delay_s']:g} ({r['p25']:g}-{r['p75']:g})"
+    return (f"| {dial} | {r['n_detected']} / {r['n_windows']} | {r['miss_share']:.2f} | {q} "
+            f"| {r['stale_at_end_share']:.2f} | {r['fa_per_hour_reference']:{fa_fmt}} "
+            f"| {r['fa_per_hour_measured_outside_windows']:{fa_fmt}} |")
+
+
+def _amoc_head(m):
+    return ("| detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share "
+            f"| false alarms per zone-hour, {m['reference_run']} | false alarms per zone-hour, {m['run']} outside "
+            "windows |")
+
+
 def amoc_table():
     a = load(AMOC)
     if a is None:
         print(f"AMOC: `{AMOC}` MISSING")
         return
     m, am = a["meta"], a["amoc"]
-
-    def row(dial, r):
-        q = "none" if r["median_delay_s"] is None else f"{r['median_delay_s']:g} ({r['p25']:g}-{r['p75']:g})"
-        return (f"| {dial} | {r['n_detected']} / {r['n_windows']} | {r['miss_share']:.2f} | {q} "
-                f"| {r['stale_at_end_share']:.2f} | {r['fa_per_hour_reference']:.1f} "
-                f"| {r['fa_per_hour_measured_outside_windows']:.1f} |")
-
-    head = ("| detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share "
-            f"| false alarms per zone-hour, {m['reference_run']} | false alarms per zone-hour, {m['run']} outside "
-            "windows |")
+    row = _amoc_row
+    head = _amoc_head(m)
     print("By K (flag = rank <= K in the zone's map at a publish):\n")
     print("| K (per zone) " + head)
     print("|---|---|---|---|---|---|---|")
@@ -747,6 +758,85 @@ def amoc_table():
           "measured run only flags matching no truth window at that publish. Rows with equal numbers are saturated: "
           "the dial already flags every cell with a nonzero cost. Definitions (verbatim from the JSON): "
           + "; ".join(f"{k}: \"{v}\"" for k, v in m["amoc_definitions"].items()) + f". Source: `{AMOC}` (`amoc`).")
+
+
+def _dominates(a, b):
+    """a is at least as good as b on both axes (detected up, reference false alarms down) and better on one."""
+    da, db = a["n_detected"], b["n_detected"]
+    fa, fb = a["fa_per_hour_reference"], b["fa_per_hour_reference"]
+    return da >= db and fa <= fb and (da > db or fa < fb)
+
+
+def fast_vs_map():
+    arms = _load_all([rel for _, rel in AMOC_ARMS], "Fast vs map")
+    if len(arms) != len(AMOC_ARMS):
+        return
+    docs = [(name, rel, d) for (name, _), (rel, d) in zip(AMOC_ARMS, arms)]
+    m0 = docs[0][2]["meta"]
+    for _, rel, d in docs:
+        m = d["meta"]
+        for f in ("phase_a_dir", "reference_dir", "run", "reference_run", "truth_kind", "n_windows", "steps", "zones",
+                  "disturb", "sim_hours", "sim_hours_reference"):
+            assert m[f] == m0[f], (rel, f)
+        for f in ("store_hash", "reference_store_hash"):
+            assert m[f + "_before"] == m[f + "_after"] == m0[f + "_before"], (rel, f)
+    ks = sorted(set.intersection(*({r["K"] for r in d["amoc"]["k"]} for _, _, d in docs)))
+    cusum = {r["K"]: r for r in docs[-1][2]["amoc"]["k"]}
+    keys = ("n_detected", "median_delay_s", "fa_per_hour_reference", "fa_per_hour_measured_outside_windows")
+    assert len({tuple(r[f] for f in keys) for r in cusum.values()}) == 1, "CUSUM rows differ by K"
+    print("By K (map: flag = rank <= K in the zone's map at a publish; CUSUM: flag = a flagged cell at a publish, K "
+          "only caps the rank):\n")
+    print("| detector | publish every, s (publishes) | K (per zone) " + _amoc_head(m0))
+    print("|---|---|---|---|---|---|---|---|---|")
+    for name, _, d in docs:
+        m = d["meta"]
+        by_k = {r["K"]: r for r in d["amoc"]["k"]}
+        fmt = ".3f" if max(r["fa_per_hour_reference"] for r in by_k.values()) < 1 else ".1f"
+        for k in ks:
+            print(f"| {name} | {m['publish_every_s']} ({m['n_publishes']}) " + _amoc_row(k, by_k[k], fmt))
+    print()
+    # dominance on (detected, reference FA/h) over every row on disk: the maps' K rows and the decayed map's cost rows
+    rows = {name: [(f"K {r['K']}", r) for r in d["amoc"]["k"]] + [(f"cost >= {r['cost']:g}", r)
+                                                                   for r in d["amoc"].get("cost", [])]
+            for name, _, d in docs}
+    cname = docs[-1][0]
+    c_row = cusum[ks[0]]
+    over = {name: [lab for lab, r in rs if _dominates(c_row, r)] for name, rs in rows.items() if name != cname}
+    under = {name: [lab for lab, r in rs if _dominates(r, c_row)] for name, rs in rows.items() if name != cname}
+    same_fa = {name: [lab for lab, r in rs if r["fa_per_hour_reference"] == c_row["fa_per_hour_reference"]]
+               for name, rs in rows.items() if name != cname}
+    assert not any(under.values()), under
+    map_min_fa = min(r["fa_per_hour_reference"] for name, rs in rows.items() if name != cname for _, r in rs)
+    best_map = max(r["n_detected"] for name, rs in rows.items() if name != cname for _, r in rs)
+    print("Dominance over every row on disk (detected up, false alarms per zone-hour on the reference down, one "
+          "strictly): the CUSUM row is dominated by no map row; it dominates "
+          + "; ".join(f"{name}: {', '.join(labs) if labs else 'none'}" for name, labs in over.items())
+          + ". Map rows at the CUSUM's reference false-alarm rate ("
+          f"{c_row['fa_per_hour_reference']:g}): "
+          + ("none" if not any(same_fa.values()) else "; ".join(f"{n}: {', '.join(l)}" for n, l in same_fa.items() if l))
+          + f". Lowest map false-alarm rate on disk {map_min_fa:.1f}; most windows any map row detects {best_map} / "
+          f"{c_row['n_windows']}.\n")
+    pp = REPO / FASTMAP_PARAMS
+    if pp.exists():
+        p = json.loads(pp.read_text())["params"]
+        params = (f"CUSUM parameters (from `{FASTMAP_PARAMS}`, gitignored, not committed): k {p['k']:g}, h {p['h']:g}, "
+                  f"bin {p['bin_s']} s, baseline {p['baseline_bins']} bins, count `{p['count']}`. ")
+    else:
+        params = f"CUSUM parameters: `{FASTMAP_PARAMS}` not on disk. "
+    arms_txt = "; ".join(
+        f"{name}: `{rel}`, " + (f"window {d['meta']['window_hours']:g} h, half-life {d['meta']['half_life_h']:g} h"
+                                if d["meta"].get("store_suffix") != "fast" else "store-fast (prebuilt)")
+        for name, rel, d in docs)
+    pubs = sorted({d["meta"]["publish_every_s"] for _, _, d in docs})
+    assert len(pubs) == 2 and docs[-1][2]["meta"]["publish_every_s"] == docs[1][2]["meta"]["publish_every_s"] == pubs[0]
+    print(f"Same measured run (`{m0['phase_a_dir']}`, {m0['n_windows']} planner-blind blocked windows) and reference "
+          f"(`{m0['reference_dir']}`) for all three, store hashes equal before and after (asserted). Ks shown are the "
+          f"ones all three JSONs share ({', '.join(map(str, ks))}). " + params
+          + "The CUSUM rows are identical at every K (asserted). False alarms are flag-publishes per zone per "
+          f"simulated hour, so they scale with the publish rate: a detector publishing every {pubs[0]} s has "
+          f"{pubs[1] / pubs[0]:g} times as many publishes per hour as one publishing every {pubs[1]} s, and more "
+          "chances to catch a window while it is open. The short-memory map is published at the CUSUM's "
+          f"{pubs[0]} s and is the like-for-like cadence comparison for it. Column definitions are those of (k). Sources: " + arms_txt + " (`amoc`, `meta`).")
 
 
 def _publishes(d):
@@ -894,6 +984,8 @@ def main():
     gate_table()
     print("\n### (m) Frozen truth cells on the breakdown run (S10G)\n")
     frozen_cells()
+    print("\n### (n) Fast detector vs decayed map (S10I, planner-blind blockage)\n")
+    fast_vs_map()
 
 
 if __name__ == "__main__":

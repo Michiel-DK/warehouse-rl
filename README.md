@@ -998,3 +998,47 @@ Frozen cells = per zone, the distinct cells a robot stood on at the start of a f
 - Each gate ran once, at its S10F default parameters (windows 3, sigma 2.0, min excess 2, min count 2). No other setting was run, so (l) shows one point on each gate's trade-off, not the trade-off curve.
 - The baseline gate's warm-up blanks publishes 1-3 (the first 900 s of a 2,500 s stream), so a blockage that ends inside that span cannot be flagged. The blockages last 60-240 steps, i.e. 300-1,200 s (`duration` is in steps, `src/warehouse_rl/disturb.py:109`; median window 132 steps in (g)). The S10F lane report's "60-240 s" read the steps as seconds. The persistence gate blanks only publish 1 and still hits 1 of 50, so warm-up does not explain the recall loss on its own.
 - The numbers are macOS arm64 only.
+
+### Sprint 10, S10I: fast detector against the decayed map (2026-10-19)
+
+S10I (PR #45) added `fleet/fastmap.py`, a per-cell CUSUM. It is published every 60 s and writes the same decision rows as the map. A stall counts in every 60 s bin it overlaps (`--count active`), whereas the map counts a stall at its end. The queue item `wr-s10i-fast-run` (exit 0) ran it at its default parameters on s10c-blind and s10-none. It also re-ran the map with a short memory (window 0.2 h, half-life 0.1 h) published every 60 s, so a map runs on the CUSUM's schedule. Both went through the AMOC scorer of (k). Everything between this paragraph and "Reading the numbers" is the output of section (n) of `.venv/bin/python scripts/sprint8_tables.py`. Only its heading was demoted one level.
+
+#### (n) Fast detector vs decayed map (S10I, planner-blind blockage)
+
+By K (map: flag = rank <= K in the zone's map at a publish; CUSUM: flag = a flagged cell at a publish, K only caps the rank):
+
+| detector | publish every, s (publishes) | K (per zone) | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, s10-none | false alarms per zone-hour, s10c-blind outside windows |
+|---|---|---|---|---|---|---|---|---|
+| decayed map (S10E) | 300 (9) | 5 | 3 / 50 | 0.94 | 475 (285-537.5) | 0.02 | 59.2 | 58.9 |
+| decayed map (S10E) | 300 (9) | 10 | 6 / 50 | 0.88 | 402.5 (277.5-568.75) | 0.04 | 109.0 | 108.3 |
+| decayed map (S10E) | 300 (9) | 20 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 177.8 | 175.1 |
+| decayed map (S10E) | 300 (9) | 40 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 200.3 | 194.7 |
+| short-memory map | 60 (42) | 5 | 6 / 50 | 0.88 | 402.5 (108.75-568.75) | 0.00 | 260.2 | 254.6 |
+| short-memory map | 60 (42) | 10 | 6 / 50 | 0.88 | 402.5 (108.75-568.75) | 0.00 | 427.4 | 402.8 |
+| short-memory map | 60 (42) | 20 | 6 / 50 | 0.88 | 402.5 (108.75-568.75) | 0.00 | 451.9 | 426.2 |
+| short-memory map | 60 (42) | 40 | 6 / 50 | 0.88 | 402.5 (108.75-568.75) | 0.00 | 451.9 | 426.2 |
+| CUSUM (S10I) | 60 (42) | 5 | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
+| CUSUM (S10I) | 60 (42) | 10 | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
+| CUSUM (S10I) | 60 (42) | 20 | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
+| CUSUM (S10I) | 60 (42) | 40 | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
+
+Dominance over every row on disk (detected up, false alarms per zone-hour on the reference down, one strictly): the CUSUM row is dominated by no map row; it dominates decayed map (S10E): cost >= 0.6, cost >= 0.8; short-memory map: none. Map rows at the CUSUM's reference false-alarm rate (0): none. Lowest map false-alarm rate on disk 37.7; most windows any map row detects 6 / 50.
+
+Same measured run (`fleet/data/s10c-blind`, 50 planner-blind blocked windows) and reference (`fleet/data/s10-none`) for all three, store hashes equal before and after (asserted). Ks shown are the ones all three JSONs share (5, 10, 20, 40). CUSUM parameters (from `fleet/data/s10c-blind/fastmap.json`, gitignored, not committed): k 1, h 3, bin 60 s, baseline 30 bins, count `active`. The CUSUM rows are identical at every K (asserted). False alarms are flag-publishes per zone per simulated hour, so they scale with the publish rate: a detector publishing every 60 s has 5 times as many publishes per hour as one publishing every 300 s, and more chances to catch a window while it is open. The short-memory map is published at the CUSUM's 60 s and is the like-for-like cadence comparison for it. Column definitions are those of (k). Sources: decayed map (S10E): `results/fleet/amoc_blind.json`, window 1 h, half-life 1 h; short-memory map: `results/fleet/amoc_shortmap.json`, window 0.2 h, half-life 0.1 h; CUSUM (S10I): `results/fleet/amoc_fast.json`, store-fast (prebuilt) (`amoc`, `meta`).
+
+**Reading the numbers.**
+- **Verdict (n): neither detector catches more windows while open at the same false-alarm rate, because no map row runs at the CUSUM's rate.** On the undisturbed reference, the CUSUM raises 0.000 false alarms per zone-hour and detects 2 of 50 blind windows. No map row on disk gets to 0. The quietest map row is cost >= 0.8 in (k), at 37.7. The maps detect more windows, 3 to 6 of 50, at 59.2 to 451.9 false alarms per zone-hour across K. The CUSUM's rows are the same at every K, because K only caps a rank.
+- **Against the map's cost rows.** The CUSUM is at least as good on both axes as two of the decayed map's cost rows in (k): cost >= 0.6 (2 of 50 at 50.3) and cost >= 0.8 (1 of 50 at 37.7). That is not a detector win, for three reasons:
+  - it rests on 2 windows;
+  - the CUSUM publishes every 60 s against the decayed map's 300 s (42 publishes against 9), so it has more chances to catch an open window;
+  - the S10I lane report shows that the whole detection at the defaults comes from the active counting rule. With the end rule, the same CUSUM flags nothing on s10c-blind.
+
+  No map row dominates the CUSUM, and the CUSUM dominates no row of the short-memory map.
+- **Cadence alone (n).** The short-memory map at 60 s detects the same 6 of 50 as the decayed map at K 20. Its median first detection is 402.5 s against 295 s, at 451.9 false alarms per zone-hour against 177.8. Publishing more often did not catch more windows here, and with the same memory it raises more false flag-publishes per hour.
+- **On the measured run (n).** Outside the windows, the CUSUM raised 0.144 false alarms per zone-hour on s10c-blind. That is one flag, at the stream-end publish. So the CUSUM's false-alarm rate is low on this run, not zero.
+
+**Caveats.**
+- One seed set (0-9), one 500-step shift, one CUSUM parameter pair (k 1, h 3, the defaults; not tuned). No count in (n) has a CI.
+- The S10I lane report lists in-sample (k, h) pairs that detect more windows. They were picked on the same 50 windows they are scored on, no results JSON holds them, and they need a held-out run before they are quoted.
+- The map with the active counting rule was not run. Part of any map-against-CUSUM gap may be the counting rule rather than the detector.
+- The numbers are macOS arm64 only (pyastar2d tie-break).
