@@ -29,6 +29,20 @@ The run name is read from DIR/store/ingest_runs.jsonl (exactly one unique run, e
 selection, the forecast stripping and the costmap rerun. Phase A's costmap used --horizon-s 1245 and the rerun the
 default; rank does not depend on the horizon (costmap.py), so that is moot.
 
+--window-hours / --half-life-h (S10I, blocked|outage only, float > 0): passed through to the costmap rerun cmd (rerun mode
+only); absent, the cmd and the output bytes are unchanged. They make the short-memory map control arm.
+--store-suffix X (S10I, [A-Za-z0-9_-]+): the copy directory is DIR/store-X instead of DIR/store-ttd-<S>, for the measured
+run and the reference. Two modes, decided per directory and recorded in meta.store_mode ({dir: "rerun"|"prebuilt"}, with
+meta.store_suffix; neither key is there without the flag):
+  rerun     DIR/store-X does not exist: the usual copy / strip / rerun / hash-check / select sequence under that name
+            (removed at the end unless --keep-store).
+  prebuilt  DIR/store-X exists (built beforehand by fleet/fastmap.py): no copy, no strip, no rerun, never removed; the
+            hash check of DIR/store/decisions.jsonl is kept; ValueError unless every hotspot_forecast row has
+            claim.detector == "cusum" (a leftover costmap copy is stale, not a detector). Zero rows: the measured run
+            raises ValueError (it measures nothing); a --reference with zero rows is accepted (the CUSUM flags nothing on
+            an undisturbed run: a valid zero-false-alarm reference, fa_per_hour_reference 0).
+            --window-hours, --half-life-h and --sweep-cost are rejected there (fastmap writes no costmap rows).
+
 --sweep-k / --sweep-cost / --reference (S10E, blocked|outage only) add an AMOC view: detection delay against false alarms
 per hour over an alarm dial (K, or a cost threshold), misses counted. Without the three flags the output bytes and the
 stdout are unchanged. The measured run is swept with the unchanged analyse_windows_k: per K on the same forecast rows as
@@ -53,6 +67,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -321,13 +336,47 @@ def strip_costmap(copy, run):
     return dropped
 
 
-def rerun_on_copy(src, every, run_name, floor, rerun, keep_store, with_costmap=False):
+def check_prebuilt_rows(rows, copy, allow_empty=False):
+    """ValueError unless there is at least one row (allow_empty: the undisturbed reference may legitimately hold none, a
+    detector with no false flag) and every row's claim has detector == 'cusum'."""
+    if not rows and not allow_empty:
+        raise ValueError(f"prebuilt store {copy} holds no hotspot_forecast rows of the run")
+    for r in rows:
+        claim = json.loads(r["claim"]) if isinstance(r["claim"], str) else r["claim"]
+        if claim.get("detector") != "cusum":
+            raise ValueError(f"prebuilt store {copy}: forecast {r.get('subject')} at {r.get('decided_at')} has "
+                             f"detector {claim.get('detector')!r}, not 'cusum' (a leftover costmap copy is stale)")
+
+
+def rerun_on_copy(src, every, run_name, floor, rerun, keep_store, with_costmap=False, store_suffix=None,
+                  window_hours=None, half_life_h=None, modes=None, allow_empty=False):
     """The one copy / strip / rerun / hash-check / select / remove sequence, for the measured run and the reference.
-    Returns (decision rows of run_name, costmap rows of run_name or None, hash before, hash after)."""
+    Returns (decision rows of run_name, costmap rows of run_name or None, hash before, hash after).
+    store_suffix: copy dir DIR/store-<suffix>; when it already exists the prebuilt mode (module docstring) reads it as it
+    is. `modes`, when given, receives {str(src): "rerun"|"prebuilt"} when a suffix is used."""
     src = Path(src)
     orig = src / "store" / "decisions.jsonl"
     hash_before = sha256_file(orig)
-    copy = src / f"store-ttd-{every}"
+    copy = src / (f"store-{store_suffix}" if store_suffix else f"store-ttd-{every}")
+    if store_suffix and copy.exists():
+        if window_hours is not None or half_life_h is not None or with_costmap:
+            raise ValueError("prebuilt store: --window-hours, --half-life-h and --sweep-cost do not apply "
+                             "(fastmap writes no costmap rows)")
+        if modes is not None:
+            modes[str(src)] = "prebuilt"
+        st = store_mod.open_store(f"jsonl:{copy}", RUN)
+        try:
+            rows = st.select("decisions", {"kind": "hotspot_forecast", "run": run_name})
+        finally:
+            st.close()
+        check_prebuilt_rows(rows, copy, allow_empty)
+        hash_after = sha256_file(orig)
+        if hash_after != hash_before:
+            raise RuntimeError(f"{orig} changed ({hash_before} -> {hash_after}); no output written")
+        return rows, None, hash_before, hash_after
+    if store_suffix and modes is not None:
+        modes[str(src)] = "rerun"
+    extra = {} if window_hours is None and half_life_h is None else dict(window_hours=window_hours, half_life_h=half_life_h)
     if copy.exists():
         shutil.rmtree(copy)
     cm_rows = None
@@ -340,7 +389,7 @@ def rerun_on_copy(src, every, run_name, floor, rerun, keep_store, with_costmap=F
             strip_forecasts(copy, run_name)
             if with_costmap:
                 strip_costmap(copy, run_name)
-            rerun(src, copy, every, run=run_name)
+            rerun(src, copy, every, run=run_name, **extra)
         hash_after = sha256_file(orig)
         if hash_after != hash_before:
             raise RuntimeError(f"{orig} changed during the rerun ({hash_before} -> {hash_after}); no output written")
@@ -357,10 +406,14 @@ def rerun_on_copy(src, every, run_name, floor, rerun, keep_store, with_costmap=F
     return rows, cm_rows, hash_before, hash_after
 
 
-def rerun_costmap(phase_a, copy, every, run=RUN):
+def rerun_costmap(phase_a, copy, every, run=RUN, window_hours=None, half_life_h=None):
     """The one costmap rerun: by subprocess on the store copy. Same pattern as scripts/closed_loop._run."""
     cmd = [sys.executable, str(FLEET / "costmap.py"), "--glob", str(Path(phase_a) / "*.jsonl.gz"), "--run", run,
            "--store", f"jsonl:{copy}", "--publish-every", str(every), "--out", str(Path(copy) / "costmap_ttd.json")]
+    if window_hours is not None:
+        cmd += ["--window-hours", str(window_hours)]
+    if half_life_h is not None:
+        cmd += ["--half-life-h", str(half_life_h)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"command failed ({r.returncode}): {' '.join(cmd)}\n{r.stdout[-2000:]}\n{r.stderr[-4000:]}")
@@ -456,7 +509,8 @@ def first_below_half(entries, label, descending=False):
     return None
 
 
-def amoc_sweep(truth_doc, kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cost, run_name, ref_res):
+def amoc_sweep(truth_doc, kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cost, run_name, ref_res,
+               ref_empty_ok=False):
     """The `amoc` block. Measured entries come from analyse_windows_k on the same rows as by_k (K) or on rank-1 pseudo
     rows built from costmap rows (cost); reference flags are counted on the reference's own rerun rows.
     ref_res = None or (ref truth, ref run, ref publish times, decision rows, costmap rows, hash before, hash after)."""
@@ -465,7 +519,8 @@ def amoc_sweep(truth_doc, kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cos
     ref_fc, ref_zones = None, None
     if ref_res is not None:
         ref_truth, ref_run, ref_pub, ref_rows, ref_cm_rows = ref_res[:5]
-        ref_fc = select_forecasts(ref_rows, ref_pub, ref_run)[0] if sweep_k else None
+        ref_fc = ([] if ref_empty_ok and not ref_rows else select_forecasts(ref_rows, ref_pub, ref_run)[0]) \
+            if sweep_k else None
         ref_zones = zone_order(ref_truth["zones"])
 
     def ref_for(dial_kind, d):
@@ -495,7 +550,7 @@ def amoc_sweep(truth_doc, kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cos
 
 
 def run(phase_a, every, ks, out, keep_store=False, rerun=rerun_costmap, span=read_span, truth_kind="floor",
-        reference=None, sweep_k=None, sweep_cost=None):
+        reference=None, sweep_k=None, sweep_cost=None, store_suffix=None, window_hours=None, half_life_h=None):
     """Full pipeline. Returns the output document; writes `out` only after the original store hash was checked."""
     phase_a = Path(phase_a)
     truth_doc = json.loads((phase_a / "truth.json").read_text())
@@ -516,11 +571,14 @@ def run(phase_a, every, ks, out, keep_store=False, rerun=rerun_costmap, span=rea
             raise ValueError(f"truth t0 {truth_doc['t0']} ({t0_epoch}) differs from the zones' first message: {bad}")
     pub = costmap.publish_times(first_ts, end_ts, every)
     ref = check_reference(reference, truth_doc, pub, span, every) if reference is not None else None
+    modes = {} if store_suffix else None
+    sfx = dict(store_suffix=store_suffix, window_hours=window_hours, half_life_h=half_life_h, modes=modes)
     rows, cm_rows, hash_before, hash_after = rerun_on_copy(phase_a, every, run_name, not windows, rerun, keep_store,
-                                                           with_costmap=bool(sweep_cost))
+                                                           with_costmap=bool(sweep_cost), **sfx)
     ref_res = None
     if ref is not None:
-        ref_res = ref + rerun_on_copy(reference, every, ref[1], False, rerun, keep_store, with_costmap=bool(sweep_cost))
+        ref_res = ref + rerun_on_copy(reference, every, ref[1], False, rerun, keep_store, with_costmap=bool(sweep_cost),
+                                         allow_empty=True, **sfx)
     t0z = {z: t0[z] for z in sorted(t0, key=lambda z: (len(z), z))}
     if windows:
         by_k, window_h, half_h = analyse_windows(rows, truth_doc, truth_kind, first_ts, pub, ks, run_name)
@@ -539,9 +597,12 @@ def run(phase_a, every, ks, out, keep_store=False, rerun=rerun_costmap, span=rea
         lens = [w["end_step"] - w["start_step"] for v in truth_doc["zones"].values() for w in v.get(key, ())]
         meta.update(caveat=WINDOW_CAVEAT, truth_kind=truth_kind, run=run_name, n_windows=len(lens),
                     window_len_steps_median=statistics.median(lens) if lens else None)
+    if store_suffix:
+        meta.update(store_suffix=store_suffix, store_mode=modes)
     doc = dict(schema_version=SCHEMA_VERSION, meta=meta, by_k=by_k)
     if sweep:
-        doc["amoc"] = amoc_sweep(truth_doc, truth_kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cost, run_name, ref_res)
+        doc["amoc"] = amoc_sweep(truth_doc, truth_kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cost, run_name, ref_res,
+                                ref_empty_ok=bool(modes) and modes.get(str(reference)) == "prebuilt")
         meta.update(reference_dir=str(reference) if ref_res else None, reference_run=ref_res[1] if ref_res else None,
                     reference_store_hash_before=ref_res[5] if ref_res else None,
                     reference_store_hash_after=ref_res[6] if ref_res else None, sim_hours=sim_hours(truth_doc),
@@ -623,6 +684,10 @@ def build_parser():
     p.add_argument("--sweep-k", default=None, metavar="K[,K...]", help="AMOC sweep over K (blocked|outage only)")
     p.add_argument("--sweep-cost", default=None, metavar="c[,c...]", help="AMOC sweep over cost thresholds (blocked|outage only)")
     p.add_argument("--reference", default=None, metavar="DIR", help="undisturbed phase-A dir for the AMOC false-alarm rate")
+    p.add_argument("--window-hours", type=float, default=None, metavar="H", help="costmap rerun --window-hours (blocked|outage)")
+    p.add_argument("--half-life-h", type=float, default=None, metavar="H", help="costmap rerun --half-life-h (blocked|outage)")
+    p.add_argument("--store-suffix", default=None, metavar="X",
+                   help="copy dir DIR/store-X; rerun mode when absent, prebuilt (fastmap) mode when it exists")
     return p
 
 
@@ -654,6 +719,16 @@ def validate(p, a):
         if (any(not math.isfinite(c) or c <= 0 for c in a.sweep_cost_values)
                 or len(set(a.sweep_cost_values)) != len(a.sweep_cost_values)):
             p.error("--sweep-cost values must be distinct finite numbers > 0")
+    for flag, v in (("--window-hours", a.window_hours), ("--half-life-h", a.half_life_h)):
+        if v is not None and (not math.isfinite(v) or v <= 0):
+            p.error(f"{flag} must be a finite number > 0")
+        if v is not None and (a.truth_kind == "floor" or a.smoke):
+            p.error(f"{flag} needs --truth-kind blocked or outage")
+    if a.store_suffix is not None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", a.store_suffix):
+            p.error(f"--store-suffix must match [A-Za-z0-9_-]+, got {a.store_suffix!r}")
+        if a.smoke:
+            p.error("--store-suffix cannot be combined with --smoke")
     amoc_flags = [f for f, v in (("--sweep-k", a.sweep_k), ("--sweep-cost", a.sweep_cost), ("--reference", a.reference))
                   if v is not None]
     if amoc_flags:
@@ -699,7 +774,7 @@ def main(argv=None, rerun=rerun_costmap, span=read_span):
         else:
             every, out = a.publish_every, a.out
             doc = run(a.phase_a, every, ks, out, a.keep_store, rerun, span, a.truth_kind, a.reference,
-                      a.sweep_k_values, a.sweep_cost_values)
+                      a.sweep_k_values, a.sweep_cost_values, a.store_suffix, a.window_hours, a.half_life_h)
             costmap.write_json(out, doc)
         for k in ks:
             print(summary_line(k, doc))
