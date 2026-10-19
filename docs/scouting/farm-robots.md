@@ -11,11 +11,11 @@ for us) carry no URL; every claim about the outside world does.
 
 Three of the four requirements hold on paper and one is weak. **Location axis, holds:** tractors log RTK
 position at 10 Hz (TUM dataset, https://zenodo.org/records/14619787, verified@2026-10-19, A) and ISOBUS TimeLogs carry
-a position in every record (section 2). **Faults that recur at places, plausible but unmeasured:** under-canopy
-robot deployments attribute most interventions to crop-row gaps and row ends (Velasquez et al. 2022,
+a position in every record (section 2). **Faults that recur at places, plausible but unmeasured:** one
+under-canopy deployment attributed 8 of 12 interventions to crop-row gaps, others to row ends (Velasquez et al. 2022,
 https://arxiv.org/abs/2106.15029, verified@2026-10-19, A-), but no source maps them across passes. **Logs with
 position and state, half:** public logs pair position with a work state (hitch in-work, ISOBUS DDI 141 "Actual Work
-State"), none with a fault code or a stop cause (section 2). **Next window, holds for barns and is weak for
+State"), and no fleet-scale log has machine faults or stop causes (section 2). **Next window, holds for barns and is weak for
 fields:** a barn robot runs every day so the next day is a natural window, while a field is visited once per operation
 and again next season, so the next window at the same cell is days to a year away. For us a **stall** is an
 in-field stop of a machine that should be working (field), or a failed or aborted task at a box or route point (barn).
@@ -42,8 +42,9 @@ pivot is a degenerate one-robot case of our method, and no pivot log was searche
 
 ## 2. Data
 
-**None found:** no public dataset or log pairs machine position with fault, alarm or stop-cause events, for field
-robots, tractors, milking robots or feed pushers. Repositories searched (queries and result counts in the report):
+**None found at fleet scale:** no public dataset or log pairs machine position with machine fault, alarm or
+stop-cause events, for field robots, tractors, milking robots or feed pushers. The only position-plus-fault set found
+is the 48 kB single-field Augmenta file below, whose sole fault is camera sun-glare. Repositories searched (queries and result counts in the report):
 Kaggle (API search "tractor", "milking", "agricultural robot", "telematics"), Zenodo (API search for milking robot,
 tractor GNSS, ag machinery trajectory, isoxml/isobus/ISO 11783), IEEE DataPort (site search only, its own search
 returned 404, so snippet-level), data.gov (the catalogue search did not apply the query and its API returned 404:
@@ -76,7 +77,10 @@ faults is UNTESTED**. A diagnostic channel (DM1 "Active Diagnostic Trouble Codes
 only in isobus.net search snippets; two direct fetches returned other PGNs, so it is **unverified**, and no public DM1
 log for farm machinery was found. AgGateway ADAPT is a conversion framework (EPL, 15 repos under
 https://github.com/AgGateway-ADAPT, verified@2026-10-19, A); its Examples repository holds code only and **no public
-ADAPT sample log was found**. Barn robots (Lely, DeLaval) use no open telemetry standard found in this search.
+ADAPT sample log was found**. For barns, ISO 17532:2007 (ISOagriNET, "Data communications network for livestock farming") appeared in one web
+search (standards retailers and ICAR slides, e.g. https://old.icar.org/wp-content/uploads/2015/09/Onken.pdf,
+verified@2026-10-19, search results only, rank C); its text is paywalled and whether Lely or DeLaval robots log through
+it is UNTESTED. No public log in it was found.
 
 ## 3. Simulators
 
@@ -191,12 +195,14 @@ down by bail position (PDF did not parse, so it is not counted).
 
 ## 6. Verdict
 
-We cannot demo this domain honestly within two weeks on fault data, because no public log pairs a machine position
+We cannot demo this domain honestly within two weeks on fault data, because no fleet-scale public log pairs a machine position
 with a fault or stop cause (section 2), and no open farm simulator injects faults by location (section 3). We can demo
 a weaker version: the TUM tractor dataset (RTK position, hitch in-work flag and road/field status at 10 Hz, CC BY 4.0)
 lets us derive in-field stops while the hitch says "working", bin them into implement-width cells and grade whether
-the top-K stop cells of one field operation predict the stop cells of the next pass on the same field. That first
-measurement is a measurement of stops, not faults: headland turns and planned refills are intentional stops, the
+the top-K stop locations of a field's earlier passes predict those of its later passes in the same operation (a wet
+strip crosses every pass). Repeat operations on the same field cannot be assumed: the data is one CSV per field and
+implement, 143 fields in one 2024 season, and the paper does not report passes per field
+(https://pmc.ncbi.nlm.nih.gov/articles/PMC11993161/, verified@2026-10-19, A). That first measurement is a measurement of stops, not faults: headland turns and planned refills are intentional stops, the
 same definition gap as our `by_design` class, so the stall definition would have to exclude headlands first. A
 simulated version is a TA-RWARE re-skin (rows plus headlands, or a barn) with our existing floor machinery, which
 proves only that the pipeline runs on a different layout, not that farm faults recur where we say. Barn robots fit
@@ -204,4 +210,4 @@ the method better (daily windows, fixed boxes and routes), but no barn robot log
 data: a fleet log with position plus a fault or stop cause, obtainable only through an OEM API with a machine owner's
 grant (CNH FieldOps documents Locations and Fault Codes) or from a barn-robot operator.
 
-SCOUT_SCORE: data=1 (position plus work state is public, faults are not) sim=1 (only generic grid sims to re-skin, no farm fault injection) competition=2 (F, G, L, D and R absent in the two public trees, DeLaval and Burro, but six of eight vendors incl. Deere and Lely are behind logins) fit=2 (location axis and planner-blind faults fit, but field windows are seasonal and barns have no open logs)
+SCOUT_SCORE: data=1 (position plus work state is public, machine faults are not beyond one 48 kB sun-glare file) sim=1 (only generic grid sims to re-skin, no farm fault injection) competition=2 (F, G, L, D and R absent in the two public trees, DeLaval and Burro, but six of eight vendors incl. Deere and Lely are behind logins) fit=2 (location axis and planner-blind faults fit; the field window is the next pass or next season, the barn window is daily)
