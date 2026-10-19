@@ -254,6 +254,39 @@ class TestV1Regression(unittest.TestCase):
                 self.assertEqual(res, json.loads(base.read_text()))
 
 
+class TestBlockedKnownKey(unittest.TestCase):
+    """S10C: blocked_windows entries carry known: bool; a blocked window is truth whatever its value, and a truth file
+    written before the key existed reads the same."""
+
+    def test_known_key_does_not_change_truth_results(self):
+        probes = [("2,2", 0, 9), ("2,2", 0, 10), ("2,2", 19, 30), ("2,2", 20, 30), ("4,4", 0, 500)]
+        results = []
+        for extra in ({}, {"known": True}, {"known": False}):
+            t = v2_truth(blocked_windows=[dict(blocked("2,2", 10, 20), **extra)])
+            results.append([truth_mod.truth_positive(t, 0, c, a, b) for c, a, b in probes])
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0], results[2])
+        self.assertEqual(results[0][1], {"blocked"})
+
+    def test_hotspot_score_truth_kinds_reads_files_without_the_key(self):
+        costmap = dict(zones={"0": {}})
+        outs = []
+        for extra in ({}, {"known": True}, {"known": False}):
+            t = v2_truth(blocked_windows=[dict(blocked("2,2", 10, 20), **extra)])
+            outs.append(hotspot_score.truth_kinds(t, costmap))
+        self.assertEqual(outs[0], outs[1])
+        self.assertEqual(outs[0], outs[2])
+
+    def test_emitter_writes_known_from_the_disturb_config(self):
+        for cfg, expect in (({"blocked_cell": {"rate_per_hour": 8.0, "duration": [10, 30]}}, True),
+                            ({"blocked_cell": {"rate_per_hour": 8.0, "duration": [10, 30], "known": True}}, True),
+                            ({"blocked_cell": {"rate_per_hour": 8.0, "duration": [10, 30], "known": False}}, False)):
+            with self.subTest(known=expect, cfg=cfg):
+                result, _ = run_zone(cfg, 300, zone=0)
+                self.assertTrue(result["blocked_windows"])
+                self.assertTrue(all(w["known"] is expect for w in result["blocked_windows"]))
+
+
 class TestTruthKinds(unittest.TestCase):
     def costmap(self, **zones):
         return dict(zones={z: dict(cells) for z, cells in zones.items()})
