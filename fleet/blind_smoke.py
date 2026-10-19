@@ -2,7 +2,7 @@
 
 Usage: python fleet/blind_smoke.py --smoke [--out-dir DIR]
 Runs 2 zones x 150 steps on the small map with {"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240],
-"known": false}} (seed base 0) through emit, ingest, costmap, grade --truth and hotspot_score (subprocesses of the
+"known": false}} (default seed base 13, see SMOKE_SEED_BASE) through emit, ingest, costmap, grade --truth and hotspot_score (subprocesses of the
 existing CLIs, in a tmp dir by default; refuses --out-dir under results/ or fleet/data/), then prints the OVERLAP:
 
   denominator = every stall message attributed 'next' (hotspot._stall_pair: consecutive messages of one robot, the robot
