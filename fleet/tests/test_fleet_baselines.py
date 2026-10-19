@@ -209,6 +209,32 @@ class TestPairedAndOutcome(unittest.TestCase):
         self.assertEqual(baselines.paired_ci([0.1, -0.1, 0.0, 0.05])["verdict"], "within noise")
         self.assertEqual(baselines.paired_ci([]), dict(mean=None, ci95=None, verdict=None, n_zones=0))
 
+    def test_ci_is_pinned_for_seed_0_1000_resamples_and_2_5_97_5(self):
+        # inject: another seed, resample count or percentile pair (golden value of this implementation)
+        p = baselines.paired_ci([-0.05, 0.0, 0.05, 0.1, -0.1, 0.15, 0.0, 0.05, 0.2, -0.025])
+        self.assertEqual((p["verdict"], p["n_zones"]), ("within noise", 10))
+        self.assertAlmostEqual(p["mean"], 0.0375)
+        self.assertAlmostEqual(p["ci95"][0], -0.015)  # 5th percentile would give -0.0076, 200 resamples -0.0101
+        self.assertAlmostEqual(p["ci95"][1], 0.09)  # 200 resamples would give 0.0876
+
+    def test_outcome_delta_is_map_minus_persistence(self):
+        # inject: the outcome delta computed as persistence - map
+        # K 1 per zone: map picks 2,2 (fresh), persistence 1,1 (3 old stalls). At T + H the 1,1 stalls (end T - 3000)
+        # fall out of the (T + H - 3600, T + H] window, 2,2 is rank 1: map hits, persistence misses, delta +1 in each zone.
+        zones = ("0", "1", "2")
+        st = MemoryStore()
+        for z in zones:
+            publish(st, [dict(s, zone=z) for s in DISAGREE])
+        claims(st, zones=zones)
+        stream_end(st, T + H, zones=zones)
+        with mock.patch.object(baselines, "PAIRED_KS", (1,)):  # pair at K 1, where the two forecasts differ
+            b = compute(st, list(zones), ["1,1", "2,2", "3,3"], {}, ks=(1,))
+        self.assertEqual((b["k"]["1"]["map"]["outcome_precision"], b["k"]["1"]["persistence"]["outcome_precision"]),
+                         (1.0, 0.0))
+        self.assertEqual(b["paired"]["1"]["outcome_precision"],
+                         dict(mean=1.0, ci95=[1.0, 1.0], verdict="beats", n_zones=3))
+        self.assertEqual(b["paired"]["1"]["truth_precision"]["mean"], 0.0)  # no positives: both 0
+
     def test_no_eligible_unit_gives_zero_outcome_units_and_nulls(self):
         # inject: the outcome gate is skipped, or an empty gate raises
         st = MemoryStore()
@@ -289,6 +315,43 @@ class TestLessonPersistPools(unittest.TestCase):
         self.assertAlmostEqual(out["lift_all"], 10.0)
         self.assertTrue(out["s8s_pool_is_ever"])
         self.assertIn("chance_window", out["pools_note"])
+
+    def next_window_store(self):
+        # window 0: 9,9 x5 + singles 0,0..4,0 (the lesson on 9,9); next window: 9,9 x3, 7,7 x2, 0,0 x1, mean 2 per
+        # stalled cell, so ratios 1.5, exactly 1.0 and 0.5: 9,9 and 7,7 clear the bar, 7,7 only in the next window.
+        nxt = tfl.cell_stalls(3, 0, start=tfl.NEXT) + tfl.cell_stalls(2, 0, cell="7,7", start=tfl.NEXT) + \
+            [tfl.stall("0,0", tfl.NEXT)]
+        st = tfl.lesson_then_advance(nxt, tfl.BASE + 2 * tfl.W)
+        lessons.grade_lessons_persist(st, tfl.RUN)
+        return st
+
+    def test_next_window_and_the_bar_at_exactly_persist_ratio(self):
+        # inject: pool members graded on the lesson's own window (shift 0); the bar as > or >= 0 instead of >= 1.0
+        st = self.next_window_store()
+        block = hotspot_score.persist_chance(st, tfl.RUN)
+        ever = baselines.ever_pools(st.select("stalls", {"run": tfl.RUN}), True)
+        self.assertEqual(len(ever["0"]), 7)  # 9,9, 0,0..4,0, 7,7
+        out = baselines.lesson_persist_block(st, tfl.RUN, ever, 10, block)
+        self.assertEqual((out["n_lessons"], out["observed_rate"]), (1, 1.0))
+        self.assertAlmostEqual(out["chance_ever"], 2 / 7)
+        self.assertAlmostEqual(out["chance_all"], 2 / 10)
+        self.assertAlmostEqual(out["lift_ever"], 7 / 2)
+        self.assertFalse(out["s8s_pool_is_ever"])  # 7,7 stalled only in the next window
+
+    def test_a_hot_robot_lesson_is_excluded_and_counted(self):
+        # inject: the hot_cell filter dropped (the robot lesson enters the pools) or the exclusion count not computed
+        st = self.next_window_store()
+        block = hotspot_score.persist_chance(st, tfl.RUN)
+        (d,) = lessons.lessons(st, tfl.RUN)
+        robot = dict(d, id="robot-lesson", claim=json.dumps(dict(lessons.claim_of(d), lesson_kind="hot_robot",
+                                                                 subject="Z0:Z0-01")))
+        st.insert("decisions", [robot])
+        block = dict(block, per_lesson=block["per_lesson"] + [dict(block["per_lesson"][0], id="robot-lesson",
+                                                                   observed=False)])
+        ever = baselines.ever_pools(st.select("stalls", {"run": tfl.RUN}), True)
+        out = baselines.lesson_persist_block(st, tfl.RUN, ever, 10, block)
+        self.assertEqual((out["n_lessons"], out["n_hot_robot_excluded"], out["observed_rate"]), (1, 1, 1.0))
+        self.assertAlmostEqual(out["chance_ever"], 2 / 7)
 
     def test_no_lessons_gives_nulls(self):
         # inject: division by zero lessons
