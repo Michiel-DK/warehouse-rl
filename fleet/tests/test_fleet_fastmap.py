@@ -20,6 +20,7 @@ for _p in (ROOT, ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
         sys.path.insert(0, str(_p))
 
 import fastmap  # noqa: E402
+import costmap as costmap_mod  # noqa: E402
 import fastmap_smoke  # noqa: E402
 import time_to_detect as ttd  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
@@ -151,6 +152,12 @@ class Built(unittest.TestCase):
         return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((d / "store").iterdir())}
 
     @staticmethod
+    def span(d):
+        """(first_ts, end_ts) of the zone files, the way time_to_detect reads them."""
+        _, first, end = ttd.read_span(str(d / "*.jsonl.gz"))
+        return first, end
+
+    @staticmethod
     def rows(copy):
         st = JsonlStore(copy)
         try:
@@ -263,6 +270,20 @@ class TestCli(Built):
         self.assertEqual(doc["meta"]["store_mode"], {str(blind): "prebuilt", str(none): "prebuilt"})
         self.assertTrue((blind / "store-fast").exists() and (none / "store-fast").exists())
         self.assertEqual(doc["amoc"]["k"][0]["K"], 20)
+        # the cusum rows detect on the fixture (known:false blocked windows -> stalls -> flags), not just parse
+        self.assertGreaterEqual(doc["by_k"]["20"]["summary"]["n_detected"], 1)
+        self.assertGreaterEqual(doc["amoc"]["k"][0]["n_detected"], 1)
+        # FA/h in the fa_per_hour_reference unit, recomputed from the reference store copy: flags (rank <= K) at publish
+        # times / (n_zones * sim_hours)
+        truth = json.loads((none / "truth.json").read_text())
+        pubs = set(costmap_mod.publish_times(*self.span(none), 60))
+        flags = sum(1 for r in self.rows(none / "store-fast")
+                    if r["decided_at"] in pubs and json.loads(r["claim"])["rank"] <= 20)
+        hours = truth["steps"] * truth["step_seconds"] / 3600
+        expect = flags / (len(truth["zones"]) * hours)
+        # the 150-step undisturbed fixture has no stall, so flags == 0 here (a zero-row prebuilt reference); the nonzero
+        # recomputation is pinned on hand-built cusum rows in test_time_to_detect.test_prebuilt_reference_fa_recomputed
+        self.assertAlmostEqual(doc["amoc"]["k"][0]["fa_per_hour_reference"], expect, places=9)
 
 
 @unittest.skipUnless((REAL_DATA / "s10c-blind").is_dir() and (REAL_DATA / "s10-none").is_dir(),

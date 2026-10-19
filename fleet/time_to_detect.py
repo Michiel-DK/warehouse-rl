@@ -37,8 +37,10 @@ meta.store_suffix; neither key is there without the flag):
   rerun     DIR/store-X does not exist: the usual copy / strip / rerun / hash-check / select sequence under that name
             (removed at the end unless --keep-store).
   prebuilt  DIR/store-X exists (built beforehand by fleet/fastmap.py): no copy, no strip, no rerun, never removed; the
-            hash check of DIR/store/decisions.jsonl is kept; ValueError unless the run has at least one hotspot_forecast
-            row and every one has claim.detector == "cusum" (a leftover costmap copy is stale, not a detector).
+            hash check of DIR/store/decisions.jsonl is kept; ValueError unless every hotspot_forecast row has
+            claim.detector == "cusum" (a leftover costmap copy is stale, not a detector). Zero rows: the measured run
+            raises ValueError (it measures nothing); a --reference with zero rows is accepted (the CUSUM flags nothing on
+            an undisturbed run: a valid zero-false-alarm reference, fa_per_hour_reference 0).
             --window-hours, --half-life-h and --sweep-cost are rejected there (fastmap writes no costmap rows).
 
 --sweep-k / --sweep-cost / --reference (S10E, blocked|outage only) add an AMOC view: detection delay against false alarms

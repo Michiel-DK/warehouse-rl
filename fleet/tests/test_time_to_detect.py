@@ -1123,6 +1123,90 @@ class TestStoreSuffixAndWindowFlags(unittest.TestCase):
         (d / "store-x" / "decisions.jsonl").touch()
         return d
 
+    def test_no_new_flags_output_identical(self):
+        # inject: write store_suffix / store_mode (or any new meta key) without the flags, append a flag to the cmd, or
+        # name the default copy anything but store-ttd-<publish-every>.
+        # Compared: (1) the PR's real rerun_costmap command list, captured by a stubbed subprocess.run, against the
+        # literal pre-lane list; (2) the output bytes of that run (real rerun_costmap path) against the bytes of a run
+        # through the injected FakeRerun, which receives the default copy dir DIR/store-ttd-<S> (the pre-lane name);
+        # (3) meta carries no store_suffix / store_mode.
+        extra = ("--truth-kind", "blocked")
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN))
+            fake = FakeRerun(WROWS)
+            code, _, out_fake = run_main(d, fake, extra=extra, out=str(Path(t) / "fake.json"), **self.window_args())
+            self.assertEqual(code, 0)
+            self.assertEqual([c[1] for c in fake.calls], [d / f"store-ttd-{EVERY}"])
+            cmds = []
+
+            def fake_run(cmd, **kw):
+                cmds.append(cmd)
+                copy = Path(cmd[cmd.index("--store") + 1].split(":", 1)[1])
+                st = JsonlStore(copy)
+                st.insert("decisions", WROWS)
+                st.close()
+                return mock.Mock(returncode=0, stdout="", stderr="")
+            with mock.patch.object(ttd.subprocess, "run", fake_run):
+                code, _, out_real = run_main(d, ttd.rerun_costmap, extra=extra, out=str(Path(t) / "real.json"),
+                                             **self.window_args())
+            self.assertEqual(code, 0)
+            copy = d / f"store-ttd-{EVERY}"
+            self.assertEqual(cmds, [[sys.executable, str(ttd.FLEET / "costmap.py"), "--glob", f"{d}/*.jsonl.gz", "--run",
+                                     WRUN, "--store", f"jsonl:{copy}", "--publish-every", str(EVERY), "--out",
+                                     f"{copy}/costmap_ttd.json"]])
+            doc = json.loads(Path(out_real).read_text())
+            self.assertNotIn("store_suffix", doc["meta"])
+            self.assertNotIn("store_mode", doc["meta"])
+            self.assertEqual(Path(out_real).read_bytes(), Path(out_fake).read_bytes())
+            self.assertGreaterEqual(doc["by_k"]["2"]["summary"]["n_detected"], 1)
+
+    def test_prebuilt_zero_row_reference_allowed_measured_not(self):
+        # inject: drop allow_empty (the reference raises), or drop the zero-row check on the measured run
+        extra = ("--truth-kind", "blocked", "--store-suffix", "x", "--sweep-k", "2")
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "m").mkdir()
+            (Path(t) / "r").mkdir()
+            m = self.prebuilt_dir(Path(t) / "m", self.cusum_rows())
+            r = Path(t) / "r"
+            make_window_phase_a(r, wtruth({"0": [], "1": []}), runs=(REF,))
+            st = JsonlStore(r / "store-x")  # a prebuilt reference holding no forecast row at all
+            st.close()
+            (r / "store-x" / "decisions.jsonl").touch()
+            z = ({"0": WF, "1": WF}, WF, WF + 300)
+            sp = dict(sp=dspan({m: z, r: z}))
+            code, _, out = run_main(m, FakeRerun(WROWS), extra=extra + ("--reference", str(r)), **sp)
+            self.assertEqual(code, 0)
+            amoc = json.loads(Path(out).read_text())["amoc"]
+            self.assertEqual(amoc["k"][0]["fa_per_hour_reference"], 0.0)  # zero rows -> zero flags, a valid reference
+            with self.assertRaisesRegex(ValueError, "holds no hotspot_forecast"):  # measured run, zero rows
+                run_main(r, FakeRerun(WROWS), extra=("--truth-kind", "blocked", "--store-suffix", "x"),
+                         sp=dspan({r: z}))
+
+    def test_prebuilt_reference_fa_recomputed(self):
+        # inject: divide by zones once, count rank > K, or read the measured run's rows for the reference
+        extra = ("--truth-kind", "blocked", "--store-suffix", "x", "--sweep-k", "1,2")
+        ref_rows = []
+        for z, cell, step, rank in (("0", "a", 20, 1), ("0", "b", 20, 2), ("1", "e", 20, 1), ("0", "a", 40, 1),
+                                    ("1", "f", 60, 3), ("0", "a", 30, 1)):  # step 30 is not a publish time
+            claim = dict(json.loads(refrow(z, cell, step, rank)["claim"]), detector="cusum")
+            ref_rows.append(dict(refrow(z, cell, step, rank), claim=json.dumps(claim)))
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "m").mkdir()
+            (Path(t) / "r").mkdir()
+            m = self.prebuilt_dir(Path(t) / "m", self.cusum_rows())
+            r = Path(t) / "r"
+            make_window_phase_a(r, wtruth({"0": [], "1": []}), runs=(REF,))
+            st = JsonlStore(r / "store-x")
+            st.insert("decisions", ref_rows)
+            st.close()
+            z = ({"0": WF, "1": WF}, WF, WF + 300)
+            code, _, out = run_main(m, FakeRerun(WROWS), extra=extra + ("--reference", str(r)), sp=dspan({m: z, r: z}))
+            self.assertEqual(code, 0)
+            hours = 300 / 3600
+            by_k = {e["K"]: e for e in json.loads(Path(out).read_text())["amoc"]["k"]}
+            self.assertEqual(by_k[1]["fa_per_hour_reference"], 3 / (2 * hours))  # rank <= 1 at publish times: 3 flags
+            self.assertEqual(by_k[2]["fa_per_hour_reference"], 4 / (2 * hours))
+
     def test_prebuilt_rejections(self):
         # inject: accept a costmap copy as a detector, accept zero rows, or allow the window / cost flags in prebuilt
         extra = ("--truth-kind", "blocked", "--store-suffix", "x")
