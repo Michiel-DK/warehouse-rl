@@ -59,10 +59,11 @@ def explorer_span(text):
 
 
 def delete_explorer(text):
-    """data.js text without run_constants.explorer: the `,"explorer":{...}` span is spliced out (it is the last key)."""
+    """data.js text without run_constants.explorer: the `,"explorer":{...}` span is spliced out (S10H: "baselines" follows it,
+    so the span ends at a comma or at the closing brace)."""
     start, end = explorer_span(text)
     key_start = start - len('"explorer":')
-    assert text[key_start - 1] == "," and text[end] == "}"
+    assert text[key_start - 1] == "," and text[end] in ",}"
     return text[:key_start - 1] + text[end:]
 
 
@@ -237,10 +238,10 @@ class TestFlag(unittest.TestCase):
         with cwd(where or self.td.name):
             return run_main(["--refresh-constants-only", "--out", str(self.out)] + list(more))
 
-    def test_data_js_is_one_line_and_the_explorer_key_is_last(self):
+    def test_data_js_is_one_line_and_the_explorer_key_is_second_to_last(self):
         self.assertEqual(self.full.count("\n"), 1)
         self.assertNotIn("explorer", self.pre)
-        self.assertEqual(list(rx.read_data_js(DATA)["run_constants"])[-1], "explorer")
+        self.assertEqual(list(rx.read_data_js(DATA)["run_constants"])[-2:], ["explorer", "baselines"])  # S10H: baselines follows explorer
         self.assertEqual(rx.read_data_js(DATA)["meta"]["schema"], "replay/4")
 
     def test_round_trip_returns_the_committed_bytes(self):
@@ -286,7 +287,7 @@ class TestFlag(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         keys = list(rx.read_data_js(self.out)["run_constants"])
         self.assertEqual(keys, [x for x in rx.RUN_CONSTANTS_ORDER if x in keys])
-        self.assertEqual(keys[-2:], ["dose_response", "explorer"])
+        self.assertEqual(keys[-3:], ["dose_response", "explorer", "baselines"])
 
     def test_the_flag_is_a_store_true_option(self):
         out, err = io.StringIO(), io.StringIO()
@@ -300,7 +301,7 @@ class TestFullExport(tre.Fixture):
         self.assertIsNone(self.payload["run_constants"]["explorer"])
         p = rx.build_payload(self.dir, self.spec, "0", env_runner=tre.fake_env, run_dir_arg=str(self.dir), explorer=True)
         self.assertEqual(p["run_constants"]["explorer"], rx.explorer_constant())
-        self.assertEqual(list(p["run_constants"])[-1], "explorer")
+        self.assertEqual(list(p["run_constants"])[-2:], ["explorer", "baselines"])  # S10H: baselines follows explorer
         self.assertEqual(list(p["run_constants"]), list(rx.RUN_CONSTANTS_ORDER))
 
 
