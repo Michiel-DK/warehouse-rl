@@ -305,8 +305,9 @@ class TestTruthKinds(unittest.TestCase):
         tk = hotspot_score.truth_kinds(t, cm)
         self.assertEqual((tk["floor"]["positives"], tk["blocked"]["positives"], tk["outage"]["positives"]), (3, 3, 1))
         self.assertEqual(tk["any"]["positives"], 4 + 2)  # zone 0: 1,1 2,2 3,3 4,4; zone 1: 1,1 3,3
-        self.assertEqual(tk["frozen"], dict(positives=2))
-        self.assertNotIn("k", tk["frozen"])
+        # S10G: the frozen windows here carry no `cell`, so cells is 0; positives stays the robot serials
+        self.assertEqual((tk["frozen"]["positives"], tk["frozen"]["cells"]), (2, 0))
+        self.assertEqual(set(tk["frozen"]), {"positives", "cells", "k"})
         k20 = tk["blocked"]["k"]["20"]
         self.assertEqual(k20["hits"], 3)  # zone 0: 3,3 and 1,1; zone 1: 3,3
         self.assertEqual(set(tk), {"floor", "blocked", "outage", "any", "frozen"})
@@ -331,6 +332,83 @@ class TestTruthKinds(unittest.TestCase):
                 cell = tk[kind]["k"][str(k)]
                 self.assertEqual((cell["precision"], cell["hits"], cell["recall"]), (0.0, 0, None))
         self.assertEqual(tk["frozen"]["positives"], 0)
+
+    def test_frozen_cells_hand_computed_with_the_same_cell_in_two_zones(self):
+        # inject: pool zones into one set, score hits against another zone's frozen cells, count windows, drop the
+        # cell-less window's serial, leave frozen out of "any"
+        def fw(serial, cell, a, b):
+            w = dict(agent_index=0, serial=serial, start_step=a, end_step=b)
+            return dict(w, cell=cell, cells=[cell]) if cell else w
+        t = dict(zones={
+            "0": dict(floor_cells={"1,1": 0.5},
+                      frozen_windows=[fw("Z0-01", "3,4", 0, 5), fw("Z0-01", "3,4", 20, 25), fw("Z0-02", "5,5", 2, 9),
+                                      fw("Z0-03", None, 2, 9)]),
+            "1": dict(floor_cells={}, frozen_windows=[fw("Z1-01", "3,4", 0, 5)])})
+        cm = self.costmap(**{"0": {"3,4": 5.0, "1,1": 4.0, "9,9": 3.0}, "1": {"9,9": 5.0, "3,4": 1.0}})
+        tk = hotspot_score.truth_kinds(t, cm, ks=(1, 2))
+        fz = tk["frozen"]
+        self.assertEqual(fz["positives"], 4)  # serials: Z0-01, Z0-02, Z0-03, Z1-01
+        self.assertEqual(fz["cells"], 3)  # zone 0: 3,4 and 5,5; zone 1: 3,4 (counted again)
+        self.assertEqual(fz["k"]["1"], dict(precision=1 / 2, recall=1 / 3, hits=1))  # zone 0 top-1 3,4; zone 1 top-1 9,9
+        self.assertEqual(fz["k"]["2"], dict(precision=2 / 4, recall=2 / 3, hits=2))  # zone 1 adds 3,4
+        self.assertLessEqual(fz["k"]["2"]["recall"], 1)
+        self.assertEqual(tk["any"]["positives"], 3 + 1)  # zone 0: 1,1 3,4 5,5; zone 1: 3,4
+        self.assertEqual(tk["any"]["k"]["2"]["hits"], 2 + 1)  # zone 0: 3,4 1,1; zone 1: 3,4
+        # no cell key anywhere: cells 0, hits 0, recall null
+        tn = dict(zones={"0": dict(floor_cells={}, frozen_windows=[fw("Z0-01", None, 0, 5)])})
+        z = hotspot_score.truth_kinds(tn, self.costmap(**{"0": {"3,4": 1.0}}), ks=(1,))["frozen"]
+        self.assertEqual((z["positives"], z["cells"], z["k"]["1"]), (1, 0, dict(precision=0.0, recall=None, hits=0)))
+
+
+FROZEN = dict(agent_index=0, serial="Z0-01", start_step=10, end_step=30)
+
+
+class TestFrozenCells(unittest.TestCase):
+    def truth(self, with_cell=True):
+        return v2_truth(frozen_windows=[dict(FROZEN, cell="3,4", cells=["3,4"]) if with_cell else dict(FROZEN)])
+
+    def test_cell_hit_miss_and_robot_rule(self):
+        # inject: end inclusive, start exclusive, ignore the cell, drop the robot rule
+        tp = lambda subj, a, b: truth_mod.truth_positive(self.truth(), 0, subj, a, b)  # noqa: E731
+        self.assertEqual(tp("3,4", 12, 12 + 30), {"frozen"})
+        self.assertEqual(tp("3,4", 40, 45), frozenset())
+        self.assertEqual(tp("3,4", 30, 31), frozenset())  # end exclusive
+        self.assertEqual(tp("3,4", 0, 10), {"frozen"})  # start <= step_to
+        self.assertEqual(tp("3,5", 12, 20), frozenset())
+        self.assertEqual(tp("Z0-01", 12, 13), {"frozen"})
+        with self.assertRaises(ValueError):
+            tp("3,4", None, None)
+        self.assertEqual(tp("3,5", None, None), frozenset())  # no matching window: no steps needed
+
+    def test_window_kinds_unchanged(self):
+        self.assertEqual(truth_mod.WINDOW_KINDS, (("blocked", "blocked_windows"), ("outage", "outage_windows")))
+
+    def test_no_cell_key_degrades_to_serial_only(self):
+        # inject: raise on a missing key, match every cell of a cell-less window
+        t = self.truth(with_cell=False)
+        self.assertEqual(truth_mod.truth_positive(t, 0, "3,4", 12, 20), frozenset())
+        self.assertEqual(truth_mod.truth_positive(t, 0, "3,4", None, None), frozenset())
+        self.assertEqual(truth_mod.truth_positive(t, 0, "Z0-01", 12, 20), {"frozen"})
+
+    def test_grade_truth_on_a_synthetic_forecast(self):
+        with tempfile.TemporaryDirectory() as d:
+            st = JsonlStore(d)
+            forecast(st, "3,4", 12, 5)  # issued inside [10, 30): hit
+            forecast(st, "3,4", 40, 5)  # after: false alarm
+            self.assertEqual(grade.grade_truth(st, RUN, self.truth()), dict(graded=2))
+            self.assertEqual(truth_rows(st), {f"Z0:3,4@{T0 + 60}": "hit", f"Z0:3,4@{T0 + 200}": "false_alarm"})
+
+    def test_hot_cell_lesson_truth_hit(self):
+        with tempfile.TemporaryDirectory() as d:
+            st = JsonlStore(d)
+            lesson(st, "hot_cell", "Z0:cell 3,4", 0, 20)  # steps 0..19 overlap [10, 30)
+            lesson(st, "hot_cell", "Z0:cell 3,4", 30, 50)  # after the window
+            self.assertEqual(grade.grade_lesson_truth(st, RUN, self.truth()), dict(graded=2))
+            got = {}
+            for dd in st.select("decisions", {"run": RUN, "kind": lessons.KIND}):
+                for g in st.select("forecast_grades", {"id": dd["id"], "grade_source": "lesson_truth"}):
+                    got[lessons.claim_of(dd)["window_start"]] = g["verdict"]
+            self.assertEqual(got, {T0: "hit", T0 + 150: "false_alarm"})
 
 
 SMALL = hotspot_score.SMOKE_ENV
@@ -424,6 +502,58 @@ class TestSmoke(unittest.TestCase):
             self.assertTrue((Path(d) / "hotspot_smoke.json").is_file())
         after = sorted(str(p) for p in results.rglob("*")) if results.exists() else []
         self.assertEqual(before, after)
+
+
+class TestEmitterFrozenCells(unittest.TestCase):
+    SEED_BASE, ZONES, STEPS = 0, 2, 150  # pinned: zone 0 has 5 frozen windows, zone 1 has 4 (9 in all)
+
+    @classmethod
+    def setUpClass(cls):
+        import gzip
+        import subprocess
+        cls.tmp = tempfile.TemporaryDirectory()
+        r = subprocess.run([sys.executable, str(ROOT / "fleet" / "emit.py"), "--zones", str(cls.ZONES), "--steps",
+                            str(cls.STEPS), "--env", SMALL, "--seed-base", str(cls.SEED_BASE), "--disturb",
+                            "breakdown-heavy", "--speed", "0", "--workers", str(cls.ZONES), "--dir", cls.tmp.name],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr[-500:]
+        cls.truth = json.loads((Path(cls.tmp.name) / "truth.json").read_text())
+        cls.by_serial = {}
+        for f in sorted(Path(cls.tmp.name).glob("zone*-*.jsonl.gz")):
+            with gzip.open(f, "rt") as fh:
+                for line in fh:
+                    m = json.loads(line)
+                    cls.by_serial.setdefault(m["serialNumber"], []).append(m)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_windows_carry_cell_and_cells_and_align_with_the_messages(self):
+        # inject: cell from the step before or after, cells as a list of lists, a column/step offset in the schedule
+        self.assertEqual(self.truth["schema_version"], "fleet-truth/2")
+        n = 0
+        for z, zt in self.truth["zones"].items():
+            self.assertGreaterEqual(len(zt["frozen_windows"]), 1, z)
+            for w in zt["frozen_windows"]:
+                n += 1
+                self.assertRegex(w["cell"], r"^\d+,\d+$")
+                self.assertEqual(w["cells"], [w["cell"]])  # a frozen robot does not move
+                msgs = self.by_serial[w["serial"]]
+                self.assertEqual(len(msgs), self.STEPS)
+                a = w["start_step"]
+                m = msgs[a]
+                self.assertEqual(em.timestamp_at(em.DEFAULT_T0, a, 5), m["timestamp"])
+                self.assertEqual(f"{int(m['agvPosition']['x'])},{int(m['agvPosition']['y'])}", w["cell"])
+                self.assertEqual([e["errorType"] for e in m["errors"]], ["BREAKDOWN"])
+                if a > 0:
+                    self.assertEqual(msgs[a - 1]["errors"], [])
+        self.assertEqual(n, 9)
+
+    def test_other_window_lists_have_no_cell_keys_added(self):
+        for zt in self.truth["zones"].values():
+            for key in ("blocked_windows", "outage_windows"):
+                self.assertTrue(all("cells" not in w for w in zt[key]))
 
 
 class TestImportFence(unittest.TestCase):

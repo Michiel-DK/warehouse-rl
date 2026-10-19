@@ -45,7 +45,7 @@ MASTER_NO_FLAG = {
              "zero_stall_share": 0.0},
     "rank_grading": {"rank_graded": 0, "top_k": [], "unranked": 0}, "run": "r",
     "stall_in_episode": {"by_cause": {}, "in_episode": 0, "total_stalls": 6}, "tag": "t",
-    "truth_kinds": {"any": _ANY, "blocked": _NONE, "floor": _ANY, "frozen": {"positives": 0}, "outage": _NONE},
+    "truth_kinds": {"any": _ANY, "blocked": _NONE, "floor": _ANY, "frozen": {"positives": 0, "cells": 0, "k": _NONE["k"]}, "outage": _NONE},
     "zones": {"0": {"k": _ANYK, "n_flagged": 2, "n_floor": 2, "spearman": None, "zero_stall_share": 0.0}}}
 
 

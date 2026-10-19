@@ -8,8 +8,9 @@ DIR holds truth.json and emit_ledger.json (the emitter's output). Per zone and a
 flagged cells counts the missing slots as misses; n_flagged is reported) and recall@K = those hits / |floor cells of the
 zone|. Cost ties break on the cell string. S10A: the summary also carries truth_kinds = {kind: {positives, k: {K: {precision, recall, hits}}}} for floor / blocked
 / outage / any (cells; a cell is positive for a kind iff truth lists it for that kind anywhere in the run, "any" = union,
-pooled over zones: precision = hits / (K * zones), recall = hits / positives) and frozen = {positives: distinct robot serials}
-(no per-K, the map ranks cells). A burst-only run has no positive cells, so precision is 0 at every K.
+pooled over zones: precision = hits / (K * zones), recall = hits / positives) and frozen = {positives: distinct robot serials,
+cells: sum over zones of the distinct frozen cells (S10G; windows with a `cell` key only), k: as the others against those
+cells}; "any" includes the frozen cells. A burst-only run has no positive cells, so precision is 0 at every K.
 Spearman (average ranks on ties) between cost and true p (0 for non-floor
 cells) over the flagged cells, null below 3 flagged cells or when either side is constant. zero_stall_share = share of
 the zone's floor cells with no stall of any kind in the store. Also: forecast_grades counts by (grade_source, verdict) as grading_counts: "outcome" = the
@@ -119,22 +120,23 @@ def _mean(vals):
 
 def truth_kinds(truth, costmap, ks=KS):
     """Per-kind positives and pooled precision/recall (S10A). A cell is positive for a kind iff the zone's truth lists
-    it for that kind anywhere in the run (floor_cells, blocked_windows, outage_windows; a cell in two kinds counts in
+    it for that kind anywhere in the run (floor_cells, blocked_windows, outage_windows, frozen_windows' `cell`; a cell in two kinds counts in
     each; "any" = the union, each cell once). Pooled over zones: hits = sum of top-K hits, precision = hits /
-    (K * zones), recall = hits / positives (null at 0 positives). frozen = distinct robot serials, no per-K (the map
-    ranks cells). A v1 truth has only floor positives; a burst-only run has none, so precision is 0 at every K."""
+    (K * zones), recall = hits / positives (null at 0 positives). frozen: positives = distinct robot serials (summed over zones, unchanged), cells = sum over zones of the
+    per-zone distinct frozen cells (windows with a `cell` key), k scored against those cells with recall = hits / cells. A v1 truth has only floor positives; a burst-only run has none, so precision is 0 at every K."""
     zones = sorted(truth["zones"], key=lambda s: int(s) if s.isdigit() else s)
     per_zone = []
     for z in zones:
         zt = truth["zones"][z]
         cells = dict(floor=set(zt["floor_cells"]),
                      blocked={w["cell"] for w in zt.get("blocked_windows", ())},
-                     outage={w["cell"] for w in zt.get("outage_windows", ())})
-        cells["any"] = cells["floor"] | cells["blocked"] | cells["outage"]
+                     outage={w["cell"] for w in zt.get("outage_windows", ())},
+                     frozen={w["cell"] for w in zt.get("frozen_windows", ()) if "cell" in w})
+        cells["any"] = cells["floor"] | cells["blocked"] | cells["outage"] | cells["frozen"]
         per_zone.append((ranked_cells(costmap["zones"].get(z, {})), cells,
                          {w["serial"] for w in zt.get("frozen_windows", ())}))
     out = {}
-    for kind in ("floor", "blocked", "outage", "any"):
+    for kind in ("floor", "blocked", "outage", "any", "frozen"):
         pos = sum(len(cells[kind]) for _, cells, _ in per_zone)
         k_out = {}
         for k in ks:
@@ -142,7 +144,8 @@ def truth_kinds(truth, costmap, ks=KS):
             k_out[str(k)] = dict(precision=hits / (k * len(per_zone)) if per_zone else 0.0,
                                  recall=hits / pos if pos else None, hits=hits)
         out[kind] = dict(positives=pos, k=k_out)
-    out["frozen"] = dict(positives=sum(len(f) for _, _, f in per_zone))
+    out["frozen"] = dict(positives=sum(len(f) for _, _, f in per_zone), cells=out["frozen"]["positives"],
+                         k=out["frozen"]["k"])
     return out
 
 

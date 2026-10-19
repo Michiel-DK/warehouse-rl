@@ -133,17 +133,24 @@ def windows_from_mask(mask):
     return windows_from_steps([[r for r, row in enumerate(rows) if row[t]] for t in range(steps)])
 
 
-def truth_windows(hook, zone, disturb):
+def truth_windows(hook, zone, disturb, positions=None):
     """The time-resolved ground truth of one finished zone (sidecar only; nothing here reaches a message). Read after
-    the episode, so demo injections that write into frozen_schedule are included."""
+    the episode, so demo injections that write into frozen_schedule are included. positions[step][row] = (x, y) of the
+    agent exactly as written into that step's message (S10G); each frozen window then carries `cell` (at start_step)
+    and `cells` (sorted by string, distinct, steps start_step..end_step-1; informational, nothing scores it)."""
     cell = lambda c: f"{c[0]},{c[1]}"  # noqa: E731
     known = disturb.get("blocked_cell", {}).get("known", True)  # S10C: informational, a blocked window is truth either way
     blocked = [dict(cell=cell(c), start_step=a, end_step=b, known=known)
                for c, a, b in windows_from_steps(hook._blocked_by_step)]
     outage = [dict(goal_index=g, cell=cell(hook.goals[g]), start_step=a, end_step=b)
               for g, a, b in windows_from_steps(hook._out_goals_by_step)]
-    frozen = [dict(agent_index=r, serial=f"Z{zone}-{hook.agents[r].id:02d}", start_step=a, end_step=b)
-              for r, a, b in windows_from_mask(hook.frozen_schedule)]
+    frozen = []
+    for r, a, b in windows_from_mask(hook.frozen_schedule):
+        w = dict(agent_index=r, serial=f"Z{zone}-{hook.agents[r].id:02d}", start_step=a, end_step=b)
+        if positions is not None and a < len(positions):
+            w["cell"] = cell(positions[a][r])
+            w["cells"] = sorted({cell(positions[t][r]) for t in range(a, min(b, len(positions)))})
+        frozen.append(w)
     burst = disturb.get("burst")
     return dict(blocked_windows=blocked, outage_windows=outage, frozen_windows=frozen,
                 burst=None if not burst else dict(start_step=burst["start"], end_step=burst["end"],
@@ -540,6 +547,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
         headers = [0] * n
         prev_pos = [(a.x, a.y) for a in agents]
         deliveries = 0
+        positions = []  # per step, per row: (x, y) as written into the message (S10G)
         floor_skips = []
         start = last_report = clock()
         speed = cfg.get("speed", 0)
@@ -562,6 +570,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
                     sleep(wait)
             frozen = hook.applied_frozen[-1]
             ts = timestamp_at(cfg["t0"], step, STEP_SECONDS)
+            positions.append([(int(a.x), int(a.y)) for a in agents])
             for i, agent in enumerate(agents):
                 pos = (agent.x, agent.y)
                 order = orders.update(i, agent.id, agent.busy, agent.target)
@@ -587,7 +596,7 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             if report and clock() - last_report >= interval:
                 report(snapshot())
                 last_report = clock()
-        windows = truth_windows(hook, zone, cfg["disturb"])
+        windows = truth_windows(hook, zone, cfg["disturb"], positions)
     finally:
         env.close()
         sink.close()

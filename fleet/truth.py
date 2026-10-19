@@ -8,6 +8,8 @@ here.
 truth_positive(truth, zone, subject, step_from, step_to) -> frozenset of matched kinds (truthy = positive):
   cell "x,y"       "floor" iff in the zone's floor_cells (time-free); "blocked" / "outage" iff some window [a, b) of
                    that kind on the cell has a <= step_to and b > step_from.
+                   S10G: also "frozen" iff some frozen window has `cell` == the subject and overlaps the same way (a window
+                   without a `cell` key, from an older file, never matches a cell; `cells` is informational, not scored).
   robot "Z<z>-NN"  "frozen" iff some frozen window with that serial overlaps the same way.
 A v1 file (no window keys, no t0) answers with floor_cells only, robots are never positive, and no step is needed
 (step_from / step_to may be None). A v2 file asked for a window kind with None steps raises ValueError.
@@ -68,6 +70,11 @@ def truth_positive(truth, zone, subject, step_from, step_to):
                 raise ValueError(f"a v2 truth needs steps to answer for {subject}")
             if any(_overlaps(w, step_from, step_to) for w in ws):
                 kinds.add(kind)
+        ws = [w for w in zt.get("frozen_windows", ()) if w.get("cell") == subject]
+        if ws and step_from is None:
+            raise ValueError(f"a v2 truth needs steps to answer for {subject}")
+        if any(_overlaps(w, step_from, step_to) for w in ws):
+            kinds.add("frozen")
     else:
         ws = [w for w in zt.get("frozen_windows", ()) if w["serial"] == subject]
         if ws and step_from is None:
