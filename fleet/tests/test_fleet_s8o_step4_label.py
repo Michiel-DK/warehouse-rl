@@ -148,8 +148,9 @@ class TestOverviewStep4(k.Committed):
         chips = [n.text() for n in self.root.find_all(cls="st") if n.text().startswith("Tested, weakly. Checked against the hidden truth")]
         self.assertEqual(len(chips), 1)
         self.assertEqual(chips[0], "Tested, weakly. Checked against the hidden truth. On a longer test shift the flagged cells were "
-                         "real 27 of 27 times; 18 of 25 were still above their zone's average in the next half hour; only 9 of 31 "
-                         "repeated their own peak, the bar the first version used.")
+                         "real 27 of 27 times; 18 of 25 were still above their zone's average in the next half hour, 3.0 times as often as "
+                         "chance against cells that got stuck in the same half hour and 3.3 times as often against the cells that ever "
+                         "got stuck; only 9 of 31 repeated their own peak, the bar the first version used.")  # S10H: the two lifts
         self.assertNotIn("being reworked", chips[0])
         self.assertNotIn("still above average next window", chips[0])
 

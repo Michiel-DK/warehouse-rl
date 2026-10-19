@@ -9,7 +9,9 @@ Reads exactly four tracked files and nothing else:
 Every number on the page is a <b class="num" data-src="<file>:<expression>"> element. resolve() turns a data-src into a
 value, format_value() turns the value into the text shown. The template contains no typed number; per-item rows (example
 stops, the lesson) are generated here from data. A build is deterministic (no clock) and refuses to write when a {name}
-placeholder is left outside <script>/<style>. S11A: the 'Try it' section (explorer_html, between the explorer-start/explorer-end
+placeholder is left outside <script>/<style>. S10H: the numbers of the map-against-persistence comparison (step 3, step 4 and the block
+between them, persist_html) read only run_constants.baselines of data.js; their data-src is run_constants.baselines.<i>.<path>,
+<i> being the entry's place in the list. S11A: the 'Try it' section (explorer_html, between the explorer-start/explorer-end
 markers) reads only run_constants.explorer of data.js; its numbers are <span class="xp-n" data-src="docs/replay/data.js:run_constants.explorer.<path>">
 resolved by the same resolve() / kind_of() / format_value(), and its script rewrites value and data-src when a control changes.
 
@@ -136,10 +138,19 @@ DOSE_FIELD = re.compile(r"run_constants\.dose_response\.\d+\.(p_lo|p_hi|floor_lo
 DOSE_KIND = {"p_lo": "g", "p_hi": "g", "floor_loss": "f1"}
 
 
+BASE = "run_constants.baselines"
+BASE_FIELD = re.compile(
+    re.escape(BASE) + r"\.\d+\.(?:k\.(?:20|40)\.(?:map|persistence)\.truth_precision|k\.(?:20|40)\.paired\.(?:mean|ci95\.[01])"
+    r"|lesson_persist\.(?:lift_window|lift_ever))$")
+
+
 def kind_of(src):
-    """The format kind of a data-src: a named NUMS entry, or a run_constants.dose_response.<i>.<field> (any regime index)."""
+    """The format kind of a data-src: a named NUMS entry, a run_constants.dose_response.<i>.<field> (any regime index) or a
+    run_constants.baselines.<i>.<field> (S10H: shares and differences of shares one decimal, lifts one decimal)."""
     if src in KIND_BY_SRC:
         return KIND_BY_SRC[src]
+    if src.startswith(DATA + ":") and BASE_FIELD.fullmatch(src[len(DATA) + 1:]):
+        return "f1" if ".lesson_persist." in src else "pct1"
     m = DOSE_FIELD.search(src) if src.startswith(DATA + ":") else None
     if m:
         return DOSE_KIND.get(m.group(1), "pct0")
@@ -414,6 +425,124 @@ def dose_html(inputs):
     s2 += "."
     return ('<!-- dose-start --><div class="dosewrap">%s%s<p class="dose-says" data-says="target">%s</p>'
             '<p class="dose-says" data-says="oracle">%s</p></div><!-- dose-end -->' % (DOSE_STYLE, figure, s1, s2))
+
+
+# ------------------------------------------------------------------------------------------------ S10H: map against last hour's counts
+BASE_LABEL = {"s8b-medium-80-p03-07": "Floor", "closed-loop-sticky": "Sticky floor", "s8e-long-w0.5": "Long shift",
+              "s10c-blind": "Hidden blockage", "s10-none": "Nothing planted"}
+HOUR = "last hour's"
+PERSIST_TITLE = "Does the map beat last hour's counts?"
+PERSIST_OPEN = ("It does not, on any of the five runs: checked against the hidden truth, the cells that were busiest by last hour's "
+                "plain counts are right as often as the map's picks, or more often.",
+                "What does the work is finding the robots that got stuck and checking each call afterwards; the decayed weighting "
+                "adds nothing on top.")
+PERSIST_REST = ("Each row sets the map's top 20 against the top 20 by last hour's plain counts; the whisker is the 95% interval of "
+                "the difference between the two.",
+                "The row with nothing planted has nothing to find, so it shows no bars and no verdict.")
+PERSIST_STYLE = """<style>
+.pw{border-top:1px solid var(--hair);padding-block:var(--sp-48);display:grid;gap:var(--sp-14)}
+.pw p{margin:0;font-size:17px;color:var(--ink-soft);max-width:62ch}
+.pw figure{margin:var(--sp-10) 0 0;display:grid;gap:var(--sp-10)}
+.pw figcaption{font-weight:700;font-size:15px}
+.pr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--sp-8) var(--sp-20);align-items:center;padding-block:var(--sp-8);border-top:1px solid var(--hair)}
+.prl{grid-column:1 / -1;font-weight:700;font-size:15px}
+.pb{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--sp-4) var(--sp-8);align-items:center;font-size:13px;font-variant-numeric:tabular-nums}
+.pk{color:var(--muted)}
+.pbt{position:relative;height:12px;background:var(--paper-deep);border-radius:3px}
+.pbf{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.pbf.k0{background:var(--accent)} .pbf.k1{background:var(--bar)}
+.pd{display:grid;gap:var(--sp-4);font-size:13px;font-variant-numeric:tabular-nums}
+.pdt{position:relative;height:18px;background:var(--paper-deep);border-radius:3px}
+.pdz{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--ink)}
+.pdw{position:absolute;top:50%;height:2px;background:var(--ink)}
+.pdw::before,.pdw::after{content:"";position:absolute;top:var(--sp-n6);width:2px;height:14px;background:var(--ink)}
+.pdw::before{left:0} .pdw::after{right:0}
+.pdm{position:absolute;top:calc(50% - var(--sp-6));width:12px;height:12px;margin-left:var(--sp-n6);border-radius:50%;background:var(--accent)}
+.pn{grid-column:1 / -1;font-size:14px;color:var(--muted)}
+.pkey{display:flex;flex-wrap:wrap;gap:var(--sp-6) var(--sp-16);font-size:12.5px;color:var(--muted)}
+.pkey i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:var(--sp-6)}
+.pkey i.k0{background:var(--accent)} .pkey i.k1{background:var(--bar)}
+@media (max-width:480px){.pr{grid-template-columns:minmax(0,1fr)}}
+</style>"""
+
+
+def base_entries(inputs):
+    entries = inputs[DATA]["run_constants"].get("baselines")
+    if not entries:
+        raise ValueError("run_constants.baselines is missing or empty in %s" % DATA)
+    return entries
+
+
+def base_index(inputs, label):
+    for i, e in enumerate(base_entries(inputs)):
+        if e["label"] == label:
+            return i
+    raise ValueError("run_constants.baselines has no entry %r" % label)
+
+
+def verdict_span(i, k, inputs):
+    """The verdict word of baselines entry i at K=k, verbatim from data.js, in a span that names its source."""
+    src = "%s:%s.%d.k.%d.paired.verdict" % (DATA, BASE, i, k)
+    return '<span class="vd" data-src="%s">%s</span>' % (htmllib.escape(src), esc(resolve(src, inputs)))
+
+
+def baseline_values(inputs):
+    """{placeholder: html} for step 3 (the same-definition comparison next to the 97%) and step 4 (plain counts, the two lifts)."""
+    i, j = base_index(inputs, "s8b-medium-80-p03-07"), base_index(inputs, "s8e-long-w0.5")
+    n = lambda idx, path: num_src("%s:%s.%d.%s" % (DATA, BASE, idx, path), inputs)
+    return {
+        "sb_map": n(i, "k.20.map.truth_precision"), "sb_pers": n(i, "k.20.persistence.truth_precision"),
+        "sb_verdict": verdict_span(i, 20, inputs),
+        "sl_pers": n(j, "k.20.persistence.truth_precision"),
+        "sl_win": n(j, "lesson_persist.lift_window"), "sl_ever": n(j, "lesson_persist.lift_ever"),
+    }
+
+
+def persist_html(inputs):
+    """The block 'Does the map beat last hour's counts?': two opening sentences, two more, and a five-run figure."""
+    entries = base_entries(inputs)
+    src = lambda i, path: "%s:%s.%d.%s" % (DATA, BASE, i, path)
+    n = lambda i, path: num_src(src(i, path), inputs)
+    fmt = lambda i, path: format_value(src(i, path), resolve(src(i, path), inputs))
+    live = [e for e in entries if e["chance_all"] != 0]  # chance 0 = nothing planted: no truth positives, nothing to score
+    if not live:
+        raise ValueError("run_constants.baselines has no run with a planted cell")
+    bound = max(max(abs(v) for v in (e["k"]["20"]["paired"]["ci95"] + [e["k"]["20"]["paired"]["mean"]])) for e in live)
+    bound = math.ceil(bound / 0.01 - 1e-9) * 0.01 or 0.01
+    pos = lambda v: (v + bound) / (2 * bound) * 100
+    rows, aria = [], []
+    for i, e in enumerate(entries):
+        name = BASE_LABEL.get(e["label"], e["label"])
+        if e["chance_all"] == 0:
+            rows.append('<div class="pr" data-label="%s" data-nothing="1"><div class="prl">%s</div>'
+                        '<div class="pn">nothing planted to find</div></div>' % (esc(e["label"]), esc(name)))
+            aria.append("%s: nothing planted to find" % name)
+            continue
+        k = e["k"]["20"]
+        lo, hi = k["paired"]["ci95"]
+        bars = "".join(
+            '<span class="pk">%s</span><span class="pbt"><span class="pbf k%d" style="width:%.2f%%"></span></span><span>%s</span>'
+            % (label, c, max(0.0, min(1.0, k[arm]["truth_precision"])) * 100, n(i, "k.20.%s.truth_precision" % arm))
+            for c, (arm, label) in enumerate((("map", "map"), ("persistence", "counts"))))
+        rows.append(
+            '<div class="pr" data-label="%s"><div class="prl">%s</div><div class="pb">%s</div>'
+            '<div class="pd"><span class="pdt"><span class="pdz"></span><span class="pdw" style="left:%.2f%%;width:%.2f%%"></span>'
+            '<span class="pdm" style="left:%.2f%%"></span></span>'
+            '<span>difference %s (%s to %s); %s</span></div></div>'
+            % (esc(e["label"]), esc(name), bars, pos(lo), pos(hi) - pos(lo), pos(k["paired"]["mean"]),
+               n(i, "k.20.paired.mean"), n(i, "k.20.paired.ci95.0"), n(i, "k.20.paired.ci95.1"), verdict_span(i, 20, inputs)))
+        aria.append("%s: map %s, counts %s, difference %s (%s to %s), %s" % (
+            name, fmt(i, "k.20.map.truth_precision"), fmt(i, "k.20.persistence.truth_precision"), fmt(i, "k.20.paired.mean"),
+            fmt(i, "k.20.paired.ci95.0"), fmt(i, "k.20.paired.ci95.1"), resolve(src(i, "k.20.paired.verdict"), inputs)))
+    label = htmllib.escape("Top 20 right against the hidden truth, the map against last hour's plain counts, with the difference "
+                           "and its 95% interval. " + "; ".join(aria) + ".", quote=True)
+    key = ('<div class="pkey"><span><i class="k0"></i>map</span><span><i class="k1"></i>' + HOUR + ' counts</span>'
+           '<span>dot and whisker: map minus counts, with its 95% interval; the line down the middle is no difference</span></div>')
+    figure = ('<figure role="img" aria-label="%s" data-scale-bound="%g"><figcaption>Top 20 right, map against ' + HOUR + ' counts</figcaption>'
+              '%s%s</figure>') % (label, bound, "".join(rows), key)
+    body = "<p>%s %s</p><p>%s %s</p>" % tuple(esc(x) for x in PERSIST_OPEN + PERSIST_REST)
+    return ('<!-- persist-start --><section class="pw">%s<h2>' + PERSIST_TITLE + '</h2>%s%s</section><!-- persist-end -->'
+            ) % (PERSIST_STYLE, body, figure)
 
 
 def script_data(inputs):
@@ -808,7 +937,7 @@ h1{font-family:var(--font-display);font-weight:700;font-size:clamp(38px,6.5vw,64
 .cta{display:inline-block;margin-top:var(--sp-28);padding:var(--sp-12) var(--sp-22);border-radius:999px;background:var(--accent);color:var(--white);font-weight:600;text-decoration:none}
 .steps{display:grid;gap:0;margin-top:var(--sp-24)}
 .step{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:var(--sp-40);align-items:center;padding-block:var(--sp-56);border-top:1px solid var(--hair)}
-@media (min-width:801px){.step:nth-child(even) .txt{order:2}}
+@media (min-width:801px){.step:nth-of-type(even) .txt{order:2}}
 .eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 var(--sp-10)}
 h2{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.2vw,40px);line-height:1.1;margin:0;max-width:18ch;text-wrap:balance}
 .one{margin:var(--sp-14) 0 0;font-size:17px;color:var(--ink-soft);max-width:44ch}
@@ -883,7 +1012,7 @@ a{color:var(--accent)}
 @media (max-width:720px){
   .hero .wrap{padding-block:var(--sp-44) var(--sp-28)}
   .step{grid-template-columns:1fr;padding-block:var(--sp-40);gap:var(--sp-24)}
-  .step:nth-child(even) .txt{order:0}
+  .step:nth-of-type(even) .txt{order:0}
   .funnel{grid-template-columns:1fr} .far{transform:rotate(90deg);justify-self:center}
   .flow .ar{display:none} .flow{gap:var(--sp-8)}
   .br{grid-template-columns:1fr} .br .val{grid-column:1}
@@ -979,12 +1108,14 @@ a{color:var(--accent)}
       <p class="eb">Step 3 · where the floor is bad</p>
       <h2>Draws the map from the stops nobody could explain.</h2>
       <p class="one">Unexplained hold-ups are counted per floor cell. The worst cells become the map. Blue rings are the analyser's top 20; brown is what we planted.</p>
-      <div class="big">{hits_top}<span>of 20 right on the latest map of this test area; {map_precision} on average over all test areas</span></div>
+      <div class="big">{hits_top}<span>of 20 right on the latest map of this test area. End-of-shift score against the planted cells, on average over all test areas: {map_precision}.<span class="sub">A separate comparison, against the hidden truth over the following hour: the map's top 20 are right {sb_map} of the time, the top 20 by last hour's plain counts {sb_pers}; paired verdict for the map: {sb_verdict}.</span></span></div>
       <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
     </div>
     <div class="pic"><svg id="m3" class="map" role="img" aria-label="{map_top_label}"></svg>
       <div class="legend"><span><i style="background:var(--planted)"></i>planted (hidden)</span><span><i style="border:2.5px solid var(--ink);box-shadow:0 0 0 2px var(--white) inset;background:var(--planted)"></i>analyser's top 20</span><span><i style="border:2.5px dashed var(--stuck);background:var(--clear)"></i>flagged, not planted</span><span>it can only find cells robots drive over: {map_ceiling} of them in one shift</span></div></div>
   </div>
+
+{persist_html}
 
   <div class="step">
     <div class="txt">
@@ -992,7 +1123,8 @@ a{color:var(--accent)}
       <h2>Plain sentences. Each one checked afterwards.</h2>
       <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
       <div class="pair"><div class="fig"><span class="fignum">{lt_hit}/{lt_n}</span><span class="figlab">real on the truth</span></div><div class="fig"><span class="fignum">{persist_held}/{persist_graded}</span><span class="figlab">still above the zone average next window</span></div></div>
-      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times; {persist_held} of {persist_graded} were still above their zone's average in the next half hour; only {held} of {graded} repeated their own peak, the bar the first version used.</span></div>
+      <p class="one">On the same shift, the top 20 by plain counts were right {sl_pers} of the time against the hidden truth.</p>
+      <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times; {persist_held} of {persist_graded} were still above their zone's average in the next half hour, {sl_win} times as often as chance against cells that got stuck in the same half hour and {sl_ever} times as often against the cells that ever got stuck; only {held} of {graded} repeated their own peak, the bar the first version used.</span></div>
     </div>
     <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
 {lessons_html}
@@ -1127,7 +1259,11 @@ def build(inputs):
         values.update(map_labels(inputs))
     except Exception as e:
         errors["map_labels"] = "%s: %s" % (type(e).__name__, e)
-    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html), ("dose_html", dose_html), ("explorer_html", explorer_html)):
+    try:
+        values.update(baseline_values(inputs))
+    except Exception as e:
+        errors["baseline_values"] = "%s: %s" % (type(e).__name__, e)
+    for name, fn in (("ep_rows", example_rows), ("id_gloss", id_gloss), ("lessons_html", lesson_items), ("bars_html", bars_html), ("dose_html", dose_html), ("persist_html", persist_html), ("explorer_html", explorer_html)):
         try:
             values[name] = fn(inputs)
         except Exception as e:

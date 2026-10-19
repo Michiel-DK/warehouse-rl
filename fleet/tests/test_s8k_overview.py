@@ -482,10 +482,11 @@ class TestChips(Committed):
         self.assertNotIn("interval includes zero", self.html)
         lessons = chips[5].text()
         lt = self.inputs[D]["run_constants"]["lessons_long"]
+        # S10H: the "still above" sentence gains the two lifts of baselines s8e-long-w0.5 (lift_window, lift_ever)
         self.assertIn("Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times; %d of %d were "
-                      "still above their zone's average in the next half hour; only %d of %d repeated their own peak, the bar the "
-                      "first version used."
-                      % (lt["truth_hit"], lt["truth_n"], lt["persist_held"], lt["persist_graded"], lt["held"], lt["graded"]), lessons)
+                      "still above their zone's average in the next half hour, "
+                      % (lt["truth_hit"], lt["truth_n"], lt["persist_held"], lt["persist_graded"]), lessons)
+        self.assertIn("; only %d of %d repeated their own peak, the bar the first version used." % (lt["held"], lt["graded"]), lessons)
         self.assertEqual((lt["truth_hit"], lt["truth_n"], lt["held"], lt["graded"]), (27, 27, 9, 31))
         # review round 1: benchmark.json batch.score.unmatched_detected has frozen (7,246) > by_design (5,600), so the chip
         # must not say most unmatched stops are shelf waits; and the stops are not "real" (only the precision share matches)
@@ -746,10 +747,13 @@ class TestS8NGlossStepFourAndMapLabels(Committed):
         self.assertEqual(labels, ["real on the truth", "still above the zone average next window"])
         self.assertEqual(len({tuple(f.classes) for f in figs}), 1)
         self.assertNotIn("flagged cells were real planted cells", self.html)
+        lp = {e["label"]: e for e in self.inputs[D]["run_constants"]["baselines"]}["s8e-long-w0.5"]["lesson_persist"]
         chip = ("Tested, weakly. Checked against the hidden truth. On a longer test shift the flagged cells were real %d of %d times; "
-                "%d of %d were still above their zone's average in the next half hour; only %d of %d repeated their own peak, "
-                "the bar the first version used."
-                % (ll["truth_hit"], ll["truth_n"], ll["persist_held"], ll["persist_graded"], ll["held"], ll["graded"]))
+                "%d of %d were still above their zone's average in the next half hour, %.1f times as often as chance against cells "
+                "that got stuck in the same half hour and %.1f times as often against the cells that ever got stuck; only %d of %d "
+                "repeated their own peak, the bar the first version used."  # S10H: the two lifts
+                % (ll["truth_hit"], ll["truth_n"], ll["persist_held"], ll["persist_graded"], lp["lift_window"], lp["lift_ever"],
+                   ll["held"], ll["graded"]))
         self.assertEqual(sum(1 for n in self.root.find_all(cls="st") if n.text() == chip), 1)
 
     def script_data(self):

@@ -30,7 +30,8 @@ SPECS = ["p 0.3-0.7=results/closed_loop/summary.json", "p 0.6-0.9=results/closed
 DATA = ROOT / "docs/replay/data.js"
 ARMS = ("none", "map_a4", "map_a32", "oracle")
 # digit counts of the overview page before S8R (git show 3dca770:docs/overview/index.html)
-MASTER_DIGITS = {"0": 538, "1": 1020, "2": 353, "3": 200, "4": 211, "5": 230, "6": 179, "7": 122, "8": 140, "9": 120}
+# S10H adds three typed "top 20" (steps 3 and 4), hence one more 2 and 0 each three times: 541 zeros, 356 twos
+MASTER_DIGITS = {"0": 541, "1": 1020, "2": 356, "3": 200, "4": 211, "5": 230, "6": 179, "7": 122, "8": 140, "9": 120}
 
 
 def run_main(argv):
@@ -288,7 +289,7 @@ class TestFigure(Fig):
         kids = [x for x in pic.kids if isinstance(x, k.Node)]
         self.assertEqual([x.classes[0] if x.classes else x.tag for x in kids], ["bars", "legend", "dosewrap"])
         self.assertIn(pic, step[0].find_all("div", "pic"))
-        self.assertEqual(self.html.count("<figure"), 1)
+        self.assertEqual(self.html.count("<figure"), 2)  # S10H: the dose figure and the persistence figure
 
     def test_twelve_bars_four_regimes_three_settings_in_data_order(self):
         bars = self.fig.find_all("span", "dbar")
@@ -485,6 +486,11 @@ class TestPage(unittest.TestCase):
         rest = re.sub(r"<!-- dose-start -->.*<!-- dose-end -->\n?", "", html, flags=re.S)
         rest = re.sub(r"<!-- explorer-start -->.*<!-- explorer-end -->\n?", "", rest, flags=re.S)
         self.assertNotIn("dosewrap", rest)
+        # S10H: the persistence block and every number it (and steps 3 and 4) reads from run_constants.baselines are generated too
+        self.assertEqual(html.count("<!-- persist-start -->"), 1)
+        rest = re.sub(r"<!-- persist-start -->.*<!-- persist-end -->\n?", "", rest, flags=re.S)
+        rest = re.sub(r'<b class="num" data-src="[^"]*run_constants\.baselines\.[^"]*">[^<]*</b>', "", rest)
+        rest = re.sub(r'<span class="vd" data-src="[^"]*run_constants\.baselines\.[^"]*">[^<]*</span>', "", rest)
         self.assertEqual(dict(Counter(re.findall(r"\d", rest))), MASTER_DIGITS)
         self.assertIn("results/closed_loop_sticky/summary.json", rest)  # footer source list unchanged
         self.assertNotIn("closed_loop_p0", rest)
