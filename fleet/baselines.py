@@ -286,8 +286,8 @@ def smoke(data_dir=None, log=print):
     """Re-score fleet/data/s8b-score (or --data-dir) with --baselines into a tmp dir. Exit code 0 only when the scorer
     exits 0, the output has a `baselines` key, the store files are byte-identical afterwards and it took < 120 s."""
     data = Path(data_dir) if data_dir else REPO / "fleet" / "data" / "s8b-score"
-    if not (data / "truth.json").exists():
-        log(f"smoke: {data} has no truth.json (fleet/data is untracked; pass --data-dir)")
+    if not (data / "store").is_dir():
+        log(f"smoke: {data} has no store (fleet/data is untracked; pass --data-dir)")
         return 1
     before = store_digest(data / "store")
     with tempfile.TemporaryDirectory(prefix="baselines_smoke_") as tmp:
