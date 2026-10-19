@@ -1034,7 +1034,7 @@ Same measured run (`fleet/data/s10c-blind`, 50 planner-blind blocked windows) an
   - the S10I lane report shows that the whole detection at the defaults comes from the active counting rule. With the end rule, the same CUSUM flags nothing on s10c-blind.
 
   No map row dominates the CUSUM, and the CUSUM dominates no row of the short-memory map.
-- **Cadence alone (n).** The short-memory map at 60 s detects the same 6 of 50 as the decayed map at K 20. Its median first detection is 402.5 s against 295 s, at 451.9 false alarms per zone-hour against 177.8. Publishing more often did not catch more windows here, and with the same memory it raises more false flag-publishes per hour.
+- **Short-memory map against decayed map (n).** At K 20, the short-memory map detects the same 6 of 50 as the decayed map. Its median first detection is 402.5 s against 295 s, at 451.9 false alarms per zone-hour against 177.8. Two things changed at once between these maps: the publish rate (60 s against 300 s) and the memory (window 0.2 h, half-life 0.1 h, against 1 h and 1 h). This run cannot separate the two effects. The fair cadence comparison is the short-memory map against the CUSUM, since both publish every 60 s: 6 of 50 at 260.2 to 451.9 against 2 of 50 at 0.000.
 - **On the measured run (n).** Outside the windows, the CUSUM raised 0.144 false alarms per zone-hour on s10c-blind. That is one flag, at the stream-end publish. So the CUSUM's false-alarm rate is low on this run, not zero.
 
 **Caveats.**
