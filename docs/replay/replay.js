@@ -59,7 +59,7 @@
       sparkFlat: 'how many of its {k} strongest picks were real, after each new map'
     },
     persist: {
-      context: "For context, from a batch of other test areas with the same floor setup, not this shift: against the hidden truth over the following hour the map's top {k} came out {map} real, the top {k} by last hour's plain counts {counts} real; paired verdict for the map: {verdict}."
+      context: "For context, from a batch of other test areas with the same floor setup, not this shift: against the hidden truth over the next {min} minutes the map's top {k} came out {map} real, the top {k} by last hour's plain counts {counts} real; the map is {verdict}."
     },
     lesson: {
       hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
@@ -166,7 +166,7 @@
     lessonLine: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.{truth}',
     truthOf: ' Checked against the hidden truth: {t}.',
     truthWords: { hit: 'the spot is a planted bad cell', false_alarm: 'the spot is not a planted bad cell' },
-    persistHover: 'From {source}: a batch of other test areas with the same floor setup, scored against the hidden truth over the following hour, not this shift. Difference between the map and the counts {mean} points, 95% interval {lo} to {hi}.',
+    persistHover: 'From {source}: a batch of other test areas with the same floor setup, scored against the hidden truth over the next {min} minutes, not this shift. Map minus counts {mean} points, likely range {lo} to {hi} points (95% interval).',
     longHover: 'From {source}: a longer independent test run, not this shift.',
     lessonLineLive: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.',
     keptLive: 'The kept share is measured on a finished shift: bytes stored divided by bytes that arrived.',
@@ -1068,7 +1068,7 @@
   function paintPersistContext() {
     var e = baselineEntry(FLOOR_LABEL), k = e && e.k ? e.k['20'] : null;
     var ok = k && k.map && k.persistence && k.paired && typeof k.paired.verdict === 'string' && Array.isArray(k.paired.ci95)
-      && isNum(k.map.truth_precision) && isNum(k.persistence.truth_precision) && isNum(k.paired.mean);
+      && isNum(k.map.truth_precision) && isNum(k.persistence.truth_precision) && isNum(k.paired.mean) && isNum(e.horizon_s);
     var node = $('sentence-persist');
     if (!ok) { if (node) node.hidden = true; return; }
     if (!node) {
@@ -1080,8 +1080,8 @@
     }
     node.hidden = false;
     setText('sentence-persist', fill(VISIBLE_COPY.persist.context, { k: fmt(TOP_N), map: pct1(k.map.truth_precision),
-      counts: pct1(k.persistence.truth_precision), verdict: k.paired.verdict }));
-    setHover('sentence-persist', fill(HOVER_COPY.persistHover, { source: e.src, mean: (k.paired.mean * 100).toFixed(1),
+      counts: pct1(k.persistence.truth_precision), verdict: k.paired.verdict, min: String(Math.round(e.horizon_s / 60)) }));
+    setHover('sentence-persist', fill(HOVER_COPY.persistHover, { source: e.src, min: String(Math.round(e.horizon_s / 60)), mean: (k.paired.mean * 100).toFixed(1),
       lo: (k.paired.ci95[0] * 100).toFixed(1), hi: (k.paired.ci95[1] * 100).toFixed(1) }));
   }
 

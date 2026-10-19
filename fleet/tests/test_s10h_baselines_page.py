@@ -1,26 +1,30 @@
 """S10H-PERSISTENCE-ON-PAGES: run_constants.baselines (exporter, data.js), the persistence numbers on the overview and the replay page.
 
 (a) every field of run_constants.baselines in data.js equals the value at its path in results/fleet/baselines_<label>.json;
-(b) overview DOM: (b1) every map truth-precision number shares its closest .big/.pair/.st/tr/figure ancestor with the persistence
-    number of the same label and K; (b2) the 97% sits in an element that also holds the s8b K20 map and persistence numbers and the
-    words 'planted' and 'hidden truth';
+(b) overview DOM: (b1) every map truth-precision number shares its closest .one/.big/.pair/.st/tr/figure ancestor with the persistence
+    number of the same label and K; (b2) the step-3 text column that holds the 97% also holds, in a p.one outside every .big, the s8b
+    K20 map and persistence numbers, the minutes and the words 'planted', 'hidden truth' and 'different test';
 (c) the verdict words shown equal the JSON verdicts (for every label that shows one; s10-none shows none and reads
     'nothing planted to find');
 (d) no BANNED word in the new copy, aria-labels and hover text of either page;
-(e) the two opening sentences of the new block, verbatim;
+(e) the two opening sentences of the new block, verbatim, in a FRESH build of the builder (which also equals the committed page),
+    and the guard that ties the opening sentence to the K20 verdicts of the data;
+(h) every window sentence renders round(horizon_s / 60) minutes of its own entry; 'following hour' / 'next hour' appear on neither page;
+(i) the figure: points, rendered end labels, bold verdicts, a counts bar with contrast >= 3:1, no 'paired verdict' on either page;
 (f) the exporter: bad --baselines input exits non-zero and leaves data.js unchanged; the refresh changes only run_constants.baselines;
 (g) the replay copy omits its clauses, with no 'null' / 'NaN' / 'undefined', when run_constants.baselines or an entry is absent.
 
 Injection that turns each test red (each was run once, see the build report): (a) change one persistence value in data.js;
-(b1) delete one persistence span of the overview; (b2) drop the sub-comparison out of the step-3 big element; (c) flip a verdict word
+(b1) delete one persistence span of the overview; (b2) put the sub-comparison back into the step-3 big element; (c) flip a verdict word
 in the overview; (d) put the word 'stall' into VISIBLE_COPY.persist.context; (e) change a word of the first sentence in
-overview_build.PERSIST_OPEN; (f) let baselines_constant skip the 'missing K' check; (g) let the replay print the sentence without the
+overview_build.PERSIST_OPEN; (h) give one horizon_s a wrong value; (e-guard) flip a K20 verdict in data.js to 'beats'; (f) let baselines_constant skip the 'missing K' check; (g) let the replay print the sentence without the
 presence check.
 """
 import contextlib
 import copy
 import io
 import json
+import math
 import re
 import shutil
 import sys
@@ -45,11 +49,11 @@ DATA = ROOT / "docs" / "replay" / "data.js"
 ARM_FIELDS = ("truth_precision", "pai", "lift_all", "lift_ever")
 LESSON_FIELDS = ("lift_window", "lift_ever", "chance_window", "chance_ever", "n_lessons", "observed_rate")
 OPEN = ("It does not, on any of the five runs: checked against the hidden truth, the cells that were busiest by last hour's plain "
-        "counts are right as often as the map's picks, or more often.",
-        "What does the work is finding the robots that got stuck and checking each call afterwards; the decayed weighting adds "
-        "nothing on top.")
+        "counts are right about as often as the map's picks, and on one run more often.",
+        "What does the work is finding the robots that got stuck and checking each call afterwards.")
 NOTHING = "nothing planted to find"
-ANCESTORS = ("big", "pair", "st", "tr", "figure")
+ANCESTORS = ("one", "big", "pair", "st", "tr", "figure")
+SHOWN = [x for x in LABELS if x != "s10-none"]  # the entries that show a verdict
 
 
 def baseline_json(label):
@@ -90,6 +94,7 @@ class TestDataJs(unittest.TestCase):
             b = baseline_json(g["label"])
             self.assertEqual(g["src"], "results/fleet/baselines_%s.json" % g["label"])
             self.assertEqual(g["n_zones"], b["paired"]["20"]["truth_precision"]["n_zones"])
+            self.assertEqual(g["horizon_s"], b["params"]["horizon_s"], g["label"])
             self.assertEqual(g["chance_all"], b["chance"]["all"])
             self.assertEqual(g["chance_ever"], b["chance"]["ever"])
             for kk in ("20", "40"):
@@ -104,6 +109,8 @@ class TestDataJs(unittest.TestCase):
             else:
                 self.assertEqual(g["lesson_persist"], {f: lp[f] for f in LESSON_FIELDS}, g["label"])
         self.assertEqual([g["label"] for g in got if g["lesson_persist"] is None], ["s8b-medium-80-p03-07", "closed-loop-sticky"])
+        self.assertEqual({g["label"]: g["horizon_s"] for g in got}, {"s8b-medium-80-p03-07": 1245, "closed-loop-sticky": 3600,
+                                                                      "s8e-long-w0.5": 1245, "s10c-blind": 1245, "s10-none": 1245})
 
     def test_the_known_verdicts(self):
         v = {g["label"]: (g["k"]["20"]["paired"]["verdict"], g["k"]["40"]["paired"]["verdict"]) for g in read_data()["run_constants"]["baselines"]}
@@ -147,7 +154,7 @@ class TestOverviewPairs(Overview):
             self.assertIsNotNone(anc)
             want = (sp[0], sp[1].replace(".map.", ".persistence."))
             self.assertIn(want, self.spans(anc), (self.entries[sp[0]]["label"], sp[1]))
-        self.assertEqual(seen, 5)  # the step-3 comparison and the four rows of the figure
+        self.assertEqual(seen, 6)  # the step-3 and step-4 comparisons and the four rows of the figure
 
     def test_b1_the_figure_binds_label_and_k_not_just_any_persistence_number(self):
         fig = self.root.find_all("figure")
@@ -162,51 +169,74 @@ class TestOverviewPairs(Overview):
             self.assertEqual({i for i, _ in self.spans(row)}, {idx}, label)  # every number of a row is that run's
             paths = {p for _, p in self.spans(row)}
             for want in ("k.20.map.truth_precision", "k.20.persistence.truth_precision", "k.20.paired.mean",
-                         "k.20.paired.ci95.0", "k.20.paired.ci95.1"):
+                         "k.20.paired.ci95.0", "k.20.paired.ci95.1", "horizon_s/60"):
                 self.assertIn(want, paths, label)
 
-    def test_b2_the_97_percent_is_labelled_and_its_element_holds_the_same_definition_pair(self):
+    def step(self, n):
+        return [s for s in self.root.find_all("div", "step") if "Step %d" % n in s.text()][0]
+
+    def test_b2_the_97_percent_is_labelled_and_its_column_holds_the_same_definition_pair_outside_every_big(self):
         hot = "results/fleet/hotspot_s8b-medium-80-p03-07.json:mean.k.20.precision"
         spans = [n for n in self.root.find_all("b", "num") if n.attrs.get("data-src") == hot]
         self.assertEqual(len(spans), 1)
-        holder = spans[0].parent
-        i = [e["label"] for e in self.entries].index("s8b-medium-80-p03-07")
-        have = {p for j, p in self.spans(holder) if j == i}
-        self.assertIn("k.20.map.truth_precision", have)
-        self.assertIn("k.20.persistence.truth_precision", have)
-        t = holder.text()
-        self.assertIn("planted", t)
-        self.assertIn("hidden truth", t)
-        # the 97% is the end-of-shift score against the planted cells, said before the comparison, never as its comparand
-        before = t[:t.index(spans[0].text())]
-        self.assertIn("End-of-shift score against the planted cells", before)
-        self.assertLess(t.index(spans[0].text()), t.index("A separate comparison"))
         big = self.closest(spans[0])
         self.assertIn("big", big.classes)
-        self.assertIn(holder, list(big.walk()))
-
-    def test_step_four_row_shows_the_plain_counts_number_without_a_verdict_and_the_two_lifts(self):
-        i = [e["label"] for e in self.entries].index("s8e-long-w0.5")
-        step = [s for s in self.root.find_all("div", "step") if "Step 4" in s.text()][0]
-        have = {p for j, p in self.spans(step) if j == i}
+        txt = self.step(3).find_all("div", "txt")
+        self.assertEqual(len(txt), 1)
+        txt = txt[0]
+        self.assertIn(spans[0], list(txt.walk()))
+        i = [e["label"] for e in self.entries].index("s8b-medium-80-p03-07")
+        have = {p for j, p in self.spans(txt) if j == i}
+        self.assertIn("k.20.map.truth_precision", have)
         self.assertIn("k.20.persistence.truth_precision", have)
-        self.assertNotIn("k.20.map.truth_precision", have)
-        self.assertEqual([n for n in step.walk() if "vd" in n.classes], [])
+        self.assertIn("horizon_s/60", have)
+        t = txt.text()
+        for w in ("planted", "hidden truth", "different test"):
+            self.assertIn(w, t)
+        # no baselines span is a descendant of any .big of the page: the comparison is not a display numeral
+        for b in self.root.find_all("div", "big"):
+            self.assertEqual(self.spans(b), [], b.text())
+        one = [p for p in txt.find_all("p", "one") if "different test" in p.text()]
+        self.assertEqual(len(one), 1)
+        self.assertTrue({"k.20.map.truth_precision", "k.20.persistence.truth_precision", "horizon_s/60"} <= {p for j, p in self.spans(one[0]) if j == i})
+        self.assertEqual([n.text() for n in one[0].walk() if "vd" in n.classes], [self.entries[i]["k"]["20"]["paired"]["verdict"]])
+        self.assertIn("hidden truth", one[0].text())
+        # the 97% keeps its label, said before the number; the comparison comes after the big element
+        self.assertIn("End-of-shift score against the planted cells", big.text())
+        self.assertLess(big.text().index("End-of-shift score against the planted cells"), big.text().index(spans[0].text()))
+        kids = [n for n in txt.kids if isinstance(n, k8.Node)]
+        self.assertLess(kids.index(big), kids.index(one[0]))
+
+    def test_step_four_pair_is_one_entry_with_its_verdict_and_the_lifts_sentence_is_unchanged(self):
+        i = [e["label"] for e in self.entries].index("s8e-long-w0.5")
+        step = self.step(4)
+        have = {p for j, p in self.spans(step) if j == i}
         line = [p for p in step.find_all("p", "one") if "plain counts" in p.text()]
         self.assertEqual(len(line), 1)
-        self.assertIn("top 20 by plain counts", line[0].text())
+        want = {"k.20.map.truth_precision", "k.20.persistence.truth_precision", "horizon_s/60"}
+        self.assertTrue(want <= {p for j, p in self.spans(line[0]) if j == i})
+        self.assertEqual({j for j, _ in self.spans(line[0])}, {i})  # every number of the pair is that one run's
+        self.assertIn("hidden truth", line[0].text())
+        self.assertIn("top 20 by last hour's plain counts", line[0].text())
+        self.assertEqual([n.text() for n in line[0].walk() if "vd" in n.classes], [self.entries[i]["k"]["20"]["paired"]["verdict"]])
+        # its own p.one, after the 27/27 and 18/25 pair
+        kids = [n for n in step.find_all("div", "txt")[0].kids if isinstance(n, k8.Node)]
+        self.assertLess(kids.index(step.find_all("div", "pair")[0]), kids.index(line[0]))
         chip = step.find_all("div", "st")[0].text()
         self.assertIn("{:.1f} times as often as chance against cells that got stuck in the same half hour".format(
             ob.Decimal(self.entries[i]["lesson_persist"]["lift_window"]).quantize(ob.Decimal("0.1"), rounding=ob.ROUND_HALF_UP)), chip)
         self.assertIn("against the cells that ever got stuck", chip)
         self.assertTrue({"lesson_persist.lift_window", "lesson_persist.lift_ever"} <= have)
+        # the pre-existing 'zone' words of step 4 are an open operator question: unchanged
+        self.assertIn("zone average", step.text())
+        self.assertIn("their zone's average", chip)
 
 
 # ------------------------------------------------------------------------------------------------ (c)
 class TestVerdicts(Overview):
     def test_c_every_verdict_word_shown_equals_the_json_verdict(self):
         vds = [n for n in self.root.walk() if n.tag == "span" and "vd" in n.classes]
-        self.assertEqual(len(vds), 5)  # step 3, plus four rows of the figure
+        self.assertEqual(len(vds), 6)  # step 3, step 4, plus four rows of the figure
         for n in vds:
             sp = self.src_parts(n.attrs["data-src"])
             e = self.entries[sp[0]]
@@ -244,15 +274,27 @@ class TestBlock(Overview):
     def block(self):
         return [s for s in self.root.find_all("section", "pw")][0]
 
-    def test_e_the_block_follows_step_three_and_opens_with_the_two_sentences(self):
-        blk = self.block()
+    def test_e_a_fresh_build_opens_with_the_two_sentences_and_equals_the_committed_page(self):
+        page, left, errors = ob.build(ob.load_inputs(DATA, ROOT))  # the builder, in-process: an edit of PERSIST_OPEN shows here
+        self.assertEqual((left, errors), ([], {}))
+        root = k8.parse(page)
+        blk = root.find_all("section", "pw")[0]
         self.assertEqual(blk.find_all("h2")[0].text(), "Does the map beat last hour's counts?")
         text = blk.find_all("p")[0].text()
         self.assertTrue(text.startswith(" ".join(OPEN)), text)
-        kids = [n for n in self.root.find_all("div", "steps")[0].kids if isinstance(n, k8.Node)]
+        self.assertEqual(page, k8.PAGE.read_text(encoding="utf-8"))
+        kids = [n for n in root.find_all("div", "steps")[0].kids if isinstance(n, k8.Node)]
         pos = kids.index(blk)
         self.assertIn("Step 3", kids[pos - 1].text())
         self.assertIn("Step 4", kids[pos + 1].text())
+
+    def test_e_guard_the_opening_sentence_still_matches_the_data(self):
+        verdicts = {e["label"]: e["k"]["20"]["paired"]["verdict"] for e in self.entries if e["label"] in SHOWN}
+        self.assertEqual(sorted(verdicts), sorted(SHOWN))
+        msg = "the opening sentence of the block no longer matches the data: %s" % verdicts
+        self.assertNotIn("beats", verdicts.values(), msg)
+        self.assertEqual(sum(v == "worse" for v in verdicts.values()), 1, msg)
+        self.assertNotIn("beats", [n.text() for n in self.root.walk() if "vd" in n.classes], msg)
 
     def test_e_at_most_four_body_sentences_and_every_number_has_a_source(self):
         blk = self.block()
@@ -264,6 +306,8 @@ class TestBlock(Overview):
             self.assertTrue(self.src_parts(n.attrs.get("data-src")), n.attrs.get("data-src"))
         # numbers in the figure text outside a span: none (the two typed ones are 'top 20' and '95%')
         rest = re.sub(r"top 20|Top 20|95%", " ", blk.text(" "))
+        for n in blk.find_all("span", "pe"):  # the whisker scale's end labels: rendered from the data-derived bound, checked in test (i)
+            rest = rest.replace(n.text(" "), " ", 1)
         for n in nums:
             rest = rest.replace(n.text(), " ", 1)
         self.assertEqual(re.findall(r"\d", rest), [])
@@ -317,6 +361,117 @@ class TestBannedWords(Overview):
         html = (DOCS / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("persistence", html)
         self.assertNotIn("sentence-persist", html)
+
+
+# ------------------------------------------------------------------------------------------------ (h) the window
+class TestWindow(Overview):
+    def test_h_every_minutes_span_renders_round_horizon_of_its_own_entry(self):
+        spans = [n for n in self.root.find_all("b", "num") if (n.attrs.get("data-src") or "").endswith(".horizon_s/60")]
+        self.assertEqual(len(spans), 6)  # step 3, step 4, four rows of the figure: one each
+        seen = set()
+        for n in spans:
+            i, path = self.src_parts(n.attrs["data-src"])
+            e = self.entries[i]
+            self.assertEqual(n.text(), str(round(baseline_json(e["label"])["params"]["horizon_s"] / 60)), e["label"])
+            seen.add((e["label"], n.text()))
+        self.assertEqual(seen, {("s8b-medium-80-p03-07", "21"), ("closed-loop-sticky", "60"), ("s8e-long-w0.5", "21"), ("s10c-blind", "21")})
+
+    def test_h_each_window_sentence_names_the_entry_it_uses(self):
+        sentences = [n for n in self.root.find_all("p") if "over the next" in n.text()]
+        self.assertEqual(len(sentences), 2)  # step 3 and step 4
+        for node in sentences:
+            spans = [n for n in node.find_all("b", "num") if (n.attrs.get("data-src") or "").endswith(".horizon_s/60")]
+            self.assertEqual(len(spans), 1, node.text())
+            mapped = {self.src_parts(n.attrs["data-src"])[0] for n in node.find_all("b", "num") if self.src_parts(n.attrs.get("data-src"))}
+            self.assertEqual(mapped, {self.src_parts(spans[0].attrs["data-src"])[0]}, node.text())
+        rows = self.root.find_all("div", "pr")
+        for row in rows:
+            if "data-nothing" in row.attrs:
+                continue
+            i = [e["label"] for e in self.entries].index(row.attrs["data-label"])
+            mins = [n for n in row.find_all("b", "num") if n.attrs["data-src"].endswith("horizon_s/60")]
+            self.assertEqual([self.src_parts(n.attrs["data-src"])[0] for n in mins], [i])
+            self.assertIn("scored over %s minutes" % mins[0].text(), row.text())
+        label = [f for f in self.root.find_all("figure")][0].attrs["aria-label"]
+        self.assertIn("scored over 60 minutes", label)
+        self.assertEqual(label.count("scored over 21 minutes"), 3)
+
+    def test_h_no_following_hour_or_next_hour_on_either_page(self):
+        js = (DOCS / "replay.js").read_text(encoding="utf-8")
+        pieces = [self.html] + [v for name in ("VISIBLE_COPY", "HOVER_COPY") for s, e, v in s8i.scan_js(js)[0]
+                                if s8i.const_span(js, name)[0] <= s <= s8i.const_span(js, name)[1]]
+        for p in pieces:
+            self.assertNotRegex(p.lower(), r"following hour|next hour")
+        # the page's own wording of the scoring window is minutes: 'over the next N minutes'
+        self.assertEqual(len(re.findall(r"over the next <b", self.html)), 2)
+
+    def test_h_a_wrong_horizon_in_the_data_changes_the_rendered_minutes(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = k8.read_js_doc(DATA)
+            doc["run_constants"]["baselines"][0]["horizon_s"] = 1800
+            fx = k8.write_fixture(Path(td) / "fx", data_doc=doc)
+            out = Path(td) / "o.html"
+            rc, err = k8.run_builder(fx, out)
+            self.assertEqual(rc, 0, err)
+            root = k8.parse(out.read_text(encoding="utf-8"))
+        mins = [n.text() for n in root.find_all("b", "num") if (n.attrs.get("data-src") or "").endswith(".baselines.0.horizon_s/60")]
+        self.assertEqual(mins, ["30", "30"])  # the step-3 sentence and the row of that entry; nothing typed
+
+
+# ------------------------------------------------------------------------------------------------ (i) the figure
+def luminance(hexcolor):
+    h = hexcolor.lstrip("#")
+    c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def contrast(a, b):
+    la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+class TestFigure(Overview):
+    def fig(self):
+        return [f for f in self.root.find_all("figure") if "Top 20 right" in f.text()][0]
+
+    def test_i_differences_are_in_points_with_a_rendered_scale_and_bold_verdicts(self):
+        fig = self.fig()
+        bound = max(max(abs(v) for v in e["k"]["20"]["paired"]["ci95"] + [e["k"]["20"]["paired"]["mean"]])
+                    for e in self.entries if e["chance_all"] != 0)
+        b = math.ceil(bound / 0.01 - 1e-9) * 0.01
+        want = ["-%g points" % round(b * 100, 6), "0", "+%g points" % round(b * 100, 6)]
+        rows = [r for r in fig.find_all("div", "pr") if "data-nothing" not in r.attrs]
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            ends = row.find_all("span", "pe")
+            self.assertEqual(len(ends), 1)
+            self.assertEqual([c.text() for c in ends[0].kids if isinstance(c, k8.Node)], want)
+            mean = [n for n in row.find_all("b", "num") if n.attrs["data-src"].endswith("paired.mean")][0]
+            self.assertTrue(mean.text().endswith(" points"), mean.text())
+            self.assertNotIn("%", mean.text())
+            self.assertIn("likely range", row.text())
+        self.assertEqual(fig.attrs["data-scale-bound"], "%g" % b)
+        css = self.html
+        self.assertRegex(css, r"\.vd\{[^}]*font-weight:700")
+        self.assertEqual(len([n for n in fig.walk() if "vd" in n.classes]), 4)
+
+    def test_i_the_counts_bar_is_a_darker_neutral_with_contrast_three_to_one(self):
+        m = re.search(r"\.pbf\.k1\{background:var\((--[\w-]+)\)\}", self.html)
+        self.assertTrue(m)
+        var = lambda name: re.search(re.escape(name) + r":(#[0-9a-fA-F]{6})", self.html).group(1)
+        self.assertGreaterEqual(contrast(var(m.group(1)), var("--paper-deep")), 3.0)
+        self.assertRegex(self.html, r"\.pkey i\.k1\{background:var\(%s\)\}" % re.escape(m.group(1)))
+
+    def test_i_no_paired_verdict_text_on_either_page(self):
+        js = (DOCS / "replay.js").read_text(encoding="utf-8")
+        self.assertNotIn("paired verdict", self.html.lower())
+        for name in ("VISIBLE_COPY", "HOVER_COPY"):
+            a, b = s8i.const_span(js, name)
+            for s, e, v in s8i.scan_js(js)[0]:
+                if a <= s <= b:
+                    self.assertNotIn("paired verdict", v.lower())
+        self.assertIn("the line is the likely range of the gap", self.html)
 
 
 # ------------------------------------------------------------------------------------------------ (f)
@@ -427,10 +582,13 @@ class TestReplayCopy(unittest.TestCase):
         self.assertFalse(snap["ids"]["sentence-persist"]["hidden"])
         self.assertIn("{:.1f}% real".format(0.925 * 100), text)
         self.assertIn("93.3% real", text)
-        self.assertIn("paired verdict for the map: " + k["paired"]["verdict"], text)
+        self.assertIn("the map is " + k["paired"]["verdict"] + ".", text)
+        self.assertIn("over the next %d minutes" % round(e["s8b-medium-80-p03-07"]["horizon_s"] / 60), text)
+        self.assertNotIn("paired", text)
         self.assertIn("not this shift", text)
         self.assertIn("hidden truth", text)
         self.assertIn("results/fleet/baselines_s8b-medium-80-p03-07.json", snap["hovers"]["sentence-persist"])
+        self.assertIn("over the next 21 minutes", snap["hovers"]["sentence-persist"])
         lesson = " ".join(snap["ids"]["lessonlong"]["text"].split())
         self.assertIn("3.0 times as often as chance against cells that got stuck in the same half hour", lesson)
         self.assertIn("3.3 times as often against the cells that ever got stuck", lesson)

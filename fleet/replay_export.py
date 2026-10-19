@@ -142,12 +142,13 @@ kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) 
                                    share/share_ci95 = share_of_floor_loss_recovered of the arm (null for "none"); source =
                                    PATH as given. Raises, naming the file, when a summary lacks one of the four arms or
                                    "undisturbed". Null without --dose-response. Context from other runs than the replay.
-                baselines          [{label, src, n_zones, chance_all, chance_ever, k {"20","40": {map, persistence: each {truth_precision,
+                baselines          [{label, src, n_zones, horizon_s, chance_all, chance_ever, k {"20","40": {map, persistence: each {truth_precision,
                                    pai, lift_all, lift_ever}, paired {mean, ci95, verdict}}}, lesson_persist {lift_window, lift_ever,
                                    chance_window, chance_ever, n_lessons, observed_rate} or null when n_lessons is 0}] in the order of the
                                    repeatable --baselines LABEL=PATH (split on the first "="), one entry per results/fleet/baselines_<label>.json.
                                    Every value is copied unrounded from the file's `baselines` key (k.<K>.{map,persistence}, paired.<K>.truth_precision,
-                                   chance); src = PATH as given; n_zones = paired.20.truth_precision.n_zones. Raises, naming the file, on a
+                                   chance); src = PATH as given; n_zones = paired.20.truth_precision.n_zones;
+                                   horizon_s = params.horizon_s (the scoring window in seconds). Raises, naming the file, on a
                                    spec without "=", a file without `baselines` or a missing K 20/40. Null without --baselines. Context
                                    from other runs than the replay.
                 explorer           {axes, floor, sweeps, source_note} from --explorer (null without; a refresh without it leaves
@@ -799,6 +800,7 @@ def baselines_constant(specs):
             lp = b["lesson_persist"]
             lesson = None if not lp["n_lessons"] else {f: lp[f] for f in LESSON_PERSIST_FIELDS}
             out.append(dict(label=label, src=path, n_zones=b["paired"]["20"]["truth_precision"]["n_zones"],
+                            horizon_s=b["params"]["horizon_s"],
                             chance_all=b["chance"]["all"], chance_ever=b["chance"]["ever"], k=ks, lesson_persist=lesson))
         except (KeyError, TypeError) as e:
             raise ValueError(f"{path} lacks a `baselines` key with k/paired for K 20 and 40 ({type(e).__name__}: {e})") from e

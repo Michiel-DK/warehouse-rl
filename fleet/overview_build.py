@@ -142,7 +142,7 @@ DOSE_KIND = {"p_lo": "g", "p_hi": "g", "floor_loss": "f1"}
 BASE = "run_constants.baselines"
 BASE_FIELD = re.compile(
     re.escape(BASE) + r"\.\d+\.(?:k\.(?:20|40)\.(?:map|persistence)\.truth_precision|k\.(?:20|40)\.paired\.(?:mean|ci95\.[01])"
-    r"|lesson_persist\.(?:lift_window|lift_ever))$")
+    r"|lesson_persist\.(?:lift_window|lift_ever)|horizon_s/60)$")
 
 
 def kind_of(src):
@@ -152,6 +152,10 @@ def kind_of(src):
     if src in KIND_BY_SRC:
         return KIND_BY_SRC[src]
     if src.startswith(DATA + ":") and BASE_FIELD.fullmatch(src[len(DATA) + 1:]):
+        if src.endswith(".horizon_s/60"):
+            return "int"  # S10H: the scoring window in whole minutes, round(horizon_s / 60)
+        if ".paired." in src:
+            return "pts1h" if src.endswith(".paired.mean") else "pts1n"  # a difference of shares, in percentage points
         return "f1h" if ".lesson_persist." in src else "pct1h"
     m = DOSE_FIELD.search(src) if src.startswith(DATA + ":") else None
     if m:
@@ -172,9 +176,9 @@ def format_value(src, value):
         return "{:g}".format(value)
     if kind == "pct0":
         return "{:.0f}%".format(value * 100)
-    if kind in ("pct1h", "f1h"):
-        d = Decimal((value + 0.0) * (100 if kind == "pct1h" else 1)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-        return "{}{}".format(d, "%" if kind == "pct1h" else "")
+    if kind in ("pct1h", "f1h", "pts1h", "pts1n"):
+        d = Decimal((value + 0.0) * (1 if kind == "f1h" else 100)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        return "{}{}".format(d, {"pct1h": "%", "pts1h": " points"}.get(kind, ""))
     if kind == "pct1":
         return "{:.1f}%".format(value * 100)
     if kind == "pp1":
@@ -438,11 +442,10 @@ BASE_LABEL = {"s8b-medium-80-p03-07": "Floor", "closed-loop-sticky": "Sticky flo
 HOUR = "last hour's"
 PERSIST_TITLE = "Does the map beat last hour's counts?"
 PERSIST_OPEN = ("It does not, on any of the five runs: checked against the hidden truth, the cells that were busiest by last hour's "
-                "plain counts are right as often as the map's picks, or more often.",
-                "What does the work is finding the robots that got stuck and checking each call afterwards; the decayed weighting "
-                "adds nothing on top.")
-PERSIST_REST = ("Each row sets the map's top 20 against the top 20 by last hour's plain counts; the whisker is the 95% interval of "
-                "the difference between the two.",
+                "plain counts are right about as often as the map's picks, and on one run more often.",
+                "What does the work is finding the robots that got stuck and checking each call afterwards.")
+PERSIST_REST = ("Each row sets the map's top 20 against the top 20 by last hour's plain counts; the line under it is the 95% range of "
+                "the gap between the two.",
                 "The row with nothing planted has nothing to find, so it shows no bars and no verdict.")
 PERSIST_STYLE = """<style>
 .pw{border-top:1px solid var(--hair);padding-block:var(--sp-48);display:grid;gap:var(--sp-14)}
@@ -455,7 +458,9 @@ PERSIST_STYLE = """<style>
 .pk{color:var(--muted)}
 .pbt{position:relative;height:12px;background:var(--paper-deep);border-radius:3px}
 .pbf{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
-.pbf.k0{background:var(--accent)} .pbf.k1{background:var(--bar)}
+.pbf.k0{background:var(--accent)} .pbf.k1{background:var(--muted)}
+.vd{font-weight:700;color:var(--ink)}
+.pe{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
 .pd{display:grid;gap:var(--sp-4);font-size:13px;font-variant-numeric:tabular-nums}
 .pdt{position:relative;height:18px;background:var(--paper-deep);border-radius:3px}
 .pdz{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--ink)}
@@ -466,7 +471,7 @@ PERSIST_STYLE = """<style>
 .pn{grid-column:1 / -1;font-size:14px;color:var(--muted)}
 .pkey{display:flex;flex-wrap:wrap;gap:var(--sp-6) var(--sp-16);font-size:12.5px;color:var(--muted)}
 .pkey i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:var(--sp-6)}
-.pkey i.k0{background:var(--accent)} .pkey i.k1{background:var(--bar)}
+.pkey i.k0{background:var(--accent)} .pkey i.k1{background:var(--muted)}
 @media (max-width:480px){.pr{grid-template-columns:minmax(0,1fr)}}
 </style>"""
 
@@ -497,8 +502,9 @@ def baseline_values(inputs):
     n = lambda idx, path: num_src("%s:%s.%d.%s" % (DATA, BASE, idx, path), inputs)
     return {
         "sb_map": n(i, "k.20.map.truth_precision"), "sb_pers": n(i, "k.20.persistence.truth_precision"),
-        "sb_verdict": verdict_span(i, 20, inputs),
-        "sl_pers": n(j, "k.20.persistence.truth_precision"),
+        "sb_verdict": verdict_span(i, 20, inputs), "sb_min": n(i, "horizon_s/60"),
+        "sl_map": n(j, "k.20.map.truth_precision"), "sl_pers": n(j, "k.20.persistence.truth_precision"),
+        "sl_verdict": verdict_span(j, 20, inputs), "sl_min": n(j, "horizon_s/60"),
         "sl_win": n(j, "lesson_persist.lift_window"), "sl_ever": n(j, "lesson_persist.lift_ever"),
     }
 
@@ -515,6 +521,7 @@ def persist_html(inputs):
     bound = max(max(abs(v) for v in (e["k"]["20"]["paired"]["ci95"] + [e["k"]["20"]["paired"]["mean"]])) for e in live)
     bound = math.ceil(bound / 0.01 - 1e-9) * 0.01 or 0.01
     pos = lambda v: (v + bound) / (2 * bound) * 100
+    ends = ("-%g points" % round(bound * 100, 6), "+%g points" % round(bound * 100, 6))  # the scale bound, rendered from the data
     rows, aria = [], []
     for i, e in enumerate(entries):
         name = BASE_LABEL.get(e["label"], e["label"])
@@ -533,16 +540,18 @@ def persist_html(inputs):
             '<div class="pr" data-label="%s"><div class="prl">%s</div><div class="pb">%s</div>'
             '<div class="pd"><span class="pdt"><span class="pdz"></span><span class="pdw" style="left:%.2f%%;width:%.2f%%"></span>'
             '<span class="pdm" style="left:%.2f%%"></span></span>'
-            '<span>difference %s (%s to %s); %s</span></div></div>'
-            % (esc(e["label"]), esc(name), bars, pos(lo), pos(hi) - pos(lo), pos(k["paired"]["mean"]),
-               n(i, "k.20.paired.mean"), n(i, "k.20.paired.ci95.0"), n(i, "k.20.paired.ci95.1"), verdict_span(i, 20, inputs)))
-        aria.append("%s: map %s, counts %s, difference %s (%s to %s), %s" % (
+            '<span class="pe"><span>%s</span><span>0</span><span>%s</span></span>'
+            '<span>map minus counts %s, likely range %s to %s points; scored over %s minutes; the map is %s</span></div></div>'
+            % (esc(e["label"]), esc(name), bars, pos(lo), pos(hi) - pos(lo), pos(k["paired"]["mean"]), ends[0], ends[1],
+               n(i, "k.20.paired.mean"), n(i, "k.20.paired.ci95.0"), n(i, "k.20.paired.ci95.1"), n(i, "horizon_s/60"),
+               verdict_span(i, 20, inputs)))
+        aria.append("%s: map %s, counts %s, map minus counts %s, likely range %s to %s points, scored over %s minutes, the map is %s" % (
             name, fmt(i, "k.20.map.truth_precision"), fmt(i, "k.20.persistence.truth_precision"), fmt(i, "k.20.paired.mean"),
-            fmt(i, "k.20.paired.ci95.0"), fmt(i, "k.20.paired.ci95.1"), resolve(src(i, "k.20.paired.verdict"), inputs)))
+            fmt(i, "k.20.paired.ci95.0"), fmt(i, "k.20.paired.ci95.1"), fmt(i, "horizon_s/60"), resolve(src(i, "k.20.paired.verdict"), inputs)))
     label = htmllib.escape("Top 20 right against the hidden truth, the map against last hour's plain counts, with the difference "
-                           "and its 95% interval. " + "; ".join(aria) + ".", quote=True)
+                           "and its likely range. " + "; ".join(aria) + ".", quote=True)
     key = ('<div class="pkey"><span><i class="k0"></i>map</span><span><i class="k1"></i>' + HOUR + ' counts</span>'
-           '<span>dot and whisker: map minus counts, with its 95% interval; the line down the middle is no difference</span></div>')
+           '<span>dot: map minus counts; the line is the likely range of the gap; the mark in the middle is no gap</span></div>')
     figure = ('<figure role="img" aria-label="%s" data-scale-bound="%g"><figcaption>Top 20 right, map against ' + HOUR + ' counts</figcaption>'
               '%s%s</figure>') % (label, bound, "".join(rows), key)
     body = "<p>%s %s</p><p>%s %s</p>" % tuple(esc(x) for x in PERSIST_OPEN + PERSIST_REST)
@@ -1113,7 +1122,8 @@ a{color:var(--accent)}
       <p class="eb">Step 3 · where the floor is bad</p>
       <h2>Draws the map from the stops nobody could explain.</h2>
       <p class="one">Unexplained hold-ups are counted per floor cell. The worst cells become the map. Blue rings are the analyser's top 20; brown is what we planted.</p>
-      <div class="big">{hits_top}<span>of 20 right on the latest map of this test area. End-of-shift score against the planted cells, on average over all test areas: {map_precision}.<span class="sub">A separate comparison, against the hidden truth over the following hour: the map's top 20 are right {sb_map} of the time, the top 20 by last hour's plain counts {sb_pers}; paired verdict for the map: {sb_verdict}.</span></span></div>
+      <div class="big">{hits_top}<span>of 20 right on the latest map of this test area. End-of-shift score against the planted cells, on average over all test areas: {map_precision}.</span></div>
+      <p class="one">A different test, against the hidden truth over the next {sb_min} minutes: the map's top 20 were right {sb_map}, the top 20 by last hour's plain counts {sb_pers}; the map is {sb_verdict}.</p>
       <div class="st ok"><i></i><span><b>Tested in simulation.</b> Over a batch of test areas, scored against the planted cells.</span></div>
     </div>
     <div class="pic"><svg id="m3" class="map" role="img" aria-label="{map_top_label}"></svg>
@@ -1128,7 +1138,7 @@ a{color:var(--accent)}
       <h2>Plain sentences. Each one checked afterwards.</h2>
       <p class="one">Rules over the counts, no language model. A cell that holds robots up far more than the rest, a robot stuck far more than its peers, two robots that keep blocking each other.</p>
       <div class="pair"><div class="fig"><span class="fignum">{lt_hit}/{lt_n}</span><span class="figlab">real on the truth</span></div><div class="fig"><span class="fignum">{persist_held}/{persist_graded}</span><span class="figlab">still above the zone average next window</span></div></div>
-      <p class="one">On the same shift, the top 20 by plain counts were right {sl_pers} of the time against the hidden truth.</p>
+      <p class="one">On that longer shift, against the hidden truth over the next {sl_min} minutes: the map's top 20 were right {sl_map}, the top 20 by last hour's plain counts {sl_pers}; the map is {sl_verdict}.</p>
       <div class="st weak"><i></i><span><b>Tested, weakly.</b> Checked against the hidden truth. On a longer test shift the flagged cells were real {lt_hit} of {lt_n} times; {persist_held} of {persist_graded} were still above their zone's average in the next half hour, {sl_win} times as often as chance against cells that got stuck in the same half hour and {sl_ever} times as often against the cells that ever got stuck; only {held} of {graded} repeated their own peak, the bar the first version used.</span></div>
     </div>
     <div class="card"><div class="lbl">What it would tell your operators</div><div class="lessons">
