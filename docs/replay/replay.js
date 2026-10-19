@@ -58,6 +58,9 @@
       sparkBetter: 'gets better as it watches',
       sparkFlat: 'how many of its {k} strongest picks were real, after each new map'
     },
+    persist: {
+      context: "For context, from a batch of other test areas with the same floor setup, not this shift: against the hidden truth over the following hour the map's top {k} came out {map} real, the top {k} by last hour's plain counts {counts} real; paired verdict for the map: {verdict}."
+    },
     lesson: {
       hot_cell: 'One spot on the floor keeps holding robots up. Worth a look.',
       hot_robot: 'One robot gets stuck far more often than the others.',
@@ -67,7 +70,8 @@
       truthHit: '✓ real spot',
       truthMiss: '✗ not a planted spot',
       short: 'Short shift, few events. On a full day the list is longer and more varied.',
-      long: "Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times; {ph} of {pg} were still above their area's average in the next half hour; only {held} of {total} repeated their own peak, the bar the first version used.",
+      long: "Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times; {ph} of {pg} were still above their area's average in the next half hour{lifts}; only {held} of {total} repeated their own peak, the bar the first version used.",
+      lifts: ', {lw} times as often as chance against cells that got stuck in the same half hour and {le} times as often against the cells that ever got stuck',
       longNoPersist: 'Checked against the hidden truth. On a longer test shift the flagged cells were real {hit} of {n} times; only {held} of {total} repeated their own peak, the bar the first version used.',
       tickOk: ' ✓ repeated',
       tickOff: ' ✗ did not repeat',
@@ -162,6 +166,7 @@
     lessonLine: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.{truth}',
     truthOf: ' Checked against the hidden truth: {t}.',
     truthWords: { hit: 'the spot is a planted bad cell', false_alarm: 'the spot is not a planted bad cell' },
+    persistHover: 'From {source}: a batch of other test areas with the same floor setup, scored against the hidden truth over the following hour, not this shift. Difference between the map and the counts {mean} points, 95% interval {lo} to {hi}.',
     longHover: 'From {source}: a longer independent test run, not this shift.',
     lessonLineLive: 'Original text: {text}\nKind {kind}, zone {zone}, support {c}, drawn at {drawn}, {verdict}.',
     keptLive: 'The kept share is measured on a finished shift: bytes stored divided by bytes that arrived.',
@@ -1050,6 +1055,36 @@
     paintLessons(v.items, v.empty);
   }
 
+  // ---- run_constants.baselines: context numbers from batches of other runs, omitted when the key or the entry is absent ----
+  var FLOOR_LABEL = 's8b-medium-80-p03-07', LONG_LABEL = 's8e-long-w0.5';
+  function pct1(x) { return (x * 100).toFixed(1) + '%'; }
+  function isNum(x) { return typeof x === 'number' && isFinite(x); }
+  function baselineEntry(label) {
+    var list = RC.baselines;
+    if (!Array.isArray(list)) return null;
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].label === label) return list[i];
+    return null;
+  }
+  function paintPersistContext() {
+    var e = baselineEntry(FLOOR_LABEL), k = e && e.k ? e.k['20'] : null;
+    var ok = k && k.map && k.persistence && k.paired && typeof k.paired.verdict === 'string' && Array.isArray(k.paired.ci95)
+      && isNum(k.map.truth_precision) && isNum(k.persistence.truth_precision) && isNum(k.paired.mean);
+    var node = $('sentence-persist');
+    if (!ok) { if (node) node.hidden = true; return; }
+    if (!node) {
+      node = el('p', 'cap');
+      node.id = 'sentence-persist';
+      node.tabIndex = 0;
+      node.setAttribute('data-hover', '');
+      $('s-right').insertAdjacentElement('afterend', node);
+    }
+    node.hidden = false;
+    setText('sentence-persist', fill(VISIBLE_COPY.persist.context, { k: fmt(TOP_N), map: pct1(k.map.truth_precision),
+      counts: pct1(k.persistence.truth_precision), verdict: k.paired.verdict }));
+    setHover('sentence-persist', fill(HOVER_COPY.persistHover, { source: e.src, mean: (k.paired.mean * 100).toFixed(1),
+      lo: (k.paired.ci95[0] * 100).toFixed(1), hi: (k.paired.ci95[1] * 100).toFixed(1) }));
+  }
+
   // ---- the header noise line, the speed lines, the rebuild sentence, the lesson footnotes and panel 5 (replay only, painted once) ----
   function paintReplayExtras() {
     var H = RC.header, sp = RC.speed, LL = RC.lessons_long;
@@ -1063,12 +1098,18 @@
       setText('speed-read', fill(VISIBLE_COPY.log.speedRead, { rate: rateNum(sp.ingest_rate), ratio: fmt(sp.ratio) }));
       setHover('speed-read', fill(HOVER_COPY.speed, { robot: sp.robot_rate_source, source: sp.source }));
     }
+    paintPersistContext();
     setText('lessonshort', VISIBLE_COPY.lesson.short);
     $('lessonlong').hidden = !LL;
     if (LL) {
       var llBase = { hit: fmt(LL.truth_hit), n: fmt(LL.truth_n), held: fmt(LL.held), total: fmt(LL.graded) };
       if (LL.persist_held != null && LL.persist_graded != null) {
         llBase.ph = fmt(LL.persist_held); llBase.pg = fmt(LL.persist_graded);
+        llBase.lifts = '';
+        var lp = baselineEntry(LONG_LABEL) ? baselineEntry(LONG_LABEL).lesson_persist : null;
+        if (lp && isNum(lp.lift_window) && isNum(lp.lift_ever)) {
+          llBase.lifts = fill(VISIBLE_COPY.lesson.lifts, { lw: lp.lift_window.toFixed(1), le: lp.lift_ever.toFixed(1) });
+        }
         setText('lessonlong', fill(VISIBLE_COPY.lesson.long, llBase));
       } else {
         setText('lessonlong', fill(VISIBLE_COPY.lesson.longNoPersist, llBase));

@@ -61,7 +61,7 @@ TEMPLATES = [
     ("Rebuilding the shift from what we kept gives every robot's state at every step, and its position at every change.", "replay.js"),
     ("Every message accounted for: {..} sent, {..} read, {..} missing, checked against the sender's own count.", "replay.js"),
     ("Checked against the hidden truth. On a longer test shift the flagged cells were real {..} of {..} times; {..} of {..} were "
-     "still above their area's average in the next half hour; only {..} of {..} repeated their own peak, the bar the first version used.",
+     "still above their area's average in the next half hour{..}; only {..} of {..} repeated their own peak, the bar the first version used.",  # S10H: {lifts}
      "replay.js"),
     ("Checked against the hidden truth. On a longer test shift the flagged cells were real {..} of {..} times; only {..} of {..} "
      "repeated their own peak, the bar the first version used.", "replay.js"),
@@ -72,6 +72,9 @@ TEMPLATES = [
     ("We can read {..} a second, so a fleet {..}x larger would still keep up.", "replay.js"),
     ("{..} messages, {..} of them deliberately broken so you can see what the extractor does with bad lines.", "replay.js"),
 ]
+# S10H: lesson.long gains the two lifts of run_constants.baselines (s8e-long-w0.5 lesson_persist, lift_window 2.986..., lift_ever 3.255...)
+LIFTS = (", 3.0 times as often as chance against cells that got stuck in the same half hour and 3.3 times as often against the cells "
+         "that ever got stuck")
 BAR_LABELS = ["Bad floor, no map", "Bad floor, the analyser's map", "Bad floor, perfect knowledge", "Clean floor"]
 
 
@@ -375,10 +378,10 @@ class TestRender(unittest.TestCase):
         ll = rc["lessons_long"]
         self.assertEqual(text_of(last, "lessonlong"), f"Checked against the hidden truth. On a longer test shift the flagged cells were "
                          f"real {ll['truth_hit']} of {ll['truth_n']} times; {ll['persist_held']} of {ll['persist_graded']} were still above "
-                         f"their area's average in the next half hour; only {ll['held']} of {ll['graded']} repeated their own peak, "
-                         "the bar the first version used.")
+                         f"their area's average in the next half hour{LIFTS}; only {ll['held']} of {ll['graded']} repeated their own peak, "
+                         "the bar the first version used.")  # S10H: the two lifts of baselines s8e-long-w0.5
         self.assertEqual(text_of(last, "lessonlong"), "Checked against the hidden truth. On a longer test shift the flagged cells were "
-                         "real 27 of 27 times; 18 of 25 were still above their area's average in the next half hour; only 9 of 31 "
+                         "real 27 of 27 times; 18 of 25 were still above their area's average in the next half hour" + LIFTS + "; only 9 of 31 "
                          "repeated their own peak, the bar the first version used.")
         w = rc["worth"]
         self.assertEqual(text_of(last, "big-mapshare"), pct_num(w["map_share"]))
@@ -458,7 +461,7 @@ class TestRender(unittest.TestCase):
         self.assertEqual(text_of(snap, "speed-robots"), "Robots send 3.7 messages a second.")
         self.assertEqual(text_of(snap, "speed-read"), "We can read 1,235 a second, so a fleet 271x larger would still keep up.")
         self.assertEqual(text_of(snap, "lessonlong"), "Checked against the hidden truth. On a longer test shift the flagged cells were real 5 of 6 "
-                         "times; 3 of 4 were still above their area's average in the next half hour; only 7 of 8 repeated their own "
+                         "times; 3 of 4 were still above their area's average in the next half hour" + LIFTS + "; only 7 of 8 repeated their own "
                          "peak, the bar the first version used.")
         self.assertEqual(text_of(snap, "big-mapshare"), "24")
         self.assertEqual(text_of(snap, "big-oracleshare"), "46")

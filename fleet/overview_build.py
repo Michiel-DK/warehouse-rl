@@ -24,6 +24,7 @@ import math
 import re
 import sys
 from collections import Counter
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,11 +147,12 @@ BASE_FIELD = re.compile(
 
 def kind_of(src):
     """The format kind of a data-src: a named NUMS entry, a run_constants.dose_response.<i>.<field> (any regime index) or a
-    run_constants.baselines.<i>.<field> (S10H: shares and differences of shares one decimal, lifts one decimal)."""
+    run_constants.baselines.<i>.<field> (S10H: shares and differences of shares, lifts: one decimal, ties rounded away from zero
+    exactly as the replay page's toFixed(1) does, so both pages show the same digits)."""
     if src in KIND_BY_SRC:
         return KIND_BY_SRC[src]
     if src.startswith(DATA + ":") and BASE_FIELD.fullmatch(src[len(DATA) + 1:]):
-        return "f1" if ".lesson_persist." in src else "pct1"
+        return "f1h" if ".lesson_persist." in src else "pct1h"
     m = DOSE_FIELD.search(src) if src.startswith(DATA + ":") else None
     if m:
         return DOSE_KIND.get(m.group(1), "pct0")
@@ -170,6 +172,9 @@ def format_value(src, value):
         return "{:g}".format(value)
     if kind == "pct0":
         return "{:.0f}%".format(value * 100)
+    if kind in ("pct1h", "f1h"):
+        d = Decimal((value + 0.0) * (100 if kind == "pct1h" else 1)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        return "{}{}".format(d, "%" if kind == "pct1h" else "")
     if kind == "pct1":
         return "{:.1f}%".format(value * 100)
     if kind == "pp1":
