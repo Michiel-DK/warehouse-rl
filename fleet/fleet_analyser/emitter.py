@@ -137,7 +137,8 @@ def truth_windows(hook, zone, disturb):
     """The time-resolved ground truth of one finished zone (sidecar only; nothing here reaches a message). Read after
     the episode, so demo injections that write into frozen_schedule are included."""
     cell = lambda c: f"{c[0]},{c[1]}"  # noqa: E731
-    blocked = [dict(cell=cell(c), start_step=a, end_step=b)
+    known = disturb.get("blocked_cell", {}).get("known", True)  # S10C: informational, a blocked window is truth either way
+    blocked = [dict(cell=cell(c), start_step=a, end_step=b, known=known)
                for c, a, b in windows_from_steps(hook._blocked_by_step)]
     outage = [dict(goal_index=g, cell=cell(hook.goals[g]), start_step=a, end_step=b)
               for g, a, b in windows_from_steps(hook._out_goals_by_step)]

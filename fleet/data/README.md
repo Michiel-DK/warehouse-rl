@@ -65,3 +65,11 @@ robot-steps inside a `stalls` row):
 Under the `stalls` reading the baseline itself is inside the band and the disturbances LOWER it; only breakdown separates
 from the baseline, and only on the in_episode reading. No reading turns the config into a knob for the band, so the
 configs stay chosen by truth coverage (table above). Two zones are a small sample; these are smoke-level numbers.
+
+## truth.json: `blocked_windows[].known` (S10C)
+
+Each `blocked_windows` entry is `{cell, start_step, end_step, known}`. `known` is the bool of the run's
+`blocked_cell.known` config key (default true): true = the planner routes around the cell, false = a blind blockage
+(a spill nobody told the planner about; robots drive into it and wait). It is informational. A blocked window is truth
+either way, so `fleet/truth.py` does not read it and answers identically with the key absent (older truth files), true
+or false. Config `known` values never change a schedule draw; they only change whether the cell is an obstacle.
