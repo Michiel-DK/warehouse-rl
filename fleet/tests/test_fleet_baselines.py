@@ -217,6 +217,11 @@ class TestPairedAndOutcome(unittest.TestCase):
         self.assertAlmostEqual(p["ci95"][0], -0.015)  # 5th percentile would give -0.0076, 200 resamples -0.0101
         self.assertAlmostEqual(p["ci95"][1], 0.09)  # 200 resamples would give 0.0876
 
+    def test_percentile_interpolates_linearly(self):
+        # inject: no interpolation between the two neighbouring ranks
+        self.assertAlmostEqual(baselines.percentile([0.0, 10.0], 50), 5.0)
+        self.assertAlmostEqual(baselines.percentile([0.0, 10.0, 20.0, 40.0], 97.5), 38.5)
+
     def test_outcome_delta_is_map_minus_persistence(self):
         # inject: the outcome delta computed as persistence - map
         # K 1 per zone: map picks 2,2 (fresh), persistence 1,1 (3 old stalls). At T + H the 1,1 stalls (end T - 3000)
@@ -353,6 +358,15 @@ class TestLessonPersistPools(unittest.TestCase):
         self.assertEqual((out["n_lessons"], out["n_hot_robot_excluded"], out["observed_rate"]), (1, 1, 1.0))
         self.assertAlmostEqual(out["chance_ever"], 2 / 7)
 
+    def test_only_hot_robot_lessons_still_report_the_exclusion(self):
+        # inject: the no-hot_cell early return drops n_hot_robot_excluded
+        st = self.next_window_store()
+        block = hotspot_score.persist_chance(st, tfl.RUN)
+        (d,) = lessons.lessons(st, tfl.RUN)
+        st.upsert("decisions", ("id",), [dict(d, claim=json.dumps(dict(lessons.claim_of(d), lesson_kind="hot_robot")))])
+        out = baselines.lesson_persist_block(st, tfl.RUN, {}, 10, block)
+        self.assertEqual((out["n_lessons"], out["n_hot_robot_excluded"], out["chance_ever"]), (0, 1, None))
+
     def test_no_lessons_gives_nulls(self):
         # inject: division by zero lessons
         st = MemoryStore()
@@ -411,6 +425,26 @@ class TestHotspotScoreFlag(unittest.TestCase):
         self.assertEqual(with_flag["baselines"]["params"]["n_cells_all"], 10)
         self.assertEqual(with_flag["baselines"]["params"]["horizon_s"], H)
         self.assertEqual(with_flag["baselines"]["n_units_outcome"], 1)
+
+    def test_lesson_persist_pools_reach_the_output_through_main(self):
+        # inject: baselines_block not handed the lesson_persist_chance block (persist_block=None)
+        # the next-window lesson fixture (TestLessonPersistPools) in the same store as the costmap fixture; the lesson
+        # stalls sit at BASE (2026), the costmap stalls at T, so neither window sees the other's stalls.
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = self.make(tmp)
+            # built apart and copied in: extracting lessons in the run's store would walk every window from the
+            # costmap stalls at T (1970) to BASE; score_run reads in_episode on every stall
+            mem = TestLessonPersistPools.next_window_store(None)
+            st = JsonlStore(Path(tmp) / "store")
+            for table, rows in mem._rows.items():
+                st.insert(table, [dict(r, in_episode=None) if table == "stalls" else r for r in rows])
+            st.close()
+            res = self.run_main(run_dir, tmp, "flag.json", "--baselines")
+        lp, chance = res["baselines"]["lesson_persist"], res["lesson_persist_chance"]
+        self.assertEqual((lp["n_lessons"], chance["n_lessons"], lp["observed_rate"]), (1, 1, 1.0))
+        self.assertAlmostEqual(lp["chance_window"], chance["chance_mean"])
+        self.assertAlmostEqual(lp["chance_ever"], 2 / 10)  # ever pool: the 7 lesson cells + 1,1 2,2 3,3
+        self.assertAlmostEqual(lp["chance_all"], 2 / 10)  # N_all = the 10 mocked candidates
 
     def test_truth_window_is_t_to_t_plus_h_through_main(self):
         # inject: the step window collapsed (s1 = s0), shifted, or the positives not drawn from truth_positive over the
