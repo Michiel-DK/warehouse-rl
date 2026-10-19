@@ -637,6 +637,23 @@ class TestReplayCopy(unittest.TestCase):
         self.assertNotIn("times as often", snap["ids"]["lessonlong"]["text"])
         self.assert_clean(snap)
 
+    def test_g_the_minutes_come_from_the_entry_and_a_missing_horizon_omits_the_sentence(self):
+        def other(rc):
+            for e in rc["baselines"]:
+                if e["label"] == "s8b-medium-80-p03-07":
+                    e["horizon_s"] = 1800
+        snap = self.run_with(other)
+        self.assertIn("over the next 30 minutes", " ".join(snap["ids"]["sentence-persist"]["text"].split()))
+        self.assertIn("over the next 30 minutes", snap["hovers"]["sentence-persist"])
+
+        def gone(rc):
+            for e in rc["baselines"]:
+                if e["label"] == "s8b-medium-80-p03-07":
+                    del e["horizon_s"]
+        snap = self.run_with(gone)
+        self.assertTrue(snap["ids"]["sentence-persist"] is None or snap["ids"]["sentence-persist"]["hidden"])
+        self.assert_clean(snap)
+
     def test_g_a_floor_entry_missing_a_value_omits_the_sentence(self):
         def broken(rc):
             for e in rc["baselines"]:

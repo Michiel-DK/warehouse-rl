@@ -30,8 +30,8 @@ SPECS = ["p 0.3-0.7=results/closed_loop/summary.json", "p 0.6-0.9=results/closed
 DATA = ROOT / "docs/replay/data.js"
 ARMS = ("none", "map_a4", "map_a32", "oracle")
 # digit counts of the overview page before S8R (git show 3dca770:docs/overview/index.html)
-# S10H adds three typed "top 20" (steps 3 and 4), hence one more 2 and 0 each three times: 541 zeros, 356 twos
-MASTER_DIGITS = {"0": 541, "1": 1020, "2": 356, "3": 200, "4": 211, "5": 230, "6": 179, "7": 122, "8": 140, "9": 120}
+# S10H adds four typed "top 20" (two sentences, steps 3 and 4), hence one more 2 and 0 each four times: 542 zeros, 357 twos
+MASTER_DIGITS = {"0": 542, "1": 1020, "2": 357, "3": 200, "4": 211, "5": 230, "6": 179, "7": 122, "8": 140, "9": 120}
 
 
 def run_main(argv):
