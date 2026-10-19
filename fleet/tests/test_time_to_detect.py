@@ -66,14 +66,17 @@ def make_phase_a(d, orig_extra=(), truth=TRUTH):
 class FakeRerun:
     """Stands in for the costmap subprocess: appends `rows` to the store copy and records the calls."""
 
-    def __init__(self, rows, also=None):
-        self.rows, self.calls, self.also, self.runs = rows, [], also, []
+    def __init__(self, rows, also=None, costmap_rows=()):
+        self.rows, self.calls, self.also, self.runs, self.costmap_rows = rows, [], also, [], list(costmap_rows)
 
     def __call__(self, phase_a, copy, every, run=None):
         self.calls.append((Path(phase_a), Path(copy), every))
         self.runs.append(run)
         st = JsonlStore(copy)
         st.insert("decisions", self.rows)
+        if self.costmap_rows:  # what costmap.py upserts: one row per nonzero cell, keyed (run, published_at, zone, cell)
+            st.upsert("costmap", ("run", "published_at", "zone", "cell"),
+                      [dict(r, run=r.get("run") or run) for r in self.costmap_rows])
         st.close()
         if self.also:
             self.also(phase_a, copy)
@@ -597,12 +600,437 @@ class TestWindowRunAndMeta(unittest.TestCase):
                               f"results/fleet/time_to_detect_{kind}.json"])
             self.assertEqual(ttd.validate(p, a), [10, 20, 40])
             self.assertEqual(a.truth_kind, kind)
+            self.assertEqual((a.sweep_k_values, a.sweep_cost_values, a.reference), (None, None, None))
+        p = ttd.build_parser()  # wr-s10e-amoc-run
+        a = p.parse_args(["--phase-a", "fleet/data/s10c-blind", "--truth-kind", "blocked", "--publish-every", "300",
+                          "--top-k", "20", "--sweep-k", "5,10,20,40,80", "--sweep-cost", "0.2,0.4,0.6,0.8", "--reference",
+                          "fleet/data/s10-none", "--out", "results/fleet/amoc_blind.json"])
+        self.assertEqual(ttd.validate(p, a), [20])
+        self.assertEqual(a.sweep_k_values, [5, 10, 20, 40, 80])
+        self.assertEqual(a.sweep_cost_values, [0.2, 0.4, 0.6, 0.8])
         p = ttd.build_parser()
         self.assertEqual(p.parse_args([]).truth_kind, "floor")
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             p.parse_args(["--truth-kind", "frozen"])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             ttd.validate(p, p.parse_args(["--smoke", "--truth-kind", "blocked"]))
+
+
+# ------------------------------------------------------------------------------------------------ S10E AMOC
+# Window-path golden, computed on base 7bebef4 BEFORE editing time_to_detect.py by running /tmp/ttd_window_golden.py
+# (make_window_phase_a(t, wtruth(WWIN)), FakeRerun(WROWS), run_main(..., extra=("--truth-kind","blocked"), ks="2",
+# sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300)); sha256 via norm_sha, stdout with the final line's --out path and
+# elapsed seconds replaced by "OUT (Ns)").
+WINDOW_GOLDEN = "04f11c527c9dcbc9cec2076cbc066d66b320d6b7b5268043f58fde64bef35bab"
+WINDOW_STDOUT = (
+    "K=2: windows 2, detected 2 (1.000), missed 0, preflag 1, stale at end 1, open at end 0, first detect s p25/median/p75 "
+    "75.0/100.0/125.0, cleared s 75.0/75.0/75.0, false flags per publish 1.0\n"
+    "CAVEAT: Windows have a start and an end; detection is measured from the start, clearing from the end.\n"
+    "time_to_detect: 3 publishes, Ks [2] -> OUT (Ns)\n")
+
+REF = "s10-ref"
+
+
+def norm_stdout(text):
+    import re
+    return re.sub(r"-> \S+ \(\d+\.\d+s\)", "-> OUT (Ns)", text)
+
+
+def cmrow(zone, cell, step, cost, run=WRUN):
+    return dict(run=run, zone=zone, published_at=WF + 5 * step, cell=cell, cost=cost, score=cost, stalls=1)
+
+
+def refrow(zone, cell, step, rank):
+    return wrow(zone, cell, step, rank, run=REF)
+
+
+# measured costmap rows (run WRUN), by publish step 20 / 40 / 60
+WCM = [cmrow("0", "1,1", 20, 0.9), cmrow("0", "9,9", 20, 0.5),
+       cmrow("0", "1,1", 40, 0.7), cmrow("1", "3,3", 40, 0.9), cmrow("0", "7,7", 40, 0.25),
+       cmrow("0", "1,1", 60, 0.8), cmrow("1", "3,3", 60, 0.1),
+       cmrow("0", "1,1", 30, 0.99)]  # step 30 is not a publish time: ignored
+# reference forecasts (run REF), ranks per zone; a rank-1 row at step 30 (not a publish time) is ignored
+RROWS = [refrow("0", "a", 20, 1), refrow("0", "b", 20, 2), refrow("0", "c", 20, 3), refrow("1", "e", 20, 1),
+         refrow("0", "a", 40, 1), refrow("0", "a", 60, 1), refrow("0", "d", 60, 4), refrow("1", "f", 60, 2),
+         refrow("0", "a", 30, 1)]
+RCM = [cmrow("0", "a", 20, 0.9, REF), cmrow("0", "b", 20, 0.6, REF), cmrow("1", "e", 20, 0.95, REF),
+       cmrow("0", "a", 40, 0.8, REF), cmrow("0", "a", 60, 0.5, REF), cmrow("0", "b", 60, 0.2, REF),
+       cmrow("1", "f", 60, 0.3, REF), cmrow("0", "a", 30, 0.99, REF)]
+HOURS = 300 / 3600  # steps 60 * step_seconds 5
+
+
+class Dispatch:
+    """One rerun callable for two dirs: routes on phase_a."""
+
+    def __init__(self, by):
+        self.by = {str(Path(k)): v for k, v in by.items()}
+
+    def __call__(self, phase_a, copy, every, run=None):
+        return self.by[str(Path(phase_a))](phase_a, copy, every, run=run)
+
+
+def dspan(by):
+    by = {str(Path(k)): v for k, v in by.items()}
+    def sp(glob):
+        t0, first, end = by[str(Path(glob).parent)]
+        return dict(t0), first, end
+    return sp
+
+
+class TestAmoc(unittest.TestCase):
+    ZSPAN = ({"0": WF, "1": WF}, WF, WF + 300)
+
+    def setup_dirs(self, t, ref_doc=None, ref_runs=(REF,), ref_span=None, stale_cm=(), rows=WROWS, windows=WWIN, cm=WCM,
+                   ref_rows=RROWS, ref_cm=RCM, ref_also=None):
+        (Path(t) / "m").mkdir()
+        d = make_window_phase_a(Path(t) / "m", wtruth(windows))
+        ref = Path(t) / "r"
+        ref.mkdir()
+        make_window_phase_a(ref, ref_doc or wtruth({"0": [], "1": []}), runs=ref_runs)
+        if stale_cm:
+            st = JsonlStore(d / "store")
+            st.upsert("costmap", ("run", "published_at", "zone", "cell"), list(stale_cm))
+            st.close()
+        fakes = {d: FakeRerun(rows, costmap_rows=cm), ref: FakeRerun(ref_rows, costmap_rows=ref_cm, also=ref_also)}
+        sp = dspan({d: self.ZSPAN, ref: ref_span or self.ZSPAN})
+        return d, ref, Dispatch(fakes), sp, fakes
+
+    def amoc_run(self, t, sweep=("--sweep-k", "3,1,2", "--sweep-cost", "0.95,0.8,0.5"), use_ref=True, ks="2", **kw):
+        d, ref, rr, sp, fakes = self.setup_dirs(t, **kw)
+        extra = ("--truth-kind", "blocked", *sweep, *(("--reference", str(ref)) if use_ref else ()))
+        code, text, out = run_main(d, rr, extra=extra, ks=ks, sp=sp, out=str(Path(t) / "out.json"))
+        return d, ref, fakes, code, text, json.loads(Path(out).read_text()), out
+
+    # ---- identity without the new flags
+    def test_window_output_and_stdout_match_the_pre_change_golden(self):
+        # inject: add a key / line to the window output without a sweep flag, or reorder meta
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN))
+            _, (code, text, out) = TestWindowRunAndMeta().run_w(d, WROWS)
+            self.assertEqual(norm_sha(out), WINDOW_GOLDEN)
+            self.assertEqual(norm_stdout(text), WINDOW_STDOUT)
+            doc = json.loads(Path(out).read_text())
+            self.assertEqual(set(doc), {"schema_version", "meta", "by_k"})
+
+    def test_by_k_is_equal_with_and_without_the_sweep(self):
+        # inject: let the sweep reuse / mutate the by_k rows
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN))
+            _, (_, _, out) = TestWindowRunAndMeta().run_w(d, WROWS)
+            plain = json.loads(Path(out).read_text())
+        with tempfile.TemporaryDirectory() as t:
+            *_, doc, _ = self.amoc_run(t)
+        self.assertEqual(doc["by_k"], plain["by_k"])
+        self.assertEqual({k: v for k, v in doc["meta"].items() if k in plain["meta"] and k != "phase_a_dir"},
+                         {k: v for k, v in plain["meta"].items() if k != "phase_a_dir"})
+
+    # ---- hand-computed values
+    def test_k_sweep_hand_computed(self):
+        # inject: count rank < K, use the span instead of steps*step_seconds as hours, or divide by zones once
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, fakes, code, text, doc, _ = self.amoc_run(t)
+        self.assertEqual(code, 0)
+        ks = doc["amoc"]["k"]
+        self.assertEqual([e["K"] for e in ks], [1, 2, 3])
+        for e in ks:
+            self.assertEqual(set(e), {"K", "median_delay_s", "p25", "p75", "miss_share", "stale_at_end_share", "n_windows",
+                                      "n_detected", "fa_per_hour_reference", "fa_per_hour_reference_by_zone",
+                                      "fa_per_hour_measured_outside_windows"})
+            self.assertEqual(e["n_windows"], 2)
+        a = self.assertAlmostEqual
+        # K=1: Z0 window missed, Z1 detected at 150 s; measured false flags 2 (1,1@20 and 1,1@60)
+        k1, k2, k3 = ks
+        self.assertEqual((k1["n_detected"], k1["miss_share"], k1["stale_at_end_share"]), (1, 0.5, 0.0))
+        self.assertEqual((k1["median_delay_s"], k1["p25"], k1["p75"]), (150, 150, 150))
+        a(k1["fa_per_hour_measured_outside_windows"], 2 / (2 * HOURS))
+        # K=2: both detected (50 s, 150 s), Z0 stale at end; 3 false flags (2 + 0 + 1)
+        self.assertEqual((k2["n_detected"], k2["miss_share"], k2["stale_at_end_share"]), (2, 0.0, 0.5))
+        self.assertEqual((k2["median_delay_s"], k2["p25"], k2["p75"]), (100.0, 75.0, 125.0))
+        a(k2["fa_per_hour_measured_outside_windows"], 3 / (2 * HOURS))
+        # K=3: both detected at 50 s; 3 false flags
+        self.assertEqual((k3["miss_share"], k3["stale_at_end_share"], k3["median_delay_s"]), (0.0, 0.5, 50.0))
+        a(k3["fa_per_hour_measured_outside_windows"], 3 / (2 * HOURS))
+        # reference flags: K=1 -> z0 3, z1 1; K=2 -> z0 4, z1 2; K=3 -> z0 5, z1 2 (the rank-1 row at step 30 is ignored)
+        for e, z0, z1 in ((k1, 3, 1), (k2, 4, 2), (k3, 5, 2)):
+            a(e["fa_per_hour_reference"], (z0 + z1) / (2 * HOURS))
+            self.assertEqual(set(e["fa_per_hour_reference_by_zone"]), {"0", "1"})
+            a(e["fa_per_hour_reference_by_zone"]["0"], z0 / HOURS)
+            a(e["fa_per_hour_reference_by_zone"]["1"], z1 / HOURS)
+        self.assertEqual(doc["amoc"]["k_at_miss_below_half"]["K"], 2)
+        self.assertEqual(doc["amoc"]["k_at_miss_below_half"]["miss_share"], 0.0)
+        a(doc["amoc"]["k_at_miss_below_half"]["fa_per_hour_reference"], 6 / (2 * HOURS))
+
+    def test_cost_sweep_hand_computed(self):
+        # inject: use > instead of >= for the threshold, keep non-publish rows, or walk cost ascending
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, fakes, code, text, doc, _ = self.amoc_run(t)
+        cs = doc["amoc"]["cost"]
+        self.assertEqual([e["cost"] for e in cs], [0.5, 0.8, 0.95])
+        c5, c8, c95 = cs
+        a = self.assertAlmostEqual
+        # c=0.5: both detected (50 s, 150 s), Z0 stale; 3 false flags (1,1@20, 9,9@20, 1,1@60)
+        self.assertEqual((c5["miss_share"], c5["stale_at_end_share"], c5["median_delay_s"], c5["p25"], c5["p75"]),
+                         (0.0, 0.5, 100.0, 75.0, 125.0))
+        a(c5["fa_per_hour_measured_outside_windows"], 3 / (2 * HOURS))
+        # c=0.8 (>=: 1,1@60 at 0.8 counts): Z0 missed, Z1 detected at 150 s; false flags 1,1@20 and 1,1@60
+        self.assertEqual((c8["miss_share"], c8["stale_at_end_share"], c8["median_delay_s"], c8["n_detected"]),
+                         (0.5, 0.0, 150, 1))
+        a(c8["fa_per_hour_measured_outside_windows"], 2 / (2 * HOURS))
+        # c=0.95: nothing flagged, both missed
+        self.assertEqual((c95["miss_share"], c95["n_detected"], c95["median_delay_s"], c95["p25"], c95["p75"]),
+                         (1.0, 0, None, None, None))
+        self.assertEqual(c95["fa_per_hour_measured_outside_windows"], 0.0)
+        # reference: c=0.5 -> z0 4 (0.9,0.6,0.8,0.5), z1 1; c=0.8 -> z0 2, z1 1; c=0.95 -> z0 0, z1 1
+        for e, z0, z1 in ((c5, 4, 1), (c8, 2, 1), (c95, 0, 1)):
+            a(e["fa_per_hour_reference"], (z0 + z1) / (2 * HOURS))
+            a(e["fa_per_hour_reference_by_zone"]["0"], z0 / HOURS)
+            a(e["fa_per_hour_reference_by_zone"]["1"], z1 / HOURS)
+        # walking from the strictest (highest) cost: 0.95 misses 1.0, 0.8 misses 0.5 (not < 0.5), 0.5 misses 0.0
+        pick = doc["amoc"]["cost_at_miss_below_half"]
+        self.assertEqual((pick["cost"], pick["miss_share"]), (0.5, 0.0))
+        a(pick["fa_per_hour_reference"], 5 / (2 * HOURS))
+        self.assertEqual(set(pick), {"cost", "miss_share", "fa_per_hour_reference"})
+
+    def test_meta_keys_stdout_lines_and_cleanup(self):
+        # inject: omit a meta key, print the AMOC lines after the CAVEAT, or leave a store-ttd dir behind
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, fakes, code, text, doc, _ = self.amoc_run(t)
+            self.assertEqual(list(doc), ["schema_version", "meta", "by_k", "amoc"])
+            self.assertEqual(list(doc["amoc"]), ["k", "cost", "k_at_miss_below_half", "cost_at_miss_below_half"])
+            m = doc["meta"]
+            self.assertEqual(set(m) - set(ttd.META_KEYS) - {"truth_kind", "run", "n_windows", "window_len_steps_median"},
+                             {"reference_dir", "reference_run", "reference_store_hash_before", "reference_store_hash_after",
+                              "sim_hours", "sim_hours_reference", "n_publishes_reference", "sweep_k", "sweep_cost",
+                              "amoc_definitions"})
+            self.assertEqual((m["reference_dir"], m["reference_run"], m["n_publishes_reference"]), (str(ref), REF, 3))
+            self.assertEqual((m["sweep_k"], m["sweep_cost"]), ([1, 2, 3], [0.5, 0.8, 0.95]))
+            self.assertAlmostEqual(m["sim_hours"], HOURS)
+            self.assertAlmostEqual(m["sim_hours_reference"], HOURS)
+            self.assertEqual(m["reference_store_hash_before"], m["reference_store_hash_after"])
+            self.assertEqual(m["reference_store_hash_before"], ttd.sha256_file(ref / "store" / "decisions.jsonl"))
+            self.assertTrue(all(isinstance(v, str) for v in m["amoc_definitions"].values()))
+            lines = text.splitlines()
+            self.assertEqual(lines[0].split(":")[0], "K=2")
+            self.assertEqual([ln.split(":")[0] for ln in lines[1:4]], ["AMOC K=1", "AMOC K=2", "AMOC K=3"])
+            self.assertEqual([ln.split(":")[0] for ln in lines[4:7]], ["AMOC cost=0.5", "AMOC cost=0.8", "AMOC cost=0.95"])
+            self.assertTrue(lines[7].startswith("AMOC K at miss share < 0.5: K=2"))
+            self.assertTrue(lines[8].startswith("AMOC cost at miss share < 0.5: cost=0.5"))
+            self.assertTrue(lines[9].startswith("CAVEAT:"))
+            self.assertTrue(lines[10].startswith("time_to_detect:"))
+            self.assertEqual(len(lines), 11)
+            for dd in (d, ref):
+                self.assertEqual([p.name for p in dd.glob("store-ttd-*")], [])
+            self.assertEqual([len(f.calls) for f in fakes.values()], [1, 1])
+
+    def test_only_the_requested_sweep_keys_and_null_miss_below_half(self):
+        # inject: always emit both lists, or return the last entry instead of null when no miss share is below 0.5
+        with tempfile.TemporaryDirectory() as t:
+            *_, doc, _ = self.amoc_run(t, sweep=("--sweep-k", "1"))
+        self.assertEqual(list(doc["amoc"]), ["k", "k_at_miss_below_half"])
+        self.assertIsNone(doc["amoc"]["k_at_miss_below_half"])  # K=1 misses 0.5, not < 0.5
+        self.assertEqual(doc["meta"]["sweep_cost"], None)
+        with tempfile.TemporaryDirectory() as t:
+            *_, code, text, doc, _ = self.amoc_run(t, sweep=("--sweep-cost", "0.95"))
+        self.assertEqual(list(doc["amoc"]), ["cost", "cost_at_miss_below_half"])
+        self.assertIsNone(doc["amoc"]["cost_at_miss_below_half"])
+        self.assertIn("AMOC cost at miss share < 0.5: none", text)
+
+    def test_without_reference_the_reference_fields_are_null(self):
+        # inject: report 0.0 instead of null without a reference
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, fakes, code, text, doc, _ = self.amoc_run(t, use_ref=False)
+        for e in doc["amoc"]["k"] + doc["amoc"]["cost"]:
+            self.assertIsNone(e["fa_per_hour_reference"])
+            self.assertIsNone(e["fa_per_hour_reference_by_zone"])
+            self.assertIsNotNone(e["fa_per_hour_measured_outside_windows"])
+        m = doc["meta"]
+        self.assertEqual((m["reference_dir"], m["reference_run"], m["sim_hours_reference"], m["n_publishes_reference"]),
+                         (None, None, None, None))
+        self.assertEqual(len(fakes[ref].calls), 0)
+        self.assertIn("FA/h ref n/a", text)
+
+    def test_zero_windows_give_null_shares(self):
+        # inject: divide by n_windows without the zero guard
+        with tempfile.TemporaryDirectory() as t:
+            *_, doc, _ = self.amoc_run(t, sweep=("--sweep-k", "2"), windows={"0": [], "1": []})
+        e = doc["amoc"]["k"][0]
+        self.assertEqual((e["n_windows"], e["miss_share"], e["stale_at_end_share"], e["median_delay_s"]), (0, None, None, None))
+        self.assertIsNone(doc["amoc"]["k_at_miss_below_half"])
+
+    def test_sweep_calls_the_unchanged_analyser_on_the_same_rows(self):
+        # inject: sweep a re-derived forecast list, or feed the cost sweep real ranks instead of rank 1
+        calls = []
+        orig = ttd.analyse_windows_k
+
+        def spy(k, forecasts, *rest):
+            calls.append((k, list(forecasts)))
+            return orig(k, forecasts, *rest)
+        with mock.patch.object(ttd, "analyse_windows_k", spy), tempfile.TemporaryDirectory() as t:
+            *_, doc, _ = self.amoc_run(t, sweep=("--sweep-k", "1,3", "--sweep-cost", "0.8"))
+        self.assertEqual([c[0] for c in calls], [2, 1, 3, 1])  # by_k (K=2), the K sweep, one cost entry at k=1
+        self.assertEqual(calls[0][1], calls[1][1])
+        self.assertEqual(calls[0][1], calls[2][1])
+        pseudo = calls[3][1]
+        self.assertEqual(sorted((f["zone"], f["cell"], f["t"], f["rank"]) for f in pseudo),
+                         sorted([("0", "1,1", WF + 100, 1), ("1", "3,3", WF + 200, 1), ("0", "1,1", WF + 300, 1)]))
+
+    def test_stale_phase_a_costmap_row_is_not_counted(self):
+        # inject: drop the strip_costmap call in rerun_on_copy
+        # phase A's row at a key the rerun does not produce (an upsert would overwrite a shared key): it would detect the
+        # Z1 3,3 window at step 20 for c=0.95 if it survived into the copy
+        stale = cmrow("1", "3,3", 20, 0.99)
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, fakes, code, text, doc, _ = self.amoc_run(t, sweep=("--sweep-cost", "0.95"), stale_cm=[stale])
+            self.assertEqual(doc["amoc"]["cost"][0]["miss_share"], 1.0)
+            self.assertEqual(doc["amoc"]["cost"][0]["n_detected"], 0)
+            self.assertEqual(len((d / "store" / "costmap.jsonl").read_text().splitlines()), 1)  # the original is untouched
+        with tempfile.TemporaryDirectory() as t:
+            d, *_ = self.setup_dirs(t, stale_cm=[stale, cmrow("0", "1,1", 40, 0.5, run="other")])
+            copy = Path(t) / "copy"
+            shutil.copytree(d / "store", copy)
+            self.assertEqual(ttd.strip_costmap(copy, WRUN), 1)
+            kept = [json.loads(ln) for ln in (copy / "costmap.jsonl").read_text().splitlines()]
+            self.assertEqual([r["run"] for r in kept], ["other"])
+
+    # ---- the reference is checked before anything is written
+    def mismatch(self, **kw):
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, rr, sp, fakes = self.setup_dirs(t, **kw)
+            out = str(Path(t) / "out.json")
+            with self.assertRaises(ValueError) as cm:
+                run_main(d, rr, extra=("--truth-kind", "blocked", "--sweep-k", "1", "--reference", str(ref)), sp=sp, out=out)
+            self.assertFalse(Path(out).exists())
+            self.assertEqual([len(f.calls) for f in fakes.values()], [0, 0])  # rejected before any rerun
+            for dd in (d, ref):
+                self.assertEqual([p.name for p in dd.glob("store-ttd-*")], [])
+            return str(cm.exception)
+
+    def test_reference_env_id_mismatch(self):
+        # inject: drop the env_id comparison
+        doc = wtruth({"0": [], "1": []})
+        doc["env_id"] = "F"
+        msg = self.mismatch(ref_doc=doc)
+        self.assertIn("env_id", msg)
+        self.assertIn("'E'", msg)
+        self.assertIn("'F'", msg)
+
+    def test_reference_steps_mismatch(self):
+        # inject: drop the steps comparison
+        doc = wtruth({"0": [], "1": []})
+        doc["steps"] = 90
+        msg = self.mismatch(ref_doc=doc)
+        self.assertIn("steps", msg)
+        self.assertIn("60", msg)
+        self.assertIn("90", msg)
+
+    def test_reference_step_seconds_mismatch(self):
+        # inject: drop the step_seconds comparison
+        doc = wtruth({"0": [], "1": []})
+        doc["step_seconds"] = 10
+        self.assertIn("step_seconds", self.mismatch(ref_doc=doc))
+
+    def test_reference_zone_set_mismatch(self):
+        # inject: compare the zone count instead of the zone set
+        msg = self.mismatch(ref_doc=wtruth({"0": [], "2": []}))
+        self.assertIn("zone set", msg)
+        self.assertIn("['0', '1']", msg)
+        self.assertIn("['0', '2']", msg)
+
+    def test_reference_publish_count_mismatch(self):
+        # inject: drop the publish count comparison
+        msg = self.mismatch(ref_span=({"0": WF, "1": WF}, WF, WF + 400))
+        self.assertIn("publish count", msg)
+        self.assertIn("3", msg)
+        self.assertIn("4", msg)
+
+    def test_reference_with_truth_or_v1_raises(self):
+        # inject: accept a reference that carries floor cells / windows / frozen windows, or a v1 file
+        for mutate in ("floor", "blocked", "outage", "frozen"):
+            doc = wtruth({"0": [], "1": []})
+            z = doc["zones"]["0"]
+            if mutate == "floor":
+                z["floor_cells"] = {"1,1": 0.9}
+            elif mutate == "frozen":
+                z["frozen_windows"] = [dict(serial="a", start_step=0, end_step=5)]
+            else:
+                z[f"{mutate}_windows"] = [dict(cell="1,1", start_step=0, end_step=5)]
+            self.assertIn("not an undisturbed run", self.mismatch(ref_doc=doc))
+        self.assertIn("v1", self.mismatch(ref_doc=wtruth({"0": [], "1": []}, v2=False)))
+
+    def test_mutated_reference_store_aborts_without_output(self):
+        # inject: skip the hash comparison for the reference dir
+        def corrupt(phase_a, copy):
+            with open(Path(phase_a) / "store" / "decisions.jsonl", "a") as f:
+                f.write("{}\n")
+
+        with tempfile.TemporaryDirectory() as t:
+            d, ref, rr, sp, fakes = self.setup_dirs(t, ref_also=corrupt)
+            out = str(Path(t) / "out.json")
+            with self.assertRaisesRegex(RuntimeError, "changed during the rerun"):
+                run_main(d, rr, extra=("--truth-kind", "blocked", "--sweep-k", "1", "--reference", str(ref)), sp=sp, out=out)
+            self.assertFalse(Path(out).exists())
+            for dd in (d, ref):
+                self.assertEqual([p.name for p in dd.glob("store-ttd-*")], [])
+
+    def test_one_helper_serves_both_dirs(self):
+        # inject: duplicate the sequence for the reference
+        with tempfile.TemporaryDirectory() as t:
+            seen = []
+            orig = ttd.rerun_on_copy
+
+            def spy(src, *a, **kw):
+                seen.append(Path(src).name)
+                return orig(src, *a, **kw)
+            with mock.patch.object(ttd, "rerun_on_copy", spy):
+                self.amoc_run(t)
+            self.assertEqual(seen, ["m", "r"])
+
+    # ---- usage errors
+    def usage(self, argv):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+            ttd.main(argv)
+        return cm.exception.code, err.getvalue()
+
+    def test_usage_errors(self):
+        # inject: drop any one of the checks in validate()
+        base = ["--phase-a", "d", "--publish-every", "300", "--top-k", "5", "--out", "o.json", "--truth-kind", "blocked"]
+        cases = [
+            (["--sweep-k", "5,5"], "distinct"), (["--sweep-k", "0"], "integers >= 1"), (["--sweep-k=-3,4"], "integers >= 1"),
+            (["--sweep-k", "a,b"], "--sweep-k"), (["--sweep-k", "1.5"], "--sweep-k"), (["--sweep-k", ""], "--sweep-k"),
+            (["--sweep-cost", "0.5,0.5"], "distinct"), (["--sweep-cost", "0"], "> 0"), (["--sweep-cost", "-1"], "> 0"),
+            (["--sweep-cost", "nan"], "finite"), (["--sweep-cost", "inf"], "finite"), (["--sweep-cost", "0.1,-inf"], "finite"),
+            (["--sweep-cost", "x"], "--sweep-cost"), (["--sweep-cost", "1e999"], "finite"),
+            (["--reference", "r"], "--reference needs"),
+            (["--reference", "d", "--sweep-k", "5"], "different directory"),
+            (["--reference", "./d/../d", "--sweep-cost", "0.5"], "different directory"),
+        ]
+        for extra, needle in cases:
+            code, msg = self.usage(base + extra)
+            self.assertEqual(code, 2, extra)
+            self.assertIn(needle, msg, extra)
+        floor = [x for x in base if x not in ("--truth-kind", "blocked")]
+        for extra in (["--sweep-k", "5"], ["--sweep-cost", "0.5"], ["--sweep-k", "5", "--reference", "r"]):
+            code, msg = self.usage(floor + extra)
+            self.assertEqual(code, 2, extra)
+            self.assertIn("--truth-kind", msg)
+            code, msg = self.usage(floor + ["--truth-kind", "floor"] + extra)
+            self.assertEqual(code, 2, extra)
+        for extra in (["--sweep-k", "5"], ["--sweep-cost", "0.5"], ["--reference", "r", "--sweep-k", "5"]):
+            code, msg = self.usage(["--smoke", *extra])
+            self.assertEqual(code, 2, extra)
+            self.assertIn("--smoke", msg)
+
+    def test_reference_same_directory_via_symlink_is_rejected(self):
+        # inject: compare the path strings instead of the resolved directories
+        with tempfile.TemporaryDirectory() as t:
+            real = Path(t) / "real"
+            real.mkdir()
+            (Path(t) / "link").symlink_to(real)
+            code, msg = self.usage(["--phase-a", str(real), "--publish-every", "300", "--top-k", "5", "--out", "o.json",
+                                    "--truth-kind", "blocked", "--sweep-k", "5", "--reference", str(Path(t) / "link")])
+            self.assertEqual(code, 2)
+            self.assertIn("different directory", msg)
 
 
 class TestIsolation(unittest.TestCase):
