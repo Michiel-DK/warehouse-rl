@@ -241,6 +241,28 @@ class TestPairedAndOutcome(unittest.TestCase):
                          dict(mean=1.0, ci95=[1.0, 1.0], verdict="beats", n_zones=3))
         self.assertEqual(b["paired"]["1"]["truth_precision"]["mean"], 0.0)  # no positives: both 0
 
+    def test_outcome_tally_accumulates_over_two_publishes_per_zone(self):
+        # inject: the per-zone outcome hits or units overwritten per unit instead of accumulated
+        # unit 1 at T: DISAGREE as above, map hits 1, persistence 0. Unit 2 at T2: one fresh stall on 5,5, both top-1
+        # lists are 5,5 and it is rank 1 at T2 + H, both hit 1. Neither window reaches the other unit's stalls.
+        # per zone: map (1 + 1) / 2 = 1.0, persistence (0 + 1) / 2 = 0.5, delta 0.5 in every zone.
+        # hits overwritten: map 1 / 2 - persistence 1 / 2 = 0; units overwritten: map 2 / 1 - persistence 1 / 1 = 1.
+        t2 = T + 7200
+        zones = ("0", "1", "2")
+        st = MemoryStore()
+        for z in zones:
+            publish(st, [dict(s, zone=z) for s in DISAGREE])
+            publish(st, [stall(z, "5,5", t2 - 10)], t=t2)
+        claims(st, zones=zones)
+        stream_end(st, t2 + H, zones=zones)
+        with mock.patch.object(baselines, "PAIRED_KS", (1,)):
+            b = compute(st, list(zones), ["1,1", "2,2", "3,3", "5,5"], {}, ks=(1,))
+        self.assertEqual(b["n_units_outcome"], 6)
+        self.assertEqual((b["k"]["1"]["map"]["outcome_precision"], b["k"]["1"]["persistence"]["outcome_precision"]),
+                         (6 / 6, 3 / 6))
+        self.assertEqual(b["paired"]["1"]["outcome_precision"],
+                         dict(mean=0.5, ci95=[0.5, 0.5], verdict="beats", n_zones=3))
+
     def test_no_eligible_unit_gives_zero_outcome_units_and_nulls(self):
         # inject: the outcome gate is skipped, or an empty gate raises
         st = MemoryStore()
