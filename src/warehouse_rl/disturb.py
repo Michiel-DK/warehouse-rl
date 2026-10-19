@@ -3,13 +3,19 @@
 Config (a plain dict, `{}` = no disturbance, validated fail-closed by `validate_config`):
   breakdown:    {rate_per_hour, duration: [lo, hi], agent_types?: ["agv", "picker"]}   freeze (REQUIRED type)
   delay:        {p_skip, duration?: [lo, hi]}                                          execution delay (REQUIRED type)
-  blocked_cell: {rate_per_hour, duration: [lo, hi]}                                    map-level, highway non-goal cells
+  blocked_cell: {rate_per_hour, duration: [lo, hi], known?: bool}                      map-level, highway non-goal cells
   burst:        {start, end, extra}                                                    extra requests for steps [start, end)
   outage:       {rate_per_hour, duration: [lo, hi]}                                    map-level, a goal becomes impassable
   floor:        {cells: K, p: [lo, hi]}                                                K fixed bad-floor highway non-goal cells
 floor: K cells are drawn without replacement at reset, each with a slip probability p_c ~ U[lo, hi]; an agent that
 requests FORWARD into one (ENTER semantics, see resolve_move_conflict) is NOOPed for that step iff its pre-drawn coin
 floor_coin[agent, t] < p_c. Floor skips are counted in info["floor_skips"], never in delayed_agents / applied_delayed.
+blocked_cell.known (S10C, default true): true = the cell is in the planner's obstacle set (robots route around it, today's
+behaviour). false = a "blind" blockage (a spill nobody told the planner about): it is still in the truth
+(`_blocked_by_step`, info["blocked_cells"]) but NOT in `_obstacles_by_step`, so find_path, the action masks and the
+recovery readers of `_obstacles_now` ignore it; a robot that requests FORWARD into it is NOOPed (after the floor branch,
+before the known-obstacle branch), hidden from the StuckCounter like a floor skip, and counted only in
+info["blind_skips"]. Outage stays known-only.
 rate_per_hour is the onset rate per robot-hour (map-level for blocked_cell / outage); one step is 5 s, so the
 per-step onset probability is rate_per_hour * 5 / 3600. Durations are uniform integers in [lo, hi] steps, lo >= 1.
 
@@ -19,7 +25,8 @@ layer never touches the global `np.random` / `random` (the vendor env seeds and 
 blocked-cell and outage schedules are a pure function of (seed, config, num_agents, max_steps, layout), so they are
 identical across policies. The floor draws (cells, p_c, the (agents, steps) coin matrix) come from a SEPARATE generator,
 and the main generator is seeded from the config WITHOUT the `floor` key, so adding `floor` to a config never shifts
-any other type's draws. The floor cells and coins are a function of (seed, full config) only; the realised skips also
+any other type's draws. `known` is stripped by `_draw_config` before EVERY generator seed (main, floor, demo), so
+known absent / true / false give identical draws everywhere. The floor cells and coins are a function of (seed, full config) only; the realised skips also
 depend on where the robots drive.
 
 Burst is only APPROXIMATELY paired across policies. Its timing and size (start, end, extra) are pure functions of the
@@ -132,7 +139,9 @@ def validate_config(config):
     for name in ("blocked_cell", "outage"):
         if name in config:
             s = config[name]
-            _check_keys(name, s, ("rate_per_hour", "duration"))
+            _check_keys(name, s, ("rate_per_hour", "duration"), ("known",) if name == "blocked_cell" else ())
+            if "known" in s and not isinstance(s["known"], bool):
+                raise ValueError(f"{name}.known must be a bool, got {s['known']!r}")
             _check_rate(f"{name}.rate_per_hour", s["rate_per_hour"])
             _check_duration(name, s["duration"])
     if "burst" in config:
@@ -158,6 +167,15 @@ def config_hash_int(config):
     """Stable (process independent) int from the config. NEVER use hash(): it is salted per process."""
     digest = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).digest()
     return int.from_bytes(digest[:8], "big")
+
+
+def _draw_config(config):
+    """Deep copy of config without blocked_cell.known: the ONLY config view any generator seed may hash, so that
+    known absent / true / false never shift a draw (S10C). The tag in resolve_disturb is the one place that may differ."""
+    cfg = copy.deepcopy(config)
+    if isinstance(cfg.get("blocked_cell"), dict):
+        cfg["blocked_cell"].pop("known", None)
+    return cfg
 
 
 def resolve_disturb(spec):
@@ -284,11 +302,13 @@ class DisturbedWarehouse(Warehouse):
         self.delay_schedule = np.zeros((A, T), dtype=bool)
         self._blocked_by_step = [_NO_CELLS] * T
         self._out_goals_by_step = [()] * T  # goal indices
-        self._obstacles_by_step = [_NO_CELLS] * T  # blocked cells + out goal cells, (x, y)
+        self._obstacles_by_step = [_NO_CELLS] * T  # known blocked cells + out goal cells, (x, y)
+        self._blind_by_step = [_NO_CELLS] * T  # blocked cells with known:false, (x, y): truth only, not obstacles
         self._t = 0
         self.applied_frozen = []
         self.applied_delayed = []
         self.applied_floor = []  # per step: bool array, agents NOOPed by a floor skip
+        self.applied_blind = []  # per step: bool array, agents NOOPed by a blind blocked-cell skip
         self.floor_cells = {}  # (x, y) -> p_c, simulator-side ground truth; nothing outside this module reads it
         self.floor_coin = np.zeros((A, T))  # pre-drawn uniform coins; a no-floor config never reads them
         self._suppressed = np.zeros(A, dtype=bool)
@@ -307,7 +327,8 @@ class DisturbedWarehouse(Warehouse):
         T, A = self.max_steps, self.num_agents
         s = int(seed) if seed is not None else int(np.random.SeedSequence().entropy)
         # The main rng is seeded from the config WITHOUT `floor`, so adding floor never shifts the other types' draws.
-        h = config_hash_int({k: v for k, v in cfg.items() if k != "floor"})
+        dcfg = _draw_config(cfg)
+        h = config_hash_int({k: v for k, v in dcfg.items() if k != "floor"})
         rng = np.random.default_rng(np.random.SeedSequence([s, h, _SEED_TAG]))
         p_step = lambda rate: min(1.0, rate * STEP_SECONDS / 3600)  # noqa: E731
 
@@ -349,21 +370,25 @@ class DisturbedWarehouse(Warehouse):
             f = cfg["floor"]
             if f["cells"] > len(self._blockable_cells):
                 raise ValueError(f"floor.cells={f['cells']} exceeds the {len(self._blockable_cells)} candidate cells")
-            frng = np.random.default_rng(np.random.SeedSequence([s, config_hash_int(cfg), _SEED_TAG, _FLOOR_TAG]))
+            frng = np.random.default_rng(np.random.SeedSequence([s, config_hash_int(dcfg), _SEED_TAG, _FLOOR_TAG]))
             idx = frng.choice(len(self._blockable_cells), size=f["cells"], replace=False)
             ps = frng.uniform(f["p"][0], f["p"][1], size=f["cells"])
             self.floor_cells = {self._blockable_cells[int(i)]: float(pc) for i, pc in zip(idx, ps)}
             self.floor_coin = frng.random((A, T))
         if self.demo_mode:  # child generator: draws nothing here, see inject_floor
             self._demo_rng = np.random.default_rng(
-                np.random.SeedSequence([s, config_hash_int(cfg), _SEED_TAG, _DEMO_TAG]))
+                np.random.SeedSequence([s, config_hash_int(dcfg), _SEED_TAG, _DEMO_TAG]))
+        blind = "blocked_cell" in cfg and cfg["blocked_cell"].get("known", True) is False
         for t in range(T):
             if blocked[t]:
                 self._blocked_by_step[t] = frozenset(blocked[t])
+                if blind:
+                    self._blind_by_step[t] = frozenset(blocked[t])
             if out[t]:
                 self._out_goals_by_step[t] = tuple(sorted(out[t]))
-            if blocked[t] or out[t]:
-                self._obstacles_by_step[t] = frozenset(blocked[t]) | frozenset(tuple(self.goals[g]) for g in out[t])
+            known_blocked = frozenset() if blind else frozenset(blocked[t])
+            if known_blocked or out[t]:
+                self._obstacles_by_step[t] = known_blocked | frozenset(tuple(self.goals[g]) for g in out[t])
 
     def reset(self, seed=None, options=None):
         obs = super().reset(seed=seed, options=options)
@@ -523,8 +548,10 @@ class DisturbedWarehouse(Warehouse):
         self.applied_delayed.append(delayed.copy())
         self._suppressed = frozen | delayed
         floor_skipped = np.zeros(self.num_agents, dtype=bool)
+        blind_skipped = np.zeros(self.num_agents, dtype=bool)
         self._abandoned = 0
         obstacles = self._obstacles_now()
+        blind = self._blind_by_step[t] if t < self.max_steps else _NO_CELLS
         for agent in agent_list:
             if self._suppressed[agent.id - 1]:
                 agent.req_action = Action.NOOP  # all micro-actions: FORWARD, LEFT, RIGHT, TOGGLE_LOAD
@@ -535,10 +562,18 @@ class DisturbedWarehouse(Warehouse):
                 # frozen > delayed > floor > obstacle, hence this branch sits between them.
                 agent.req_action = Action.NOOP
                 floor_skipped[agent.id - 1] = True
+            elif (blind and agent.req_action == Action.FORWARD and agent.req_location(self.grid_size) in blind
+                  and agent.req_location(self.grid_size) != (agent.x, agent.y)):
+                # Blind blocked cell (known:false): the planner never heard of it, so the robot drives into it and
+                # waits (spill semantics). Precedence frozen > delayed > floor > blind > known obstacle.
+                agent.req_action = Action.NOOP
+                blind_skipped[agent.id - 1] = True
             elif obstacles and agent.req_action == Action.FORWARD and agent.req_location(self.grid_size) in obstacles:
                 agent.req_action = Action.NOOP  # stored paths ignore the mask until replan
         self.applied_floor.append(floor_skipped)
-        self._suppressed = self._suppressed | floor_skipped  # same hiding from resolve_stuck_agents as a delay skip
+        self.applied_blind.append(blind_skipped)
+        # same hiding from resolve_stuck_agents as a delay skip
+        self._suppressed = self._suppressed | floor_skipped | blind_skipped
         return super().resolve_move_conflict(agent_list)
 
     def _floor_skips(self, agent, t):
@@ -620,6 +655,7 @@ class DisturbedWarehouse(Warehouse):
         info["frozen_agents"] = int(frozen.sum())
         info["delayed_agents"] = int(delayed.sum())
         info["floor_skips"] = int(self.applied_floor[-1].sum())
+        info["blind_skips"] = int(self.applied_blind[-1].sum())
         info["frozen_fraction"] = int(frozen.sum()) / self.num_agents
         info["delivered_per_agent"] = list(self.delivered_per_agent)
         info["blocked_cells"] = len(self._blocked_by_step[t]) if t < self.max_steps else 0
