@@ -277,6 +277,20 @@ the core is parameterised on that.
 | The analyser's hotspot map recovers the floor-imperfection loss when the planner routes on it | NOT SHOWN 2026-10-14: 30 seeds paired, medium map, 80 cells p 0.3-0.7, loss 6.14 lines/h. The map at alpha 4 recovers 15.6% (CI -11% to 45%) and the oracle 22.7% (CI -4% to 50%). Neither CI excludes zero (README "Sprint 8: the closed loop", `results/closed_loop/summary.json`) | Operator's call. Candidates: more seeds, or a traffic-weighted floor draw. The map's information is not shown to be the bottleneck, since the oracle does not clear zero either |
 | Realistic demand dataset is usable | Footwear dataset is CC BY 4.0 but randomised; KIT instances better | Use a Zipf prior and say so |
 
+What the persistence comparison (S10D, 2026-10-19, README "Sprint 10" (j)) means for the analyser premise. The
+analyser's ranking step is an exponentially decayed stall count. On every floor run it ranks truth cells no better
+than the same one-hour count without decay. It is within noise at K 20 on s8b (-0.008, CI -0.020 to +0.005) and on
+the 30-zone sticky run (+0.002). It is worse at K 40 on both and at both K on the 3-zone s8e-long run. Its only
+"beats" is on outcome precision on s8e-long: 3 zones, graded with the map's own decay. So the ranking value the map
+shows on floors (precision@20 0.97) is value a raw recent-stall tally also delivers; the decay adds none that was
+measured. The closed loop was not re-run with a persistence-routed arm. On blockages neither forecast is above
+chance. With no disturbance the map flags about 20 cells per zone at K 20, all false, at the same rate as the
+disturbed runs. What the analyser contributes
+beyond counting stalls by cell is therefore not shown by these runs. The premise is not tested by them either: they
+do not test the lessons, the grading loop, or a longer window. Whether this changes the analyser's direction (an
+ETAS-style background-rate model per `docs/LITERATURE.md`, a narrower claim, or stopping) is the operator's
+decision.
+
 Known env facts (from source, `vendor/tarware/tarware/`): map sizes tiny (1x3), small (2x3), medium (2x5), large
 (3x5), extralarge (4x7); column_height 8; goals = 2 x shelf_columns on the bottom row; episode = 500 steps, 1 step =
 5 s (upstream `run_heuristic.py`); action per agent = Discrete(num_locations + goals + 1), 103 on small; global obs on
@@ -899,9 +913,10 @@ shown one yet.
 
 ### Sprint 10: the analyser on other disturbances (2026-10-18)
 
-Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) and (g). Reports are in
-laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md` and
-`wr-dev-s10-readme.md`.
+Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) to (k). Reports are in
+laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md`,
+`wr-dev-s10-readme.md`, `wr-lane-s10c-blind-blockage.md`, `wr-lane-s10d-persistence-baseline.md`,
+`wr-lane-s10d-pass2.md`, `wr-lane-s10e-amoc.md` and `wr-dev-s10c-readme.md`.
 
 - [x] S10A truth v2 (PR #36, 46e9872). `fleet-truth/2` blocked/outage/frozen windows, `fleet/truth.py`, and
       `truth_kinds` in `hotspot_score.py`. The stall-share calibration band was unreachable (baseline 0.982), so the
@@ -915,10 +930,21 @@ laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md
       median of 190 s. 2 cleared, 2 were stale at the end and 3 were open at the end. For outages, 1 of 20 was
       detected, and it was open at the end.
 - [x] S11A explorer (PR #37, d655d96). "Try it" section over the recorded measurements.
+- [x] S10C planner-blind blockage (PR #40, 7bebef4). `blocked_cell` takes `"known": false`: the planner does not see
+      the cell, the move is NOOPed and the robot is hidden from the StuckCounter; the schedule is the same as known.
+- [x] S10D persistence baseline (PR #39, 02322b1 after a tests-only pass 2). `fleet/baselines.py`,
+      `hotspot_score.py --baselines`: persistence top-K, PAI, chance_all / chance_ever, paired zone bootstrap.
+- [x] S10E AMOC (PR #41, 85df140). `time_to_detect.py --reference --sweep-k --sweep-cost`.
+- [x] Runs (queue items `wr-s10-none-run`, `wr-s10c-blind-run`, `wr-s10d-baselines-run`, `wr-s10e-amoc-run`, all
+      exit 0 on 2026-10-19; no PR; results committed in d44ed98, README (h)-(k)). Planner-blind detection at K 20 is
+      6 of 50 windows against 7 of 50 known, median 295 s against 190 s. The undisturbed run raises 177.8 false
+      flag-publishes per zone-hour at K 20, and every disturbed run is within 3% of it. The map is within noise of
+      persistence at K 20 on s8b and sticky and worse at K 40. No K or cost brings the blind miss share below 0.5.
 - Open:
-  - No lesson_persist reading exists on any S10 preset. A shift longer than 3,600 s, or a shorter window, would be
-    needed.
-  - There is no undisturbed hotspot run to set the S10 false-flag counts against.
+  - lesson_persist: s10c-blind and s10-none ran lessons with `--window-h 0.2` and graded 5 and 6 rows (2 and 3
+    hot_cell lessons in the `baselines` block), too few to read. The four 2026-10-18 presets still have none.
+  - The blind run does not record how many robots reached a blind cell, so a low detection share cannot be split
+    into "rarely reached" and "not ranked".
   - `hotspot_score.py` still counts window cells itself instead of importing `truth.py` (S10A deviation 3).
 
 ## Compute and timing

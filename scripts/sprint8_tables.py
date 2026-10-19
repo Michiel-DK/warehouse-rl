@@ -15,6 +15,13 @@ Reads:
   results/fleet/hotspot_s10-{blocked,outage,breakdown,burst}.json -> (f) the analyser on other disturbances
                                                   (`truth_kinds`, flagged cells per zone, `lesson_persist_chance`)
   results/fleet/time_to_detect_{blocked,outage}.json -> (g) time to detect and time to clear per window kind
+  results/fleet/hotspot_s10c-blind.json, results/fleet/time_to_detect_blind.json -> (h) planner-blind blockage next to
+                                                  the known blockage of (f) and (g), same 50 windows
+  results/fleet/hotspot_s10-none.json, results/fleet/amoc_blind.json (reference rows) -> (i) the undisturbed reference:
+                                                  flagged cells and false alarms per hour by K next to the disturbed runs
+  results/fleet/baselines_{s8b-medium-80-p03-07,closed-loop-sticky,s8e-long-w0.5,s10c-blind,s10-none}.json
+                                               -> (j) map versus persistence (`baselines` block, S10D)
+  results/fleet/amoc_blind.json                -> (k) AMOC: delay, misses and false alarms per hour by K and by cost
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -41,6 +48,14 @@ TTD = ["results/fleet/time_to_detect_sticky500.json", "results/fleet/time_to_det
 LESSONS = [f"results/fleet/hotspot_s8e-long-w{w}.json" for w in ("0.2", "0.5", "1.0")]
 S10 = [f"results/fleet/hotspot_s10-{k}.json" for k in ("blocked", "outage", "breakdown", "burst")]
 TTD_WINDOWS = ["results/fleet/time_to_detect_blocked.json", "results/fleet/time_to_detect_outage.json"]
+BLIND, KNOWN = "results/fleet/hotspot_s10c-blind.json", "results/fleet/hotspot_s10-blocked.json"
+TTD_BLIND = "results/fleet/time_to_detect_blind.json"
+NONE = "results/fleet/hotspot_s10-none.json"
+AMOC = "results/fleet/amoc_blind.json"
+BASELINES = [f"results/fleet/baselines_{t}.json" for t in ("s8b-medium-80-p03-07", "closed-loop-sticky", "s8e-long-w0.5",
+                                                           "s10c-blind", "s10-none")]
+S8B_COMMITTED = "results/fleet/hotspot_s8b-medium-80-p03-07.json"
+REF_KS = ("10", "20", "40")
 CELL_KINDS = ("floor", "blocked", "outage")
 S10_KS = ("20", "40")
 SECONDS_PER_STEP = 5
@@ -435,6 +450,286 @@ def detect_and_clear():
           "JSON): \"" + docs[0][1]["meta"]["caveat"] + "\"")
 
 
+def _load_all(rels, what):
+    out = []
+    for rel in rels:
+        d = load(rel)
+        if d is None:
+            print(f"{what}: `{rel}` MISSING")
+        else:
+            out.append((rel, d))
+    return out
+
+
+def _windows(d, k):
+    return [(z, w) for z, ws in sorted(d["by_k"][k]["windows"].items()) for w in ws]
+
+
+def blind_blockage():
+    docs = _load_all([KNOWN, BLIND, TTD_WINDOWS[0], TTD_BLIND], "Blind blockage")
+    if len(docs) < 4:
+        return
+    (_, hk), (_, hb), (_, tk), (_, tb) = docs
+    assert tk["meta"]["truth_kind"] == tb["meta"]["truth_kind"] == "blocked"
+    print("Final map (run-level, as in (f)):\n")
+    print("| run | planner knows the cell | blocked cells | " + " | ".join(f"K {k}: hits, precision, recall"
+                                                                       for k in S10_KS)
+          + " | " + " | ".join(f"K {k}: false flags (per zone)" for k in S10_KS)
+          + " | hotspot_forecast truth grades: hit / graded |")
+    print("|---|---|---|" + "---|" * (2 * len(S10_KS)) + "---|")
+    for d in (hk, hb):
+        tk_ = d["truth_kinds"]
+        known = d["config"]["disturb"]["blocked_cell"].get("known", True)
+        nz = len(d["zones"])
+        hits = [f"{tk_['blocked']['k'][k]['hits']}, {tk_['blocked']['k'][k]['precision']:.4f}, "
+                f"{tk_['blocked']['k'][k]['recall']:.2f}" for k in S10_KS]
+        ffs = []
+        for k in S10_KS:
+            ff = _flagged(d, k)[0] - tk_["any"]["k"][k]["hits"]
+            ffs.append(f"{ff} ({ff / nz:.1f})")
+        t = d["grading_counts"].get("truth", {})
+        print(f"| {d['tag']} | {'yes' if known else 'no'} | {tk_['blocked']['positives']} | " + " | ".join(hits)
+              + " | " + " | ".join(ffs) + f" | {t.get('hit', 0)} / {sum(t.values())} |")
+    print()
+    print("Over time (as in (g)), the same 50 windows on both runs:\n")
+    print("| K (per zone) | run | detected (share) | missed | preflag | first detect, s, median (p25-p75) | cleared "
+          "| stale_at_end | open_at_end | false flags per publish, 10 zones summed (per zone) |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    ks = [k for k in map(str, tk["meta"]["top_k"]) if k in tb["by_k"]]
+    for k in ks:
+        wk, wb = _windows(tk, k), _windows(tb, k)
+        assert [(z, w["cell"], w["start_step"], w["end_step"]) for z, w in wk] == \
+               [(z, w["cell"], w["start_step"], w["end_step"]) for z, w in wb], k
+        for d in (tk, tb):
+            sm = d["by_k"][k]["summary"]
+            nz = len(d["meta"]["zones"])
+            n_cleared = sum(1 for _, w in _windows(d, k) if w["cleared_s"] is not None)
+            ff = sm["false_flags_per_publish_mean"]
+            print(f"| {k} | {d['meta']['run']} | {sm['n_detected']} ({sm['share_detected']:.2f}) | {sm['missed']} "
+                  f"| {sm['preflag']} | {_q(sm['first_detect_s'])} | {n_cleared} | {sm['stale_at_end']} "
+                  f"| {sm['open_at_end']} | {ff:.1f} ({ff / nz:.2f}) |")
+    print()
+    print("Paired by window (same cell, start and end on both runs):\n")
+    print("| K (per zone) | detected on both | known only | blind only | neither |")
+    print("|---|---|---|---|---|")
+    for k in ks:
+        pairs = list(zip(_windows(tk, k), _windows(tb, k)))
+        c = [sum(1 for (_, a), (_, b) in pairs if (a["detected"], b["detected"]) == want)
+             for want in ((True, True), (True, False), (False, True), (False, False))]
+        assert sum(c) == len(pairs)
+        print(f"| {k} | " + " | ".join(map(str, c)) + " |")
+    print()
+    print(f"Both runs use `rate_per_hour` {tb['meta']['disturb']['blocked_cell']['rate_per_hour']:g} and duration "
+          f"{tb['meta']['disturb']['blocked_cell']['duration']}, seeds 0-9, 500 steps; `known` is removed before the "
+          "schedule is hashed (S10C), so the windows are identical (asserted here). With `known: false` the planner does "
+          "not see the cell, a move into it is NOOPed and the robot is hidden from the StuckCounter, like a floor cell "
+          "with p = 1 while the window is open. Sources: " + ", ".join(f"`{r}`" for r, _ in docs) + ".")
+
+
+def _fa_per_hour(ff_per_publish_summed, n_publishes, n_zones, steps):
+    return ff_per_publish_summed * n_publishes / (n_zones * steps * SECONDS_PER_STEP / 3600)
+
+
+def undisturbed_reference():
+    s10 = _load_all([NONE] + S10 + [BLIND], "Undisturbed reference")
+    amoc = load(AMOC)
+    if amoc is None:
+        print(f"Undisturbed reference: `{AMOC}` MISSING")
+    print("Final map (run-level; false flags = top-K cells that are not a truth cell of any kind):\n")
+    print("| run | disturbance | flagged cells per zone, mean | " + " | ".join(f"K {k}: false flags (per zone)"
+                                                                         for k in S10_KS) + " |")
+    print("|---|---|---|" + "---|" * len(S10_KS))
+    for _, d in s10:
+        nz = len(d["zones"])
+        cells = []
+        for k in S10_KS:
+            ff = _flagged(d, k)[0] - d["truth_kinds"]["any"]["k"][k]["hits"]
+            cells.append(f"{ff} ({ff / nz:.1f})")
+        print(f"| {d['tag']} | `{json.dumps(d['config']['disturb'])}` | {d['mean']['n_flagged']:.1f} | "
+              + " | ".join(cells) + " |")
+    print()
+    if amoc is None:
+        return
+    m = amoc["meta"]
+    ref_k = {str(r["K"]): r for r in amoc["amoc"]["k"]}
+    ttd = _load_all(TTD_WINDOWS + [TTD_BLIND], "Undisturbed reference")
+    for _, d in ttd:
+        if d["meta"]["run"] == m["run"]:
+            for k in REF_KS:
+                sm = d["by_k"][k]["summary"]
+                got = _fa_per_hour(sm["false_flags_per_publish_mean"], d["meta"]["n_publishes"],
+                                   len(d["meta"]["zones"]), d["meta"]["steps"])
+                assert abs(got - ref_k[k]["fa_per_hour_measured_outside_windows"]) < 1e-6, (k, got)
+    nz_ref = len(m["zones"])
+    print("Per publish (9 publishes every 5 min, the last at stream end), false flags per zone per publish and false "
+          "alarms per zone per simulated hour:\n")
+    head = [f"{m['reference_run']} (undisturbed, every flag is false)"] + [d["meta"]["run"] for _, d in ttd]
+    print("| K (per zone) | " + " | ".join(f"{h}: per publish, per hour" for h in head) + " |")
+    print("|---|" + "---|" * len(head))
+    for k in REF_KS:
+        r = ref_k[k]
+        per_pub = r["fa_per_hour_reference"] * m["sim_hours_reference"] / m["n_publishes_reference"]
+        cells = [f"{per_pub:.2f}, {r['fa_per_hour_reference']:.1f}"]
+        for _, d in ttd:
+            sm = d["by_k"][k]["summary"]
+            nz = len(d["meta"]["zones"])
+            fa = _fa_per_hour(sm["false_flags_per_publish_mean"], d["meta"]["n_publishes"], nz, d["meta"]["steps"])
+            cells.append(f"{sm['false_flags_per_publish_mean'] / nz:.2f}, {fa:.1f}")
+        print(f"| {k} | " + " | ".join(cells) + " |")
+    print()
+    print(f"Reference = `{m['reference_dir']}` ({nz_ref} zones x {m['steps']} steps, no disturbance, no truth), scored "
+          f"by `{AMOC}` (`amoc.k[].fa_per_hour_reference`; per publish = that x {m['sim_hours_reference']:.4f} h / "
+          f"{m['n_publishes_reference']} publishes). The disturbed columns count only flags that match no truth window "
+          "at that publish (the S10B rule), from `time_to_detect_{blocked,outage,blind}.json`: per hour = false flags "
+          "per publish summed over zones x publishes / (zones x steps x 5 s / 3600). The conversion is asserted equal "
+          f"to `amoc.k[].fa_per_hour_measured_outside_windows` for {m['run']} at K {', '.join(REF_KS)}. The unit is "
+          "flag-publishes per zone per simulated hour, not distinct cells. The burst and breakdown runs have no "
+          "time-to-detect file, so they appear in the final-map table only. Sources: "
+          + ", ".join(f"`{r}`" for r, _ in s10 + ttd) + f", `{AMOC}`.")
+
+
+def _same_sets(d, k):
+    """Every zone flags fewer than K cells on the final map and the map window covers the whole stream, so the flagged
+    set only grows and at every publish both top-K lists hold all of it (fleet/baselines.py docstring CONSEQUENCE)."""
+    b = d["baselines"]
+    covers = d["config"]["steps"] * SECONDS_PER_STEP <= b["params"]["window_hours"] * 3600
+    return covers and all(z["n_flagged"] < int(k) for z in d["zones"].values())
+
+
+def _delta3(p):
+    lo, hi = p["ci95"]
+    return f"{p['mean']:+.3f} ({lo:+.3f} to {hi:+.3f})"
+
+
+def _paired(p, d, k, field):
+    b = d["baselines"]
+    if p["mean"] is None:
+        return "n/a (0 units)", "n/a"
+    if field == "truth_precision" and b["k"][k]["map"]["hits"]["positives"] == 0:
+        return "n/a", "n/a, no truth positives"
+    v = verdict(p)
+    assert v == p["verdict"], (k, field, v, p["verdict"])
+    if _same_sets(d, k):
+        assert b["k"][k]["map"] == b["k"][k]["persistence"] and p["ci95"] == [0.0, 0.0], (d["tag"], k)
+        return _delta3(p), "identical top-K sets"
+    return _delta3(p), v
+
+
+def _f(x, fmt=".3f"):
+    return "n/a" if x is None else format(x, fmt)
+
+
+def map_vs_persistence():
+    docs = _load_all(BASELINES, "Map vs persistence")
+    if not docs:
+        return
+    print("| run | zones | K | truth precision: map / persistence | PAI (= lift_all): map / persistence "
+          "| lift_ever: map / persistence | paired truth precision, map - persistence (95% CI) | verdict "
+          "| paired outcome precision (95% CI) | verdict |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for _, d in docs:
+        b = d["baselines"]
+        for k in S10_KS:
+            mp, ps = b["k"][k]["map"], b["k"][k]["persistence"]
+            for x in (mp, ps):
+                assert x["pai"] == x["lift_all"] or abs(x["pai"] - x["lift_all"]) < 1e-9, (d["tag"], k)
+            pr = b["paired"][k]
+            td, tv = _paired(pr["truth_precision"], d, k, "truth_precision")
+            od, ov = _paired(pr["outcome_precision"], d, k, "outcome_precision")
+            print(f"| {d['tag']} | {pr['truth_precision']['n_zones']} | {k} | {_f(mp['truth_precision'])} / "
+                  f"{_f(ps['truth_precision'])} | {_f(mp['pai'], '.2f')} / {_f(ps['pai'], '.2f')} "
+                  f"| {_f(mp['lift_ever'], '.2f')} / {_f(ps['lift_ever'], '.2f')} | {td} | {tv} | {od} | {ov} |")
+    print()
+    print("Chance lines and units per run:\n")
+    print("| run | disturbance | steps | chance_all | chance_ever | forecast units (truth / outcome) "
+          "| rank forecasts graded (unranked) |")
+    print("|---|---|---|---|---|---|---|")
+    for _, d in docs:
+        b = d["baselines"]
+        rg = d["rank_grading"]
+        print(f"| {d['tag']} | `{json.dumps(d['config']['disturb'])}` | {d['config']['steps']} "
+              f"| {b['chance']['all']:.3f} | {b['chance']['ever']:.3f} | {b['n_units_truth']} / "
+              f"{b['n_units_outcome']} | {rg['rank_graded']} ({rg['unranked']}) |")
+    print()
+    print("lesson_persist (hot_cell lessons) against three pools:\n")
+    print("| run | hot_cell lessons graded | hot_robot excluded | observed rate | chance: window (S8S) / ever / all "
+          "| lift: window / ever / all |")
+    print("|---|---|---|---|---|---|")
+    for _, d in docs:
+        lp = d["baselines"]["lesson_persist"]
+        if not lp["n_lessons"]:
+            print(f"| {d['tag']} | 0 | {lp['n_hot_robot_excluded']} | n/a | n/a | n/a |")
+            continue
+        print(f"| {d['tag']} | {lp['n_lessons']} | {lp['n_hot_robot_excluded']} | {lp['observed_rate']:.3f} "
+              f"| {lp['chance_window']:.3f} / {lp['chance_ever']:.3f} / {lp['chance_all']:.4f} "
+              f"| {_f(lp['lift_window'], '.2f')} / {_f(lp['lift_ever'], '.2f')} / {_f(lp['lift_all'], '.2f')} |")
+    print()
+    s8b = next((d for r, d in docs if d["tag"] == "s8b-medium-80-p03-07"), None)
+    committed = load(S8B_COMMITTED)
+    note = ""
+    if s8b is not None and committed is not None:
+        note = (f" The s8b re-score reads the store as it is on disk today, which grades {s8b['rank_grading']['rank_graded']}"
+                f" rank forecasts ({s8b['rank_grading']['unranked']} unranked); the committed `{S8B_COMMITTED}` graded "
+                f"{committed['rank_grading']['rank_graded']} ({committed['rank_grading']['unranked']} unranked). The "
+                "`baselines` block is computed from the costmap rows, not from those grades.")
+    print("Persistence = the same published rows ranked by their raw window stall count instead of the decayed cost: "
+          "same window, same filter, same `min_stalls`, so decay is the only difference (`fleet/baselines.py` "
+          "docstring). Truth precision here is per publish against the cells that are truth-positive over the next "
+          "horizon [t, t + H], pooled over (zone, publish) units, so it is not the run-level `truth_kinds` of (f) and "
+          "(h). PAI = (hits / positives) / (K / 380 candidate cells) and equals lift_all by definition (asserted). "
+          "Paired = per-zone map minus persistence, mean over zones, 1,000-resample zone bootstrap (seed 0), 2.5 / 97.5 "
+          "percentiles; the verdict rule is the one at the top of this script (asserted equal to the JSON's), but the "
+          "CI is a bootstrap, not `evaluate.paired_delta`'s Student-t. \"identical top-K sets\" = every zone flags fewer "
+          "than K cells on the final map and the 1 h map window covers the whole 500-step stream, so both lists hold "
+          "the whole flagged set at every publish (asserted: equal blocks, CI 0 to 0); this is the case on s10c-blind "
+          "and s10-none at K 40 (at most 36 and 32 flagged cells per zone). s10-none has no truth positives, so "
+          "its truth columns are 0 or n/a by construction. s8e-long-w0.5 has 3 zones; a 3-zone bootstrap CI sits on "
+          "the extreme resamples, so its verdicts are weak. The outcome grade re-ranks with the map's own decay at "
+          "t + H, so it leans toward the map; closed-loop-sticky has one publish at stream end and 0 outcome units."
+          + note + " Sources: " + ", ".join(f"`{r}`" for r, _ in docs) + " (`baselines`, `rank_grading`, `config`).")
+
+
+def amoc_table():
+    a = load(AMOC)
+    if a is None:
+        print(f"AMOC: `{AMOC}` MISSING")
+        return
+    m, am = a["meta"], a["amoc"]
+
+    def row(dial, r):
+        q = "none" if r["median_delay_s"] is None else f"{r['median_delay_s']:g} ({r['p25']:g}-{r['p75']:g})"
+        return (f"| {dial} | {r['n_detected']} / {r['n_windows']} | {r['miss_share']:.2f} | {q} "
+                f"| {r['stale_at_end_share']:.2f} | {r['fa_per_hour_reference']:.1f} "
+                f"| {r['fa_per_hour_measured_outside_windows']:.1f} |")
+
+    head = ("| detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share "
+            f"| false alarms per zone-hour, {m['reference_run']} | false alarms per zone-hour, {m['run']} outside "
+            "windows |")
+    print("By K (flag = rank <= K in the zone's map at a publish):\n")
+    print("| K (per zone) " + head)
+    print("|---|---|---|---|---|---|---|")
+    for r in am["k"]:
+        print(row(r["K"], r))
+    print()
+    print("By cost threshold (flag = cost >= c at a publish):\n")
+    print("| cost >= " + head)
+    print("|---|---|---|---|---|---|---|")
+    for r in am["cost"]:
+        print(row(f"{r['cost']:g}", r))
+    print()
+    kb = am["k_at_miss_below_half"]
+    cb = am["cost_at_miss_below_half"]
+    print(f"Dial at which the miss share first drops below 0.5: K {'none at any K' if kb is None else kb}; cost "
+          f"{'none at any cost' if cb is None else cb}.\n")
+    print(f"Measured run `{m['phase_a_dir']}` ({m['n_windows']} planner-blind blocked windows, `{json.dumps(m['disturb'])}`),"
+          f" reference `{m['reference_dir']}` (undisturbed), both {len(m['zones'])} zones x {m['steps']} steps = "
+          f"{m['sim_hours']:.4f} simulated h, {m['n_publishes']} publishes every {m['publish_every_s'] / 60:g} min. "
+          "False alarms are flag-publishes per zone per simulated hour: on the reference every flag counts; on the "
+          "measured run only flags matching no truth window at that publish. Rows with equal numbers are saturated: "
+          "the dial already flags every cell with a nonzero cost. Definitions (verbatim from the JSON): "
+          + "; ".join(f"{k}: \"{v}\"" for k, v in m["amoc_definitions"].items()) + f". Source: `{AMOC}` (`amoc`).")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -456,6 +751,14 @@ def main():
     other_disturbances()
     print("\n### (g) Time to detect and time to clear (S10B)\n")
     detect_and_clear()
+    print("\n### (h) Planner-blind blockage next to the known blockage (S10C)\n")
+    blind_blockage()
+    print("\n### (i) The undisturbed reference (s10-none) next to the disturbed runs\n")
+    undisturbed_reference()
+    print("\n### (j) Map versus persistence (S10D)\n")
+    map_vs_persistence()
+    print("\n### (k) AMOC: delay, misses and false alarms per hour (S10E, planner-blind blockage)\n")
+    amoc_table()
 
 
 if __name__ == "__main__":

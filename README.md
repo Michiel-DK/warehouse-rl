@@ -821,7 +821,140 @@ Per window: detected = the cell is in the zone's top K at a publish while the wi
 
 **Caveats.**
 - One seed set (0-9) and one 500-step shift per preset, with no CI on any count here.
-- There is no undisturbed hotspot run next to these, so nothing here says why the map misses blocked cells.
+- The undisturbed run is set against these in (i) below. Why the map misses known blockages is explained by the mechanism audit in `docs/SCOPE.md`: the planner routes around them.
 - The (f) hits are run-level (final map, truth at any time). Only (g) is time-resolved.
 - In (g) a flag matching a truth window of any kind counts as not false. Each S10 run holds only its own kind, so this does not move these numbers.
+- The numbers are macOS arm64 only.
+
+### Sprint 10, second half: planner-blind blockage, undisturbed reference, persistence, AMOC (2026-10-19)
+
+The mechanism audit (`docs/SCOPE.md`, 2026-10-18) found that the known blockages of (f) and (g) never tested the analyser: the planner routes around them. Four lanes and four queue runs followed. S10C (PR #40) added `blocked_cell` with `"known": false`, a blockage the planner does not see, with the robot hidden from the StuckCounter like a floor cell. The queue item `wr-s10c-blind-run` ran it on the same 50 windows as s10-blocked. `wr-s10-none-run` ran the same 10 zones x 500 steps with no disturbance. S10D (PR #39) added `hotspot_score.py --baselines`: a persistence forecast (the same window count without decay) and chance lines. `wr-s10d-baselines-run` re-scored five runs with it. S10E (PR #41) added the AMOC sweep to `fleet/time_to_detect.py`, run as `wr-s10e-amoc-run`. Everything between this paragraph and the next "Reading the numbers" is the output of sections (h) to (k) of `.venv/bin/python scripts/sprint8_tables.py`. Only its headings were demoted one level.
+
+#### (h) Planner-blind blockage next to the known blockage (S10C)
+
+Final map (run-level, as in (f)):
+
+| run | planner knows the cell | blocked cells | K 20: hits, precision, recall | K 40: hits, precision, recall | K 20: false flags (per zone) | K 40: false flags (per zone) | hotspot_forecast truth grades: hit / graded |
+|---|---|---|---|---|---|---|---|
+| s10-blocked | yes | 50 | 4, 0.0200, 0.08 | 7, 0.0175, 0.14 | 195 (19.5) | 260 (26.0) | 23 / 1409 |
+| s10c-blind | no | 50 | 17, 0.0850, 0.34 | 20, 0.0500, 0.40 | 183 (18.3) | 241 (24.1) | 16 / 1363 |
+
+Over time (as in (g)), the same 50 windows on both runs:
+
+| K (per zone) | run | detected (share) | missed | preflag | first detect, s, median (p25-p75) | cleared | stale_at_end | open_at_end | false flags per publish, 10 zones summed (per zone) |
+|---|---|---|---|---|---|---|---|---|---|
+| 10 | s10-blocked | 6 (0.12) | 44 | 1 | 187.5 (117.5-242.5) | 3 | 1 | 2 | 83.0 (8.30) |
+| 10 | s10c-blind | 6 (0.12) | 44 | 1 | 402.5 (277.5-568.75) | 0 | 2 | 4 | 83.6 (8.36) |
+| 20 | s10-blocked | 7 (0.14) | 43 | 2 | 190 (140-232.5) | 2 | 2 | 3 | 135.8 (13.58) |
+| 20 | s10c-blind | 6 (0.12) | 44 | 2 | 295 (218.75-438.75) | 0 | 2 | 4 | 135.1 (13.51) |
+| 40 | s10-blocked | 7 (0.14) | 43 | 2 | 190 (140-232.5) | 0 | 4 | 3 | 154.6 (15.46) |
+| 40 | s10c-blind | 6 (0.12) | 44 | 2 | 295 (218.75-438.75) | 0 | 2 | 4 | 150.2 (15.02) |
+
+Paired by window (same cell, start and end on both runs):
+
+| K (per zone) | detected on both | known only | blind only | neither |
+|---|---|---|---|---|
+| 10 | 4 | 2 | 2 | 42 |
+| 20 | 5 | 2 | 1 | 42 |
+| 40 | 5 | 2 | 1 | 42 |
+
+Both runs use `rate_per_hour` 8 and duration [60, 240], seeds 0-9, 500 steps; `known` is removed before the schedule is hashed (S10C), so the windows are identical (asserted here). With `known: false` the planner does not see the cell, a move into it is NOOPed and the robot is hidden from the StuckCounter, like a floor cell with p = 1 while the window is open. Sources: `results/fleet/hotspot_s10-blocked.json`, `results/fleet/hotspot_s10c-blind.json`, `results/fleet/time_to_detect_blocked.json`, `results/fleet/time_to_detect_blind.json`.
+
+#### (i) The undisturbed reference (s10-none) next to the disturbed runs
+
+Final map (run-level; false flags = top-K cells that are not a truth cell of any kind):
+
+| run | disturbance | flagged cells per zone, mean | K 20: false flags (per zone) | K 40: false flags (per zone) |
+|---|---|---|---|---|
+| s10-none | `{}` | 26.4 | 200 (20.0) | 264 (26.4) |
+| s10-blocked | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240]}}` | 26.7 | 195 (19.5) | 260 (26.0) |
+| s10-outage | `{"outage": {"rate_per_hour": 4.0, "duration": [120, 360]}}` | 26.8 | 199 (19.9) | 267 (26.7) |
+| s10-breakdown | `{"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}` | 8.9 | 89 (8.9) | 89 (8.9) |
+| s10-burst | `{"burst": {"start": 100, "end": 300, "extra": 20}}` | 25.7 | 195 (19.5) | 257 (25.7) |
+| s10c-blind | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}` | 26.1 | 183 (18.3) | 241 (24.1) |
+
+Per publish (9 publishes every 5 min, the last at stream end), false flags per zone per publish and false alarms per zone per simulated hour:
+
+| K (per zone) | s10-none (undisturbed, every flag is false): per publish, per hour | s10-blocked: per publish, per hour | s10-outage: per publish, per hour | s10c-blind: per publish, per hour |
+|---|---|---|---|---|
+| 10 | 8.41, 109.0 | 8.30, 107.6 | 8.50, 110.2 | 8.36, 108.3 |
+| 20 | 13.72, 177.8 | 13.58, 176.0 | 13.90, 180.1 | 13.51, 175.1 |
+| 40 | 15.46, 200.3 | 15.46, 200.3 | 15.71, 203.6 | 15.02, 194.7 |
+
+Reference = `fleet/data/s10-none` (10 zones x 500 steps, no disturbance, no truth), scored by `results/fleet/amoc_blind.json` (`amoc.k[].fa_per_hour_reference`; per publish = that x 0.6944 h / 9 publishes). The disturbed columns count only flags that match no truth window at that publish (the S10B rule), from `time_to_detect_{blocked,outage,blind}.json`: per hour = false flags per publish summed over zones x publishes / (zones x steps x 5 s / 3600). The conversion is asserted equal to `amoc.k[].fa_per_hour_measured_outside_windows` for s10c-blind at K 10, 20, 40. The unit is flag-publishes per zone per simulated hour, not distinct cells. The burst and breakdown runs have no time-to-detect file, so they appear in the final-map table only. Sources: `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-blocked.json`, `results/fleet/hotspot_s10-outage.json`, `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-burst.json`, `results/fleet/hotspot_s10c-blind.json`, `results/fleet/time_to_detect_blocked.json`, `results/fleet/time_to_detect_outage.json`, `results/fleet/time_to_detect_blind.json`, `results/fleet/amoc_blind.json`.
+
+#### (j) Map versus persistence (S10D)
+
+| run | zones | K | truth precision: map / persistence | PAI (= lift_all): map / persistence | lift_ever: map / persistence | paired truth precision, map - persistence (95% CI) | verdict | paired outcome precision (95% CI) | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| s8b-medium-80-p03-07 | 10 | 20 | 0.925 / 0.932 | 4.39 / 4.43 | 1.32 / 1.33 | -0.008 (-0.020 to +0.005) | within noise | +0.015 (-0.020 to +0.055) | within noise |
+| s8b-medium-80-p03-07 | 10 | 40 | 0.791 / 0.814 | 3.76 / 3.87 | 1.13 / 1.16 | -0.023 (-0.034 to -0.011) | worse | +0.003 (-0.032 to +0.033) | within noise |
+| closed-loop-sticky | 30 | 20 | 0.955 / 0.953 | 4.54 / 4.53 | 1.10 / 1.10 | +0.002 (-0.010 to +0.017) | within noise | n/a (0 units) | n/a |
+| closed-loop-sticky | 30 | 40 | 0.841 / 0.859 | 3.99 / 4.08 | 0.97 / 0.99 | -0.018 (-0.029 to -0.008) | worse | n/a (0 units) | n/a |
+| s8e-long-w0.5 | 3 | 20 | 0.977 / 0.985 | 4.64 / 4.68 | 2.02 / 2.03 | -0.008 (-0.019 to -0.002) | worse | +0.029 (+0.007 to +0.071) | beats |
+| s8e-long-w0.5 | 3 | 40 | 0.879 / 0.898 | 4.18 / 4.27 | 1.81 / 1.85 | -0.019 (-0.026 to -0.009) | worse | +0.008 (+0.007 to +0.010) | beats |
+| s10c-blind | 10 | 20 | 0.008 / 0.009 | 1.03 / 1.10 | 0.18 / 0.19 | -0.001 (-0.002 to +0.000) | within noise | +0.000 (+0.000 to +0.000) | within noise |
+| s10c-blind | 10 | 40 | 0.004 / 0.004 | 0.55 / 0.55 | 0.09 / 0.09 | +0.000 (+0.000 to +0.000) | identical top-K sets | +0.000 (+0.000 to +0.000) | identical top-K sets |
+| s10-none | 10 | 20 | 0.000 / 0.000 | n/a / n/a | n/a / n/a | n/a | n/a, no truth positives | +0.000 (+0.000 to +0.000) | within noise |
+| s10-none | 10 | 40 | 0.000 / 0.000 | n/a / n/a | n/a / n/a | n/a | n/a, no truth positives | +0.000 (+0.000 to +0.000) | identical top-K sets |
+
+Chance lines and units per run:
+
+| run | disturbance | steps | chance_all | chance_ever | forecast units (truth / outcome) | rank forecasts graded (unranked) |
+|---|---|---|---|---|---|---|
+| s8b-medium-80-p03-07 | `{"floor": {"cells": 80, "p": [0.3, 0.7]}}` | 500 | 0.211 | 0.702 | 20 / 10 | 442 (0) |
+| closed-loop-sticky | `{"floor": {"cells": 80, "p": [0.9, 0.99]}}` | 500 | 0.211 | 0.865 | 30 / 0 | 0 (0) |
+| s8e-long-w0.5 | `{"floor": {"cells": 80, "p": [0.3, 0.7]}}` | 2000 | 0.211 | 0.485 | 24 / 21 | 420 (1120) |
+| s10c-blind | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}` | 500 | 0.008 | 0.047 | 90 / 40 | 300 (0) |
+| s10-none | `{}` | 500 | 0.000 | 0.000 | 90 / 40 | 297 (0) |
+
+lesson_persist (hot_cell lessons) against three pools:
+
+| run | hot_cell lessons graded | hot_robot excluded | observed rate | chance: window (S8S) / ever / all | lift: window / ever / all |
+|---|---|---|---|---|---|
+| s8b-medium-80-p03-07 | 0 | 0 | n/a | n/a | n/a |
+| closed-loop-sticky | 0 | 0 | n/a | n/a | n/a |
+| s8e-long-w0.5 | 25 | 0 | 0.720 | 0.241 / 0.221 / 0.0772 | 2.99 / 3.26 / 9.33 |
+| s10c-blind | 2 | 3 | 0.500 | 0.034 / 0.024 / 0.0013 | 14.50 / 21.00 / 380.00 |
+| s10-none | 3 | 3 | 0.333 | 0.061 / 0.102 / 0.0061 | 5.45 / 3.28 / 54.29 |
+
+Persistence = the same published rows ranked by their raw window stall count instead of the decayed cost: same window, same filter, same `min_stalls`, so decay is the only difference (`fleet/baselines.py` docstring). Truth precision here is per publish against the cells that are truth-positive over the next horizon [t, t + H], pooled over (zone, publish) units, so it is not the run-level `truth_kinds` of (f) and (h). PAI = (hits / positives) / (K / 380 candidate cells) and equals lift_all by definition (asserted). Paired = per-zone map minus persistence, mean over zones, 1,000-resample zone bootstrap (seed 0), 2.5 / 97.5 percentiles; the verdict rule is the one at the top of this script (asserted equal to the JSON's), but the CI is a bootstrap, not `evaluate.paired_delta`'s Student-t. "identical top-K sets" = every zone flags fewer than K cells on the final map and the 1 h map window covers the whole 500-step stream, so both lists hold the whole flagged set at every publish (asserted: equal blocks, CI 0 to 0); this is the case on s10c-blind and s10-none at K 40 (at most 36 and 32 flagged cells per zone). s10-none has no truth positives, so its truth columns are 0 or n/a by construction. s8e-long-w0.5 has 3 zones; a 3-zone bootstrap CI sits on the extreme resamples, so its verdicts are weak. The outcome grade re-ranks with the map's own decay at t + H, so it leans toward the map; closed-loop-sticky has one publish at stream end and 0 outcome units. The s8b re-score reads the store as it is on disk today, which grades 442 rank forecasts (0 unranked); the committed `results/fleet/hotspot_s8b-medium-80-p03-07.json` graded 200 (242 unranked). The `baselines` block is computed from the costmap rows, not from those grades. Sources: `results/fleet/baselines_s8b-medium-80-p03-07.json`, `results/fleet/baselines_closed-loop-sticky.json`, `results/fleet/baselines_s8e-long-w0.5.json`, `results/fleet/baselines_s10c-blind.json`, `results/fleet/baselines_s10-none.json` (`baselines`, `rank_grading`, `config`).
+
+#### (k) AMOC: delay, misses and false alarms per hour (S10E, planner-blind blockage)
+
+By K (flag = rank <= K in the zone's map at a publish):
+
+| K (per zone) | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, s10-none | false alarms per zone-hour, s10c-blind outside windows |
+|---|---|---|---|---|---|---|
+| 5 | 3 / 50 | 0.94 | 475 (285-537.5) | 0.02 | 59.2 | 58.9 |
+| 10 | 6 / 50 | 0.88 | 402.5 (277.5-568.75) | 0.04 | 109.0 | 108.3 |
+| 20 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 177.8 | 175.1 |
+| 40 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 200.3 | 194.7 |
+| 80 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 200.3 | 194.7 |
+
+By cost threshold (flag = cost >= c at a publish):
+
+| cost >= | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, s10-none | false alarms per zone-hour, s10c-blind outside windows |
+|---|---|---|---|---|---|---|
+| 0.2 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 200.3 | 194.7 |
+| 0.4 | 6 / 50 | 0.88 | 402.5 (277.5-568.75) | 0.04 | 143.1 | 140.5 |
+| 0.6 | 2 / 50 | 0.96 | 537.5 (506.25-568.75) | 0.00 | 50.3 | 45.2 |
+| 0.8 | 1 / 50 | 0.98 | 475 (475-475) | 0.00 | 37.7 | 35.7 |
+
+Dial at which the miss share first drops below 0.5: K none at any K; cost none at any cost.
+
+Measured run `fleet/data/s10c-blind` (50 planner-blind blocked windows, `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}`), reference `fleet/data/s10-none` (undisturbed), both 10 zones x 500 steps = 0.6944 simulated h, 9 publishes every 5 min. False alarms are flag-publishes per zone per simulated hour: on the reference every flag counts; on the measured run only flags matching no truth window at that publish. Rows with equal numbers are saturated: the dial already flags every cell with a nonzero cost. Definitions (verbatim from the JSON): sim_hours: "steps * step_seconds / 3600 from each run's truth.json (not the span)"; fa_per_hour_reference: "flags over all reference publishes and zones (flagged: rank <= K, or cost >= c) / (n_zones_reference * sim_hours_reference); every flag on the reference is false"; fa_per_hour_reference_by_zone: "{zone: zone flags / sim_hours_reference}"; fa_per_hour_measured_outside_windows: "sum over measured publishes of analyse_windows_k's false flags (flagged cells with no truth_positive of any kind) / (n_zones_measured * sim_hours_measured)"; miss_share: "summary.missed / n_windows (null for 0 windows)"; stale_at_end_share: "summary.stale_at_end / n_windows (null for 0 windows)"; median_delay_s: "summary.first_detect_s median over detected windows; p25 / p75 likewise"; k_at_miss_below_half: "first K entry (K ascending) with miss_share < 0.5, else null"; cost_at_miss_below_half: "first cost entry (cost descending) with miss_share < 0.5, else null". Source: `results/fleet/amoc_blind.json` (`amoc`).
+
+**Reading the numbers.**
+- **Map against persistence (j).** The decayed map does not beat persistence, the plain one-hour stall count, on any run. On truth precision it is within noise at K 20 on s8b (-0.008, CI -0.020 to +0.005) and on the 30-zone sticky run (+0.002, CI -0.010 to +0.017). It is worse at K 40 on both (-0.023 and -0.018) and at both K on the 3-zone s8e-long run (-0.008 and -0.019). On outcome precision the map is within noise on s8b at both K and beats persistence on s8e-long (+0.029 and +0.008). That run has only 3 zones, and the outcome grade re-ranks with the map's own decay. Both forecasts are far above a random draw from all cells on the floor runs (PAI 4.39 to 4.68 at K 20) but close to a random draw from the cells that ever stalled (lift_ever 1.10 to 2.03 at K 20, and 0.97 for the map on the sticky run at K 40).
+- **On the blockage runs (j).** On s10c-blind both forecasts have truth precision below 0.01, about chance (map PAI 1.03, chance_all 0.008). The map's lift_ever is 0.18, so a random pick among the cells that ever stalled would do better. At K 40 the two lists are the same set. s10-none has no truth, so only its outcome column means anything.
+- **Lessons against three pools (j).** On s8e-long 18 of 25 hot_cell lessons persisted (0.720). Lift is 2.99 against the S8S window pool, 3.26 against the ever-stalled pool and 9.33 against all cells. The s10c-blind and s10-none rows rest on 2 and 3 lessons, too few to read.
+- **Planner-blind against known blockage (h).** Hiding the blockage from the planner did not raise detection while the window was open. At K 20, 6 of 50 blind windows were detected against 7 of 50 known ones. Per window, 5 were caught on both runs, 2 only on the known run and 1 only on the blind run. Detection came later on the blind run (median 295 s against 190 s), and no blind window cleared (known: 2). On the final map the blind run has 17 blocked cells in a zone's top 20 against 4 (recall 0.34 against 0.08). At least 11 of those 17 were never in the top 20 at a publish while their window was open, so the final-map recall measures cells flagged after the fact. The JSONs do not record how many robots reached a blind cell (`blind_skips`). This run therefore cannot tell "robots rarely reach the cell" apart from "the map does not rank it". The S10C smoke (2 zones x 150 steps, small map) found 0 blind skips at seed base 0.
+- **The false-alarm floor is the map's own (i).** With no disturbance at all, the map flags 26.4 cells per zone on the final map and 20.0 per zone in the top 20 (all false). That is the same as the disturbed runs (18.3 to 19.9 per zone at K 20, outside breakdown). Per publish, the undisturbed run raises 177.8 false flag-publishes per zone per simulated hour at K 20. Every disturbed run is within 3% of the undisturbed run at K 10, 20 and 40, so the false flags come from ordinary traffic, not from the disturbances.
+- **AMOC (k).** No setting of K or of the cost threshold brings the miss share below 0.5 on the planner-blind run. The miss share is 0.88 or more everywhere. The best dial (K 20) detects 6 of 50 windows with a median delay of 295 s, at 177.8 false alarms per zone-hour on the undisturbed run. The quietest dial (cost >= 0.8) detects 1 of 50 at 37.7. K 40, K 80 and cost >= 0.2 give identical rows: every cell with a nonzero cost is already flagged.
+
+**Caveats.**
+- One seed set and one 500-step shift per preset (s8e-long: 3 zones x 2,000 steps). The only CIs are the zone-bootstrap CIs of (j); there is none on any count in (h), (i) or (k).
+- The s8b re-score reads today's store, which grades 442 rank forecasts against the committed hotspot JSON's 200 (footnote of (j)). The `baselines` block does not use those grades.
+- Persistence here differs from the map only by the decay. A persistence forecast over a different window length was not run.
 - The numbers are macOS arm64 only.
