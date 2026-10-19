@@ -30,6 +30,14 @@ chance_mean, chance_median, lift (= observed_rate / chance_mean, null when chanc
 per_lesson [{id, subject, window_start, pool_size, pool_ok, chance, observed}] sorted by (window_start, subject, id).
 A lesson whose own subject is not in its pool, or whose recomputed verdict differs from the stored row, raises ValueError.
 --window-h W (hours) must match every stored lesson window (exit nonzero otherwise); omitted, stored windows are used.
+gate_grading (S10F, present only when a hotspot_forecast claim of the run carries a `gate` key, i.e. the run was published
+with costmap.py --gate; before `baselines`): {gate: dict(forecasts, truth_graded, hits, false_alarms, precision, hit_cells,
+positive_cells, recall, flags_per_zone_publish)} from the run's gated forecasts joined by id to their "truth" grade rows.
+forecasts = gated decisions of that gate, truth_graded = those with a truth row, hits / false_alarms = truth rows by
+verdict (a count of forecasts: a cell flagged at two publishes and hit twice is 2 hits), precision = hits / truth_graded
+(null at 0), hit_cells = distinct (zone, cell) with a truth hit, positive_cells = truth_kinds["any"].positives, recall =
+hit_cells / positive_cells (null at 0), flags_per_zone_publish = dict(max, mean) of the forecasts per (zone, decided_at)
+pair holding at least one forecast of that gate (publishes with no flag are not pairs). Absent for ungated runs.
 --baselines (S10D) adds ONE top-level key `baselines` after every other key (persistence baseline, chance lines, paired
 CI; see fleet/baselines.py); without it the output is unchanged. --window-h never reaches it: the baselines use the
 costmap's own window. Candidate cells = the env's highway non-goal cells (DisturbedWarehouse._blockable_cells).
@@ -147,6 +155,33 @@ def truth_kinds(truth, costmap, ks=KS):
     out["frozen"] = dict(positives=sum(len(f) for _, _, f in per_zone), cells=out["frozen"]["positives"],
                          k=out["frozen"]["k"])
     return out
+
+
+def gate_grading(decisions, grades, positive_cells):
+    """The gate_grading block (see module docstring), or None when no forecast claim carries a `gate` key."""
+    truth_rows = {g["id"]: g["verdict"] for g in grades if g["grade_source"] == "truth"}
+    by_gate = {}
+    for d in decisions:
+        gate = lessons.claim_of(d).get("gate")
+        if gate is not None:
+            by_gate.setdefault(gate, []).append(d)
+    out = {}
+    for gate, ds in sorted(by_gate.items()):
+        verdicts = [truth_rows[d["id"]] for d in ds if d["id"] in truth_rows]
+        hits = sum(1 for v in verdicts if v == "hit")
+        hit_cells = {d["subject"] for d in ds if truth_rows.get(d["id"]) == "hit"}
+        per_pair = {}
+        for d in ds:
+            key = (d["subject"].partition(":")[0], d["decided_at"])
+            per_pair[key] = per_pair.get(key, 0) + 1
+        out[gate] = dict(forecasts=len(ds), truth_graded=len(verdicts), hits=hits,
+                         false_alarms=sum(1 for v in verdicts if v == "false_alarm"),
+                         precision=hits / len(verdicts) if verdicts else None, hit_cells=len(hit_cells),
+                         positive_cells=positive_cells,
+                         recall=len(hit_cells) / positive_cells if positive_cells else None,
+                         flags_per_zone_publish=dict(max=max(per_pair.values()),
+                                                     mean=sum(per_pair.values()) / len(per_pair)))
+    return out or None
 
 
 def score_run(truth, costmap, stalls, grades, ks=KS, lesson_decisions=()):
@@ -361,6 +396,7 @@ def main(argv=None):
     stalls = st.select("stalls", {"run": run})
     grades = st.select("forecast_grades", {"run": run})
     lesson_decisions = st.select("decisions", {"run": run, "kind": "lesson"})
+    forecast_decisions = st.select("decisions", {"run": run, "kind": "hotspot_forecast"})
     try:
         chance = persist_chance(st, run, a.window_h)
     except WindowMismatch as e:
@@ -378,6 +414,9 @@ def main(argv=None):
                platform=dict(platform=platform.platform(), python=sys.version.split()[0]))
     res["lesson_persist_chance"] = chance
     res["truth_kinds"] = truth_kinds(truth, costmap)
+    gated = gate_grading(forecast_decisions, grades, res["truth_kinds"]["any"]["positives"])
+    if gated is not None:
+        res["gate_grading"] = gated
     if base is not None:
         res["baselines"] = base
     out = Path(a.out) if a.out else REPO / "results" / "fleet" / f"hotspot_{a.tag}.json"
@@ -399,6 +438,10 @@ def main(argv=None):
             row = base["k"][str(k)]
             print(f"  baselines K={k}: truth precision map {row['map']['truth_precision']} persistence "
                   f"{row['persistence']['truth_precision']}; chance_all {base['chance']['all']} ever {base['chance']['ever']}")
+    for gate, g in (res.get("gate_grading") or {}).items():
+        print(f"  gate {gate}: {g['forecasts']} forecasts, {g['hits']} hits / {g['truth_graded']} graded (precision "
+              f"{g['precision']}), hit cells {g['hit_cells']} of {g['positive_cells']} (recall {g['recall']}), flags "
+              f"per zone-publish {g['flags_per_zone_publish']}")
     print(f"-> {out}")
     return 0
 
