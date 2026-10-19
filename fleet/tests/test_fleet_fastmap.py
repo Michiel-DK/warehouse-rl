@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import io
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -296,10 +297,26 @@ class TestSmokeOnRealData(unittest.TestCase):
             code = fastmap_smoke.main(["--data-root", str(REAL_DATA)])
         self.assertEqual(code, 0)
         text = buf.getvalue()
+        rows = {}
         for arm in ("a", "b", "c", "c-end"):
             m = re.search(rf"(?m)^ROW {re.escape(arm)}: detected (\d+)/(\d+), median first-detect (\S+) s, FA/h ref (\S+)", text)
             self.assertIsNotNone(m, f"arm {arm}\n{text}")
             self.assertEqual(m.group(2), "50")
+            det, med, fa = int(m.group(1)), m.group(3), float(m.group(4))
+            self.assertTrue(math.isfinite(fa) and fa >= 0, (arm, fa))
+            self.assertLessEqual(det, 50)
+            self.assertEqual(med == "n/a", det == 0, (arm, det, med))  # median is null iff nothing was detected
+            rows[arm] = (det, None if med == "n/a" else float(med), fa)
+        # (a) is read from the tracked results/fleet/amoc_blind.json, so exact on every platform
+        e = next(x for x in json.loads((ROOT / "results/fleet/amoc_blind.json").read_text())["amoc"]["k"] if x["K"] == 20)
+        self.assertEqual(rows["a"][:2], (e["n_detected"], e["median_delay_s"]))
+        self.assertEqual((rows["a"][0], rows["a"][1], round(rows["a"][2], 2)), (6, 295.0, 177.84))
+        self.assertAlmostEqual(rows["a"][2], e["fa_per_hour_reference"], places=3)
+        # (b) and (c) are the pass-1 measured values, deterministic on this data on macOS; pinned there only because the
+        # pyastar2d A* tie-break differs on Linux (the bounds above still hold everywhere)
+        if sys.platform == "darwin":
+            got = {arm: (rows[arm][0], rows[arm][1], round(rows[arm][2], 2)) for arm in ("b", "c")}
+            self.assertEqual(got, {"b": (6, 402.5, 451.87), "c": (2, 525.0, 0.0)})
         elapsed = float(re.search(r"elapsed ([0-9.]+) s", text).group(1))
         self.assertLess(elapsed, 180)
 
