@@ -1033,6 +1033,142 @@ class TestAmoc(unittest.TestCase):
             self.assertIn("different directory", msg)
 
 
+class TestStoreSuffixAndWindowFlags(unittest.TestCase):
+    """S10I: --window-hours / --half-life-h passthrough and --store-suffix (rerun and prebuilt modes)."""
+
+    @staticmethod
+    def cusum_rows():
+        out = []
+        for r in WROWS:
+            claim = dict(json.loads(r["claim"]), detector="cusum")
+            out.append(dict(r, claim=json.dumps(claim)))
+        return out
+
+    def window_args(self):
+        return dict(sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+
+    def test_window_flags_passthrough(self):
+        # inject: pass the flags when None, drop them when given, or change the order of the old cmd
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(ttd.subprocess, "run", fake_run):
+            ttd.rerun_costmap("/pa", "/copy", 60, run="r")
+            ttd.rerun_costmap("/pa", "/copy", 60, run="r", window_hours=0.2, half_life_h=0.1)
+            ttd.rerun_costmap("/pa", "/copy", 60, run="r", window_hours=0.2)
+        old = [sys.executable, str(ttd.FLEET / "costmap.py"), "--glob", "/pa/*.jsonl.gz", "--run", "r", "--store",
+               "jsonl:/copy", "--publish-every", "60", "--out", "/copy/costmap_ttd.json"]
+        self.assertEqual(calls[0], old)
+        self.assertEqual(calls[1], old + ["--window-hours", "0.2", "--half-life-h", "0.1"])
+        self.assertEqual(calls[2], old + ["--window-hours", "0.2"])
+
+    def test_window_flags_reach_the_injected_rerun_only_when_given(self):
+        # inject: always pass window_hours / half_life_h keyword arguments to the rerun
+        with tempfile.TemporaryDirectory() as t:
+            d = make_window_phase_a(t, wtruth(WWIN))
+            fake = FakeRerun(WROWS)
+            seen = []
+            orig_call = fake.__call__.__func__
+
+            def spy(phase_a, copy, every, run=None, **kw):
+                seen.append(kw)
+                return orig_call(fake, phase_a, copy, every, run)
+            run_main(d, spy, extra=("--truth-kind", "blocked"), sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+            run_main(d, spy, extra=("--truth-kind", "blocked", "--window-hours", "0.2", "--half-life-h", "0.1"),
+                     sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+        self.assertEqual(seen, [{}, {"window_hours": 0.2, "half_life_h": 0.1}])
+
+    def test_store_suffix_modes(self):
+        # inject: copy / rerun / remove in prebuilt mode, write store_mode without the flag, or accept "../x"
+        extra = ("--truth-kind", "blocked", "--store-suffix", "x")
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "rerun").mkdir()
+            d = make_window_phase_a(Path(t) / "rerun", wtruth(WWIN))
+            fake = FakeRerun(WROWS)
+            code, text, out = run_main(d, fake, extra=extra, sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+            self.assertEqual([c[1] for c in fake.calls], [d / "store-x"])
+            self.assertFalse((d / "store-x").exists())  # removed at the end
+            meta = json.loads(Path(out).read_text())["meta"]
+            self.assertEqual((meta["store_suffix"], meta["store_mode"]), ("x", {str(d): "rerun"}))
+            # prebuilt: store-x exists, built by fastmap
+            (Path(t) / "pre").mkdir()
+            d2 = make_window_phase_a(Path(t) / "pre", wtruth(WWIN))
+            st = JsonlStore(d2 / "store-x")
+            st.insert("decisions", self.cusum_rows())
+            st.close()
+            snap = {p.name: p.read_bytes() for p in (d2 / "store-x").iterdir()}
+            fake = FakeRerun(WROWS)
+            real_rmtree = shutil.rmtree
+
+            def no_remove(path, *args, **kw):
+                self.assertNotIn("store-x", str(path))
+                return real_rmtree(path, *args, **kw)
+            with mock.patch.object(ttd.shutil, "copytree", side_effect=AssertionError("copy")), \
+                    mock.patch.object(ttd, "strip_forecasts", side_effect=AssertionError("strip")), \
+                    mock.patch.object(ttd.shutil, "rmtree", no_remove):
+                code, text, out = run_main(d2, fake, extra=extra, sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+            self.assertEqual(fake.calls, [])
+            self.assertEqual({p.name: p.read_bytes() for p in (d2 / "store-x").iterdir()}, snap)
+            doc = json.loads(Path(out).read_text())
+            self.assertEqual(doc["meta"]["store_mode"], {str(d2): "prebuilt"})
+            self.assertEqual(doc["by_k"]["2"]["summary"]["n_detected"], 2)
+
+    def prebuilt_dir(self, t, rows):
+        d = make_window_phase_a(Path(t), wtruth(WWIN))
+        st = JsonlStore(d / "store-x")
+        st.insert("decisions", rows)
+        st.close()
+        (d / "store-x" / "decisions.jsonl").touch()
+        return d
+
+    def test_prebuilt_rejections(self):
+        # inject: accept a costmap copy as a detector, accept zero rows, or allow the window / cost flags in prebuilt
+        extra = ("--truth-kind", "blocked", "--store-suffix", "x")
+        for rows, label in ((WROWS, "costmap rows, no detector"), ([], "zero rows")):
+            with tempfile.TemporaryDirectory() as t:
+                d = self.prebuilt_dir(t, rows)
+                with self.assertRaises(ValueError, msg=label):
+                    run_main(d, FakeRerun(WROWS), extra=extra, **self.window_args())
+        with tempfile.TemporaryDirectory() as t:
+            d = self.prebuilt_dir(t, self.cusum_rows() + [WROWS[0]])
+            with self.assertRaises(ValueError):  # one non-cusum row among cusum rows
+                run_main(d, FakeRerun(WROWS), extra=extra, **self.window_args())
+        for flags in (("--window-hours", "0.2"), ("--half-life-h", "0.1"), ("--sweep-cost", "0.5")):
+            with tempfile.TemporaryDirectory() as t:
+                d = self.prebuilt_dir(t, self.cusum_rows())
+                with self.assertRaises(ValueError, msg=flags):
+                    run_main(d, FakeRerun(WROWS), extra=extra + flags, **self.window_args())
+
+    def test_prebuilt_keeps_the_original_store_hash_check(self):
+        # inject: skip the hash comparison in the prebuilt branch
+        with tempfile.TemporaryDirectory() as t:
+            d = self.prebuilt_dir(t, self.cusum_rows())
+            orig = d / "store" / "decisions.jsonl"
+
+            def mutate(rows, copy, allow_empty=False):
+                orig.write_text("changed\n")
+            with mock.patch.object(ttd, "check_prebuilt_rows", mutate):
+                with self.assertRaises(RuntimeError):
+                    run_main(d, FakeRerun(WROWS), extra=("--truth-kind", "blocked", "--store-suffix", "x"),
+                             **self.window_args())
+
+    def test_usage_errors_for_suffix_and_window_flags(self):
+        # inject: let a path-like suffix through, or accept the window flags with the floor kind
+        for argv in (("--store-suffix", "../x"), ("--store-suffix", "a b"), ("--store-suffix", ""),
+                     ("--window-hours", "0"), ("--half-life-h", "-1"), ("--window-hours", "nan"),
+                     ("--window-hours", "0.2", "--truth-kind", "floor")):
+            with tempfile.TemporaryDirectory() as t:
+                d = make_window_phase_a(t, wtruth(WWIN))
+                base = ["--phase-a", str(d), "--publish-every", "100", "--top-k", "2", "--out", str(Path(t) / "o.json")]
+                if "--truth-kind" not in argv:
+                    base += ["--truth-kind", "blocked"]
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                    ttd.main(base + list(argv), rerun=FakeRerun(WROWS), span=span())
+                self.assertEqual(cm.exception.code, 2, argv)
+
+
 class TestIsolation(unittest.TestCase):
     def hotspot_tests(self):
         return importlib.import_module("fleet.tests.test_fleet_hotspot")
