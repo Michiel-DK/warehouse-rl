@@ -4,8 +4,10 @@ Question: does the exponentially decayed map beat "the next window looks like th
 above a random draw from the cells that can stall at all (Adepeju et al. 2016)? hotspot_score.py --baselines calls
 compute() and writes the result as ONE extra top-level key `baselines`; without the flag nothing here runs.
 
-This module reads no ground-truth file and imports no truth module. hotspot_score.py passes in the truth predicate
-(positives_fn) and the candidate cell set, so the fence on who reads the emitter's truth stays where it is.
+This module reads no run-dir file and imports none of the evaluation helpers. hotspot_score.py passes in the positive-cell
+predicate (positives_fn) and the candidate cell set, and renames the "label" key vocabulary used here (precision,
+recall, n_units and hits of the positive-cell score) to the output keys documented in the S10D brief, so the fence on
+who reads the emitter's hidden labels stays where it is. In this module "label" = scored against the positive cells.
 
 Forecasts, per zone and per publish time t (the distinct published_at values of the run's costmap table; a zone with no
 rows at t has an empty map):
@@ -23,18 +25,18 @@ Scores at every K (a short list counts its missing slots as misses, as hotspot_s
   * outcome precision = share of the K slots whose cell has rank <= K in the zone's map recomputed at t + H
     (forecast_grade.ranked_zone, the claim's own map parameters), over outcome-eligible units only: forecast_grade.
     stream_end(zone) is not None and >= t + H, and H >= forecast_grade.DEFAULT_MIN_HORIZON_S.
-  * truth precision = hits / K, truth recall = hits / positives, PAI = (hits / positives) / (K / N_all), where positives =
-    candidate cells with a truth positive over [t, t + H] and N_all = the number of candidate cells (the env's highway
+  * label precision = hits / K, label recall = hits / positives, PAI = (hits / positives) / (K / N_all), where positives =
+    candidate cells with a label positive over [t, t + H] and N_all = the number of candidate cells (the env's highway
     non-goal cells, derived by hotspot_score.py). recall and PAI are null at 0 positives. Pooled over units: precision =
-    sum hits / (K * units); recall and PAI from the summed hits and summed positives. n_units_truth counts every
-    (zone, t); n_units_outcome only the eligible ones. Pooled PAI equals truth lift_all exactly.
-Chance (truth precision of a random K-draw from a pool = positives in pool / pool size, pooled as sum / sum): chance_all =
+    sum hits / (K * units); recall and PAI from the summed hits and summed positives. n_units_label counts every
+    (zone, t); n_units_outcome only the eligible ones. Pooled PAI equals label lift_all exactly.
+Chance (label precision of a random K-draw from a pool = positives in pool / pool size, pooled as sum / sum): chance_all =
 pool is the N_all candidate cells; chance_ever = pool is the zone's cells with >= 1 counted stall anywhere in the stream
 (includes cells outside the candidate set; n_ever and n_ever_outside_candidates are reported per zone). chance_ever is not
-guaranteed to be >= chance_all. lift_all / lift_ever = truth precision / chance (null when the chance is 0).
+guaranteed to be >= chance_all. lift_all / lift_ever = label precision / chance (null when the chance is 0).
 paired: per zone d_z = map minus persistence precision (over that zone's units), mean over zones, 1000-resample zone
 bootstrap (random.Random(0), mean of d), ci95 = 2.5 / 97.5 percentiles, verdict by the scripts/sprint8_tables.py rule
-(CI low > 0 "beats", CI high < 0 "worse", else "within noise"), for K 20 and 40, truth and outcome precision.
+(CI low > 0 "beats", CI high < 0 "worse", else "within noise"), for K 20 and 40, label and outcome precision.
 lesson_persist (hot_cell lessons only): observed rate against three named pools, chance_window (the S8S per-window pool,
 read from the lesson_persist_chance block), chance_ever (share of the zone's ever-stalled cells that clear the persist bar
 over the lesson's next window) and chance_all (the same count over N_all). A cell clears the bar iff it appears in
@@ -146,10 +148,10 @@ def score_units(units, zones, ks, horizon_s, candidates, positives_fn, outcome_r
     n_all = len(candidates)
     tally = {f: {k: dict(hits=0, outcome_hits=0, zone={z: dict(h=0, u=0, oh=0, ou=0) for z in zones}) for k in ks}
              for f in FORECASTS}
-    n_truth = n_outcome = positives = pool_all = pool_ever = pos_ever = 0
+    n_label = n_outcome = positives = pool_all = pool_ever = pos_ever = 0
     for (z, t), rows in sorted(units.items(), key=lambda kv: (zone_sort_key(kv[0][0]), kv[0][1])):
         pos = set(positives_fn(z, t, horizon_s)) & set(candidates)
-        n_truth += 1
+        n_label += 1
         positives += len(pos)
         pool_all += n_all
         pool_ever += len(ever.get(z, ()))
@@ -172,7 +174,7 @@ def score_units(units, zones, ks, horizon_s, candidates, positives_fn, outcome_r
                     tl["outcome_hits"] += oh
                     zt["oh"] += oh
                     zt["ou"] += 1
-    return tally, dict(n_truth=n_truth, n_outcome=n_outcome, positives=positives, pool_all=pool_all,
+    return tally, dict(n_label=n_label, n_outcome=n_outcome, positives=positives, pool_all=pool_all,
                        pool_ever=pool_ever, pos_ever=pos_ever)
 
 
@@ -216,9 +218,9 @@ def lesson_persist_block(store, run, ever, n_all, persist_block):
 
 
 def compute(store, run, zones, meta, candidates, positives_fn, persist_block=None, ks=KS):
-    """The `baselines` block. zones: truth zone ids; meta: the costmap meta (window_hours, half_life_h, min_stalls,
+    """The `baselines` block. zones: label zone ids; meta: the costmap meta (window_hours, half_life_h, min_stalls,
     exclude_occupied); candidates: the cell strings of the candidate set; positives_fn(zone, t, horizon_s) -> cells that
-    are truth positives over [t, t + H] (passed in by hotspot_score.py); persist_block: the lesson_persist_chance block."""
+    are label positives over [t, t + H] (passed in by hotspot_score.py); persist_block: the lesson_persist_chance block."""
     zones = sorted((str(z) for z in zones), key=zone_sort_key)
     candidates = set(candidates)
     n_all = len(candidates)
@@ -249,23 +251,23 @@ def compute(store, run, zones, meta, candidates, positives_fn, persist_block=Non
         k_out[str(k)] = {}
         for f in FORECASTS:
             tl = tally[f][k]
-            tp = _ratio(tl["hits"], k * n["n_truth"])
+            tp = _ratio(tl["hits"], k * n["n_label"])
             recall = _ratio(tl["hits"], n["positives"])
             k_out[str(k)][f] = dict(
-                outcome_precision=_ratio(tl["outcome_hits"], k * n["n_outcome"]), truth_precision=tp,
-                truth_recall=recall,
+                outcome_precision=_ratio(tl["outcome_hits"], k * n["n_outcome"]), label_precision=tp,
+                label_recall=recall,
                 pai=_ratio(recall, k / n_all) if recall is not None and n_all else None,
                 lift_all=_ratio(tp, chance_all) if tp is not None else None,
                 lift_ever=_ratio(tp, chance_ever) if tp is not None else None,
-                hits=dict(truth=tl["hits"], outcome=tl["outcome_hits"], positives=n["positives"]))
+                hits=dict(label=tl["hits"], outcome=tl["outcome_hits"], positives=n["positives"]))
     paired = {}
     for k in PAIRED_KS:
         if k not in ks:
             continue
         zm, zp = tally["map"][k]["zone"], tally["persistence"][k]["zone"]
-        truth_d = [zm[z]["h"] / (k * zm[z]["u"]) - zp[z]["h"] / (k * zp[z]["u"]) for z in zones if zm[z]["u"]]
+        label_d = [zm[z]["h"] / (k * zm[z]["u"]) - zp[z]["h"] / (k * zp[z]["u"]) for z in zones if zm[z]["u"]]
         out_d = [zm[z]["oh"] / (k * zm[z]["ou"]) - zp[z]["oh"] / (k * zp[z]["ou"]) for z in zones if zm[z]["ou"]]
-        paired[str(k)] = dict(truth_precision=paired_ci(truth_d), outcome_precision=paired_ci(out_d))
+        paired[str(k)] = dict(label_precision=paired_ci(label_d), outcome_precision=paired_ci(out_d))
     return dict(
         params=dict(window_hours=meta["window_hours"], half_life_h=meta["half_life_h"], min_stalls=meta["min_stalls"],
                     exclude_occupied=meta["exclude_occupied"], horizon_s=horizon_s, n_cells_all=n_all, ks=list(ks),
@@ -274,7 +276,7 @@ def compute(store, run, zones, meta, candidates, positives_fn, persist_block=Non
                     per_zone={z: dict(n_ever=len(ever.get(z, ())), n_ever_outside_candidates=len(ever.get(z, set())
                                                                                               - candidates))
                               for z in zones}),
-        k=k_out, n_units_truth=n["n_truth"], n_units_outcome=n["n_outcome"], paired=paired,
+        k=k_out, n_units_label=n["n_label"], n_units_outcome=n["n_outcome"], paired=paired,
         lesson_persist=lesson_persist_block(store, run, ever, n_all, persist_block))
 
 

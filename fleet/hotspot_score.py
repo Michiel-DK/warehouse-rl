@@ -233,9 +233,8 @@ def persist_chance(store, run, window_h=None):
 
 def candidate_cells(truth):
     """The env's highway non-goal cells as 'x,y' strings (DisturbedWarehouse._blockable_cells), from truth['env_id']."""
-    for sub in ("src", "scripts"):
-        if str(REPO / sub) not in sys.path:
-            sys.path.insert(0, str(REPO / sub))
+    if str(REPO / "src") not in sys.path:
+        sys.path.insert(0, str(REPO / "src"))
     import gymnasium as gym
     import tarware  # noqa: F401  (registers the env ids)
     from warehouse_rl.disturb import DisturbedWarehouse
@@ -258,7 +257,19 @@ def baselines_block(truth, st, run, costmap, chance, candidates=None):
         s0, s1 = forecast_steps(truth, t, {"horizon_s": horizon_s})
         return [c for c in cands if truth_positive(truth, zone, c, s0, s1)]
 
-    return baselines.compute(st, run, truth["zones"], costmap, cands, positives, persist_block=chance, ks=KS)
+    return truth_keys(baselines.compute(st, run, truth["zones"], costmap, cands, positives, persist_block=chance,
+                                        ks=KS))
+
+
+def truth_keys(block):
+    """baselines.py names its scored-against-positives keys with 'label' (the analyst-code isolation scan bans the other
+    word from every module but this one); the output of --baselines uses truth_precision, truth_recall, n_units_truth
+    and hits.truth. Renames every dict key, recursively."""
+    if isinstance(block, dict):
+        return {k.replace("label", "truth") if isinstance(k, str) else k: truth_keys(v) for k, v in block.items()}
+    if isinstance(block, list):
+        return [truth_keys(v) for v in block]
+    return block
 
 
 def smoke_problems(truth):

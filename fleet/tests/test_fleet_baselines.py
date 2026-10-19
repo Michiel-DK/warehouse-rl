@@ -27,6 +27,27 @@ H = 600
 META = dict(window_hours=1.0, half_life_h=1.0, min_stalls=1, exclude_occupied=True)
 
 
+# Output of master's (origin/master afa7b2b) hotspot_score.main on TestHotspotScoreFlag.make's fixture, platform dropped,
+# pasted as a literal: the no-flag run must equal it key for key.
+_K = {"120": 0.016666666666666666, "20": 0.1, "40": 0.05, "80": 0.025}
+_ANYK = {k: {"hits": 2, "precision": v, "recall": 1.0} for k, v in _K.items()}
+_ANY = {"k": _ANYK, "positives": 2}
+_NONE = {"k": {k: {"hits": 0, "precision": 0.0, "recall": None} for k in _K}, "positives": 0}
+MASTER_NO_FLAG = {
+    "config": {"disturb": {}, "disturb_tag": "t", "emit_schema": None, "emit_status": None, "env_id": "e", "seed_base": 0,
+               "steps": 100, "zones": 1},
+    "costmap": {"exclude_occupied": True, "generated_at": "x", "half_life_h": 1.0, "min_stalls": 1, "window_hours": 1.0},
+    "grading_counts": {}, "lesson_grading": {},
+    "lesson_persist_chance": {"chance_mean": None, "chance_median": None, "lift": None, "n_lessons": 0, "observed_ok": 0,
+                              "observed_rate": None, "per_lesson": []},
+    "mean": {"k": {k: {"precision": v, "recall": 1.0} for k, v in _K.items()}, "n_flagged": 2.0, "spearman": None,
+             "zero_stall_share": 0.0},
+    "rank_grading": {"rank_graded": 0, "top_k": [], "unranked": 0}, "run": "r",
+    "stall_in_episode": {"by_cause": {}, "in_episode": 0, "total_stalls": 6}, "tag": "t",
+    "truth_kinds": {"any": _ANY, "blocked": _NONE, "floor": _ANY, "frozen": {"positives": 0}, "outage": _NONE},
+    "zones": {"0": {"k": _ANYK, "n_flagged": 2, "n_floor": 2, "spearman": None, "zero_stall_share": 0.0}}}
+
+
 def stall(zone, cell, end, next_occupied=False, faulted=False):
     return dict(run=RUN, zone=zone, robot="R1", cell=cell, start=end - 5, end=end, seconds=5, next_occupied=next_occupied,
                 faulted_episode=faulted, in_episode=None)
@@ -54,7 +75,9 @@ def stream_end(st, end, zones=("0",)):
 
 
 def compute(st, zones, cands, positives, ks=(2,), persist=None):
-    return baselines.compute(st, RUN, zones, META, cands, lambda z, t, h: positives.get(z, set()), persist, ks)
+    """baselines.compute with the key names of the --baselines output (hotspot_score.truth_keys)."""
+    return hotspot_score.truth_keys(
+        baselines.compute(st, RUN, zones, META, cands, lambda z, t, h: positives.get(z, set()), persist, ks))
 
 
 # map and persistence disagree: A 3 old stalls (raw 3), B 2 fresh stalls (raw 2), C 1 fresh stall (raw 1).
@@ -318,6 +341,7 @@ class TestHotspotScoreFlag(unittest.TestCase):
         self.assertEqual(list(plain), ["zones", "mean", "grading_counts", "rank_grading", "stall_in_episode",
                                        "lesson_grading", "tag", "run", "config", "costmap", "platform",
                                        "lesson_persist_chance", "truth_kinds"])
+        self.assertEqual({k: v for k, v in plain.items() if k != "platform"}, MASTER_NO_FLAG)  # == master's output
         self.assertEqual(list(with_flag), list(plain) + ["baselines"])
         self.assertEqual({k: v for k, v in with_flag.items() if k != "baselines"}, plain)
         self.assertEqual(plain["zones"]["0"]["k"]["20"]["hits"], 2)
@@ -328,8 +352,16 @@ class TestHotspotScoreFlag(unittest.TestCase):
     def test_baselines_module_does_not_import_or_read_truth(self):
         # inject: baselines.py imports truth or opens truth.json
         src = (ROOT / "fleet" / "baselines.py").read_text()
-        for needle in ("truth.json", "import truth", "from truth", "fleet.truth"):
-            self.assertNotIn(needle, src)
+        # the analyst-isolation scan (test_fleet_hotspot.TestAnalystIsolation) bans this vocabulary outside exempt files
+        self.assertNotRegex(src, r"floor_cells|floor_skip|floor_coin|applied_floor|truth")
+
+    def test_truth_keys_renames_only_the_label_vocabulary(self):
+        # inject: the rename misses a nested key
+        got = hotspot_score.truth_keys({"n_units_label": 1, "k": {"20": {"map": {"label_precision": 1,
+                                                                                "hits": {"label": 3}}}},
+                                        "paired": {"20": {"label_recall": [{"label_x": 1}]}}})
+        self.assertEqual(got, {"n_units_truth": 1, "k": {"20": {"map": {"truth_precision": 1, "hits": {"truth": 3}}}},
+                               "paired": {"20": {"truth_recall": [{"truth_x": 1}]}}})
 
 
 if __name__ == "__main__":
