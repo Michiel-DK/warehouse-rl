@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import io
 import json
+import random
 import sys
 import tempfile
 import unittest
@@ -373,6 +374,222 @@ class TestLessonPersistPools(unittest.TestCase):
         out = baselines.lesson_persist_block(st, RUN, {}, 10, hotspot_score.persist_chance(st, RUN))
         self.assertEqual((out["n_lessons"], out["chance_window"], out["lift_all"], out["s8s_pool_is_ever"]),
                          (0, None, None, None))
+
+
+def replay_ci(deltas):
+    """Independent re-derivation of the zone bootstrap (hard-coded seed 0, 1000 resamples, 2.5 / 97.5 percentiles with
+    linear interpolation); imports nothing from baselines, so a changed constant there moves the code, not this."""
+    n = len(deltas)
+    rng = random.Random(0)
+    means = sorted(sum(deltas[rng.randrange(n)] for _ in range(n)) / n for _ in range(1000))
+
+    def pct(q):
+        pos = (len(means) - 1) * q / 100
+        lo = int(pos)
+        return means[lo] + (means[min(lo + 1, len(means) - 1)] - means[lo]) * (pos - lo)
+    return pct(2.5), pct(97.5)
+
+
+NC = 45  # cells "00,0" .. "44,0" per zone; the published map ranks them by index (cost 1 - i / 100)
+NUMERIC = ("1", "2", "3", "10", "20")
+
+
+def cell(i):
+    return f"{i:02d},0"
+
+
+def rot(r):
+    return list(range(r, NC)) + list(range(r))
+
+
+# per zone: the persistence order (raw `stalls` column, descending) and the label positives (cell indexes).
+# Map top-K is always cells 0..K-1. Hand-computed hits (map | persistence) per publish, K = 20 then K = 40:
+#   zone 1  persistence order 10..44,0..9; positives 0..9
+#           K20: map 10, pers 10..29 -> 0:  d = +10/20 = 0.5;   K40: map 10, pers 10..44+0..4 -> 5:  d = +5/40
+#   zone 2  persistence order 44..0; positives 25..34 and 2, 3
+#           K20: map {2,3} -> 2, pers 25..44 -> 10:  d = -8/20 = -0.4;   K40: map 12, pers 5..44 -> 10:  d = +2/40
+#   zone 3  persistence order 15..44,0..14; positives 0..14
+#           K20: map 15, pers 15..34 -> 0:  d = +15/20 = 0.75;   K40: map 15, pers 15..44+0..9 -> 10:  d = +5/40
+#   zone 10 persistence order 5..44,0..4; positives 0..19 and 40, 41, 42
+#           K20: map 20, pers 5..24 -> 15:  d = +5/20 = 0.25;   K40: map 20, pers 5..44 -> 15 + 3 = 18:  d = +2/40
+#   zone 20 persistence order 25..44,0..24; positives 0..9 and 25..29
+#           K20: map 10, pers 25..44 -> 5:  d = +5/20 = 0.25;   K40: map 10 + 5 = 15, pers 25..44+0..19 -> 5 + 10 = 15: 0
+ZONES5 = {
+    "1": (rot(10), set(range(10))),
+    "2": (list(range(NC - 1, -1, -1)), set(range(25, 35)) | {2, 3}),
+    "3": (rot(15), set(range(15))),
+    "10": (rot(5), set(range(20)) | {40, 41, 42}),
+    "20": (rot(25), set(range(10)) | set(range(25, 30))),
+}
+D20 = {"1": 0.5, "2": -0.4, "3": 0.75, "10": 0.25, "20": 0.25}
+D40 = {"1": 5 / 40, "2": 2 / 40, "3": 5 / 40, "10": 2 / 40, "20": 0.0}
+
+
+class TestMultiZonePaired(unittest.TestCase):
+    """Five zones whose map and persistence top-K differ in a known way, two publishes each (so the per-zone tallies
+    accumulate), zones handed to compute() in an order that is neither numeric nor string order."""
+    INPUT = ["1", "20", "10", "3", "2"]  # numeric order 1 2 3 10 20, string order 1 10 2 20 3
+
+    def build(self):
+        st = MemoryStore()
+        rows = []
+        for z, (order, _) in ZONES5.items():
+            for t in (T, T + 100):
+                rows += [dict(run=RUN, zone=z, published_at=t, cell=cell(i), cost=round(1 - i / 100, 6),
+                              score=1.0, stalls=100 - order.index(i)) for i in range(NC)]
+        st.insert("costmap", rows)
+        claims(st, zones=tuple(ZONES5))
+        return st
+
+    def run_compute(self, order=None):
+        pos = {z: {cell(i) for i in p} for z, (_, p) in ZONES5.items()}
+        return baselines.compute(self.build(), RUN, order or self.INPUT, META, [cell(i) for i in range(NC)],
+                                 lambda z, t, h: pos[z], None, (20, 40))
+
+    def test_expected_deltas_follow_from_the_fixture(self):
+        # the table above re-derived by set arithmetic, so the literals below are not circular
+        for k, want in ((20, D20), (40, D40)):
+            for z, (order, p) in ZONES5.items():
+                self.assertAlmostEqual(len(set(range(k)) & p) / k - len(set(order[:k]) & p) / k, want[z])
+
+    def test_paired_label_delta_mean_ci_verdict_and_hits(self):
+        # inject: delta sign flipped (persistence - map); a per-zone hit / unit tally overwritten instead of
+        # accumulated; zone_sort_key constant (CI index order follows the input order); a changed seed / percentile
+        b = self.run_compute()
+        self.assertEqual(b["n_units_label"], 10)
+        # pooled hits over 2 publishes: the per-zone hits of the comment table (zones 1 2 3 10 20), doubled
+        self.assertEqual(b["k"]["20"]["map"]["hits"]["label"], 2 * (10 + 2 + 15 + 20 + 10))
+        self.assertEqual(b["k"]["20"]["persistence"]["hits"]["label"], 2 * (0 + 10 + 0 + 15 + 5))
+        self.assertEqual(b["k"]["40"]["map"]["hits"]["label"], 2 * (10 + 12 + 15 + 20 + 15))
+        self.assertEqual(b["k"]["40"]["persistence"]["hits"]["label"], 2 * (5 + 10 + 10 + 18 + 15))
+        self.assertEqual(b["k"]["20"]["map"]["hits"]["positives"], 2 * (10 + 12 + 15 + 23 + 15))
+        self.assertAlmostEqual(b["k"]["20"]["map"]["label_precision"], 114 / (20 * 10))
+        # K 20: deltas in numeric zone order [0.5, -0.4, 0.75, 0.25, 0.25], mean 1.35 / 5
+        p20 = b["paired"]["20"]["label_precision"]
+        self.assertAlmostEqual(p20["mean"], 0.27)
+        self.assertEqual(p20["n_zones"], 5)
+        self.assertAlmostEqual(p20["ci95"][0], -0.09, places=12)
+        self.assertAlmostEqual(p20["ci95"][1], 0.6, places=12)
+        self.assertEqual(p20["verdict"], "within noise")
+        # K 40: [0.125, 0.05, 0.125, 0.05, 0.0], mean 0.35 / 5
+        p40 = b["paired"]["40"]["label_precision"]
+        self.assertAlmostEqual(p40["mean"], 0.07)
+        self.assertEqual(p40["n_zones"], 5)
+        self.assertAlmostEqual(p40["ci95"][0], 0.03, places=12)
+        self.assertAlmostEqual(p40["ci95"][1], 0.11, places=12)
+        self.assertEqual(p40["verdict"], "beats")  # CI low 0.03 > 0
+        # the literals above against the independent replay of the bootstrap over the numeric-order deltas
+        for k, d in (("20", D20), ("40", D40)):
+            lo, hi = replay_ci([d[z] for z in NUMERIC])
+            got = b["paired"][k]["label_precision"]["ci95"]
+            self.assertAlmostEqual(got[0], lo, places=12)
+            self.assertAlmostEqual(got[1], hi, places=12)
+        # outcome precision: no stream_end, so no unit is eligible
+        self.assertEqual(b["paired"]["20"]["outcome_precision"], dict(mean=None, ci95=None, verdict=None, n_zones=0))
+
+    def test_zone_order_given_to_compute_does_not_change_the_result(self):
+        # inject: zone_sort_key constant / string order: the same deltas land on other bootstrap indexes
+        want = self.run_compute()["paired"]
+        self.assertEqual(self.run_compute(list(NUMERIC))["paired"], want)
+        self.assertEqual(self.run_compute(["20", "3", "2", "10", "1"])["paired"], want)
+        self.assertEqual(list(self.run_compute()["chance"]["per_zone"]), list(NUMERIC))
+
+    def test_the_fixture_is_sensitive_to_the_order_of_the_deltas(self):
+        # guard on the fixture: in input or string order the CI differs, so the pins above bite
+        num20 = replay_ci([D20[z] for z in NUMERIC])
+        self.assertNotEqual(num20, replay_ci([D20[z] for z in self.INPUT]))
+        self.assertNotEqual(num20, replay_ci([D20[z] for z in ("1", "10", "2", "20", "3")]))
+        self.assertNotEqual(replay_ci([D40[z] for z in NUMERIC]), replay_ci([D40[z] for z in self.INPUT]))
+
+
+class TestHalfLifeIsNotTheWindow(unittest.TestCase):
+    def test_params_carry_both_and_the_two_forecasts_differ_under_that_half_life(self):
+        # inject: params.half_life_h read from window_hours (or the reverse), or the half-life ignored by the publish
+        # window 2 h, half-life 0.5 h: A 3 stalls at T - 3000 -> 3 * 2 ** (-3000 / 1800) = 0.945, B 2 stalls at T - 100
+        # -> 2 * 2 ** (-100 / 1800) = 1.924, C 1 stall at T - 100 -> 0.962. Map order B, C, A; persistence A, B, C.
+        meta = dict(window_hours=2.0, half_life_h=0.5, min_stalls=1, exclude_occupied=True)
+        st = MemoryStore()
+        st.insert("stalls", DISAGREE)
+        rows = []
+        for z, cells in hotspot.cost_zones(DISAGREE, T, 2.0, 0.5, 1, True).items():
+            rows += [dict(run=RUN, zone=z, published_at=T, cell=c, cost=v["cost"], score=v["score"], stalls=v["stalls"])
+                     for c, v in cells.items()]
+        st.insert("costmap", rows)
+        claims(st)
+        by_cell = {r["cell"]: r for r in rows}
+        self.assertEqual(baselines.map_top(by_cell), ["2,2", "3,3", "1,1"])
+        self.assertEqual(baselines.persistence_top(by_cell), ["1,1", "2,2", "3,3"])
+        b = baselines.compute(st, RUN, ["0"], meta, ["1,1", "2,2", "3,3", "4,4"], lambda z, t, h: {"2,2"}, None, (1,))
+        self.assertEqual(b["params"]["window_hours"], 2.0)
+        self.assertEqual(b["params"]["half_life_h"], 0.5)
+        self.assertEqual(b["k"]["1"]["map"]["hits"]["label"], 1)  # B first
+        self.assertEqual(b["k"]["1"]["persistence"]["hits"]["label"], 0)  # A first
+
+
+class TestLessonPersistMeans(unittest.TestCase):
+    """Three hot_cell lessons (zones 0, 1, 2) with different rates, built directly; 10 candidate cells in all."""
+    def build(self):
+        s, nx = tfl.BASE + 10, tfl.NEXT
+        st = MemoryStore()
+        # zone 0: own window 1,1 x3 + 2,2 x1; the ever pool also holds 3,3 and 4,4 (stalled elsewhere): own != ever.
+        # Next window 1,1 x2 + 3,3 x2: n 4, d 2 -> ratio of 1,1 and 3,3 = 1.0 = PERSIST_RATIO (clears); 2,2, 4,4 absent.
+        stalls = [tfl.stall("1,1", s, "0") for _ in range(3)] + [tfl.stall("2,2", s, "0")]
+        stalls += [tfl.stall("1,1", nx, "0") for _ in range(2)] + [tfl.stall("3,3", nx, "0") for _ in range(2)]
+        # zone 1: own window 1,1 2,2 3,3 once each = exactly its ever pool. Next window 1,1 x3 + 2,2 x1: n 4, d 2 ->
+        # ratio of 1,1 = 1.5 clears, 2,2 = 0.5, 3,3 absent.
+        stalls += [tfl.stall(c, s, "1") for c in ("1,1", "2,2", "3,3")]
+        stalls += [tfl.stall("1,1", nx, "1") for _ in range(3)] + [tfl.stall("2,2", nx, "1")]
+        # zone 2: no stalls at all, empty ever pool.
+        st.insert("stalls", stalls)
+        st.insert("decisions", [dict(run=RUN, kind=lessons.KIND, id=f"L{z}", subject=f"Z{z}:cell 1,1",
+                                     claim=json.dumps(dict(lesson_kind="hot_cell", zone=z,
+                                                           window_end=tfl.BASE + tfl.W)))
+                                for z in ("0", "1", "2")])
+        # the last lesson iterated (zone 2) has own pool == its (empty) ever pool; the first (zone 0) does not
+        per = [dict(id="L0", window_start=tfl.BASE, chance=0.3, observed=True),
+               dict(id="L1", window_start=tfl.BASE, chance=0.6, observed=False),
+               dict(id="L2", window_start=tfl.BASE, chance=0.15, observed=True)]
+        ever = {"0": {"1,1", "2,2", "3,3", "4,4"}, "1": {"1,1", "2,2", "3,3"}}
+        return st, dict(per_lesson=per), ever
+
+    def test_means_over_unequal_lessons_with_an_empty_pool_and_a_mixed_same_pool(self):
+        # inject: means without / n; same_pool overwritten instead of accumulated (only the last lesson has own ==
+        # ever); empty-pool ever rate 0.0 -> 1.0; observed counted over the wrong lessons
+        st, block, ever = self.build()
+        out = baselines.lesson_persist_block(st, RUN, ever, 10, block)
+        self.assertEqual(out["n_lessons"], 3)
+        self.assertEqual(out["n_hot_robot_excluded"], 0)
+        # chance_window: (0.3 + 0.6 + 0.15) / 3
+        self.assertAlmostEqual(out["chance_window"], 1.05 / 3)
+        # chance_ever: zone 0 clears {1,1 3,3} of 4 = 0.5, zone 1 clears {1,1} of 3 = 1/3, zone 2 pool empty = 0.0
+        self.assertAlmostEqual(out["chance_ever"], (2 / 4 + 1 / 3 + 0.0) / 3)
+        self.assertAlmostEqual(out["chance_ever"], 5 / 18)
+        # chance_all: 2 / 10, 1 / 10, 0 / 10 -> 0.1
+        self.assertAlmostEqual(out["chance_all"], (0.2 + 0.1 + 0.0) / 3)
+        # observed: ok, off, ok -> 2 / 3
+        self.assertAlmostEqual(out["observed_rate"], 2 / 3)
+        self.assertAlmostEqual(out["lift_window"], (2 / 3) / 0.35)
+        self.assertAlmostEqual(out["lift_ever"], (2 / 3) / (5 / 18))
+        self.assertAlmostEqual(out["lift_ever"], 2.4)
+        self.assertAlmostEqual(out["lift_all"], (2 / 3) / 0.1)
+        self.assertIs(out["s8s_pool_is_ever"], False)
+
+    def test_zero_candidate_cells_gives_a_zero_chance_all_and_a_null_lift(self):
+        # inject: the n_all == 0 fallback rate 0.0 -> 1.0
+        st, block, ever = self.build()
+        out = baselines.lesson_persist_block(st, RUN, ever, 0, block)
+        self.assertEqual(out["chance_all"], 0.0)
+        self.assertIsNone(out["lift_all"])
+        self.assertAlmostEqual(out["chance_ever"], 5 / 18)
+
+    def test_a_lesson_whose_own_pool_is_the_ever_pool_alone_reports_true(self):
+        # the other branch of s8s_pool_is_ever: only zone 1's lesson (own == ever), observed off
+        st, block, ever = self.build()
+        out = baselines.lesson_persist_block(st, RUN, ever, 10, dict(per_lesson=[block["per_lesson"][1]]))
+        self.assertIs(out["s8s_pool_is_ever"], True)
+        self.assertAlmostEqual(out["chance_ever"], 1 / 3)
+        self.assertEqual(out["observed_rate"], 0.0)
+        self.assertEqual(out["lift_ever"], 0.0)
 
 
 def sha_tree(path):
