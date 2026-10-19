@@ -438,10 +438,6 @@ def main(argv=None):
             row = base["k"][str(k)]
             print(f"  baselines K={k}: truth precision map {row['map']['truth_precision']} persistence "
                   f"{row['persistence']['truth_precision']}; chance_all {base['chance']['all']} ever {base['chance']['ever']}")
-    for gate, g in (res.get("gate_grading") or {}).items():
-        print(f"  gate {gate}: {g['forecasts']} forecasts, {g['hits']} hits / {g['truth_graded']} graded (precision "
-              f"{g['precision']}), hit cells {g['hit_cells']} of {g['positive_cells']} (recall {g['recall']}), flags "
-              f"per zone-publish {g['flags_per_zone_publish']}")
     print(f"-> {out}")
     return 0
 

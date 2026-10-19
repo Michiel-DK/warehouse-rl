@@ -270,8 +270,188 @@ class TestResetForecasts(unittest.TestCase):
         msgs, stalls = stream(counts)
         st = MemoryStore()
         run_gate(msgs, stalls, "none", store=st)
-        run_gate(msgs, stalls, "baseline", store=st)
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            run_gate(msgs, stalls, "baseline", store=st)
+        self.assertIn("--reset-forecasts", err.getvalue())
         self.assertTrue(all("gate" not in claim(d) for d in forecasts(st)))
+
+
+def two_msgs(zone="0"):
+    return [message(zone, FIRST_TS), message(zone, FIRST_TS + EVERY * N_PUBLISH)]
+
+
+def raw_stall(zone, cell, end, robot, **over):
+    s = dict(run="r", zone=zone, robot=robot, cell=cell, attribution="next", start=end - 2, end=end, n_msgs=1,
+             seconds=2, next_occupied=False, in_episode=None, faulted_episode=False)
+    s.update(over)
+    return s
+
+
+class TestStallFilterInTheGate(unittest.TestCase):
+    """hotspot.counted decides which stalls the gate counts. Cell X, persistence, C = 2, E = 3, no background:
+    window 2 holds one plain stall, one stall of a robot inside a blocked_by_faulted episode (annotate_episodes sets
+    faulted_episode from the store's stuck_episodes, as in production) and one stall with next_occupied. Counted by
+    default: 1 (below C and E: not flagged). With exclude_occupied=False: 2 (plain + occupied; new entrant, count 2,
+    flagged). The faulted stall never counts: counting it would make 2 by default (flagged) and 3 with occupied (a
+    rise of 3 >= E, reason new_entrant+rose, count 3)."""
+
+    def setUp(self):
+        self.stalls = [raw_stall("0", "X", t_of(1) + 150, "Z0-01"),
+                       raw_stall("0", "X", t_of(1) + 160, "Z0-90"),  # inside the faulted episode below
+                       raw_stall("0", "X", t_of(1) + 170, "Z0-91", next_occupied=True)]
+        self.episode = dict(run="r", zone="0", robot="Z0-90", start=t_of(1) + 100, end=t_of(1) + 200,
+                            cause="blocked_by_faulted")
+        self.times = [t_of(i) for i in range(1, N_PUBLISH + 1)]
+
+    def run_x(self, **kw):
+        st = MemoryStore()
+        st.insert("stuck_episodes", [self.episode])
+        return run_gate(two_msgs(), self.stalls, "persistence", store=st, gate_min_excess=3, **kw)
+
+    def annotated(self):
+        return costmap.hotspot.annotate_episodes([dict(s) for s in self.stalls], [self.episode])
+
+    def test_default_counts_the_plain_stall_only(self):
+        self.assertEqual([s["faulted_episode"] for s in self.annotated()], [False, True, False])
+        self.assertEqual(costmap.gate_window_counts(self.annotated(), self.times, FIRST_TS)[1], {"0": {"X": 1}})
+        doc, st = self.run_x()
+        self.assertEqual([p["flagged"] for p in doc["gate"]["publishes"]], [{"0": []}] * N_PUBLISH)
+        self.assertEqual(forecasts(st), [])
+
+    def test_exclude_occupied_false_counts_the_occupied_stall_but_never_the_faulted_one(self):
+        self.assertEqual(costmap.gate_window_counts(self.annotated(), self.times, FIRST_TS, False)[1],
+                         {"0": {"X": 2}})
+        doc, st = self.run_x(exclude_occupied=False)
+        self.assertEqual([p["flagged"]["0"] for p in doc["gate"]["publishes"]], [[], ["X"]] + [[]] * 5)
+        c = claim(forecasts(st)[0])
+        self.assertEqual((c["gate_count"], c["gate_reason"], c["exclude_occupied"]), (2, "new_entrant", False))
+
+    def test_cli_include_occupied_reaches_the_gate(self):
+        for extra, want in (([], [[]] * N_PUBLISH), (["--include-occupied"], [[], ["X"]] + [[]] * 5)):
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as tmp:
+                store, out = Path(tmp) / "store-x", Path(tmp) / "c.json"
+                st = JsonlStore(store)
+                st.insert("stuck_episodes", [self.episode])
+                st.close()
+                with mock.patch.object(costmap.hotspot, "read_messages", return_value=two_msgs()), \
+                        mock.patch.object(costmap.hotspot, "extract_stalls",
+                                          return_value=[dict(s) for s in self.stalls]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    code = costmap.main(["--glob", "x/*.jsonl.gz", "--store", f"jsonl:{store}", "--run", "r",
+                                         "--publish-every", str(EVERY), "--gate", "persistence",
+                                         "--gate-min-excess", "3", "--out", str(out), *extra])
+                self.assertEqual(code, 0)
+                doc = json.loads(out.read_text())
+                self.assertEqual([p["flagged"]["0"] for p in doc["gate"]["publishes"]], want)
+
+
+class TestWindowEdges(unittest.TestCase):
+    def test_end_equal_to_a_publish_time_counts_in_that_window(self):
+        # two stalls of Y end exactly at t_2: window 2 = (t_1, t_2] holds them, window 3 does not. Persistence
+        # (C = 2, E = 3): Y is a new entrant with count 2 at publish 2; with the edge one window later it would be
+        # flagged at publish 3 instead.
+        stalls = [raw_stall("0", "Y", t_of(2), f"Z0-0{k}") for k in range(2)]
+        w = costmap.gate_window_counts(stalls, [t_of(i) for i in range(1, N_PUBLISH + 1)], FIRST_TS)
+        self.assertEqual((w[1], w[2]), ({"0": {"Y": 2}}, {}))
+        doc, _ = run_gate(two_msgs(), stalls, "persistence", gate_min_excess=3)
+        self.assertEqual([p["flagged"]["0"] for p in doc["gate"]["publishes"]], [[], ["Y"]] + [[]] * 5)
+
+    def test_first_window_starts_after_first_ts_minus_one(self):
+        # baseline B = 1, S = 0, E = 2. Cell P: 3 mid-window stalls in window 2. Window 1 gets a stall ending at
+        # first_ts (counts) and one ending at first_ts - 1 = t_0 (does not): history m = 1, 3 - 1 >= 2: flagged with
+        # gate_mean 1. Counting the t_0 stall gives m = 2 (not flagged); dropping the first_ts stall gives m = 0.
+        stalls = [raw_stall("0", "P", FIRST_TS, "Z0-01"), raw_stall("0", "P", FIRST_TS - 1, "Z0-02")]
+        stalls += [raw_stall("0", "P", t_of(1) + 100 + k, f"Z0-1{k}") for k in range(3)]
+        w = costmap.gate_window_counts(stalls, [t_of(i) for i in range(1, N_PUBLISH + 1)], FIRST_TS)
+        self.assertEqual((w[0], w[1]), ({"0": {"P": 1}}, {"0": {"P": 3}}))
+        doc, st = run_gate(two_msgs(), stalls, "baseline", gate_windows=1, gate_sigma=0.0, gate_min_excess=2)
+        self.assertEqual([p["flagged"]["0"] for p in doc["gate"]["publishes"]], [[], ["P"]] + [[]] * 5)
+        c = claim(forecasts(st)[0])
+        self.assertEqual((c["gate_mean"], c["gate_count"]), (1, 3))
+
+
+class TestResetForecastsStoreRule(unittest.TestCase):
+    """reset_forecasts reads a store directory by the rule of JsonlStore._load (a complete line that does not parse is
+    skipped, a last line without its newline is a torn write and ignored). What it does with them: the unparsable
+    complete line stays in the file verbatim, the torn fragment is not written back (a rewritten file ends without it)."""
+
+    def make(self, tmp):
+        msgs, stalls = stream({c: [3] * N_PUBLISH for c in bg_cells(2)})
+        d = Path(tmp) / "store-gate-x"
+        st = JsonlStore(d)
+        run_gate(msgs, stalls, "none", store=st)
+        n = len(forecasts(st))
+        st.close()
+        return d, n
+
+    def test_torn_last_line_and_unparsable_line_are_read_like_the_store_reads_them(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, n = self.make(tmp)
+            path = d / "decisions.jsonl"
+            lines = path.read_text().splitlines(True)
+            fragment = '{"id":"torn-fragment","kind":"hotspot_for'
+            path.write_text("".join(lines[:1] + ["this is not json\n"] + lines[1:]) + fragment)
+            self.assertEqual(len(JsonlStore(d).select("decisions")), n)  # the store reads it fine
+            self.assertEqual(costmap.reset_forecasts(d, "r")[0], n)  # and so does reset: no JSONDecodeError
+            text = path.read_text()
+            self.assertNotIn("torn-fragment", text)  # the torn write is not written back, whole or torn
+            self.assertEqual(text, "this is not json\n")  # the unparsable complete line is kept verbatim
+            self.assertEqual(JsonlStore(d).select("decisions"), [])
+
+    def test_a_torn_last_line_is_never_matched_even_if_it_would_parse(self):
+        # a last line without its newline that happens to be valid JSON is still ignored by the store: reset must
+        # not count it as a decision of the run (it would be a phantom id) or write it back
+        with tempfile.TemporaryDirectory() as tmp:
+            d, n = self.make(tmp)
+            path = d / "decisions.jsonl"
+            whole = json.loads(path.read_text().splitlines()[0])
+            path.write_text(path.read_text() + json.dumps(dict(whole, id="extra-id", dedup_key="extra-key")))
+            self.assertEqual(len(JsonlStore(d).select("decisions")), n)
+            self.assertEqual(costmap.reset_forecasts(d, "r")[0], n)
+            self.assertNotIn("extra-id", path.read_text())
+
+    def test_a_torn_tail_in_a_file_with_nothing_to_drop_is_removed_not_completed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, _ = self.make(tmp)
+            path = d / "costmap.jsonl"
+            keep = '{"run":"other","zone":"0","published_at":1,"cell":"1,1","cost":1.0,"score":1.0,"stalls":1}\n'
+            path.write_text(keep + '{"run":"r","zone":"0","pub')
+            self.assertEqual(costmap.reset_forecasts(d, "r")[2], 0)
+            self.assertEqual(path.read_text(), keep)
+
+
+class TestExistingForecastWarning(unittest.TestCase):
+    def test_gated_run_over_existing_forecasts_warns_once_on_stderr(self):
+        counts = {c: [3] * N_PUBLISH for c in bg_cells()}
+        counts["J"] = [3, 3, 3] + [9] * (N_PUBLISH - 3)
+        msgs, stalls = stream(counts)
+
+        def go(tmp, store, *extra):
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.object(costmap.hotspot, "read_messages", return_value=msgs), \
+                    mock.patch.object(costmap.hotspot, "extract_stalls", return_value=[dict(s) for s in stalls]), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = costmap.main(["--glob", "x/*.jsonl.gz", "--store", f"jsonl:{store}", "--run", "r",
+                                     "--publish-every", str(EVERY), "--out", str(Path(tmp) / "c.json"), *extra])
+            self.assertEqual(code, 0)
+            return out.getvalue(), err.getvalue()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fresh_out, fresh_err = go(tmp, Path(tmp) / "store-a", "--gate", "baseline")
+            self.assertEqual(fresh_err, "")
+            store = Path(tmp) / "store-b"
+            go(tmp, store)  # the ungated forecasts
+            out, err = go(tmp, store, "--gate", "baseline")  # rerun without --reset-forecasts
+            self.assertEqual(len(err.splitlines()), 1)
+            self.assertTrue(err.startswith("warning:"))
+            self.assertIn("--reset-forecasts", err)
+            self.assertEqual(out, fresh_out)  # stdout is what a fresh gated run prints
+            out2, err2 = go(tmp, store, "--gate", "baseline", "--reset-forecasts")
+            self.assertEqual(err2, "")  # with the reset there is nothing to warn about
+            self.assertEqual(out2.splitlines()[1:], fresh_out.splitlines())
+            self.assertTrue(out2.startswith("reset-forecasts r: dropped"))
+            _, plain_err = go(tmp, store)  # no gate: a rerun is a legitimate no-op, no warning
+            self.assertEqual(plain_err, "")
 
 
 def capture(argv):
@@ -377,8 +557,7 @@ class TestGateGrading(unittest.TestCase):
     def build(self, st):
         """baseline: Z0:1,1 hit at 100 and 200 (one cell hit twice), Z0:2,2 false alarm at 200, Z0:3,3 false alarm at
         300, Z0:5,5 at 400 without a truth row, Z1:1,1 hit at 100. persistence: one forecast without a truth row.
-        (zone, decided_at) pairs of baseline: (0,100) 1, (1,100) 1, (0,200) 2, (0,300) 1, (0,400) 1. A publish at 500
-        with no flag is no pair."""
+        (zone, decided_at) pairs of baseline: (0,100) 1, (1,100) 1, (0,200) 2, (0,300) 1, (0,400) 1."""
         rows = [(forecast_decision(st, 0, "1,1", 100), "hit"), (forecast_decision(st, 0, "1,1", 200), "hit"),
                 (forecast_decision(st, 0, "2,2", 200), "false_alarm"),
                 (forecast_decision(st, 0, "3,3", 300), "false_alarm"),
@@ -409,16 +588,18 @@ class TestGateGrading(unittest.TestCase):
         res = hotspot_score.gate_grading(st.select("decisions"), [], 0)
         self.assertIsNone(res["baseline"]["recall"])
 
-    def test_publish_with_zero_flags_is_not_in_the_mean(self):
-        # the synthetic baseline stream flags one cell at one of its 4 non-warm-up publishes: mean 1.0, not 1/4
-        counts = {c: [3] * N_PUBLISH for c in bg_cells()}
-        counts["J"] = [3, 3, 3] + [9] * (N_PUBLISH - 3)
-        msgs, stalls = stream(counts)
-        _, st = run_gate(msgs, stalls, "baseline")
-        did = forecasts(st)[0]["id"]
-        res = hotspot_score.gate_grading(forecasts(st), [truth_row(did, "hit")], 1)
-        self.assertEqual(res["baseline"]["flags_per_zone_publish"], dict(max=1, mean=1.0))
-        self.assertEqual((res["baseline"]["precision"], res["baseline"]["recall"]), (1.0, 1.0))
+    def test_mean_is_over_pairs_holding_a_flag_not_over_the_zone_by_publish_grid(self):
+        # gate_grading sees only the decisions, so a (zone, decided_at) pair without a forecast can never be in its
+        # denominator; the grid is pinned by hand: zone 0 flags 2 cells at t=100 (zone 1 none), zone 1 flags 1 cell at
+        # t=200 (zone 0 none). Pairs (0,100)=2 and (1,200)=1: mean 1.5, max 2. Averaging over every zone x decided_at
+        # (2 x 2 = 4 pairs, two of them empty) would give 3 / 4 = 0.75.
+        st = MemoryStore()
+        forecast_decision(st, 0, "1,1", 100)
+        forecast_decision(st, 0, "2,2", 100)
+        forecast_decision(st, 1, "1,1", 200)
+        res = hotspot_score.gate_grading(st.select("decisions"), [], 1)
+        self.assertEqual(res["baseline"]["flags_per_zone_publish"], dict(max=2, mean=1.5))
+        self.assertNotEqual(res["baseline"]["flags_per_zone_publish"]["mean"], 3 / 4)
 
     def test_main_writes_gate_grading_only_for_a_gated_run(self):
         for gated in (True, False):
@@ -450,7 +631,7 @@ class TestGateGrading(unittest.TestCase):
                     self.assertEqual(list(res)[-1], "gate_grading")
                     self.assertEqual(res["gate_grading"]["baseline"]["recall"], 2 / 4)
                     self.assertEqual(res["gate_grading"]["baseline"]["hit_cells"], 2)
-                    self.assertIn("gate baseline:", text.getvalue())
+                    self.assertNotIn("gate baseline", text.getvalue())  # gate_grading lives in the JSON only
                 else:
                     self.assertNotIn("gate_grading", res)
                     self.assertNotIn("gate ", text.getvalue())

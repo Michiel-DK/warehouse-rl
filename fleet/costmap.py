@@ -28,7 +28,8 @@ count >= 1 at publish i (1-based).
 Only passing cells that are also in the ungated map get a forecast (claim + gate, gate_reason, gate_count and the gate's
 numbers and parameters). --out gains one key `gate`. Forecast ids are deterministic on (kind, subject, publish ISO), so a
 gated rerun on a store that already holds the ungated forecasts would dedupe into them: --reset-forecasts (jsonl store
-copies only, never a directory named "store") first drops this run's hotspot_forecast decisions with their update
+copies only, never a directory named "store"; a gated run without it that finds forecasts already in the store prints one
+warning line to stderr) first drops this run's hotspot_forecast decisions with their update
 records, the forecast_grades rows of those ids and this run's costmap rows, and prints the three counts.
 Every per-cell quantity is per zone: each zone has its own seed and floor layout. Analyst side: input is the stream and the
 store only.
@@ -124,31 +125,44 @@ def gate_pass(gate, windows, idx, zone, top_k, windows_b, sigma, min_excess, min
 def reset_forecasts(directory, run):
     """Drop `run`'s hotspot_forecast decisions (with their update records), the forecast_grades rows (and update
     records) of those ids and the run's costmap rows from a jsonl store directory.
+    Reads each file by the rule of JsonlStore._load: a complete line that does not parse is not a record (kept verbatim
+    in the file, never matched); a last line without its newline is a torn write the store ignores, so it is not a
+    record either and is NOT written back: a file holding one is rewritten without it (the store would otherwise append
+    the next record onto the fragment).
     Returns (decisions dropped, grade rows dropped, costmap rows dropped)."""
     d = Path(directory)
 
     def records(name):
-        path = d / name
-        if not path.exists():
-            return []
-        return [(ln, json.loads(ln) if ln.strip() else None) for ln in path.read_text(encoding="utf-8").splitlines(True)]
+        recs, torn = [], False
+        if (d / name).exists():
+            with open(d / name, encoding="utf-8") as f:
+                for ln in f:
+                    if not ln.endswith("\n"):
+                        torn = True
+                        break
+                    try:
+                        rec = json.loads(ln)
+                    except ValueError:
+                        rec = None
+                    recs.append((ln, rec if isinstance(rec, dict) else None))
+        return recs, torn
 
-    def rewrite(name, recs, drop):
+    def rewrite(name, drop):
+        recs, torn = records(name)
         keep = [ln for ln, r in recs if not (r is not None and drop(r))]
-        if len(keep) != len(recs):
+        if len(keep) != len(recs) or torn:
             (d / name).write_text("".join(keep), encoding="utf-8")
         return len(recs) - len(keep)
 
     def upd_id(r):
         return r.get("__upd", {}).get("eq", {}).get("id")
 
-    dec = records("decisions.jsonl")
+    dec, _ = records("decisions.jsonl")
     gone = {r["id"] for _, r in dec if r and "__upd" not in r and r.get("kind") == "hotspot_forecast"
             and r.get("run") == run}
-    n_dec = rewrite("decisions.jsonl", dec, lambda r: ("__upd" not in r and r.get("id") in gone) or upd_id(r) in gone)
-    n_gr = rewrite("forecast_grades.jsonl", records("forecast_grades.jsonl"),
-                   lambda r: r.get("id") in gone or upd_id(r) in gone)
-    n_cm = rewrite("costmap.jsonl", records("costmap.jsonl"), lambda r: r.get("run") == run)
+    n_dec = rewrite("decisions.jsonl", lambda r: ("__upd" not in r and r.get("id") in gone) or upd_id(r) in gone)
+    n_gr = rewrite("forecast_grades.jsonl", lambda r: r.get("id") in gone or upd_id(r) in gone)
+    n_cm = rewrite("costmap.jsonl", lambda r: r.get("run") == run)
     return len(gone), n_gr, n_cm
 
 
@@ -173,7 +187,7 @@ def build_costmap(messages, store, run, window_h=1.0, half_life_h=1.0, min_stall
     times = publish_times(first_ts, end_ts, publish_every)
     gated = gate != "none"
     windows = gate_window_counts(stalls, times, first_ts, exclude_occupied) if gated else None
-    gate_log, skipped = [], 0
+    gate_log, skipped, existing = [], 0, 0
     for idx, t in enumerate(times):
         maps = cost_zones(stalls, t, window_h, half_life_h, min_stalls, exclude_occupied)
         rows = [dict(run=run, zone=z, published_at=t, cell=c, cost=v["cost"], score=v["score"], stalls=v["stalls"])
@@ -198,7 +212,7 @@ def build_costmap(messages, store, run, window_h=1.0, half_life_h=1.0, min_stall
                             continue
                         extra = dict(gate=gate, **passes[z][c])
                     x = v["stalls"] * 3600 / covered
-                    decisions.record_decision(
+                    _, created = decisions.record_decision(
                         store, run=run, kind="hotspot_forecast", subject=f"Z{z}:{c}", start_iso=iso(t), decided_at=t,
                         claim=dict(expected_stalls_next_hour=x, cost=v["cost"], rank=k, horizon_s=horizon_s,
                                    window_hours=window_h, top_k=top_k, half_life_h=half_life_h,
@@ -206,11 +220,15 @@ def build_costmap(messages, store, run, window_h=1.0, half_life_h=1.0, min_stall
                         rationale=f"{v['stalls']} stalls at {c} in zone {z} over the last {covered:.0f}s; cost "
                                   f"{v['cost']}, rank {k}" + (f"; gate {gate}: {extra['gate_reason']}" if extra else ""),
                         expected=x, grade_after=t + horizon_s)
+                    existing += gated and not created
         if gated:
             gate_log.append(dict(published_at=t, gate_warmup=gate_warmup(gate, idx, gate_windows), flagged=flagged))
         last = dict(schema_version=SCHEMA_VERSION, run=run, generated_at=iso(t), window_hours=window_h,
                     half_life_h=half_life_h, min_stalls=min_stalls, exclude_occupied=exclude_occupied,
                     zones={z: {c: v["cost"] for c, v in sorted(maps.get(z, {}).items())} for z in zones})
+    if existing:
+        print(f"warning: --gate {gate}: {existing} forecast(s) already in the store were kept as they are (ids are "
+              f"deterministic, so they stay ungated); rerun on a store copy with --reset-forecasts", file=sys.stderr)
     if gated:
         last["gate"] = dict(name=gate, params=dict(windows=gate_windows, sigma=gate_sigma, min_excess=gate_min_excess,
                                                    min_count=gate_min_count, top_k=top_k),
