@@ -1,7 +1,7 @@
 """Score a published cost map against the emitter's ground truth (the only module besides grade.py that reads it).
 
 Usage: python fleet/hotspot_score.py --run-dir DIR --store jsonl:DIR|clickhouse://... --tag NAME
-       [--costmap DIR/costmap.json] [--out results/fleet/hotspot_<tag>.json] [--window-h W]
+       [--costmap DIR/costmap.json] [--out results/fleet/hotspot_<tag>.json] [--window-h W] [--baselines]
 Smoke: python fleet/hotspot_score.py --smoke [--out-dir DIR] (all five disturbance kinds, 2 zones x 200 steps, tmp dir).
 DIR holds truth.json and emit_ledger.json (the emitter's output). Per zone and as the mean over zones, for K in
 {20, 40, 80, 120}: precision@K = floor cells among the K most expensive flagged cells / K (a map with fewer than K
@@ -29,6 +29,9 @@ chance_mean, chance_median, lift (= observed_rate / chance_mean, null when chanc
 per_lesson [{id, subject, window_start, pool_size, pool_ok, chance, observed}] sorted by (window_start, subject, id).
 A lesson whose own subject is not in its pool, or whose recomputed verdict differs from the stored row, raises ValueError.
 --window-h W (hours) must match every stored lesson window (exit nonzero otherwise); omitted, stored windows are used.
+--baselines (S10D) adds ONE top-level key `baselines` after every other key (persistence baseline, chance lines, paired
+CI; see fleet/baselines.py); without it the output is unchanged. --window-h never reaches it: the baselines use the
+costmap's own window. Candidate cells = the env's highway non-goal cells (DisturbedWarehouse._blockable_cells).
 """
 import argparse
 import json
@@ -228,6 +231,36 @@ def persist_chance(store, run, window_h=None):
                 lift=rate / mean if n and mean else None, per_lesson=per)
 
 
+def candidate_cells(truth):
+    """The env's highway non-goal cells as 'x,y' strings (DisturbedWarehouse._blockable_cells), from truth['env_id']."""
+    for sub in ("src", "scripts"):
+        if str(REPO / sub) not in sys.path:
+            sys.path.insert(0, str(REPO / sub))
+    import gymnasium as gym
+    import tarware  # noqa: F401  (registers the env ids)
+    from warehouse_rl.disturb import DisturbedWarehouse
+    kw = dict(gym.spec(truth["env_id"]).kwargs)
+    kw["max_steps"] = truth["steps"]
+    env = DisturbedWarehouse(disturb={}, **kw)
+    cells = [f"{x},{y}" for x, y in env._blockable_cells]
+    env.close()
+    return cells
+
+
+def baselines_block(truth, st, run, costmap, chance, candidates=None):
+    """The `baselines` key: truth positives over [t, t + H] decided here with truth.truth_positive (baselines.py never
+    sees the truth file), then baselines.compute."""
+    import baselines
+    from truth import forecast_steps, truth_positive
+    cands = list(candidates) if candidates is not None else candidate_cells(truth)
+
+    def positives(zone, t, horizon_s):
+        s0, s1 = forecast_steps(truth, t, {"horizon_s": horizon_s})
+        return [c for c in cands if truth_positive(truth, zone, c, s0, s1)]
+
+    return baselines.compute(st, run, truth["zones"], costmap, cands, positives, persist_block=chance, ks=KS)
+
+
 def smoke_problems(truth):
     """Why a smoke truth.json is not an all-five-kinds run: [] when every zone has non-empty blocked, outage and frozen
     windows and a non-null burst."""
@@ -290,6 +323,8 @@ def main(argv=None):
     p.add_argument("--tag", default=None)
     p.add_argument("--out", default=None)
     p.add_argument("--window-h", type=float, default=None)
+    p.add_argument("--baselines", action="store_true",
+                   help="add the `baselines` key (S10D): persistence baseline, chance lines, paired CI")
     p.add_argument("--smoke", action="store_true",
                    help="self-check: 2 zones x 200 steps with all five disturbance kinds through emit, ingest, costmap, "
                         "grade --truth and score in a tmp dir (or --out-dir); exit nonzero if a truth list is empty")
@@ -316,6 +351,7 @@ def main(argv=None):
         chance = persist_chance(st, run, a.window_h)
     except WindowMismatch as e:
         p.error(str(e))
+    base = baselines_block(truth, st, run, costmap, chance) if a.baselines else None
     st.close()
     res = score_run(truth, costmap, stalls, grades, lesson_decisions=lesson_decisions)
     res.update(tag=a.tag, run=run,
@@ -328,6 +364,8 @@ def main(argv=None):
                platform=dict(platform=platform.platform(), python=sys.version.split()[0]))
     res["lesson_persist_chance"] = chance
     res["truth_kinds"] = truth_kinds(truth, costmap)
+    if base is not None:
+        res["baselines"] = base
     out = Path(a.out) if a.out else REPO / "results" / "fleet" / f"hotspot_{a.tag}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(res, indent=1))
@@ -342,6 +380,11 @@ def main(argv=None):
     print(f"  lessons {res['lesson_grading']}")
     print(f"  lesson_persist_chance: {chance['observed_ok']}/{chance['n_lessons']} ok, chance mean "
           f"{chance['chance_mean']}, median {chance['chance_median']}, lift {chance['lift']}")
+    if base is not None:
+        for k in (20, 40):
+            row = base["k"][str(k)]
+            print(f"  baselines K={k}: truth precision map {row['map']['truth_precision']} persistence "
+                  f"{row['persistence']['truth_precision']}; chance_all {base['chance']['all']} ever {base['chance']['ever']}")
     print(f"-> {out}")
     return 0
 
