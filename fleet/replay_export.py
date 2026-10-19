@@ -5,6 +5,7 @@ Usage: python fleet/replay_export.py --run-dir DIR --store jsonl:DIR/store --zon
        [--hotspot results/fleet/hotspot_<tag>.json] [--closed-loop-summary results/closed_loop_sticky/summary.json]
        [--lessons-long results/fleet/hotspot_s8e-long-w0.5.json]
        [--dose-response "p 0.3-0.7=results/closed_loop/summary.json" ...]   (repeatable, order kept)
+       [--baselines "LABEL=results/fleet/baselines_<label>.json" ...]   (repeatable, order kept: run_constants.baselines)
        [--explorer]   (run_constants.explorer from the five closed-loop summaries and the density and breakdown sweeps)
        [--sticky-none PATH --sticky-map-a32 PATH --sticky-oracle-a32 PATH --sticky-undisturbed PATH]
 DIR holds the zone files zone<Z>-<nnn>.jsonl.gz, truth.json, emit_ledger.json and costmap.json (the run name is
@@ -141,6 +142,14 @@ kept_pct = 100 * (B(transitions) + B(decisions) + B(state_sample) + B(rejects)) 
                                    share/share_ci95 = share_of_floor_loss_recovered of the arm (null for "none"); source =
                                    PATH as given. Raises, naming the file, when a summary lacks one of the four arms or
                                    "undisturbed". Null without --dose-response. Context from other runs than the replay.
+                baselines          [{label, src, n_zones, chance_all, chance_ever, k {"20","40": {map, persistence: each {truth_precision,
+                                   pai, lift_all, lift_ever}, paired {mean, ci95, verdict}}}, lesson_persist {lift_window, lift_ever,
+                                   chance_window, chance_ever, n_lessons, observed_rate} or null when n_lessons is 0}] in the order of the
+                                   repeatable --baselines LABEL=PATH (split on the first "="), one entry per results/fleet/baselines_<label>.json.
+                                   Every value is copied unrounded from the file's `baselines` key (k.<K>.{map,persistence}, paired.<K>.truth_precision,
+                                   chance); src = PATH as given; n_zones = paired.20.truth_precision.n_zones. Raises, naming the file, on a
+                                   spec without "=", a file without `baselines` or a missing K 20/40. Null without --baselines. Context
+                                   from other runs than the replay.
                 explorer           {axes, floor, sweeps, source_note} from --explorer (null without; a refresh without it leaves
                                    an existing key untouched). Paths are fixed and resolved from the repo root. axes {regimes
                                    [{key, word, p_lo, p_hi}], arms [{key, alpha or null, label}] (none, map_a4, map_a8, map_a16,
@@ -765,6 +774,37 @@ def dose_response_constant(specs):
     return out
 
 
+BASELINE_KS = ("20", "40")
+BASELINE_ARM_FIELDS = ("truth_precision", "pai", "lift_all", "lift_ever")
+LESSON_PERSIST_FIELDS = ("lift_window", "lift_ever", "chance_window", "chance_ever", "n_lessons", "observed_rate")
+
+
+def baselines_constant(specs):
+    """run_constants.baselines from ["LABEL=PATH", ...] (see the module docstring); None without specs."""
+    if not specs:
+        return None
+    out = []
+    for spec in specs:
+        label, sep, path = spec.partition("=")
+        if not sep or not label or not path:
+            raise ValueError(f"--baselines {spec!r} is not LABEL=PATH")
+        doc = _load_json(path, "baselines")
+        try:
+            b = doc["baselines"]
+            ks = {}
+            for k in BASELINE_KS:
+                row, paired = b["k"][k], b["paired"][k]["truth_precision"]
+                ks[k] = {arm: {f: row[arm][f] for f in BASELINE_ARM_FIELDS} for arm in ("map", "persistence")}
+                ks[k]["paired"] = dict(mean=paired["mean"], ci95=list(paired["ci95"]), verdict=paired["verdict"])
+            lp = b["lesson_persist"]
+            lesson = None if not lp["n_lessons"] else {f: lp[f] for f in LESSON_PERSIST_FIELDS}
+            out.append(dict(label=label, src=path, n_zones=b["paired"]["20"]["truth_precision"]["n_zones"],
+                            chance_all=b["chance"]["all"], chance_ever=b["chance"]["ever"], k=ks, lesson_persist=lesson))
+        except (KeyError, TypeError) as e:
+            raise ValueError(f"{path} lacks a `baselines` key with k/paired for K 20 and 40 ({type(e).__name__}: {e})") from e
+    return out
+
+
 # S11A: the explorer's data. Paths are resolved from the repo root, never from the cwd.
 EXPLORER_FILES = (  # (regime key, word, summary path); the order is the page order
     ("mild", "mild", "results/closed_loop/summary.json"),
@@ -1004,7 +1044,7 @@ def assert_single_run(payload):
 # ------------------------------------------------------------------------------------------------ assembly
 def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, log=print,
                   run_dir_arg=None, closed_loop_arg=None, benchmark=None, hotspot_file=None, closed_loop_summary=None,
-                  lessons_long=None, sticky=None, dose_response=None, explorer=False):
+                  lessons_long=None, sticky=None, dose_response=None, explorer=False, baselines=None):
     zone = str(zone)
     run_dir = Path(run_dir)
     truth = json.loads((run_dir / "truth.json").read_text())
@@ -1083,7 +1123,8 @@ def build_payload(run_dir, store_spec, zone, closed_loop=None, env_runner=None, 
         lessons_long=lessons_long_constant(lessons_long),
         worth=worth_constant(sticky),
         dose_response=dose_response_constant(dose_response),
-        explorer=explorer_constant() if explorer else None)
+        explorer=explorer_constant() if explorer else None,
+        baselines=baselines_constant(baselines))
     if check is not None:
         cov = ledger.coverage(check["messages_accepted"], expected)
         check = dict(check, coverage=None if cov is None else round(cov, 6))
@@ -1151,7 +1192,7 @@ def read_data_js(path):
 
 
 RUN_CONSTANTS_ORDER = ("ingest_msgs_per_s", "benchmark_msgs_per_s", "kept", "hotspot", "closed_loop", "audit", "header", "speed",
-                       "lessons_long", "worth", "dose_response", "explorer")  # the key order of build_payload's run_constants
+                       "lessons_long", "worth", "dose_response", "explorer", "baselines")  # the key order of build_payload's run_constants
 
 
 def _insertion_point(text, start, end, name):
@@ -1168,8 +1209,8 @@ def _insertion_point(text, start, end, name):
     return None
 
 
-def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES, explorer=False):
-    """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response, explorer) of an existing data.js by text
+def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes=MAX_BYTES, explorer=False, baselines=None):
+    """Rewrite only the run_constants keys whose source was given (lessons_long, dose_response, explorer, baselines) of an existing data.js by text
     splice; a key that is not in the file yet is inserted into run_constants before the first existing key that follows it in
     RUN_CONSTANTS_ORDER (the order of a full export), or appended when none does. Returns the new byte size."""
     out = Path(out)
@@ -1182,8 +1223,10 @@ def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes
         new_values["dose_response"] = dose_response_constant(dose_response)
     if explorer:
         new_values["explorer"] = explorer_constant()
+    if baselines:
+        new_values["baselines"] = baselines_constant(baselines)
     if not new_values:
-        raise ValueError("nothing to refresh: give --lessons-long, --dose-response and/or --explorer")
+        raise ValueError("nothing to refresh: give --lessons-long, --dose-response, --explorer and/or --baselines")
     text = out.read_text(encoding="utf-8")
     if not text.startswith(PREFIX):
         raise ValueError(f"{out} does not start with {PREFIX!r}")
@@ -1233,7 +1276,7 @@ def refresh_constants(out, lessons_long_path=None, dose_response=None, max_bytes
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--refresh-constants-only", action="store_true",
-                   help="rewrite only the run_constants keys given by --lessons-long, --dose-response and/or --explorer of the existing --out (no re-simulation)")
+                   help="rewrite only the run_constants keys given by --lessons-long, --dose-response, --explorer and/or --baselines of the existing --out (no re-simulation)")
     p.add_argument("--run-dir", default=None)
     p.add_argument("--store", default=None, help="jsonl:<dir> or clickhouse://host[:port]/db (read only)")
     p.add_argument("--zone", default="0")
@@ -1247,6 +1290,8 @@ def main(argv=None):
                    help="results/fleet/hotspot_s8e-long-w0.5.json: run_constants.lessons_long (context from a longer run)")
     p.add_argument("--dose-response", action="append", default=None, metavar="LABEL=PATH",
                    help="repeatable: a closed-loop summary.json and its label, in page order: run_constants.dose_response")
+    p.add_argument("--baselines", action="append", default=None, metavar="LABEL=PATH",
+                   help="repeatable: a results/fleet/baselines_<label>.json and its label, in page order: run_constants.baselines")
     p.add_argument("--explorer", action="store_true",
                    help="run_constants.explorer: the five closed-loop summaries and the density and breakdown sweeps under results/ "
                         "(resolved from the repo root); without it a full export writes explorer = null and a refresh leaves the key alone")
@@ -1255,14 +1300,14 @@ def main(argv=None):
                        help=f"results/closed_loop_sticky/{arm}/*.json (one row file): a bar of run_constants.worth")
     a = p.parse_args(argv)
     if a.refresh_constants_only:
-        if a.lessons_long is None and not a.dose_response and not a.explorer:
-            p.error("--refresh-constants-only requires --lessons-long, --dose-response and/or --explorer")
+        if a.lessons_long is None and not a.dose_response and not a.explorer and not a.baselines:
+            p.error("--refresh-constants-only requires --lessons-long, --dose-response, --explorer and/or --baselines")
         try:
-            n = refresh_constants(a.out, a.lessons_long, a.dose_response, explorer=a.explorer)
+            n = refresh_constants(a.out, a.lessons_long, a.dose_response, explorer=a.explorer, baselines=a.baselines)
         except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
-        names = [k for k, v in (("lessons_long", a.lessons_long), ("dose_response", a.dose_response), ("explorer", a.explorer)) if v]
+        names = [k for k, v in (("lessons_long", a.lessons_long), ("dose_response", a.dose_response), ("explorer", a.explorer), ("baselines", a.baselines)) if v]
         print(f"refreshed run_constants.{' and '.join(names)}, {n} bytes -> {a.out}")
         return 0
     if a.run_dir is None or a.store is None:
@@ -1270,7 +1315,7 @@ def main(argv=None):
     try:
         payload = build_payload(a.run_dir, a.store, a.zone, a.closed_loop, run_dir_arg=a.run_dir,
                                 closed_loop_arg=a.closed_loop, benchmark=a.benchmark, hotspot_file=a.hotspot,
-                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long, dose_response=a.dose_response, explorer=a.explorer,
+                                closed_loop_summary=a.closed_loop_summary, lessons_long=a.lessons_long, dose_response=a.dose_response, explorer=a.explorer, baselines=a.baselines,
                                 sticky={arm: getattr(a, "sticky_" + arm) for arm in WORTH_ARMS})
         n = write_data_js(payload, a.out)
     except (ValueError, OSError) as e:
