@@ -312,8 +312,20 @@
   "outcome": {
    "ok": 101
   },
+  "lesson": {
+   "off": 5,
+   "ok": 3
+  },
+  "lesson_persist": {
+   "off": 2
+  },
   "truth": {
-   "false_alarm": 488
+   "false_alarm": 463,
+   "hit": 25
+  },
+  "lesson_truth": {
+   "hit": 1,
+   "false_alarm": 1
   }
  },
  "rank_grading": {
@@ -334,7 +346,28 @@
    "unknown": 16
   }
  },
- "lesson_grading": {},
+ "lesson_grading": {
+  "lesson": {
+   "cause_mix": {
+    "off": 3,
+    "ok": 3
+   },
+   "hot_robot": {
+    "off": 2
+   }
+  },
+  "lesson_persist": {
+   "hot_robot": {
+    "off": 2
+   }
+  },
+  "lesson_truth": {
+   "hot_robot": {
+    "hit": 1,
+    "false_alarm": 1
+   }
+  }
+ },
  "tag": "s10-breakdown",
  "run": "s10-breakdown",
  "config": {
@@ -367,13 +400,32 @@
   "python": "3.10.6"
  },
  "lesson_persist_chance": {
-  "n_lessons": 0,
+  "n_lessons": 2,
   "observed_ok": 0,
-  "observed_rate": null,
-  "chance_mean": null,
-  "chance_median": null,
-  "lift": null,
-  "per_lesson": []
+  "observed_rate": 0.0,
+  "chance_mean": 0.5818181818181818,
+  "chance_median": 0.5818181818181818,
+  "lift": 0.0,
+  "per_lesson": [
+   {
+    "id": "808d25e4cd13ee976cfe0257603d1138d4243da5",
+    "subject": "Z1:Z1-10",
+    "window_start": 1767226320,
+    "pool_size": 10,
+    "pool_ok": 8,
+    "chance": 0.8,
+    "observed": false
+   },
+   {
+    "id": "fae90b6834a6c817bdca57be9408c3bf684a3741",
+    "subject": "Z9:Z9-12",
+    "window_start": 1767226320,
+    "pool_size": 11,
+    "pool_ok": 4,
+    "chance": 0.36363636363636365,
+    "observed": false
+   }
+  ]
  },
  "truth_kinds": {
   "floor": {
@@ -452,32 +504,55 @@
    }
   },
   "any": {
-   "positives": 0,
+   "positives": 283,
    "k": {
     "20": {
-     "precision": 0.0,
-     "recall": null,
-     "hits": 0
+     "precision": 0.095,
+     "recall": 0.06713780918727916,
+     "hits": 19
     },
     "40": {
-     "precision": 0.0,
-     "recall": null,
-     "hits": 0
+     "precision": 0.0475,
+     "recall": 0.06713780918727916,
+     "hits": 19
     },
     "80": {
-     "precision": 0.0,
-     "recall": null,
-     "hits": 0
+     "precision": 0.02375,
+     "recall": 0.06713780918727916,
+     "hits": 19
     },
     "120": {
-     "precision": 0.0,
-     "recall": null,
-     "hits": 0
+     "precision": 0.015833333333333335,
+     "recall": 0.06713780918727916,
+     "hits": 19
     }
    }
   },
   "frozen": {
-   "positives": 119
+   "positives": 119,
+   "cells": 283,
+   "k": {
+    "20": {
+     "precision": 0.095,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "40": {
+     "precision": 0.0475,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "80": {
+     "precision": 0.02375,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "120": {
+     "precision": 0.015833333333333335,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    }
+   }
   }
  }
 }
