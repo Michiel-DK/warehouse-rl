@@ -22,6 +22,9 @@ Reads:
   results/fleet/baselines_{s8b-medium-80-p03-07,closed-loop-sticky,s8e-long-w0.5,s10c-blind,s10-none}.json
                                                -> (j) map versus persistence (`baselines` block, S10D)
   results/fleet/amoc_blind.json                -> (k) AMOC: delay, misses and false alarms per hour by K and by cost
+  results/fleet/hotspot_{s10-none,s10c-blind,closed-loop-sticky}-gate-{baseline,persistence}.json, with the ungated
+  results/fleet/hotspot_{s10-none,s10c-blind}.json -> (l) the false-alarm gate (S10F, `gate_grading`)
+  results/fleet/hotspot_s10-breakdown.json     -> (m) frozen truth cells on the breakdown run (S10G, `truth_kinds.frozen`)
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -58,6 +61,8 @@ S8B_COMMITTED = "results/fleet/hotspot_s8b-medium-80-p03-07.json"
 REF_KS = ("10", "20", "40")
 CELL_KINDS = ("floor", "blocked", "outage")
 S10_KS = ("20", "40")
+GATES = ("baseline", "persistence")
+GATE_RUNS = [("s10-none", NONE), ("s10c-blind", BLIND), ("closed-loop-sticky", None)]
 SECONDS_PER_STEP = 5
 
 
@@ -336,20 +341,23 @@ def other_disturbances():
               + " | ".join(str(tk[k]["positives"]) for k in CELL_KINDS)
               + f" | {tk['frozen']['positives']} | {d['mean']['n_flagged']:.1f} |")
     print()
-    print("Precision and recall at K, split by kind (only kinds with positives in the run; pooled over zones):\n")
+    print("Precision and recall at K, split by kind (only kinds with positives in the run; pooled over zones; frozen "
+          "cells = the robot's cell at the start of each frozen window, S10G):\n")
     print("| run | kind | positives | " + " | ".join(f"K {k}: hits, precision, recall" for k in S10_KS)
           + " | zones flagging fewer than K cells (" + " / ".join(f"K {k}" for k in S10_KS) + ") |")
     print("|---|---|---|" + "---|" * len(S10_KS) + "---|")
     for _, d in docs:
         tk = d["truth_kinds"]
         short = " / ".join(str(_flagged(d, k)[1]) for k in S10_KS)
-        kinds = [k for k in CELL_KINDS if tk[k]["positives"] > 0]
+        kinds = [k for k in CELL_KINDS if tk[k]["positives"] > 0] + (["frozen"] if tk["frozen"].get("cells") else [])
         for kind in kinds:
             cells = []
             for k in S10_KS:
                 e = tk[kind]["k"][k]
                 cells.append(f"{e['hits']}, {e['precision']:.4f}, {e['recall']:.2f}")
-            print(f"| {d['tag']} | {kind} | {tk[kind]['positives']} | " + " | ".join(cells) + f" | {short} |")
+            pos = tk[kind]["cells"] if kind == "frozen" else tk[kind]["positives"]
+            label = "frozen cells" if kind == "frozen" else kind
+            print(f"| {d['tag']} | {label} | {pos} | " + " | ".join(cells) + f" | {short} |")
         if not kinds:
             why = (f"{tk['frozen']['positives']} frozen robots; the map ranks cells" if tk["frozen"]["positives"]
                    else "the run has no truth cells")
@@ -392,7 +400,8 @@ def other_disturbances():
           "is not used: no S10 run has floor cells. lesson_persist grades a lesson with window [s, e) over [e, e + W) "
           "only when the zone's stream reaches e + W (`fleet/fleet_analyser/lessons.py` docstring); the queue item "
           "`wr-s10-disturbance-measure` ran lessons with `--window-h 0.5` (1800 s), so a 2500 s stream allows no "
-          "graded lesson. Sources: " + ", ".join(f"`{r}`" for r, _ in docs)
+          "graded lesson. s10-breakdown was re-emitted bit-identically and re-scored by `wr-s10g-breakdown-rerun` "
+          "(S10G truth with frozen cells, lessons `--window-h 0.2`), so its row is the re-score. Sources: " + ", ".join(f"`{r}`" for r, _ in docs)
           + " (`truth_kinds`, `zones.*.n_flagged`, `grading_counts.truth`, `lesson_grading`, "
           "`lesson_persist_chance`).")
 
@@ -740,6 +749,118 @@ def amoc_table():
           + "; ".join(f"{k}: \"{v}\"" for k, v in m["amoc_definitions"].items()) + f". Source: `{AMOC}` (`amoc`).")
 
 
+def _publishes(d):
+    """Publishes every 300 s with the last at stream end (the queue items' `--publish-every 300`)."""
+    return -(-d["config"]["steps"] * SECONDS_PER_STEP // 300)
+
+
+def gate_table():
+    tb = load(TTD_BLIND)
+    rows = []
+    for tag, ungated in GATE_RUNS:
+        u = load(ungated) if ungated else None
+        if ungated and u is None:
+            print(f"Gate: `{ungated}` MISSING")
+        gated = []
+        for g in GATES:
+            rel = f"results/fleet/hotspot_{tag}-gate-{g}.json"
+            d = load(rel)
+            if d is None:
+                print(f"Gate: `{rel}` MISSING")
+                continue
+            assert d["tag"] == f"{tag}-gate-{g}" and list(d["gate_grading"]) == [g], rel
+            if u is not None:
+                same = [k for k in u["truth_kinds"] if k != "frozen"]  # S10G added frozen.cells/k after these
+                assert all(d["truth_kinds"][k] == u["truth_kinds"][k] for k in same) and d["zones"] == u["zones"], rel
+            gated.append((rel, g, d))
+        rows.append((tag, ungated, u, gated))
+    if tb is not None:
+        assert _publishes(load(BLIND)) == tb["meta"]["n_publishes"]
+    print("| run | gate | forecasts (flags) | per zone per publish: mean over all, max | truth hits / false alarms "
+          "| precision | truth cells hit / truth cells | recall (cells) |")
+    print("|---|---|---|---|---|---|---|---|")
+    used = []
+    for tag, ungated, u, gated in rows:
+        nz = len((u or gated[0][2])["zones"]) if (u or gated) else 0
+        if u is not None:
+            used.append(ungated)
+            t = u["grading_counts"].get("truth", {})
+            n, h = sum(t.values()), t.get("hit", 0)
+            pos = u["truth_kinds"]["any"]["positives"]
+            print(f"| {tag} | none | {n} | {n / (nz * _publishes(u)):.2f}, n/a | {h} / {t.get('false_alarm', 0)} "
+                  f"| {h / n:.3f} | n/a / {pos} | n/a |")
+        else:
+            print(f"| {tag} | none | n/a | n/a | n/a | n/a | n/a | n/a (not comparable: the original phase A map "
+                  "had one publish) |")
+        for rel, g, d in gated:
+            used.append(rel)
+            e = d["gate_grading"][g]
+            t = d["grading_counts"].get("truth", {})
+            assert (e["hits"], e["false_alarms"]) == (t.get("hit", 0), t.get("false_alarm", 0)), rel
+            nz = len(d["zones"])
+            prec = "n/a" if e["precision"] is None else f"{e['precision']:.3f}"
+            rec = "n/a (no truth cells)" if e["recall"] is None else f"{e['recall']:.3f}"
+            print(f"| {tag} | {g} | {e['forecasts']} | {e['forecasts'] / (nz * _publishes(d)):.2f}, "
+                  f"{e['flags_per_zone_publish']['max']} | {e['hits']} / {e['false_alarms']} | {prec} "
+                  f"| {e['hit_cells']} / {e['positive_cells']} | {rec} |")
+    print()
+    print("Forecasts = `hotspot_forecast` claims, each graded once against the truth over the next horizon (truth hit "
+          "or false alarm); a gated run publishes only the forecasts that pass the gate, and the cost map itself is "
+          "unchanged (asserted here: `zones` and every `truth_kinds` kind except `frozen`, whose S10G fields the ungated JSONs predate, are equal to the ungated JSON's). Per zone per publish, "
+          "mean over all = forecasts / (zones x publishes), with 9 publishes every 300 s, the last at stream end, "
+          "warm-up publishes included (baseline: publishes 1-3 pass nothing; persistence: publish 1); max = "
+          "`gate_grading.flags_per_zone_publish.max`, after warm-up. The ungated JSONs carry no per-publish maximum "
+          "and no truth cells hit, so those are n/a; truth cells = `truth_kinds.any.positives`. Truth cells hit = "
+          "distinct (zone, cell) with at least one truth-hit forecast; recall = that / truth cells. The gate runs used "
+          "`--publish-every 300 --horizon-s 1245` on copies of each store (`wr-s10f-gate-run`); s10-none and "
+          "s10c-blind are the same publishes as their ungated runs, the sticky phase A was originally published once, "
+          "so it has no ungated row on this schedule. On the sticky run the truth cells are its 80 floor cells per "
+          "zone, present for the whole run. Gate parameters: windows 3, sigma 2.0, min excess 2, min count 2 (the "
+          "S10F defaults). Sources: " + ", ".join(f"`{r}`" for r in used) + " (`gate_grading`, `grading_counts.truth`, "
+          "`truth_kinds`).")
+
+
+def frozen_cells():
+    d = load(S10[2])
+    if d is None:
+        print(f"Frozen cells: `{S10[2]}` MISSING")
+        return
+    fz = d["truth_kinds"]["frozen"]
+    if "cells" not in fz:
+        print(f"Frozen cells: `{S10[2]}` has no `truth_kinds.frozen.cells` (pre-S10G file)")
+        return
+    nz = len(d["zones"])
+    flagged = sum(z["n_flagged"] for z in d["zones"].values())
+    print("| run | frozen robots | frozen cells | flagged cells, final map (per zone, max) | "
+          + " | ".join(f"K {k}: hits, precision, recall" for k in S10_KS)
+          + " | zones flagging fewer than K cells (" + " / ".join(f"K {k}" for k in S10_KS) + ") "
+          "| hotspot_forecast truth grades: hit / graded |")
+    print("|---|---|---|---|" + "---|" * len(S10_KS) + "---|---|")
+    cells = []
+    for k in S10_KS:
+        e = fz["k"][k]
+        assert e["hits"] == d["truth_kinds"]["any"]["k"][k]["hits"], k
+        cells.append(f"{e['hits']}, {e['precision']:.4f}, {e['recall']:.3f}")
+    t = d["grading_counts"].get("truth", {})
+    short = " / ".join(str(_flagged(d, k)[1]) for k in S10_KS)
+    print(f"| {d['tag']} | {fz['positives']} | {fz['cells']} | {flagged} ({flagged / nz:.1f}, "
+          f"{max(z['n_flagged'] for z in d['zones'].values())}) | " + " | ".join(cells)
+          + f" | {short} | {t.get('hit', 0)} / {sum(t.values())} |")
+    print()
+    k0 = S10_KS[0]
+    print(f"Frozen cells = per zone, the distinct cells a robot stood on at the start of a frozen window, summed over "
+          f"zones (`truth_kinds.frozen.cells`); a hit is a final-map top-K cell that is a frozen cell of its zone at any "
+          f"time in the run, so it does not mean the cell was flagged while the robot was frozen. Frozen cells are the "
+          f"only truth cells of this run (asserted: frozen hits = `any` hits), so {fz['k'][k0]['hits']} of the "
+          f"{flagged} flagged cells are frozen cells and the rest are false flags. Every zone flags fewer than "
+          f"{k0} cells, so K {' and K '.join(S10_KS)} score the same cells. The time-matched number is the forecast "
+          "truth grade: a forecast is a hit when its cell is truth-positive (here: frozen) over the next horizon "
+          "(1245 s). Before S10G the same run graded 0 hits of 488 (the committed (f) of 2026-10-18), because frozen "
+          "windows carried no cell. No chance line is computed for frozen cells. Source: "
+          f"`{S10[2]}` (`truth_kinds.frozen`, `zones.*.n_flagged`, `grading_counts.truth`), from "
+          "`wr-s10g-breakdown-rerun` (bit-identical re-emit, lessons `--window-h 0.2`).")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -769,6 +890,10 @@ def main():
     map_vs_persistence()
     print("\n### (k) AMOC: delay, misses and false alarms per hour (S10E, planner-blind blockage)\n")
     amoc_table()
+    print("\n### (l) The false-alarm gate (S10F): gate none / baseline / persistence\n")
+    gate_table()
+    print("\n### (m) Frozen truth cells on the breakdown run (S10G)\n")
+    frozen_cells()
 
 
 if __name__ == "__main__":

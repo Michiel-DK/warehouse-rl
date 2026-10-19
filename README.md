@@ -764,13 +764,13 @@ Truth positives per run (cells are counted once per kind over the whole run, rob
 | s10-breakdown | `{"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}` | 0 | 0 | 0 | 119 | 8.9 |
 | s10-burst | `{"burst": {"start": 100, "end": 300, "extra": 20}}` | 0 | 0 | 0 | 0 | 25.7 |
 
-Precision and recall at K, split by kind (only kinds with positives in the run; pooled over zones):
+Precision and recall at K, split by kind (only kinds with positives in the run; pooled over zones; frozen cells = the robot's cell at the start of each frozen window, S10G):
 
 | run | kind | positives | K 20: hits, precision, recall | K 40: hits, precision, recall | zones flagging fewer than K cells (K 20 / K 40) |
 |---|---|---|---|---|---|
 | s10-blocked | blocked | 50 | 4, 0.0200, 0.08 | 7, 0.0175, 0.14 | 1 / 10 |
 | s10-outage | outage | 20 | 1, 0.0050, 0.05 | 1, 0.0025, 0.05 | 0 / 10 |
-| s10-breakdown | none | 0 cells (119 frozen robots; the map ranks cells) | n/a | n/a | 10 / 10 |
+| s10-breakdown | frozen cells | 283 | 19, 0.0950, 0.07 | 19, 0.0475, 0.07 | 10 / 10 |
 | s10-burst | none | 0 cells (the run has no truth cells) | n/a | n/a | 1 / 10 |
 
 False flags (top-K cells that are not a truth cell of any kind, summed over 10 zones, on the final map) and the forecast truth grades:
@@ -779,7 +779,7 @@ False flags (top-K cells that are not a truth cell of any kind, summed over 10 z
 |---|---|---|---|
 | s10-blocked | 195 (19.5) | 260 (26.0) | 1386 / 1409 |
 | s10-outage | 199 (19.9) | 267 (26.7) | 1414 / 1417 |
-| s10-breakdown | 89 (8.9) | 89 (8.9) | 488 / 488 |
+| s10-breakdown | 70 (7.0) | 70 (7.0) | 463 / 488 |
 | s10-burst | 195 (19.5) | 257 (25.7) | 1388 / 1388 |
 
 lesson_persist and its chance rate:
@@ -788,10 +788,10 @@ lesson_persist and its chance rate:
 |---|---|---|---|---|---|---|
 | s10-blocked | 2500 | hot_cell 3 false_alarm, hot_robot 2 false_alarm | 0 | n/a | n/a | n/a |
 | s10-outage | 2500 | hot_cell 4 false_alarm, hot_robot 2 false_alarm | 0 | n/a | n/a | n/a |
-| s10-breakdown | 2500 | none | 0 | n/a | n/a | n/a |
+| s10-breakdown | 2500 | hot_robot 1 false_alarm, 1 hit | 2 | 0.000 | 0.582 | 0.00 |
 | s10-burst | 2500 | hot_cell 6 false_alarm, hot_robot 2 false_alarm | 0 | n/a | n/a | n/a |
 
-`truth_kinds` is run-level: a cell is positive for a kind if the truth lists it at any time in the run, and the map is the final one, so a hit does not mean the cell was flagged while it was blocked (time is in (g)). Precision = hits / (K x zones), so zones that flag fewer than K cells still count K. false flags = sum over zones of min(K, flagged cells) minus the `any` hits. The floor-based `mean.k` block of these JSONs is not used: no S10 run has floor cells. lesson_persist grades a lesson with window [s, e) over [e, e + W) only when the zone's stream reaches e + W (`fleet/fleet_analyser/lessons.py` docstring); the queue item `wr-s10-disturbance-measure` ran lessons with `--window-h 0.5` (1800 s), so a 2500 s stream allows no graded lesson. Sources: `results/fleet/hotspot_s10-blocked.json`, `results/fleet/hotspot_s10-outage.json`, `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-burst.json` (`truth_kinds`, `zones.*.n_flagged`, `grading_counts.truth`, `lesson_grading`, `lesson_persist_chance`).
+`truth_kinds` is run-level: a cell is positive for a kind if the truth lists it at any time in the run, and the map is the final one, so a hit does not mean the cell was flagged while it was blocked (time is in (g)). Precision = hits / (K x zones), so zones that flag fewer than K cells still count K. false flags = sum over zones of min(K, flagged cells) minus the `any` hits. The floor-based `mean.k` block of these JSONs is not used: no S10 run has floor cells. lesson_persist grades a lesson with window [s, e) over [e, e + W) only when the zone's stream reaches e + W (`fleet/fleet_analyser/lessons.py` docstring); the queue item `wr-s10-disturbance-measure` ran lessons with `--window-h 0.5` (1800 s), so a 2500 s stream allows no graded lesson. s10-breakdown was re-emitted bit-identically and re-scored by `wr-s10g-breakdown-rerun` (S10G truth with frozen cells, lessons `--window-h 0.2`), so its row is the re-score. Sources: `results/fleet/hotspot_s10-blocked.json`, `results/fleet/hotspot_s10-outage.json`, `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-burst.json` (`truth_kinds`, `zones.*.n_flagged`, `grading_counts.truth`, `lesson_grading`, `lesson_persist_chance`).
 
 #### (g) Time to detect and time to clear (S10B)
 
@@ -814,9 +814,9 @@ Per window: detected = the cell is in the zone's top K at a publish while the wi
 - **Outages.** 1 of the 20 outage cells is in the final top 20 and top 40 (recall 0.05). Over time, 1 of 20 windows was detected, at 280 s. That window was still open at the last publish, so whether it cleared is not observed.
 - **Clearing.** Of the 7 detected blocked windows at K 20, 2 cleared (median 970 s after the window ended), 2 were stale at the end and 3 were open at the end. At K 40, none cleared: 4 were stale and 3 were open. At K 10, 3 of the 6 detected windows cleared, median 155 s after the end. All of these counts are 3 or fewer, so the medians rest on 0 to 3 windows.
 - **False flags.** The burst run has no truth cells, so all its flagged cells are false: 195 in the top 20 over 10 zones (19.5 per zone) and 257 in the top 40. The blocked and outage runs have 195 and 199 false flags in the top 20, and 260 and 267 in the top 40. That is within 4 (K 20) and 10 (K 40) of the burst run, which has no truth at all. Per publish (g), the blocked and outage maps carry 83 to 157 false flags over 10 zones, and the count rises with K.
-- **Forecast grades.** 23 of 1,409 `hotspot_forecast` truth grades are hits on the blocked run and 3 of 1,417 on the outage run. All 488 on the breakdown run and all 1,388 on the burst run are false alarms.
-- **Breakdown.** The run has 119 frozen robots and no truth cells. The map ranks cells, so frozen robots get no per-K score; the map flags 8.9 cells per zone on average, and none of them is a truth cell.
-- **Lessons.** No run graded any lesson_persist row, so this section has no persist rate and no chance rate. A 0.5 h lesson window needs 3,600 s of stream to be graded over its next window, and each zone streams 2,500 s. Against truth, all 13 hot_cell lessons and all 6 hot_robot lessons across the blocked, outage and burst runs are false alarms. The breakdown run has no graded lessons.
+- **Forecast grades.** 23 of 1,409 `hotspot_forecast` truth grades are hits on the blocked run and 3 of 1,417 on the outage run. All 1,388 on the burst run are false alarms. On the breakdown run 25 of 488 are hits since the S10G re-score (19 Oct, (m)); before it, all 488 were false alarms because frozen windows carried no cell.
+- **Breakdown.** The run has 119 frozen robots. Since S10G their cells are truth cells: 283 frozen cells over 10 zones. The map flags 8.9 cells per zone on average, and 19 of the 89 flagged cells are frozen cells (recall 0.07). Details in (m).
+- **Lessons.** On the four 2026-10-18 presets, no lesson_persist row was graded. A 0.5 h lesson window needs 3,600 s of stream to be graded over its next window, and each zone streams 2,500 s. Against truth, all 13 hot_cell lessons and all 6 hot_robot lessons across the blocked, outage and burst runs are false alarms. The breakdown re-score ran lessons at 0.2 h: 2 hot_robot lessons were graded for persistence and neither persisted (chance 0.582). Against truth, 1 of its 2 hot_robot lessons is a hit.
 - **Against the sticky floor (d).** On the sticky floor the per-zone top 20 had shown 44.0% of the truth cells by the end of a 500-step shift. Here it caught 14% of blocked windows and 5% of outage windows. These are different units (static cells there, time windows here), so the comparison is about scale only.
 
 **Caveats.**
@@ -869,7 +869,7 @@ Final map (run-level; false flags = top-K cells that are not a truth cell of any
 | s10-none | `{}` | 26.4 | 200 (20.0) | 264 (26.4) |
 | s10-blocked | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240]}}` | 26.7 | 195 (19.5) | 260 (26.0) |
 | s10-outage | `{"outage": {"rate_per_hour": 4.0, "duration": [120, 360]}}` | 26.8 | 199 (19.9) | 267 (26.7) |
-| s10-breakdown | `{"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}` | 8.9 | 89 (8.9) | 89 (8.9) |
+| s10-breakdown | `{"breakdown": {"rate_per_hour": 8.0, "duration": [20, 60]}}` | 8.9 | 70 (7.0) | 70 (7.0) |
 | s10-burst | `{"burst": {"start": 100, "end": 300, "extra": 20}}` | 25.7 | 195 (19.5) | 257 (25.7) |
 | s10c-blind | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}` | 26.1 | 183 (18.3) | 241 (24.1) |
 
@@ -957,4 +957,44 @@ Measured run `fleet/data/s10c-blind` (50 planner-blind blocked windows, `{"block
 - One seed set and one 500-step shift per preset (s8e-long: 3 zones x 2,000 steps). The only CIs are the zone-bootstrap CIs of (j); there is none on any count in (h), (i) or (k).
 - The s8b re-score reads today's store, which grades 442 rank forecasts against the committed hotspot JSON's 200 (footnote of (j)). The `baselines` block does not use those grades.
 - Persistence here differs from the map only by the decay. A persistence forecast over a different window length was not run.
+- The numbers are macOS arm64 only.
+
+### Sprint 10, closing: false-alarm gate and frozen truth cells (2026-10-19)
+
+S10F (PR #44) added a false-alarm gate to `fleet/costmap.py`. `--gate baseline` passes a cell only when its count in the latest 300 s window is above the mean plus 2 standard deviations of the previous 3 windows, by at least 2 stalls. `--gate persistence` passes a new top-K entrant with at least 2 stalls, or a cell whose count rose by at least 2 since the previous window. The gate suppresses forecasts only: the map is unchanged. The queue item `wr-s10f-gate-run` ran both gates on copies of the s10-none, s10c-blind and sticky phase A stores. S10G (PR #42) gave each frozen window the robot's cell, so a frozen cell is now truth-positive. `wr-s10g-breakdown-rerun` re-emitted s10-breakdown, checked it bit-identical by sha256, and re-scored it, with lessons at `--window-h 0.2` instead of 0.5. That re-score is why the s10-breakdown rows of (f) and (i) above changed. S10H (PR #43) put the persistence baseline of (j) next to every map precision on the overview and replay pages. Everything between this paragraph and "Reading the numbers" is the output of sections (l) and (m) of `.venv/bin/python scripts/sprint8_tables.py`. Only its headings were demoted one level.
+
+#### (l) The false-alarm gate (S10F): gate none / baseline / persistence
+
+| run | gate | forecasts (flags) | per zone per publish: mean over all, max | truth hits / false alarms | precision | truth cells hit / truth cells | recall (cells) |
+|---|---|---|---|---|---|---|---|
+| s10-none | none | 1391 | 15.46, n/a | 0 / 1391 | 0.000 | n/a / 0 | n/a |
+| s10-none | baseline | 2 | 0.02, 1 | 0 / 2 | 0.000 | 0 / 0 | n/a (no truth cells) |
+| s10-none | persistence | 5 | 0.06, 1 | 0 / 5 | 0.000 | 0 / 0 | n/a (no truth cells) |
+| s10c-blind | none | 1363 | 15.14, n/a | 16 / 1347 | 0.012 | n/a / 50 | n/a |
+| s10c-blind | baseline | 5 | 0.06, 1 | 1 / 4 | 0.200 | 1 / 50 | 0.020 |
+| s10c-blind | persistence | 9 | 0.10, 1 | 1 / 8 | 0.111 | 1 / 50 | 0.020 |
+| closed-loop-sticky | none | n/a | n/a | n/a | n/a | n/a | n/a (not comparable: the original phase A map had one publish) |
+| closed-loop-sticky | baseline | 89 | 0.33, 3 | 88 / 1 | 0.989 | 85 / 2400 | 0.035 |
+| closed-loop-sticky | persistence | 176 | 0.65, 4 | 175 / 1 | 0.994 | 157 / 2400 | 0.065 |
+
+Forecasts = `hotspot_forecast` claims, each graded once against the truth over the next horizon (truth hit or false alarm); a gated run publishes only the forecasts that pass the gate, and the cost map itself is unchanged (asserted here: `zones` and every `truth_kinds` kind except `frozen`, whose S10G fields the ungated JSONs predate, are equal to the ungated JSON's). Per zone per publish, mean over all = forecasts / (zones x publishes), with 9 publishes every 300 s, the last at stream end, warm-up publishes included (baseline: publishes 1-3 pass nothing; persistence: publish 1); max = `gate_grading.flags_per_zone_publish.max`, after warm-up. The ungated JSONs carry no per-publish maximum and no truth cells hit, so those are n/a; truth cells = `truth_kinds.any.positives`. Truth cells hit = distinct (zone, cell) with at least one truth-hit forecast; recall = that / truth cells. The gate runs used `--publish-every 300 --horizon-s 1245` on copies of each store (`wr-s10f-gate-run`); s10-none and s10c-blind are the same publishes as their ungated runs, the sticky phase A was originally published once, so it has no ungated row on this schedule. On the sticky run the truth cells are its 80 floor cells per zone, present for the whole run. Gate parameters: windows 3, sigma 2.0, min excess 2, min count 2 (the S10F defaults). Sources: `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-none-gate-baseline.json`, `results/fleet/hotspot_s10-none-gate-persistence.json`, `results/fleet/hotspot_s10c-blind.json`, `results/fleet/hotspot_s10c-blind-gate-baseline.json`, `results/fleet/hotspot_s10c-blind-gate-persistence.json`, `results/fleet/hotspot_closed-loop-sticky-gate-baseline.json`, `results/fleet/hotspot_closed-loop-sticky-gate-persistence.json` (`gate_grading`, `grading_counts.truth`, `truth_kinds`).
+
+#### (m) Frozen truth cells on the breakdown run (S10G)
+
+| run | frozen robots | frozen cells | flagged cells, final map (per zone, max) | K 20: hits, precision, recall | K 40: hits, precision, recall | zones flagging fewer than K cells (K 20 / K 40) | hotspot_forecast truth grades: hit / graded |
+|---|---|---|---|---|---|---|---|
+| s10-breakdown | 119 | 283 | 89 (8.9, 16) | 19, 0.0950, 0.067 | 19, 0.0475, 0.067 | 10 / 10 | 25 / 488 |
+
+Frozen cells = per zone, the distinct cells a robot stood on at the start of a frozen window, summed over zones (`truth_kinds.frozen.cells`); a hit is a final-map top-K cell that is a frozen cell of its zone at any time in the run, so it does not mean the cell was flagged while the robot was frozen. Frozen cells are the only truth cells of this run (asserted: frozen hits = `any` hits), so 19 of the 89 flagged cells are frozen cells and the rest are false flags. Every zone flags fewer than 20 cells, so K 20 and K 40 score the same cells. The time-matched number is the forecast truth grade: a forecast is a hit when its cell is truth-positive (here: frozen) over the next horizon (1245 s). Before S10G the same run graded 0 hits of 488 (the committed (f) of 2026-10-18), because frozen windows carried no cell. No chance line is computed for frozen cells. Source: `results/fleet/hotspot_s10-breakdown.json` (`truth_kinds.frozen`, `zones.*.n_flagged`, `grading_counts.truth`), from `wr-s10g-breakdown-rerun` (bit-identical re-emit, lessons `--window-h 0.2`).
+
+**Reading the numbers.**
+- **The gate removes the false-alarm floor (l).** With no disturbance, the ungated map raised 1,391 forecasts, all false: 15.46 per zone per publish. The baseline gate raised 2 and the persistence gate 5, and neither put more than 1 flag in any zone at any publish.
+- **It removes the detections with it (l).** On the planner-blind blockage run, the ungated forecasts scored 16 truth hits out of 1,363 (precision 0.012). The baseline gate kept 1 hit out of 5 (0.200), and the persistence gate 1 out of 9 (0.111). Both gated runs hit 1 of the 50 blocked cells (recall 0.020). Precision rose roughly tenfold, but 15 of the 16 hits were lost. The ungated JSON does not record how many distinct cells its 16 hits cover, so the ungated cell recall is n/a here.
+- **Persistence against baseline (l).** The persistence gate passes about twice as many forecasts as the baseline gate on every run: 5 against 2, 9 against 5, 176 against 89. On the sticky floor it hits 157 of 2,400 floor cells against 85 (recall 0.065 against 0.035), at precision 0.994 against 0.989. On that run nearly every stalled cell is a floor cell (chance_ever 0.865 in (j), over a 60-min horizon), so a precision near 1 says little. The difference between the gates is in recall. The sticky run has no ungated row on the same publish schedule.
+- **Frozen cells (m).** S10G's mechanism note predicted about 0 frozen hits, because `counted()` drops faulted-episode stalls and, by default, stalls on an occupied cell. That prediction did not hold. 19 of the 89 cells the breakdown map flags are frozen cells, out of 283 (recall 0.067). Over time, 25 of 488 forecasts are truth hits (0.051), against 0 of 488 before frozen windows carried a cell. Which stalls put those cells on the map was not examined. The hits are run-level, so a hit does not show that the cell was flagged while its robot was frozen. No chance line exists for frozen cells, so 0.067 cannot be read as above or below chance. K 20 and K 40 are the same cells, because no zone flags 20 (max 16).
+
+**Caveats.**
+- One seed set (0-9) and one 500-step shift per run (the sticky phase A run: 30 zones). There is no CI on any count in (l) or (m).
+- Each gate ran once, at its S10F default parameters (windows 3, sigma 2.0, min excess 2, min count 2). No other setting was run, so (l) shows one point on each gate's trade-off, not the trade-off curve.
+- The baseline gate's warm-up blanks publishes 1-3 (the first 900 s of a 2,500 s stream), so a blockage that ends inside that span cannot be flagged. The blockages last 60-240 steps, i.e. 300-1,200 s (`duration` is in steps, `src/warehouse_rl/disturb.py:109`; median window 132 steps in (g)). The S10F lane report's "60-240 s" read the steps as seconds. The persistence gate blanks only publish 1 and still hits 1 of 50, so warm-up does not explain the recall loss on its own.
 - The numbers are macOS arm64 only.

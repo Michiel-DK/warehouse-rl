@@ -285,11 +285,20 @@ the 30-zone sticky run (+0.002). It is worse at K 40 on both and at both K on th
 shows on floors (precision@20 0.97) is value a raw recent-stall tally also delivers; the decay adds none that was
 measured. The closed loop was not re-run with a persistence-routed arm. On the planner-blind blockage run (the only
 blockage run re-scored against persistence) neither forecast is above chance. With no disturbance the map flags about 20 cells per zone at K 20, all false, at the same rate as the
-disturbed runs. What the analyser contributes
-beyond counting stalls by cell is therefore not shown by these runs. The premise is not tested by them either: they
-do not test the lessons, the grading loop, or a longer window. Whether this changes the analyser's direction (an
-ETAS-style background-rate model per `docs/LITERATURE.md`, a narrower claim, or stopping) is the operator's
-decision.
+disturbed runs.
+
+Measured answer (2026-10-19, README "Sprint 10" (j) and "Sprint 10, closing" (l), (m); S10H pages): **the map
+does not beat persistence.** On truth precision at K 20 it is never better on any of the five runs: 1 worse
+(s8e-long), 3 within noise (s8b, sticky, s10c-blind) and 1 with nothing planted (s10-none). The one "beats" is on
+outcome precision on s8e-long (3 zones, graded with the map's own decay), so the statement is scoped to truth
+precision. The ranking step is therefore not the asset. What the runs do show working is the stuck-robot detector
+and the grading loop: every forecast is checked afterwards against the truth and the outcome. That loop is what
+measured the map against persistence, and what measured the S10F gate's trade (false flags per zone per publish
+from 15.46 to at most 1 on the undisturbed run, but 1 of 50 blocked cells hit on the blind run, (l)). The S10G
+re-score found 19 of 283 frozen cells on the breakdown map (m), against a predicted ~0. The runs still do not test
+the lessons at scale or a longer window. Whether the premise stands, narrows to "detector plus grading", or the
+analyser changes direction (an ETAS-style background-rate model per `docs/LITERATURE.md`, or stopping) is the
+operator's decision.
 
 Known env facts (from source, `vendor/tarware/tarware/`): map sizes tiny (1x3), small (2x3), medium (2x5), large
 (3x5), extralarge (4x7); column_height 8; goals = 2 x shelf_columns on the bottom row; episode = 500 steps, 1 step =
@@ -913,10 +922,11 @@ shown one yet.
 
 ### Sprint 10: the analyser on other disturbances (2026-10-18)
 
-Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) to (k). Reports are in
+Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) to (m). Reports are in
 laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md`,
 `wr-dev-s10-readme.md`, `wr-lane-s10c-blind-blockage.md`, `wr-lane-s10d-persistence-baseline.md`,
-`wr-lane-s10d-pass2.md`, `wr-lane-s10e-amoc.md` and `wr-dev-s10c-readme.md`.
+`wr-lane-s10d-pass2.md`, `wr-lane-s10e-amoc.md`, `wr-dev-s10c-readme.md`, `wr-lane-s10f-false-alarm-floor.md`,
+`wr-lane-s10g-frozen-truth-cells.md`, `wr-lane-s10h-persistence-on-pages.md` and `wr-dev-s10f-readme.md`.
 
 - [x] S10A truth v2 (PR #36, 46e9872). `fleet-truth/2` blocked/outage/frozen windows, `fleet/truth.py`, and
       `truth_kinds` in `hotspot_score.py`. The stall-share calibration band was unreachable (baseline 0.982), so the
@@ -940,12 +950,29 @@ laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md
       6 of 50 windows against 7 of 50 known, median 295 s against 190 s. The undisturbed run raises 177.8 false
       flag-publishes per zone-hour at K 20, and every disturbed run is within 3% of it. The map is within noise of
       persistence at K 20 on s8b and sticky and worse at K 40. No K or cost brings the blind miss share below 0.5.
+- [x] S10G frozen truth cells (PR #42, 5fe4501). Each frozen window carries the robot's `cell`, `truth_positive`
+      scores it, and `truth_kinds.frozen` gains `cells` and `k`.
+- [x] S10H persistence on the pages (PR #43, a83c9a4). `replay_export.py --baselines`. The overview and replay
+      pages show the persistence number next to every map precision, with a block titled "Does the map beat last
+      hour's counts?". It does not on any of the five runs (truth precision).
+- [x] S10F false-alarm gate (PR #44, ae299d6). `costmap.py --gate none|baseline|persistence`,
+      `--reset-forecasts`, and `gate_grading` in `hotspot_score.py`.
+- [x] Runs (queue items `wr-s10f-gate-run` and `wr-s10g-breakdown-rerun`, both exit 0 on 2026-10-19; no PR;
+      README (l), (m), and the s10-breakdown rows of (f) and (i)). Undisturbed: forecasts per zone per publish fell
+      from 15.46 to 0.02 (baseline) and 0.06 (persistence), max 1. Blind: 16 truth hits of 1,363 became 1 of 5 and
+      1 of 9, and 1 of 50 blocked cells was hit. Breakdown re-emit bit-identical: 19 of 89 flagged cells are frozen
+      cells (283 in all), and 25 of 488 forecasts are truth hits (was 0).
 - Open:
   - lesson_persist: s10c-blind and s10-none ran lessons with `--window-h 0.2` and graded 5 and 6 rows (2 and 3
-    hot_cell lessons in the `baselines` block), too few to read. The four 2026-10-18 presets still have none.
+    hot_cell lessons in the `baselines` block), too few to read. Of the four 2026-10-18 presets, only the
+    s10-breakdown re-score (0.2 h) graded any: 2 hot_robot lessons, neither persisted.
   - The blind run does not record how many robots reached a blind cell, so a low detection share cannot be split
     into "rarely reached" and "not ranked".
   - `hotspot_score.py` still counts window cells itself instead of importing `truth.py` (S10A deviation 3).
+  - The S10F gate ran at one parameter set only, so its false-alarm/recall trade-off curve is not measured. The
+    blockages last 60-240 steps (300-1,200 s), not the "60-240 s" of the S10F lane report.
+  - Which stalls put the 19 frozen cells on the breakdown map, given that `counted()` drops faulted-episode stalls
+    and occupied-cell stalls, was not examined. There is no chance line for frozen cells.
 
 ## Compute and timing
 
