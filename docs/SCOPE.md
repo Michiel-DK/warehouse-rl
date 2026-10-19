@@ -283,8 +283,8 @@ than the same one-hour count without decay. It is within noise at K 20 on s8b (-
 the 30-zone sticky run (+0.002). It is worse at K 40 on both and at both K on the 3-zone s8e-long run. Its only
 "beats" is on outcome precision on s8e-long: 3 zones, graded with the map's own decay. So the ranking value the map
 shows on floors (precision@20 0.97) is value a raw recent-stall tally also delivers; the decay adds none that was
-measured. The closed loop was not re-run with a persistence-routed arm. On blockages neither forecast is above
-chance. With no disturbance the map flags about 20 cells per zone at K 20, all false, at the same rate as the
+measured. The closed loop was not re-run with a persistence-routed arm. On the planner-blind blockage run (the only
+blockage run re-scored against persistence) neither forecast is above chance. With no disturbance the map flags about 20 cells per zone at K 20, all false, at the same rate as the
 disturbed runs. What the analyser contributes
 beyond counting stalls by cell is therefore not shown by these runs. The premise is not tested by them either: they
 do not test the lessons, the grading loop, or a longer window. Whether this changes the analyser's direction (an

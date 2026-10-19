@@ -580,7 +580,9 @@ def undisturbed_reference():
     print(f"Reference = `{m['reference_dir']}` ({nz_ref} zones x {m['steps']} steps, no disturbance, no truth), scored "
           f"by `{AMOC}` (`amoc.k[].fa_per_hour_reference`; per publish = that x {m['sim_hours_reference']:.4f} h / "
           f"{m['n_publishes_reference']} publishes). The disturbed columns count only flags that match no truth window "
-          "at that publish (the S10B rule), from `time_to_detect_{blocked,outage,blind}.json`: per hour = false flags "
+          "at that publish (the S10B rule), from `time_to_detect_{blocked,outage,blind}.json`, so they are flagged cells "
+          "minus the flags on an open truth window (each such flag is a detection, so at most the detected windows "
+          "of (g) and (h) per publish over all zones): per hour = false flags "
           "per publish summed over zones x publishes / (zones x steps x 5 s / 3600). The conversion is asserted equal "
           f"to `amoc.k[].fa_per_hour_measured_outside_windows` for {m['run']} at K {', '.join(REF_KS)}. The unit is "
           "flag-publishes per zone per simulated hour, not distinct cells. The burst and breakdown runs have no "
@@ -664,6 +666,13 @@ def map_vs_persistence():
               f"| {lp['chance_window']:.3f} / {lp['chance_ever']:.3f} / {lp['chance_all']:.4f} "
               f"| {_f(lp['lift_window'], '.2f')} / {_f(lp['lift_ever'], '.2f')} / {_f(lp['lift_all'], '.2f')} |")
     print()
+    same = [(d["tag"], k, max(z["n_flagged"] for z in d["zones"].values())) for _, d in docs for k in S10_KS
+            if _same_sets(d, k)]
+    same_txt = "; ".join(f"{t} at K {k} (at most {n} flagged cells per zone)" for t, k, n in same) or "no row"
+    empty = [d["tag"] for _, d in docs if all(d["baselines"]["k"][k]["map"]["hits"]["positives"] == 0 for k in S10_KS)]
+    few = [(d["tag"], d["baselines"]["paired"][S10_KS[0]]["truth_precision"]["n_zones"]) for _, d in docs
+           if (d["baselines"]["paired"][S10_KS[0]]["truth_precision"]["n_zones"] or 99) < 5]
+    p0 = docs[0][1]["baselines"]["params"]
     s8b = next((d for r, d in docs if d["tag"] == "s8b-medium-80-p03-07"), None)
     committed = load(S8B_COMMITTED)
     note = ""
@@ -676,15 +685,16 @@ def map_vs_persistence():
           "same window, same filter, same `min_stalls`, so decay is the only difference (`fleet/baselines.py` "
           "docstring). Truth precision here is per publish against the cells that are truth-positive over the next "
           "horizon [t, t + H], pooled over (zone, publish) units, so it is not the run-level `truth_kinds` of (f) and "
-          "(h). PAI = (hits / positives) / (K / 380 candidate cells) and equals lift_all by definition (asserted). "
-          "Paired = per-zone map minus persistence, mean over zones, 1,000-resample zone bootstrap (seed 0), 2.5 / 97.5 "
-          "percentiles; the verdict rule is the one at the top of this script (asserted equal to the JSON's), but the "
+          f"(h). PAI = (hits / positives) / (K / {p0['n_cells_all']} candidate cells) and equals lift_all by definition "
+          f"(asserted). Paired = per-zone map minus persistence, mean over zones, {p0['n_resamples']:,}-resample zone "
+          f"bootstrap (seed {p0['bootstrap_seed']}), 2.5 / 97.5 percentiles; the verdict rule is the one at the top of this script (asserted equal to the JSON's), but the "
           "CI is a bootstrap, not `evaluate.paired_delta`'s Student-t. \"identical top-K sets\" = every zone flags fewer "
-          "than K cells on the final map and the 1 h map window covers the whole 500-step stream, so both lists hold "
-          "the whole flagged set at every publish (asserted: equal blocks, CI 0 to 0); this is the case on s10c-blind "
-          "and s10-none at K 40 (at most 36 and 32 flagged cells per zone). s10-none has no truth positives, so "
-          "its truth columns are 0 or n/a by construction. s8e-long-w0.5 has 3 zones; a 3-zone bootstrap CI sits on "
-          "the extreme resamples, so its verdicts are weak. The outcome grade re-ranks with the map's own decay at "
+          "than K cells on the final map and the map window covers the whole stream, so both lists hold the whole "
+          f"flagged set at every publish (asserted: equal blocks, CI 0 to 0): {same_txt}. "
+          + "".join(f"{t} has no truth positives, so its truth columns are 0 or n/a by construction. " for t in empty)
+          + "".join(f"{t} has {n} zones; a bootstrap over so few zones sits on the extreme resamples, so its verdicts "
+                    "are weak. " for t, n in few)
+          + "The outcome grade re-ranks with the map's own decay at "
           "t + H, so it leans toward the map; closed-loop-sticky has one publish at stream end and 0 outcome units."
           + note + " Sources: " + ", ".join(f"`{r}`" for r, _ in docs) + " (`baselines`, `rank_grading`, `config`).")
 
