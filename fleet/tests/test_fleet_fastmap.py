@@ -197,6 +197,37 @@ class TestCli(Built):
         self.assertEqual(cm.exception.code, 2)
         self.assertEqual(self.store_hashes(d), before)
 
+    def tree(self):
+        return {str(p.relative_to(self.tmp)): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in sorted(self.tmp.rglob("*")) if p.is_file()}
+
+    def test_refuses_ancestor_and_run_dir(self):
+        # inject: compare names / equality only (the pass-1 guard), or run the rmtree before the check
+        d = self.tmp / "blind"
+        (d / "store" / "sub").mkdir()  # a subdirectory of the original store (removed again: fixtures are shared)
+        self.addCleanup((d / "store" / "sub").rmdir)
+        (self.tmp / "other").mkdir(exist_ok=True)
+        (self.tmp / "other" / "decisions.jsonl").write_text("{}\n")  # looks like a copy but sits under the temp tree
+        (d / "notacopy").mkdir()
+        self.addCleanup(shutil.rmtree, d / "notacopy")
+        (d / "notacopy" / "keep.txt").write_text("x")  # an existing directory that is not a previous fastmap copy
+        targets = (d, self.tmp, d / "store" / "sub", d / "store", d / ".." / "blind", d / "x" / ".." / ".." / "blind",
+                   d / "notacopy")
+        before = self.tree()
+        self.assertTrue(any(k.endswith(".jsonl.gz") for k in before) and any("store/" in k for k in before))
+        for target in targets:
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                self.fm(d, copy=target)
+            self.assertEqual(cm.exception.code, 2, target)
+            self.assertEqual(self.tree(), before, target)
+            with self.assertRaises(ValueError, msg=str(target)):
+                fastmap.run_fastmap(str(d / "*.jsonl.gz"), RUN, target, str(d / "o.json"))
+            self.assertEqual(self.tree(), before, target)
+        # a leftover fastmap copy is replaced
+        code, _ = self.fm(d, copy=d / "store-again")
+        code, _ = self.fm(d, copy=d / "store-again")
+        self.assertEqual(code, 0)
+
     def test_deterministic(self):
         # inject: iterate a set or dict in insertion-unstable order when ranking, or stamp wall time into --out
         d = self.tmp / "blind"

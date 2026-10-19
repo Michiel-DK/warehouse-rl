@@ -24,11 +24,16 @@ baseline memory) and half_life_h (None: there is no decay) are in the claim only
 time_to_detect.select_forecasts reads both and raises when they are missing.
 Store: the decisions go to a jsonl COPY of <glob dir>/store after costmap.reset_forecasts(copy, run) (the copied store
 already holds map forecasts on the same grid and record_decision would dedupe into them). The original store is never
-written and its decisions.jsonl is hashed before and after (a change aborts, no --out). A --store that is not jsonl:,
-that resolves to the original store, or whose directory is named "store" is refused (exit 2). Stalls are not upserted.
+written and its decisions.jsonl is hashed before and after (a change aborts, no --out). A --store that is not jsonl: is
+refused (exit 2). The copy directory is resolved (symlinks, ..) and refused (exit 2 from the CLI, ValueError from
+run_fastmap, nothing deleted) when it is the original store, an ancestor of it (so also the glob's directory and any
+parent), inside it, named "store", or contains a file matching --glob. An existing copy is deleted only when it looks like
+a previous fastmap copy: it holds decisions.jsonl, no *.jsonl.gz and no directory named store; otherwise refused. The
+reason is that the delete acts on a whole subtree, so the guard compares subtrees, not names. Stalls are not upserted.
 Analyst side: input is the stream and the store copy only.
 """
 import argparse
+import glob as globmod
 import hashlib
 import math
 import os
@@ -125,12 +130,33 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def check_copy(glob, copy):
+    """ValueError unless `copy` is a safe place to rmtree / copytree (module docstring). Returns the resolved copy."""
+    src = (Path(os.path.dirname(os.path.abspath(glob))) / "store").resolve()
+    copy = Path(copy).resolve()
+    if copy.name == "store":
+        raise ValueError(f"{copy}: a directory named 'store' is refused; give a copy, e.g. store-fast")
+    if copy == src or copy in src.parents or src in copy.parents:
+        raise ValueError(f"{copy}: is, contains or lies inside the original store {src}")
+    for f in globmod.glob(glob):
+        p = Path(os.path.abspath(f))
+        p = p.parent.resolve() / p.name
+        if copy == p.parent or copy in p.parent.parents:
+            raise ValueError(f"{copy}: contains the stream file {p}")
+    if copy.exists() or copy.is_symlink():
+        if not (copy.is_dir() and not copy.is_symlink() and (copy / "decisions.jsonl").is_file()
+                and not any(copy.rglob("*.jsonl.gz")) and not any(d.is_dir() and d.name == "store" for d in copy.rglob("*"))):
+            raise ValueError(f"{copy} exists and does not look like a previous fastmap copy (needs decisions.jsonl, no "
+                             f"*.jsonl.gz, no 'store' directory); not deleting it")
+    return copy
+
+
 def run_fastmap(glob, run, copy, out, publish_every=DEFAULT_PUBLISH_S, bin_s=DEFAULT_BIN_S,
                 baseline_bins=DEFAULT_BASELINE_BINS, k=DEFAULT_K, h=DEFAULT_H, top_k=DEFAULT_TOP_K, rule="active",
                 include_occupied=False):
     """The whole sequence (module docstring). Returns the --out document."""
     src = Path(os.path.dirname(os.path.abspath(glob))) / "store"
-    copy = Path(copy)
+    copy = check_copy(glob, copy)
     orig = src / "decisions.jsonl"
     hash_before = sha256_file(orig)
     if copy.exists():
@@ -205,9 +231,10 @@ def main(argv=None):
     if kind != "jsonl" or not rest:
         p.error("--store must be jsonl:<dir> (a copy of the glob's store)")
     src = Path(os.path.dirname(os.path.abspath(a.glob))) / "store"
-    copy = Path(rest).resolve()
-    if copy == src.resolve() or copy.name == "store":
-        p.error("--store refuses the original store and any directory named 'store'; give a copy, e.g. store-fast")
+    try:
+        copy = check_copy(a.glob, rest)
+    except ValueError as e:
+        p.error(str(e))
     if not (src / "decisions.jsonl").exists():
         p.error(f"{src / 'decisions.jsonl'} is missing")
     run = a.run or os.path.basename(os.path.dirname(os.path.abspath(a.glob))) or "run"
