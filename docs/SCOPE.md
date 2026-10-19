@@ -291,10 +291,13 @@ Measured answer (2026-10-19, README "Sprint 10" (j) and "Sprint 10, closing" (l)
 does not beat persistence.** On truth precision at K 20 it is never better on any of the five runs: 1 worse
 (s8e-long), 3 within noise (s8b, sticky, s10c-blind) and 1 with nothing planted (s10-none). The one "beats" is on
 outcome precision on s8e-long (3 zones, graded with the map's own decay), so the statement is scoped to truth
-precision. The ranking step is therefore not the asset. What the runs do show working is the stuck-robot detector
-and the grading loop: every forecast is checked afterwards against the truth and the outcome. That loop is what
-measured the map against persistence, and what measured the S10F gate's trade (false flags per zone per publish
-from 15.46 to at most 1 on the undisturbed run, but 1 of 50 blocked cells hit on the blind run, (l)). The S10G
+precision. The ranking step is therefore not the asset. The working framing is that the detector and the grading are
+the asset. The S10 runs support the grading half: every forecast is checked afterwards against the truth and the
+outcome. That loop measured the map against persistence and the S10F gate's trade. On the undisturbed run,
+forecasts per zone per publish fell from a mean of 15.46 to 0.02 (baseline) and 0.06 (persistence), max 1. On the
+blind run, 1 of 50 blocked cells was hit (l). The stuck-robot detector was not re-measured in S10. Its numbers
+are the Sprint 5 benchmark (README "Sprint 5": batch recall 0.698, strict precision 0.216, mostly a definition
+gap). The S10G
 re-score found 19 of 283 frozen cells on the breakdown map (m), against a predicted ~0. The runs still do not test
 the lessons at scale or a longer window. Whether the premise stands, narrows to "detector plus grading", or the
 analyser changes direction (an ETAS-style background-rate model per `docs/LITERATURE.md`, or stopping) is the
