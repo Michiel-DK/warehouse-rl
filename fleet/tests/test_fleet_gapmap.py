@@ -1,6 +1,6 @@
 """Tests for S12B dead zones: the emitter's --deadzone write filter (G1, G2), fleet/gapmap.py (G3, G4), and the truth /
 hotspot_score additions (G5). Envs run strictly one at a time: every emit is a subprocess of the emit CLI.
-G2 pins the sha256 of a fixed-seed run per platform in tests/platform_expected.json (key fleet_deadzone_g2, measured on
+G2 pins the sha256 of a fixed-seed run per platform in tests/platform_expected.json (fleet_stream.<tag>.g2_*, measured on
 master BEFORE the emitter change); a platform without a value skips visibly.
 Each case names its red demonstration in an `# inject:` comment."""
 import gzip
@@ -115,8 +115,8 @@ class TestDeadzoneEmitter(unittest.TestCase):
 class TestByteIdentity(unittest.TestCase):
     def test_g2_no_flag_bytes_equal_master(self):
         # inject: writing deadzones: [] / dropped_messages: 0 into truth.json (or the ledger) when the flag is absent
-        content = _platform.expected("fleet_deadzone_g2", "content_sha256")  # SkipTest here skips visibly
-        truth_sha = _platform.expected("fleet_deadzone_g2", "truth_sha256")
+        content = _platform.expected("fleet_stream", "g2_content_sha256")  # SkipTest here skips visibly
+        truth_sha = _platform.expected("fleet_stream", "g2_truth_sha256")
         with tempfile.TemporaryDirectory() as d:
             r = emit(d, G2_SEED)
             self.assertEqual(r.returncode, 0, r.stderr)
