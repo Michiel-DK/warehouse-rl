@@ -1,7 +1,7 @@
 """Ingest fleet state into the stuck-detector store.
 
 Usage: python fleet/ingest.py --source file --glob 'fleet/data/<run>/*.jsonl.gz' [--run NAME]
-       [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB] [--stuck-after 30] [--poll 2] [--ledger-interval 10] [--once]
+       [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB] [--stuck-after 30] [--stations auto|PATH [--station-radius 0]] [--poll 2] [--ledger-interval 10] [--once]
        python fleet/ingest.py --source kafka --bootstrap localhost:19092 [--topic fleet.state] [--group stuck-analyser]
        [--run NAME] [--emit-ledger PATH] [--until-idle S] [--store ...]
 The file source reads growing gzip JSONL files (zone files in nnn order) and cross-checks <glob dir>/emit_ledger.json
@@ -32,6 +32,11 @@ def build_parser():
     p.add_argument("--store", default=None,
                    help="jsonl:<dir> (default fleet/data/<run>/store) or clickhouse://host[:port]/db")
     p.add_argument("--stuck-after", type=int, default=30, help="seconds stopped with an order before an episode opens")
+    p.add_argument("--stations", default=None, metavar="auto|PATH",
+                   help="file source, S13B: station goal cells (auto = from <glob dir>/emit_ledger.json and the env, or a "
+                        "{\"stations\": [[x, y]...]} file); a stopped run starting within --station-radius of one is "
+                        "SERVICING, not stuck: no episode, counted as servicing_runs in the ingest_runs row")
+    p.add_argument("--station-radius", type=int, default=0, help="Manhattan radius around a station cell (default 0)")
     p.add_argument("--poll", type=float, default=2.0)
     p.add_argument("--ledger-interval", type=float, default=10.0)
     p.add_argument("--once", action="store_true", help="process what is on disk now, end input, exit")
@@ -81,7 +86,11 @@ def main(argv=None):
     a = p.parse_args(argv)
     if a.stuck_after < 1 or a.poll <= 0 or a.ledger_interval <= 0:
         p.error("--stuck-after must be >= 1, --poll and --ledger-interval > 0")
+    if a.station_radius < 0:
+        p.error("--station-radius must be >= 0")
     if a.source == "kafka":
+        if a.stations is not None:
+            p.error("--stations is for the file source only")
         return run_kafka(p, a)
     if not a.glob:
         p.error("--glob is required for --source file")
@@ -90,8 +99,14 @@ def main(argv=None):
         st = store_mod.open_store(a.store, run)
     except ValueError as e:
         p.error(str(e))
+    stations = None
+    if a.stations is not None:
+        from fleet_analyser.stations import load_stations
+
+        stations = load_stations(a.stations, os.path.dirname(os.path.abspath(a.glob)))
     ing = ingest.Ingester(a.glob, run, st, stuck_after=a.stuck_after, poll=a.poll, ledger_interval=a.ledger_interval,
-                          once=a.once, log=lambda s: print(s, file=sys.stderr))
+                          once=a.once, log=lambda s: print(s, file=sys.stderr), stations=stations,
+                          station_radius=a.station_radius)
     ingest.install_signal_handlers(ing)
     t0 = time.monotonic()
     code = ing.run_loop()

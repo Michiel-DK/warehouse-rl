@@ -36,6 +36,11 @@ the same per-robot fields and are excluded from totals, jobs_per_robot_hour and 
 layout worker (--stations auto) or from an optional "pickers" list in the --stations file (absent = all AGVs).
 Per robot the bucket sum equals the span (checked by check_bucket_sum, which raises ValueError; integer seconds).
 
+Station-aware stuck rule (S13B, --station-aware [--station-radius N]): the station GOAL cells from the same --stations
+source (never the shelf-adjacent set) go to the Detector of recompute_episodes and to run_is_stuck, both through
+fleet_analyser.detector.at_station. A run whose first stopped message is within Manhattan N (default 0) of a goal cell is
+not stuck: its seconds fall to stopped_short, the detector's SERVICING. Without --station-aware nothing changes.
+
 Layouts (--stations auto): every (env_id, seed) layout is computed by its own freshly spawned process (a new
 ProcessPoolExecutor(max_workers=1) per call), because Agent.counter / Shelf.counter are class attributes. The station
 cells are the env goals and the shelf slots the env shelf positions right after reset.
@@ -44,11 +49,10 @@ Output (sort_keys, indent 1, no wall-clock value, so two runs give byte-identica
 written except --out. Elapsed time goes to stdout only.
 """
 import argparse
-import concurrent.futures as cf
+import concurrent.futures as cf  # noqa: F401  (tests patch tb.cf.ThreadPoolExecutor)
 import glob as _glob
 import hashlib
 import json
-import multiprocessing as mp
 import sys
 import time
 from pathlib import Path
@@ -59,9 +63,11 @@ for _p in (FLEET, REPO / "src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from fleet_analyser.detector import DEFAULT_STUCK_AFTER, Detector  # noqa: E402
+from fleet_analyser.detector import DEFAULT_STUCK_AFTER, Detector, at_station  # noqa: E402
 from fleet_analyser.hotspot import read_messages  # noqa: E402
 from fleet_analyser.parse import iso  # noqa: E402
+from fleet_analyser.stations import (_layout_worker, auto_layouts, goal_cells, kinds_of,  # noqa: E402,F401
+                                     resolve_workers, run_layout_worker)
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
 BUCKETS = ("no_data", "faulted", "paused", "moving", "waiting_station", "waiting_shelf", "stuck", "stopped_short", "idle")
@@ -71,75 +77,6 @@ SAME_MINUTE_SHARE = 0.8
 
 
 # ------------------------------------------------------------------------------------------------ layouts
-def resolve_workers(cli_value, environ=None, n_tasks=None):
-    """--workers, else SCHED_WORKERS, else os.cpu_count() - 2 (the repo's rule, scripts/evaluate.resolve_workers)."""
-    import os
-
-    scripts = str(REPO / "scripts")
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-    import evaluate as ev
-
-    return ev.resolve_workers(cli_value, os.environ if environ is None else environ, n_tasks=n_tasks)
-
-
-def _layout_worker(job):
-    """Runs in a fresh spawned process: exactly one env is built here."""
-    from warehouse_rl.env import WarehouseEnv
-
-    env = WarehouseEnv(job["env_id"], max_steps=job["steps"])
-    try:
-        env.reset(seed=job["seed"])
-        hook = env.env
-        return dict(goals=[[int(x), int(y)] for x, y in hook.goals],
-                    shelves=sorted([int(s.x), int(s.y)] for s in hook.shelfs),
-                    agent_ids=[int(a.id) for a in hook.agents], num_agvs=int(hook.num_agvs))
-    finally:
-        env.close()
-
-
-def run_layout_worker(job):
-    """One layout, one new process, one env (never reuse a pool for a second layout)."""
-    ctx = mp.get_context("spawn")
-    with cf.ProcessPoolExecutor(max_workers=1, mp_context=ctx) as ex:
-        return ex.submit(_layout_worker, job).result()
-
-
-def kinds_of(layout, zone):
-    return {f"Z{zone}-{i:02d}": "agv" if k < layout["num_agvs"] else "picker"
-            for k, i in enumerate(layout["agent_ids"])}
-
-
-def auto_layouts(glob_dir, zones, workers=None):
-    """{zone: dict(goals, shelves, pickers (set of serials), layout (description))} for the zones present."""
-    ledger_path = Path(glob_dir) / "emit_ledger.json"
-    if not ledger_path.is_file():
-        raise SystemExit(f"timebudget: --stations auto needs {ledger_path}")
-    ledger = json.loads(ledger_path.read_text())
-    cfg = ledger["config"]
-    seeds = {str(z["zone"]): z["seed"] for z in ledger["zones"]}
-    missing = [z for z in zones if z not in seeds]
-    if missing:
-        raise SystemExit(f"timebudget: zones {missing} are in the messages but not in {ledger_path}")
-    jobs = {}  # (env_id, seed) -> job
-    for z in zones:
-        jobs[(cfg["env_id"], seeds[z])] = dict(env_id=cfg["env_id"], steps=cfg["steps"], seed=seeds[z])
-    results = {}
-    with cf.ThreadPoolExecutor(max_workers=resolve_workers(workers, n_tasks=len(jobs))) as pool:
-        futs = {k: pool.submit(run_layout_worker, j) for k, j in sorted(jobs.items())}
-        for k, f in futs.items():
-            results[k] = f.result()
-    out = {}
-    for z in zones:
-        key = (cfg["env_id"], seeds[z])
-        lay = results[key]
-        kinds = kinds_of(lay, z)
-        out[z] = dict(goals=lay["goals"], shelves=lay["shelves"],
-                      pickers={s for s, k in kinds.items() if k == "picker"},
-                      layout=dict(source="auto", env_id=cfg["env_id"], steps=cfg["steps"], seed=seeds[z]))
-    return out, str(ledger_path)
-
-
 def path_layouts(stations_path, zones):
     data = json.loads(Path(stations_path).read_text())
     out = {}
@@ -192,8 +129,12 @@ def stopped_runs(kept):
     return runs, run_of
 
 
-def run_is_stuck(kept, run):
-    return kept[run[1]].ts - kept[run[0]].ts >= DEFAULT_STUCK_AFTER
+def run_is_stuck(kept, run, stations=None, radius=0):
+    """Long enough to be stuck and (with stations) not a station dwell: the run's cell is that of its first message."""
+    if kept[run[1]].ts - kept[run[0]].ts < DEFAULT_STUCK_AFTER:
+        return False
+    first = kept[run[0]]
+    return not at_station(first.x, first.y, stations, radius)
 
 
 def check_bucket_sum(serial, seconds, span):
@@ -203,11 +144,13 @@ def check_bucket_sum(serial, seconds, span):
         raise ValueError(f"timebudget: robot {serial}: bucket sum {total} != span {span} ({seconds})")
 
 
-def robot_budget(kept, stations, near_shelf, shift_s, max_gap_s=DEFAULT_MAX_GAP_S):
-    """(record, runs) for one robot. record = dict(seconds, share, span_s, per_shift_s, jobs)."""
+def robot_budget(kept, stations, near_shelf, shift_s, max_gap_s=DEFAULT_MAX_GAP_S, rule_radius=None):
+    """(record, runs) for one robot. record = dict(seconds, share, span_s, per_shift_s, jobs). rule_radius not None: the
+    stuck rule is station-aware (the `stations` cells, that radius); None: the rule ignores stations (the S12A rule)."""
     seconds = {b: 0 for b in BUCKETS}
     runs, run_of = stopped_runs(kept)
-    stuck_flags = [run_is_stuck(kept, r) for r in runs]
+    stuck_flags = [run_is_stuck(kept, r) if rule_radius is None else run_is_stuck(kept, r, stations, rule_radius)
+                   for r in runs]
     for i in range(len(kept) - 1):
         m = kept[i]
         dt = kept[i + 1].ts - m.ts
@@ -264,9 +207,9 @@ def stop_minutes(agv_kept):
 
 
 # ------------------------------------------------------------------------------------------------ episodes
-def recompute_episodes(messages):
+def recompute_episodes(messages, stations=None, station_radius=0):
     """Detector() fed every kept message in (ts, serial) order, then end_all(); last open/close event per episode_id."""
-    det = Detector()
+    det = Detector(stations=stations, station_radius=station_radius)
     rows = {}
     events = []
     for m in sorted(messages, key=lambda m: (m.ts, m.serial)):
@@ -322,7 +265,7 @@ def _pool_waits(parts, source):
 
 
 # ------------------------------------------------------------------------------------------------ main computation
-def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT_MAX_GAP_S):
+def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT_MAX_GAP_S, station_radius=None):
     by_zone = {}
     for m in messages:
         by_zone.setdefault(m.zone, {}).setdefault(m.serial, []).append(m)
@@ -338,7 +281,7 @@ def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT
         robots, pick, agv_kept, starts = {}, {}, {}, set()
         for serial in sorted(by_zone[z]):
             kept = kept_messages(by_zone[z][serial])
-            rec, s = robot_budget(kept, stations, near, shift_s, max_gap_s)
+            rec, s = robot_budget(kept, stations, near, shift_s, max_gap_s, station_radius)
             starts |= s
             if serial in pickers:
                 pick[serial] = rec
@@ -397,7 +340,12 @@ def main(argv=None):
                     help="an interval between two messages of a robot longer than this is no_data (default 60; must be > 0)")
     ap.add_argument("--store", default=None, help="jsonl:DIR (default: DIR/store, DIR = the glob's directory)")
     ap.add_argument("--workers", type=int, default=None, help="default: SCHED_WORKERS, else os.cpu_count() - 2")
+    ap.add_argument("--station-aware", action="store_true",
+                    help="S13B: a stopped run starting at/near a station goal cell is not stuck (detector SERVICING)")
+    ap.add_argument("--station-radius", type=int, default=0, help="with --station-aware: Manhattan radius (default 0)")
     args = ap.parse_args(argv)
+    if args.station_radius < 0:
+        ap.error("--station-radius must be >= 0")
     t_start = time.time()
     out_path = Path(args.out)
     if not out_path.parent.is_dir():
@@ -418,11 +366,15 @@ def main(argv=None):
     else:
         layouts, ledger_path = path_layouts(args.stations, zones_present), None
         stations_sha = hashlib.sha256(Path(args.stations).read_bytes()).hexdigest()
+    if args.station_aware:
+        det_stations, rule_radius = goal_cells(layouts), args.station_radius
+    else:
+        det_stations, rule_radius = None, None
     if present:
         episodes, source = store_episodes(store_dir, args.run), "store"
     else:
-        episodes, source = recompute_episodes(messages), "recomputed"
-    zones, run_out = compute(messages, args.run, layouts, episodes, source, args.shift_s, args.max_gap_s)
+        episodes, source = recompute_episodes(messages, det_stations, args.station_radius), "recomputed"
+    zones, run_out = compute(messages, args.run, layouts, episodes, source, args.shift_s, args.max_gap_s, rule_radius)
     hash_after = store_hash(store_dir) if present else None
     if hash_after != hash_before:
         print(f"timebudget: store {store_dir} changed during the run", file=sys.stderr)
@@ -432,6 +384,8 @@ def main(argv=None):
                store_sha256_before=hash_before, store_sha256_after=hash_after, stuck_after=DEFAULT_STUCK_AFTER,
                shelf_adjacent_manhattan=SHELF_ADJACENT_MANHATTAN, same_minute_share=SAME_MINUTE_SHARE,
                shift_s=args.shift_s, max_gap_s=args.max_gap_s, script="timebudget.py")
+    if args.station_aware:
+        src.update(station_aware=True, station_radius=args.station_radius)
     out_path.write_text(json.dumps(dict(zones=zones, run=run_out, src=src), sort_keys=True, indent=1) + "\n")
 
     for z, d in zones.items():

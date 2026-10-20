@@ -199,7 +199,7 @@ class _Tap(Detector):
         return events
 
 
-def run_batches(messages, stuck_after=DEFAULT_STUCK_AFTER, observer=None):
+def run_batches(messages, stuck_after=DEFAULT_STUCK_AFTER, observer=None, stations=None, station_radius=0):
     """Drive the detector over `messages` (in stream order) and call observer(zone, ts, batch, states, edges, events, since) per
     processed batch, where edges = batch_edges(batch, states) and since = {serial: stopped-run start} of the robots in a run. Returns {zone: sorted list of batch ts}."""
     seen = {}
@@ -209,7 +209,7 @@ def run_batches(messages, stuck_after=DEFAULT_STUCK_AFTER, observer=None):
         if observer is not None:
             observer(zone, ts, batch, states, batch_edges(batch, states), events, since)
 
-    det = _Tap(tap, stuck_after=stuck_after)
+    det = _Tap(tap, stuck_after=stuck_after, stations=stations, station_radius=station_radius)
     for m in messages:
         det.feed(m)
     det.end_all()
@@ -248,7 +248,7 @@ def _row(item):
     return row
 
 
-def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
+def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stations=None, station_radius=0):
     """{zone: dict(blocking_clusters, blocking_chains, n_robots, first_ts, last_ts)}: the clusters / chains kept by min_s, as rows."""
     trackers, spans = {}, {}
 
@@ -270,7 +270,7 @@ def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
         tr[1].step(ts, chains, lambda k, order: dict(robots=k, order=order, cells=cells(k),
                                                       start=max(since[s] for s in k if s in since)))
 
-    run_batches(messages, stuck_after, observe)
+    run_batches(messages, stuck_after, observe, stations, station_radius)
     out = {}
     for zone in sorted(trackers):
         sp = spans[zone]
@@ -282,8 +282,8 @@ def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
     return out
 
 
-def build_document(messages, run, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
-    per = analyse(messages, min_s, stuck_after)
+def build_document(messages, run, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stations=None, station_radius=0):
+    per = analyse(messages, min_s, stuck_after, stations, station_radius)
     zones, rows = {}, []
     num = hours = 0.0
     n_dl = n_kn = 0
@@ -341,6 +341,10 @@ def build_parser():
     p.add_argument("--out", required=True, metavar="PATH")
     p.add_argument("--min-s", type=float, default=DEFAULT_MIN_S, help="keep blocking clusters / chains with length_s >= this")
     p.add_argument("--store", default=None, help="jsonl:<COPY of the run store>; never the original")
+    p.add_argument("--stations", default=None, metavar="auto|PATH",
+                   help="S13B: station goal cells (auto = from <glob dir>/emit_ledger.json and the env, or a PATH file); "
+                        "a stopped run starting within --station-radius of one is SERVICING, not STUCK")
+    p.add_argument("--station-radius", type=int, default=0, help="Manhattan radius around a station cell (default 0)")
     return p
 
 
@@ -362,7 +366,16 @@ def main(argv=None):
     messages = hotspot.read_messages(a.glob)
     if not messages:
         p.error(f"no messages under {a.glob}")
-    doc = build_document(messages, a.run, a.min_s)
+    if a.station_radius < 0:
+        p.error("--station-radius must be >= 0")
+    stations = None
+    if a.stations is not None:
+        from fleet_analyser.stations import load_stations
+
+        stations = load_stations(a.stations, os.path.dirname(os.path.abspath(a.glob)))
+    doc = build_document(messages, a.run, a.min_s, DEFAULT_STUCK_AFTER, stations, a.station_radius)
+    if stations is not None:
+        doc["station_rule"] = dict(stations=a.stations, radius=a.station_radius)
     if copy is not None:
         doc["store_duplicates"] = write_store(copy, a.glob, a.run, doc["decisions"])
     costmap.write_json(a.out, doc)

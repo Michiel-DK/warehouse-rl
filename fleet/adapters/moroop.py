@@ -3,6 +3,7 @@
 Usage: python fleet/adapters/moroop.py --raw DIR --out DIR [--shift N] [--cell-m 0.5] [--moving-eps 0.05]
                                        [--omega-eps 0.05] [--stations PATH]
        python fleet/adapters/moroop.py --analyse [--raw DIR] [--jsonl DIR] [--budget DIR] [--stations PATH] [--results DIR]
+                                       [--station-radius N] [--suffix S]
 
 Build mode writes OUT/zone<k>-000.jsonl.gz per shift (only k = N with --shift) and OUT/adapter_stats.json, and derives the
 stations file from ALL nine shifts (default fleet/data/moroop/stations.json). The time budget is then run UNCHANGED once
@@ -11,6 +12,10 @@ per shift, never one glob over all nine (read_messages dedups (serial, headerId)
       --stations fleet/data/moroop/stations.json --out fleet/data/moroop/budget/zone<k>.json
 Analyse mode reads raw + jsonl + budget and writes results/fleet/timebudget_moroop.json and
 results/fleet/timebudget_moroop_shifts.json (sort_keys, indent 1, no wall clock, no absolute path).
+S13B: --station-radius N applies the --stations cells to the stuck rule (a run starting within Manhattan N of a station
+cell is not stuck; timebudget.run_is_stuck with stations, the same predicate as the Detector). --suffix S writes
+timebudget_moroop-S.json, timebudget_moroop_shifts-S.json and moroop_label-S.json (the per-shift and pooled `label`
+objects) and never the unsuffixed files. Both absent: the S13A files, byte for byte.
 
 The pure functions work on plain lists of dicts (one dict per row, timestamps int epoch microseconds). pyarrow is imported
 lazily inside load_table only, so this module imports and the pure functions run on a venv without pyarrow.
@@ -407,11 +412,12 @@ def _tb():
     return timebudget
 
 
-def second_buckets(kept, stations, near, tb, max_gap_s=None, shift_s=3600):
+def second_buckets(kept, stations, near, tb, max_gap_s=None, shift_s=3600, radius=None):
     """Bucket of every integer second of [first ts, last ts), via timebudget.robot_budget on the pair (i, i+1);
     stuck vs stopped_short decided on the full stream with timebudget.stopped_runs / run_is_stuck."""
     runs, run_of = tb.stopped_runs(kept)
-    stuck_flags = [tb.run_is_stuck(kept, r) for r in runs]
+    stuck_flags = [tb.run_is_stuck(kept, r) if radius is None else tb.run_is_stuck(kept, r, stations, radius)
+                   for r in runs]
     out = []
     for i in range(len(kept) - 1):
         kw = {} if max_gap_s is None else dict(max_gap_s=max_gap_s)
@@ -441,21 +447,21 @@ def label_episodes(native_rows, grid_end_ts):
     return eps
 
 
-def run_intervals(kept, tb):
+def run_intervals(kept, tb, stations=None, radius=None):
     """Stuck runs as (start ts, end ts, first index, last index); end = ts owning-end of the last message."""
     runs, _ = tb.stopped_runs(kept)
     out = []
     for a, b in runs:
-        if tb.run_is_stuck(kept, (a, b)):
+        if tb.run_is_stuck(kept, (a, b)) if radius is None else tb.run_is_stuck(kept, (a, b), stations, radius):
             end = kept[b + 1].ts if b + 1 < len(kept) else kept[b].ts
             out.append((kept[a].ts, end, a, b))
     return out
 
 
-def label_comparison(native_rows, kept, buckets, operations, stations, tb):
+def label_comparison(native_rows, kept, buckets, operations, stations, tb, radius=None):
     t0, t_end = kept[0].ts, kept[-1].ts
     eps = label_episodes(native_rows, t_end)
-    sruns = run_intervals(kept, tb)
+    sruns = run_intervals(kept, tb, stations, radius)
     sec_bucket = collections.Counter()
     for e in eps:
         for s in range(max(e["start"], t0), min(e["end"], t_end)):
@@ -544,7 +550,7 @@ def _check(name, expected, observed, kind, tol=0.05, gating=None):
 
 
 def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, stations_path=DEFAULT_STATIONS,
-            results=DEFAULT_RESULTS, cell_m=DEFAULT_CELL_M):
+            results=DEFAULT_RESULTS, cell_m=DEFAULT_CELL_M, station_radius=None, suffix=None):
     tb = _tb()
     from fleet_analyser.detector import DEFAULT_STUCK_AFTER
     from fleet_analyser.parse import parse_line
@@ -584,14 +590,16 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
         inproc, _ = tb.robot_budget(kept, stations, near, 3600)
         if inproc["seconds"] != brec["seconds"] or inproc["jobs"] != brec["jobs"] or inproc["span_s"] != brec["span_s"]:
             raise SystemExit(f"moroop: shift {k} budget file differs from an in-process robot_budget run")
-        buckets = second_buckets(kept, stations, near, tb)
+        if station_radius is not None:  # the on-disk budget is the station-unaware S13A one; the rule here is aware
+            brec = tb.robot_budget(kept, stations, near, 3600, rule_radius=station_radius)[0]
+        buckets = second_buckets(kept, stations, near, tb, radius=station_radius)
         counts = collections.Counter(buckets)
         per_bucket = {b: counts.get(b, 0) for b in tb.BUCKETS}
         if per_bucket != brec["seconds"]:
             raise ValueError(f"moroop: shift {k} per-second bucket counts {per_bucket} != timebudget {brec['seconds']}")
-        buckets_nogap = second_buckets(kept, stations, near, tb, max_gap_s=float("inf"))
+        buckets_nogap = second_buckets(kept, stations, near, tb, max_gap_s=float("inf"), radius=station_radius)
         span = kept[-1].ts - kept[0].ts
-        lab = label_comparison(d["robot_state_cleaned"], kept, buckets, d["operations"], stations, tb)
+        lab = label_comparison(d["robot_state_cleaned"], kept, buckets, d["operations"], stations, tb, station_radius)
         nd = no_data_stats(kept, buckets_nogap, tb)
         chg = charging_seconds(aux, kept, buckets, tb)
         jph = brec["jobs"] / (span / 3600)
@@ -653,6 +661,9 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
                shifts=list(SHIFTS), script="fleet/adapters/moroop.py --analyse",
                timebudget_runs="one per shift: fleet/timebudget.py --glob fleet/data/moroop/jsonl/zone<k>-000.jsonl.gz "
                                "--run moroop-<shift> --stations fleet/data/moroop/stations.json")
+    if station_radius is not None:
+        src["station_rule"] = dict(radius=station_radius, cells="the --stations file", predicate="detector.at_station",
+                                   run_cell="cell of the run's first stopped message")
     out_pooled = dict(
         shifts=len(SHIFTS), span_s=span_s, seconds=secs_out, share=share_out, jobs=pooled["jobs"], jobs_per_robot_hour=jph,
         messages=pooled["messages"], parse_rejects=pooled["rejects"], charging=dict(pooled["charge"]),
@@ -664,8 +675,13 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     out_shifts = dict(shifts=shifts, waiting_shelf="n/a", faulted="not computed", src=src)
     results = Path(results)
     results.mkdir(parents=True, exist_ok=True)
-    (results / "timebudget_moroop.json").write_text(json.dumps(out_pooled, sort_keys=True, indent=1) + "\n")
-    (results / "timebudget_moroop_shifts.json").write_text(json.dumps(out_shifts, sort_keys=True, indent=1) + "\n")
+    tag = f"-{suffix}" if suffix else ""
+    (results / f"timebudget_moroop{tag}.json").write_text(json.dumps(out_pooled, sort_keys=True, indent=1) + "\n")
+    (results / f"timebudget_moroop_shifts{tag}.json").write_text(json.dumps(out_shifts, sort_keys=True, indent=1) + "\n")
+    if suffix:
+        label_doc = dict(shifts={k: v["label"] for k, v in shifts.items()}, pooled=out_pooled["label"],
+                         station_radius=station_radius, src=src)
+        (results / f"moroop_label{tag}.json").write_text(json.dumps(label_doc, sort_keys=True, indent=1) + "\n")
     print(f"{'check':45s} {'kind':6s} {'expected':>24s} {'observed':>24s} ok")
     for k, s in shifts.items():
         for c in s["sanity"]:
@@ -692,9 +708,16 @@ def main(argv=None):
     ap.add_argument("--jsonl", default=str(DEFAULT_JSONL))
     ap.add_argument("--budget", default=str(DEFAULT_BUDGET))
     ap.add_argument("--results", default=str(DEFAULT_RESULTS))
+    ap.add_argument("--station-radius", type=int, default=None,
+                    help="--analyse: stuck rule ignores runs starting within this Manhattan radius of a --stations cell "
+                         "(default: stations not applied)")
+    ap.add_argument("--suffix", default=None, help="--analyse: write timebudget_moroop-S.json etc. instead of the S13A files")
     args = ap.parse_args(argv)
+    if args.station_radius is not None and args.station_radius < 0:
+        ap.error("--station-radius must be >= 0")
     if args.analyse:
-        return analyse(args.raw, args.jsonl, args.budget, args.stations, args.results, args.cell_m)
+        return analyse(args.raw, args.jsonl, args.budget, args.stations, args.results, args.cell_m, args.station_radius,
+                       args.suffix)
     if args.out is None:
         ap.error("--out is required unless --analyse")
     if args.shift is not None and not 0 <= args.shift < len(SHIFTS):
