@@ -6,4 +6,7 @@ results/*.png
 runs/
 wandb/
 .DS_Store
-fleet/data/
+fleet/data/*
+!fleet/data/moroop/
+fleet/data/moroop/*
+!fleet/data/moroop/stations.json
