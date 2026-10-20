@@ -672,6 +672,24 @@ class TestPausedAndNoData(unittest.TestCase):
         kept = [dataclasses.replace(msg("R", 0, "o", faulted=True), paused=True), msg("R", 90, "o")]
         self.assertEqual(self.budget(kept)["seconds"], zero(no_data=90))
 
+    def test_cli_max_gap_s_reaches_the_budget(self):
+        # inject: drop args.max_gap_s from the compute call in main, or max_gap_s from the robot_budget call in compute
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            write_gz(d / "zone0-000.jsonl.gz", [line("Z0-01", 0, driving=True), line("Z0-01", 13, driving=True)])
+            (d / "stations.json").write_text(json.dumps(dict(stations=[[9, 9]], shelves=[[7, 7]])))
+            got = {}
+            for extra in ([], ["--max-gap-s", "100"]):
+                out = d / f"o{len(extra)}.json"
+                with redirect_stdout(StringIO()):
+                    rc = tb.main(["--glob", str(d / "*.jsonl.gz"), "--run", "r", "--stations", str(d / "stations.json"),
+                                  "--out", str(out), "--store", f"jsonl:{d / 'nostore'}"] + extra)
+                self.assertIn(rc, (None, 0))
+                doc = json.loads(out.read_text())
+                got[len(extra)] = (doc["zones"]["0"]["robots"]["Z0-01"]["seconds"], doc["src"]["max_gap_s"])
+            self.assertEqual(got[0], (zero(no_data=65), 60))  # the 65 s interval is a gap at the default
+            self.assertEqual(got[2], (zero(moving=65), 100))
+
     def test_max_gap_s_zero_or_negative_is_rejected(self):
         # inject: drop the > 0 check
         for bad in ("0", "-5", "nan", "inf"):
