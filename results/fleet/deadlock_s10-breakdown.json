@@ -1,0 +1,1554 @@
+{
+ "schema_version": "fleet-deadlock/1",
+ "run": "s10-breakdown",
+ "min_s": 30,
+ "definition": "deadlock: strongly connected component (>= 2 robots) of the per-batch graph in which every STUCK robot has an edge to all adjacent faulted robots, else to all adjacent stuck robots, else (exactly one neighbour) to it; mutually blocked cluster that persists, not a proven circular wait. knot: maximal path of >= 2 edges among robots in no such component. length_s = end - start, start = latest stopped-run start among the members.",
+ "zones": {
+  "0": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z0-05",
+      "Z0-08"
+     ],
+     "cells": [
+      "19,15",
+      "19,16"
+     ],
+     "start": 1767226345,
+     "end": 1767226600,
+     "start_iso": "2026-01-01T00:12:25Z",
+     "end_iso": "2026-01-01T00:16:40Z",
+     "length_s": 255,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z0-06",
+      "Z0-08"
+     ],
+     "cells": [
+      "19,18",
+      "19,19"
+     ],
+     "start": 1767227120,
+     "end": 1767227285,
+     "start_iso": "2026-01-01T00:25:20Z",
+     "end_iso": "2026-01-01T00:28:05Z",
+     "length_s": 165,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [
+    {
+     "robots": [
+      "Z0-12",
+      "Z0-05",
+      "Z0-08"
+     ],
+     "cells": [
+      "19,16",
+      "20,15",
+      "20,16"
+     ],
+     "start": 1767226795,
+     "end": 1767226845,
+     "start_iso": "2026-01-01T00:19:55Z",
+     "end_iso": "2026-01-01T00:20:45Z",
+     "length_s": 50,
+     "resolution": "broke_up",
+     "head": "Z0-08"
+    }
+   ],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 101.00200400801603,
+   "top_cells": [
+    {
+     "cell": "19,15",
+     "deadlock_s": 255
+    },
+    {
+     "cell": "19,16",
+     "deadlock_s": 255
+    },
+    {
+     "cell": "19,18",
+     "deadlock_s": 165
+    },
+    {
+     "cell": "19,19",
+     "deadlock_s": 165
+    }
+   ]
+  },
+  "1": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z1-01",
+      "Z1-09"
+     ],
+     "cells": [
+      "7,9",
+      "8,9"
+     ],
+     "start": 1767225660,
+     "end": 1767225790,
+     "start_iso": "2026-01-01T00:01:00Z",
+     "end_iso": "2026-01-01T00:03:10Z",
+     "length_s": 130,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z1-03",
+      "Z1-08"
+     ],
+     "cells": [
+      "19,23",
+      "19,24"
+     ],
+     "start": 1767226050,
+     "end": 1767226090,
+     "start_iso": "2026-01-01T00:07:30Z",
+     "end_iso": "2026-01-01T00:08:10Z",
+     "length_s": 40,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z1-02",
+      "Z1-06"
+     ],
+     "cells": [
+      "18,16",
+      "18,17"
+     ],
+     "start": 1767226885,
+     "end": 1767227075,
+     "start_iso": "2026-01-01T00:21:25Z",
+     "end_iso": "2026-01-01T00:24:35Z",
+     "length_s": 190,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z1-01",
+      "Z1-02"
+     ],
+     "cells": [
+      "18,17",
+      "18,18"
+     ],
+     "start": 1767227650,
+     "end": 1767227760,
+     "start_iso": "2026-01-01T00:34:10Z",
+     "end_iso": "2026-01-01T00:36:00Z",
+     "length_s": 110,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 113.02605210420842,
+   "top_cells": [
+    {
+     "cell": "18,17",
+     "deadlock_s": 300
+    },
+    {
+     "cell": "18,16",
+     "deadlock_s": 190
+    },
+    {
+     "cell": "7,9",
+     "deadlock_s": 130
+    },
+    {
+     "cell": "8,9",
+     "deadlock_s": 130
+    },
+    {
+     "cell": "18,18",
+     "deadlock_s": 110
+    },
+    {
+     "cell": "19,23",
+     "deadlock_s": 40
+    },
+    {
+     "cell": "19,24",
+     "deadlock_s": 40
+    }
+   ]
+  },
+  "2": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z2-04",
+      "Z2-05"
+     ],
+     "cells": [
+      "15,23",
+      "15,24"
+     ],
+     "start": 1767225880,
+     "end": 1767225920,
+     "start_iso": "2026-01-01T00:04:40Z",
+     "end_iso": "2026-01-01T00:05:20Z",
+     "length_s": 40,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z2-02",
+      "Z2-11"
+     ],
+     "cells": [
+      "15,14",
+      "15,15"
+     ],
+     "start": 1767226710,
+     "end": 1767226775,
+     "start_iso": "2026-01-01T00:18:30Z",
+     "end_iso": "2026-01-01T00:19:35Z",
+     "length_s": 65,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z2-04",
+      "Z2-07"
+     ],
+     "cells": [
+      "6,12",
+      "6,13"
+     ],
+     "start": 1767226925,
+     "end": 1767226970,
+     "start_iso": "2026-01-01T00:22:05Z",
+     "end_iso": "2026-01-01T00:22:50Z",
+     "length_s": 45,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z2-01",
+      "Z2-05"
+     ],
+     "cells": [
+      "7,17",
+      "7,18"
+     ],
+     "start": 1767227005,
+     "end": 1767227200,
+     "start_iso": "2026-01-01T00:23:25Z",
+     "end_iso": "2026-01-01T00:26:40Z",
+     "length_s": 195,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z2-04",
+      "Z2-07"
+     ],
+     "cells": [
+      "6,12",
+      "6,13"
+     ],
+     "start": 1767227140,
+     "end": 1767227235,
+     "start_iso": "2026-01-01T00:25:40Z",
+     "end_iso": "2026-01-01T00:27:15Z",
+     "length_s": 95,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z2-04",
+      "Z2-07"
+     ],
+     "cells": [
+      "6,12",
+      "6,13"
+     ],
+     "start": 1767227140,
+     "end": 1767227705,
+     "start_iso": "2026-01-01T00:25:40Z",
+     "end_iso": "2026-01-01T00:35:05Z",
+     "length_s": 565,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z2-01",
+      "Z2-05"
+     ],
+     "cells": [
+      "7,17",
+      "7,18"
+     ],
+     "start": 1767227450,
+     "end": 1767227955,
+     "start_iso": "2026-01-01T00:30:50Z",
+     "end_iso": "2026-01-01T00:39:15Z",
+     "length_s": 505,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 363.12625250501003,
+   "top_cells": [
+    {
+     "cell": "6,12",
+     "deadlock_s": 705
+    },
+    {
+     "cell": "6,13",
+     "deadlock_s": 705
+    },
+    {
+     "cell": "7,17",
+     "deadlock_s": 700
+    },
+    {
+     "cell": "7,18",
+     "deadlock_s": 700
+    },
+    {
+     "cell": "15,14",
+     "deadlock_s": 65
+    },
+    {
+     "cell": "15,15",
+     "deadlock_s": 65
+    },
+    {
+     "cell": "15,23",
+     "deadlock_s": 40
+    },
+    {
+     "cell": "15,24",
+     "deadlock_s": 40
+    }
+   ]
+  },
+  "3": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z3-05",
+      "Z3-09"
+     ],
+     "cells": [
+      "1,7",
+      "2,7"
+     ],
+     "start": 1767226990,
+     "end": 1767227180,
+     "start_iso": "2026-01-01T00:23:10Z",
+     "end_iso": "2026-01-01T00:26:20Z",
+     "length_s": 190,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z3-02",
+      "Z3-03"
+     ],
+     "cells": [
+      "18,13",
+      "18,14"
+     ],
+     "start": 1767227330,
+     "end": 1767227555,
+     "start_iso": "2026-01-01T00:28:50Z",
+     "end_iso": "2026-01-01T00:32:35Z",
+     "length_s": 225,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z3-02",
+      "Z3-03"
+     ],
+     "cells": [
+      "18,13",
+      "18,14"
+     ],
+     "start": 1767227330,
+     "end": 1767227910,
+     "start_iso": "2026-01-01T00:28:50Z",
+     "end_iso": "2026-01-01T00:38:30Z",
+     "length_s": 580,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 239.27855711422848,
+   "top_cells": [
+    {
+     "cell": "18,13",
+     "deadlock_s": 805
+    },
+    {
+     "cell": "18,14",
+     "deadlock_s": 805
+    },
+    {
+     "cell": "1,7",
+     "deadlock_s": 190
+    },
+    {
+     "cell": "2,7",
+     "deadlock_s": 190
+    }
+   ]
+  },
+  "4": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z4-02",
+      "Z4-07"
+     ],
+     "cells": [
+      "14,7",
+      "14,8"
+     ],
+     "start": 1767226200,
+     "end": 1767226655,
+     "start_iso": "2026-01-01T00:10:00Z",
+     "end_iso": "2026-01-01T00:17:35Z",
+     "length_s": 455,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z4-07",
+      "Z4-08"
+     ],
+     "cells": [
+      "10,12",
+      "11,12"
+     ],
+     "start": 1767227895,
+     "end": 1767228005,
+     "start_iso": "2026-01-01T00:38:15Z",
+     "end_iso": "2026-01-01T00:40:05Z",
+     "length_s": 110,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [
+    {
+     "robots": [
+      "Z4-02",
+      "Z4-11",
+      "Z4-08"
+     ],
+     "cells": [
+      "14,10",
+      "14,8",
+      "14,9"
+     ],
+     "start": 1767227085,
+     "end": 1767227305,
+     "start_iso": "2026-01-01T00:24:45Z",
+     "end_iso": "2026-01-01T00:28:25Z",
+     "length_s": 220,
+     "resolution": "broke_up",
+     "head": "Z4-08"
+    }
+   ],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 135.87174348697394,
+   "top_cells": [
+    {
+     "cell": "14,7",
+     "deadlock_s": 455
+    },
+    {
+     "cell": "14,8",
+     "deadlock_s": 455
+    },
+    {
+     "cell": "10,12",
+     "deadlock_s": 110
+    },
+    {
+     "cell": "11,12",
+     "deadlock_s": 110
+    }
+   ]
+  },
+  "5": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z5-03",
+      "Z5-06"
+     ],
+     "cells": [
+      "7,14",
+      "7,15"
+     ],
+     "start": 1767225665,
+     "end": 1767225995,
+     "start_iso": "2026-01-01T00:01:05Z",
+     "end_iso": "2026-01-01T00:06:35Z",
+     "length_s": 330,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z5-03",
+      "Z5-06"
+     ],
+     "cells": [
+      "7,14",
+      "7,15"
+     ],
+     "start": 1767226710,
+     "end": 1767226830,
+     "start_iso": "2026-01-01T00:18:30Z",
+     "end_iso": "2026-01-01T00:20:30Z",
+     "length_s": 120,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z5-03",
+      "Z5-06",
+      "Z5-07"
+     ],
+     "cells": [
+      "7,14",
+      "7,15",
+      "7,16"
+     ],
+     "start": 1767226800,
+     "end": 1767227455,
+     "start_iso": "2026-01-01T00:20:00Z",
+     "end_iso": "2026-01-01T00:30:55Z",
+     "length_s": 655,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [
+    {
+     "robots": [
+      "Z5-06",
+      "Z5-03",
+      "Z5-07"
+     ],
+     "cells": [
+      "7,14",
+      "7,15",
+      "7,16"
+     ],
+     "start": 1767226800,
+     "end": 1767227670,
+     "start_iso": "2026-01-01T00:20:00Z",
+     "end_iso": "2026-01-01T00:34:30Z",
+     "length_s": 870,
+     "resolution": "broke_up",
+     "head": "Z5-07"
+    },
+    {
+     "robots": [
+      "Z5-07",
+      "Z5-03",
+      "Z5-10"
+     ],
+     "cells": [
+      "7,15",
+      "7,16",
+      "8,15"
+     ],
+     "start": 1767227765,
+     "end": 1767227975,
+     "start_iso": "2026-01-01T00:36:05Z",
+     "end_iso": "2026-01-01T00:39:35Z",
+     "length_s": 210,
+     "resolution": "broke_up",
+     "head": "Z5-10"
+    },
+    {
+     "robots": [
+      "Z5-07",
+      "Z5-03",
+      "Z5-06"
+     ],
+     "cells": [
+      "7,14",
+      "7,15",
+      "7,16"
+     ],
+     "start": 1767226800,
+     "end": 1767227980,
+     "start_iso": "2026-01-01T00:20:00Z",
+     "end_iso": "2026-01-01T00:39:40Z",
+     "length_s": 1180,
+     "resolution": "broke_up",
+     "head": "Z5-06"
+    }
+   ],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 344.4889779559118,
+   "top_cells": [
+    {
+     "cell": "7,14",
+     "deadlock_s": 1105
+    },
+    {
+     "cell": "7,15",
+     "deadlock_s": 1105
+    },
+    {
+     "cell": "7,16",
+     "deadlock_s": 655
+    }
+   ]
+  },
+  "6": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z6-06",
+      "Z6-08"
+     ],
+     "cells": [
+      "7,23",
+      "7,24"
+     ],
+     "start": 1767226235,
+     "end": 1767226275,
+     "start_iso": "2026-01-01T00:10:35Z",
+     "end_iso": "2026-01-01T00:11:15Z",
+     "length_s": 40,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z6-08",
+      "Z6-12"
+     ],
+     "cells": [
+      "18,14"
+     ],
+     "start": 1767227170,
+     "end": 1767227590,
+     "start_iso": "2026-01-01T00:26:10Z",
+     "end_iso": "2026-01-01T00:33:10Z",
+     "length_s": 420,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 110.62124248496994,
+   "top_cells": [
+    {
+     "cell": "18,14",
+     "deadlock_s": 420
+    },
+    {
+     "cell": "7,23",
+     "deadlock_s": 40
+    },
+    {
+     "cell": "7,24",
+     "deadlock_s": 40
+    }
+   ]
+  },
+  "7": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z7-02",
+      "Z7-03"
+     ],
+     "cells": [
+      "7,11",
+      "7,12"
+     ],
+     "start": 1767225735,
+     "end": 1767225950,
+     "start_iso": "2026-01-01T00:02:15Z",
+     "end_iso": "2026-01-01T00:05:50Z",
+     "length_s": 215,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 51.703406813627254,
+   "top_cells": [
+    {
+     "cell": "7,11",
+     "deadlock_s": 215
+    },
+    {
+     "cell": "7,12",
+     "deadlock_s": 215
+    }
+   ]
+  },
+  "8": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z8-05",
+      "Z8-11"
+     ],
+     "cells": [
+      "15,5",
+      "16,5"
+     ],
+     "start": 1767226120,
+     "end": 1767226260,
+     "start_iso": "2026-01-01T00:08:40Z",
+     "end_iso": "2026-01-01T00:11:00Z",
+     "length_s": 140,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 33.66733466933868,
+   "top_cells": [
+    {
+     "cell": "15,5",
+     "deadlock_s": 140
+    },
+    {
+     "cell": "16,5",
+     "deadlock_s": 140
+    }
+   ]
+  },
+  "9": {
+   "deadlocks": [
+    {
+     "robots": [
+      "Z9-01",
+      "Z9-06"
+     ],
+     "cells": [
+      "10,8",
+      "10,9"
+     ],
+     "start": 1767227335,
+     "end": 1767227620,
+     "start_iso": "2026-01-01T00:28:55Z",
+     "end_iso": "2026-01-01T00:33:40Z",
+     "length_s": 285,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z9-05",
+      "Z9-11"
+     ],
+     "cells": [
+      "13,12",
+      "14,12"
+     ],
+     "start": 1767227525,
+     "end": 1767227620,
+     "start_iso": "2026-01-01T00:32:05Z",
+     "end_iso": "2026-01-01T00:33:40Z",
+     "length_s": 95,
+     "resolution": "broke_up"
+    },
+    {
+     "robots": [
+      "Z9-04",
+      "Z9-05"
+     ],
+     "cells": [
+      "14,7",
+      "14,8"
+     ],
+     "start": 1767227800,
+     "end": 1767227985,
+     "start_iso": "2026-01-01T00:36:40Z",
+     "end_iso": "2026-01-01T00:39:45Z",
+     "length_s": 185,
+     "resolution": "broke_up"
+    }
+   ],
+   "knots": [],
+   "robot_hours": 8.316666666666666,
+   "deadlock_s_per_robot_hour": 135.87174348697394,
+   "top_cells": [
+    {
+     "cell": "10,8",
+     "deadlock_s": 285
+    },
+    {
+     "cell": "10,9",
+     "deadlock_s": 285
+    },
+    {
+     "cell": "14,7",
+     "deadlock_s": 185
+    },
+    {
+     "cell": "14,8",
+     "deadlock_s": 185
+    },
+    {
+     "cell": "13,12",
+     "deadlock_s": 95
+    },
+    {
+     "cell": "14,12",
+     "deadlock_s": 95
+    }
+   ]
+  }
+ },
+ "total": {
+  "deadlocks": 28,
+  "knots": 5,
+  "robot_hours": 83.16666666666664,
+  "deadlock_s_per_robot_hour": 162.8657314629259
+ },
+ "decisions": [
+  {
+   "id": "f9ba4650102c708d82016fc5d97cbbaabf36a3d7",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "19,15;19,16",
+   "start_iso": "2026-01-01T00:12:25Z",
+   "decided_at": 1767226600,
+   "claim": {
+    "robots": [
+     "Z0-05",
+     "Z0-08"
+    ],
+    "cells": [
+     "19,15",
+     "19,16"
+    ],
+    "length_s": 255,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "0"
+   },
+   "rationale": "2 robots mutually blocked for 255 s in zone 0",
+   "expected": 255.0,
+   "grade_after": 1767226600,
+   "dedup_key": "deadlock:19,15;19,16:2026-01-01T00:12:25Z"
+  },
+  {
+   "id": "b4913d20f1011cec73e518b663720800a4ff5bd3",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "19,18;19,19",
+   "start_iso": "2026-01-01T00:25:20Z",
+   "decided_at": 1767227285,
+   "claim": {
+    "robots": [
+     "Z0-06",
+     "Z0-08"
+    ],
+    "cells": [
+     "19,18",
+     "19,19"
+    ],
+    "length_s": 165,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "0"
+   },
+   "rationale": "2 robots mutually blocked for 165 s in zone 0",
+   "expected": 165.0,
+   "grade_after": 1767227285,
+   "dedup_key": "deadlock:19,18;19,19:2026-01-01T00:25:20Z"
+  },
+  {
+   "id": "035103b1e12158abe91a7415a1db3146b6a1ee64",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,9;8,9",
+   "start_iso": "2026-01-01T00:01:00Z",
+   "decided_at": 1767225790,
+   "claim": {
+    "robots": [
+     "Z1-01",
+     "Z1-09"
+    ],
+    "cells": [
+     "7,9",
+     "8,9"
+    ],
+    "length_s": 130,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "1"
+   },
+   "rationale": "2 robots mutually blocked for 130 s in zone 1",
+   "expected": 130.0,
+   "grade_after": 1767225790,
+   "dedup_key": "deadlock:7,9;8,9:2026-01-01T00:01:00Z"
+  },
+  {
+   "id": "27ef27e47a8d5dc7b541c0cd43a85f9bc5eb2c3e",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "19,23;19,24",
+   "start_iso": "2026-01-01T00:07:30Z",
+   "decided_at": 1767226090,
+   "claim": {
+    "robots": [
+     "Z1-03",
+     "Z1-08"
+    ],
+    "cells": [
+     "19,23",
+     "19,24"
+    ],
+    "length_s": 40,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "1"
+   },
+   "rationale": "2 robots mutually blocked for 40 s in zone 1",
+   "expected": 40.0,
+   "grade_after": 1767226090,
+   "dedup_key": "deadlock:19,23;19,24:2026-01-01T00:07:30Z"
+  },
+  {
+   "id": "7529270723954c80416f9142de7f8ab2e9087843",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "18,16;18,17",
+   "start_iso": "2026-01-01T00:21:25Z",
+   "decided_at": 1767227075,
+   "claim": {
+    "robots": [
+     "Z1-02",
+     "Z1-06"
+    ],
+    "cells": [
+     "18,16",
+     "18,17"
+    ],
+    "length_s": 190,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "1"
+   },
+   "rationale": "2 robots mutually blocked for 190 s in zone 1",
+   "expected": 190.0,
+   "grade_after": 1767227075,
+   "dedup_key": "deadlock:18,16;18,17:2026-01-01T00:21:25Z"
+  },
+  {
+   "id": "f2d75972d1d7ea5f6383ee1bb55020d3e31dd8a0",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "18,17;18,18",
+   "start_iso": "2026-01-01T00:34:10Z",
+   "decided_at": 1767227760,
+   "claim": {
+    "robots": [
+     "Z1-01",
+     "Z1-02"
+    ],
+    "cells": [
+     "18,17",
+     "18,18"
+    ],
+    "length_s": 110,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "1"
+   },
+   "rationale": "2 robots mutually blocked for 110 s in zone 1",
+   "expected": 110.0,
+   "grade_after": 1767227760,
+   "dedup_key": "deadlock:18,17;18,18:2026-01-01T00:34:10Z"
+  },
+  {
+   "id": "bc9605d6caf8dc370c6020653018e0ce171b2242",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "15,23;15,24",
+   "start_iso": "2026-01-01T00:04:40Z",
+   "decided_at": 1767225920,
+   "claim": {
+    "robots": [
+     "Z2-04",
+     "Z2-05"
+    ],
+    "cells": [
+     "15,23",
+     "15,24"
+    ],
+    "length_s": 40,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 40 s in zone 2",
+   "expected": 40.0,
+   "grade_after": 1767225920,
+   "dedup_key": "deadlock:15,23;15,24:2026-01-01T00:04:40Z"
+  },
+  {
+   "id": "a788224ef0b2c57ee10e33eff474542f21957082",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "15,14;15,15",
+   "start_iso": "2026-01-01T00:18:30Z",
+   "decided_at": 1767226775,
+   "claim": {
+    "robots": [
+     "Z2-02",
+     "Z2-11"
+    ],
+    "cells": [
+     "15,14",
+     "15,15"
+    ],
+    "length_s": 65,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 65 s in zone 2",
+   "expected": 65.0,
+   "grade_after": 1767226775,
+   "dedup_key": "deadlock:15,14;15,15:2026-01-01T00:18:30Z"
+  },
+  {
+   "id": "846b122fe4194fdb22dea64f0b1ba6332e902d42",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "6,12;6,13",
+   "start_iso": "2026-01-01T00:22:05Z",
+   "decided_at": 1767226970,
+   "claim": {
+    "robots": [
+     "Z2-04",
+     "Z2-07"
+    ],
+    "cells": [
+     "6,12",
+     "6,13"
+    ],
+    "length_s": 45,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 45 s in zone 2",
+   "expected": 45.0,
+   "grade_after": 1767226970,
+   "dedup_key": "deadlock:6,12;6,13:2026-01-01T00:22:05Z"
+  },
+  {
+   "id": "13e47b06de65b2a5d9907c30096f957e4e4b2b8e",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,17;7,18",
+   "start_iso": "2026-01-01T00:23:25Z",
+   "decided_at": 1767227200,
+   "claim": {
+    "robots": [
+     "Z2-01",
+     "Z2-05"
+    ],
+    "cells": [
+     "7,17",
+     "7,18"
+    ],
+    "length_s": 195,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 195 s in zone 2",
+   "expected": 195.0,
+   "grade_after": 1767227200,
+   "dedup_key": "deadlock:7,17;7,18:2026-01-01T00:23:25Z"
+  },
+  {
+   "id": "d9cabd2600826687c64c86a902f595993d1cb1c3",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "6,12;6,13",
+   "start_iso": "2026-01-01T00:25:40Z",
+   "decided_at": 1767227235,
+   "claim": {
+    "robots": [
+     "Z2-04",
+     "Z2-07"
+    ],
+    "cells": [
+     "6,12",
+     "6,13"
+    ],
+    "length_s": 95,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 95 s in zone 2",
+   "expected": 95.0,
+   "grade_after": 1767227235,
+   "dedup_key": "deadlock:6,12;6,13:2026-01-01T00:25:40Z"
+  },
+  {
+   "id": "d9cabd2600826687c64c86a902f595993d1cb1c3",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "6,12;6,13",
+   "start_iso": "2026-01-01T00:25:40Z",
+   "decided_at": 1767227705,
+   "claim": {
+    "robots": [
+     "Z2-04",
+     "Z2-07"
+    ],
+    "cells": [
+     "6,12",
+     "6,13"
+    ],
+    "length_s": 565,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 565 s in zone 2",
+   "expected": 565.0,
+   "grade_after": 1767227705,
+   "dedup_key": "deadlock:6,12;6,13:2026-01-01T00:25:40Z"
+  },
+  {
+   "id": "6c4af26dc69d3b2b4ed6ce7a3166d0586d7e131e",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,17;7,18",
+   "start_iso": "2026-01-01T00:30:50Z",
+   "decided_at": 1767227955,
+   "claim": {
+    "robots": [
+     "Z2-01",
+     "Z2-05"
+    ],
+    "cells": [
+     "7,17",
+     "7,18"
+    ],
+    "length_s": 505,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "2"
+   },
+   "rationale": "2 robots mutually blocked for 505 s in zone 2",
+   "expected": 505.0,
+   "grade_after": 1767227955,
+   "dedup_key": "deadlock:7,17;7,18:2026-01-01T00:30:50Z"
+  },
+  {
+   "id": "9868042d7faf0e6ab8a0fac5fe9a8e4970195a29",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "1,7;2,7",
+   "start_iso": "2026-01-01T00:23:10Z",
+   "decided_at": 1767227180,
+   "claim": {
+    "robots": [
+     "Z3-05",
+     "Z3-09"
+    ],
+    "cells": [
+     "1,7",
+     "2,7"
+    ],
+    "length_s": 190,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "3"
+   },
+   "rationale": "2 robots mutually blocked for 190 s in zone 3",
+   "expected": 190.0,
+   "grade_after": 1767227180,
+   "dedup_key": "deadlock:1,7;2,7:2026-01-01T00:23:10Z"
+  },
+  {
+   "id": "a0504edd08941a85a6f33da7364935821cc8c252",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "18,13;18,14",
+   "start_iso": "2026-01-01T00:28:50Z",
+   "decided_at": 1767227555,
+   "claim": {
+    "robots": [
+     "Z3-02",
+     "Z3-03"
+    ],
+    "cells": [
+     "18,13",
+     "18,14"
+    ],
+    "length_s": 225,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "3"
+   },
+   "rationale": "2 robots mutually blocked for 225 s in zone 3",
+   "expected": 225.0,
+   "grade_after": 1767227555,
+   "dedup_key": "deadlock:18,13;18,14:2026-01-01T00:28:50Z"
+  },
+  {
+   "id": "a0504edd08941a85a6f33da7364935821cc8c252",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "18,13;18,14",
+   "start_iso": "2026-01-01T00:28:50Z",
+   "decided_at": 1767227910,
+   "claim": {
+    "robots": [
+     "Z3-02",
+     "Z3-03"
+    ],
+    "cells": [
+     "18,13",
+     "18,14"
+    ],
+    "length_s": 580,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "3"
+   },
+   "rationale": "2 robots mutually blocked for 580 s in zone 3",
+   "expected": 580.0,
+   "grade_after": 1767227910,
+   "dedup_key": "deadlock:18,13;18,14:2026-01-01T00:28:50Z"
+  },
+  {
+   "id": "ce5d0158ffaa6a2fd2c8b23e745d87ab86fc27da",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "14,7;14,8",
+   "start_iso": "2026-01-01T00:10:00Z",
+   "decided_at": 1767226655,
+   "claim": {
+    "robots": [
+     "Z4-02",
+     "Z4-07"
+    ],
+    "cells": [
+     "14,7",
+     "14,8"
+    ],
+    "length_s": 455,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "4"
+   },
+   "rationale": "2 robots mutually blocked for 455 s in zone 4",
+   "expected": 455.0,
+   "grade_after": 1767226655,
+   "dedup_key": "deadlock:14,7;14,8:2026-01-01T00:10:00Z"
+  },
+  {
+   "id": "8f397257fea6c75bd4a091f44d414fdd0779c8d6",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "10,12;11,12",
+   "start_iso": "2026-01-01T00:38:15Z",
+   "decided_at": 1767228005,
+   "claim": {
+    "robots": [
+     "Z4-07",
+     "Z4-08"
+    ],
+    "cells": [
+     "10,12",
+     "11,12"
+    ],
+    "length_s": 110,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "4"
+   },
+   "rationale": "2 robots mutually blocked for 110 s in zone 4",
+   "expected": 110.0,
+   "grade_after": 1767228005,
+   "dedup_key": "deadlock:10,12;11,12:2026-01-01T00:38:15Z"
+  },
+  {
+   "id": "0a77a2c4ff4837904f29f26b4c3c1540f63bdb37",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,14;7,15",
+   "start_iso": "2026-01-01T00:01:05Z",
+   "decided_at": 1767225995,
+   "claim": {
+    "robots": [
+     "Z5-03",
+     "Z5-06"
+    ],
+    "cells": [
+     "7,14",
+     "7,15"
+    ],
+    "length_s": 330,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "5"
+   },
+   "rationale": "2 robots mutually blocked for 330 s in zone 5",
+   "expected": 330.0,
+   "grade_after": 1767225995,
+   "dedup_key": "deadlock:7,14;7,15:2026-01-01T00:01:05Z"
+  },
+  {
+   "id": "d629d99513273862856836d83409b99de258fff4",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,14;7,15",
+   "start_iso": "2026-01-01T00:18:30Z",
+   "decided_at": 1767226830,
+   "claim": {
+    "robots": [
+     "Z5-03",
+     "Z5-06"
+    ],
+    "cells": [
+     "7,14",
+     "7,15"
+    ],
+    "length_s": 120,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "5"
+   },
+   "rationale": "2 robots mutually blocked for 120 s in zone 5",
+   "expected": 120.0,
+   "grade_after": 1767226830,
+   "dedup_key": "deadlock:7,14;7,15:2026-01-01T00:18:30Z"
+  },
+  {
+   "id": "5461b3ad778e676c9cec27d3361aaf31dec24552",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,14;7,15;7,16",
+   "start_iso": "2026-01-01T00:20:00Z",
+   "decided_at": 1767227455,
+   "claim": {
+    "robots": [
+     "Z5-03",
+     "Z5-06",
+     "Z5-07"
+    ],
+    "cells": [
+     "7,14",
+     "7,15",
+     "7,16"
+    ],
+    "length_s": 655,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "5"
+   },
+   "rationale": "3 robots mutually blocked for 655 s in zone 5",
+   "expected": 655.0,
+   "grade_after": 1767227455,
+   "dedup_key": "deadlock:7,14;7,15;7,16:2026-01-01T00:20:00Z"
+  },
+  {
+   "id": "ae45e2a124e25719d2ea7c24440926d6f60675f8",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,23;7,24",
+   "start_iso": "2026-01-01T00:10:35Z",
+   "decided_at": 1767226275,
+   "claim": {
+    "robots": [
+     "Z6-06",
+     "Z6-08"
+    ],
+    "cells": [
+     "7,23",
+     "7,24"
+    ],
+    "length_s": 40,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "6"
+   },
+   "rationale": "2 robots mutually blocked for 40 s in zone 6",
+   "expected": 40.0,
+   "grade_after": 1767226275,
+   "dedup_key": "deadlock:7,23;7,24:2026-01-01T00:10:35Z"
+  },
+  {
+   "id": "1377c05c27976703bc1fddb2ef37bd41956c89f8",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "18,14",
+   "start_iso": "2026-01-01T00:26:10Z",
+   "decided_at": 1767227590,
+   "claim": {
+    "robots": [
+     "Z6-08",
+     "Z6-12"
+    ],
+    "cells": [
+     "18,14"
+    ],
+    "length_s": 420,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "6"
+   },
+   "rationale": "2 robots mutually blocked for 420 s in zone 6",
+   "expected": 420.0,
+   "grade_after": 1767227590,
+   "dedup_key": "deadlock:18,14:2026-01-01T00:26:10Z"
+  },
+  {
+   "id": "c053eedbc4184c609cc152a6385f206f4497df65",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "7,11;7,12",
+   "start_iso": "2026-01-01T00:02:15Z",
+   "decided_at": 1767225950,
+   "claim": {
+    "robots": [
+     "Z7-02",
+     "Z7-03"
+    ],
+    "cells": [
+     "7,11",
+     "7,12"
+    ],
+    "length_s": 215,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "7"
+   },
+   "rationale": "2 robots mutually blocked for 215 s in zone 7",
+   "expected": 215.0,
+   "grade_after": 1767225950,
+   "dedup_key": "deadlock:7,11;7,12:2026-01-01T00:02:15Z"
+  },
+  {
+   "id": "3131f30d0f4940b1e10ec940a7154d31c9099754",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "15,5;16,5",
+   "start_iso": "2026-01-01T00:08:40Z",
+   "decided_at": 1767226260,
+   "claim": {
+    "robots": [
+     "Z8-05",
+     "Z8-11"
+    ],
+    "cells": [
+     "15,5",
+     "16,5"
+    ],
+    "length_s": 140,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "8"
+   },
+   "rationale": "2 robots mutually blocked for 140 s in zone 8",
+   "expected": 140.0,
+   "grade_after": 1767226260,
+   "dedup_key": "deadlock:15,5;16,5:2026-01-01T00:08:40Z"
+  },
+  {
+   "id": "0d1480ab676748f7e3427d7914339adb0f5e2eaa",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "10,8;10,9",
+   "start_iso": "2026-01-01T00:28:55Z",
+   "decided_at": 1767227620,
+   "claim": {
+    "robots": [
+     "Z9-01",
+     "Z9-06"
+    ],
+    "cells": [
+     "10,8",
+     "10,9"
+    ],
+    "length_s": 285,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "9"
+   },
+   "rationale": "2 robots mutually blocked for 285 s in zone 9",
+   "expected": 285.0,
+   "grade_after": 1767227620,
+   "dedup_key": "deadlock:10,8;10,9:2026-01-01T00:28:55Z"
+  },
+  {
+   "id": "3ba515a25026616179f650d71fd300b24c996195",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "13,12;14,12",
+   "start_iso": "2026-01-01T00:32:05Z",
+   "decided_at": 1767227620,
+   "claim": {
+    "robots": [
+     "Z9-05",
+     "Z9-11"
+    ],
+    "cells": [
+     "13,12",
+     "14,12"
+    ],
+    "length_s": 95,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "9"
+   },
+   "rationale": "2 robots mutually blocked for 95 s in zone 9",
+   "expected": 95.0,
+   "grade_after": 1767227620,
+   "dedup_key": "deadlock:13,12;14,12:2026-01-01T00:32:05Z"
+  },
+  {
+   "id": "6206b213245b65619216e2b7e50b7540391459fb",
+   "run": "s10-breakdown",
+   "kind": "deadlock",
+   "subject": "14,7;14,8",
+   "start_iso": "2026-01-01T00:36:40Z",
+   "decided_at": 1767227985,
+   "claim": {
+    "robots": [
+     "Z9-04",
+     "Z9-05"
+    ],
+    "cells": [
+     "14,7",
+     "14,8"
+    ],
+    "length_s": 185,
+    "resolution": "broke_up",
+    "min_s": 30,
+    "zone": "9"
+   },
+   "rationale": "2 robots mutually blocked for 185 s in zone 9",
+   "expected": 185.0,
+   "grade_after": 1767227985,
+   "dedup_key": "deadlock:14,7;14,8:2026-01-01T00:36:40Z"
+  }
+ ]
+}
