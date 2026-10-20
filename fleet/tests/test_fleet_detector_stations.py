@@ -26,9 +26,9 @@ from fleet_analyser.parse import Message, parse_line  # noqa: E402
 BASE = 1767225600
 
 
-def M(serial, step, order="o1", driving=False, x=3, y=4, zone="0"):
+def M(serial, step, order="o1", driving=False, x=3, y=4, zone="0", faulted=False):
     return Message(serial=serial, zone=zone, header_id=step, ts=BASE + 5 * step, order_id=order, x=x, y=y,
-                   driving=driving, faulted=False, loaded=False, raw_len=1)
+                   driving=driving, faulted=faulted, loaded=False, raw_len=1)
 
 
 def feed(msgs, **kw):
@@ -170,6 +170,55 @@ class TestByteIdentity(unittest.TestCase):
         if path is None:
             self.skipTest("fleet/data/s10-none absent in this checkout and the main one")
         self.assertEqual(event_stream_sha(path), want)
+
+    def test_i_stations_absent_event_stream_equals_master_on_sticky_phasea_zone0(self):
+        # inject: let Detector add a key to its events or change the state of a station-less run
+        want = _platform.expected("fleet_stream", "s13b_sticky_phasea_zone0_event_sha256")
+        path = find_file("results", "closed_loop_sticky", "phaseA", "zone0-000.jsonl.gz")
+        if path is None:
+            self.skipTest("results/closed_loop_sticky/phaseA absent in this checkout and the main one")
+        self.assertEqual(event_stream_sha(path), want)
+
+
+def dumps(ev):
+    return [json.dumps(e, sort_keys=True) for e in ev]
+
+
+class TestFaultBeatsServicing(unittest.TestCase):
+    """A faulted message is never SERVICING and never suppresses an episode open (pass 2)."""
+
+    def test_h1_faulted_throughout_a_station_stop_equals_stations_none(self):
+        # inject: restore `servicing = stuck_now and run.get("station", False)` (ignores m.faulted)
+        msgs = [M("Z0-00", s, faulted=True) for s in range(0, 19)]
+        want, _ = feed(msgs)
+        got, det = feed(msgs, stations={(3, 4)})
+        self.assertEqual(dumps(got), dumps(want))
+        o = opens(got)
+        self.assertEqual(len(o), 1)
+        self.assertEqual((o[0]["cause"], o[0]["t_entry"], o[0]["start"]), ("faulted_self", BASE + 30, BASE))
+        self.assertEqual(transitions(got, SERVICING), [])
+
+    def test_h2_servicing_then_faulted_opens_at_first_faulted_message(self):
+        # inject: restore `servicing = stuck_now and run.get("station", False)` (ignores m.faulted)
+        msgs = [M("Z0-00", s, faulted=s >= 8) for s in range(0, 19)]
+        ev, det = feed(msgs, stations={(3, 4)})
+        self.assertEqual([e["ts"] for e in transitions(ev, SERVICING)], [BASE + 30])
+        self.assertEqual([e["ts"] for e in transitions(ev, "FAULTED")], [BASE + 40])
+        o = opens(ev)
+        self.assertEqual(len(o), 1)
+        self.assertEqual((o[0]["cause"], o[0]["t_entry"], o[0]["start"]), ("faulted_self", BASE + 40, BASE))
+        self.assertEqual(det.servicing_runs, 1)  # the run stays counted: it was servicing before the fault
+
+    def test_h3_faulted_robot_on_a_station_is_the_blocker_of_an_adjacent_robot(self):
+        # inject: make the cause scan skip robots whose run is SERVICING
+        msgs = [M("Z0-00", s, faulted=True) for s in range(0, 19)] + \
+               [M("Z0-01", s, x=4, y=4) for s in range(0, 19)]
+        want, _ = feed(msgs)
+        got, _ = feed(msgs, stations={(3, 4)})
+        self.assertEqual(dumps(got), dumps(want))
+        nb = [e for e in opens(got) if e["robot"] == "Z0-01"]
+        self.assertEqual(len(nb), 1)
+        self.assertEqual((nb[0]["cause"], nb[0]["blocker"]), ("blocked_by_faulted", "Z0-00"))
 
 
 class TestFlags(unittest.TestCase):

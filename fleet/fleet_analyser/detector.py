@@ -73,7 +73,12 @@ class Detector:
         (their start and duration are lower bounds).
         stations: a set of (x, y) station GOAL cells, or a mapping zone -> such a set (key "*" = every other zone), or
         None (default: the rule is unaware of stations). A stopped run starting within `station_radius` (Manhattan) of
-        one is SERVICING instead of STUCK. servicing_runs counts the runs that became SERVICING."""
+        one is SERVICING instead of STUCK. servicing_runs counts the runs that became SERVICING.
+        A FAULTED message is never SERVICING and never suppresses an episode: the state is FAULTED and an episode opens
+        (cause faulted_self, start = run start) at the first faulted message once the run is >= stuck_after old, as with
+        stations=None. A run that was servicing and then faulted stays counted in servicing_runs (it was counted when it
+        became SERVICING); if the fault clears while still stopped on the station the state returns to SERVICING and the
+        open episode stays open until the run ends."""
         self.stuck_after = stuck_after
         self.resumed = resumed
         self.stations = stations
@@ -178,7 +183,7 @@ class Detector:
         elif run is not None:
             run["faulted_last"] = m.faulted
         stuck_now = run is not None and m.ts - run["since"] >= self.stuck_after
-        servicing = stuck_now and run.get("station", False)
+        servicing = stuck_now and run.get("station", False) and not m.faulted
         if servicing and not run.get("counted"):
             run["counted"] = True
             self.servicing_runs += 1
