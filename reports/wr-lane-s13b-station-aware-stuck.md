@@ -62,4 +62,30 @@ OK (skipped=7)
 
 An earlier run of the same gate (before the T14 test patch) had one error, test_t14_cli_workers_reaches_the_layout_pool, because auto_layouts moved to fleet_analyser.stations and the test patched the old name; fixed in the test, fleet.tests.test_fleet_timebudget 37/37 ok. The truth.json isolation tests (test_fleet_hotspot.TestAnalystIsolation, test_time_to_detect isolation scan) are part of this gate and ok. `python -m unittest fleet.tests.test_fleet_detector_stations -v`: 12 tests, all ok, none skipped on darwin-arm64 (the MoRoOp raw dir is in the main checkout).
 
-SCHED_RESULT: OK S13B station-aware stuck rule: detector SERVICING + flags on ingest/deadlock/timebudget/moroop, stations-absent bytes equal master, gate 1085 ok, wr-s13b-rerun command written and smoked on a copy (157 s)
+## Pass 2
+
+Cause of the pass-1 refutations: one defect, not two. `_step` computed `servicing = stuck_now and run station flag` without looking at `m.faulted`, so a faulted robot stopped on a station opened no episode (and, because the episode was missing, the faulted robot's episode could not be seen in the event list at all); the suite never fed a faulted message, so it could not tell. The two verdicts (correctness, test-honesty) are the code half and the test half of that one gap.
+
+Fix (fleet/fleet_analyser/detector.py `_step`): `servicing = stuck_now and run.get("station", False) and not m.faulted`. A FAULTED message is never SERVICING and never suppresses the open guard. The Detector docstring now states that a run that was servicing and later faulted stays counted in `servicing_runs` (counted when it became SERVICING), and that if the fault clears on the station the state returns to SERVICING with the opened episode left open until the run ends.
+
+New tests, fleet/tests/test_fleet_detector_stations.py (class TestFaultBeatsServicing, plus test_i), all ok on darwin-arm64, none skipped. Result against the pass-1 detector (head 36ee8a9, same tests, detector.py unfixed):
+
+- h1 (faulted throughout a 90 s stop on (3,4), stations={(3,4)} vs stations=None, json.dumps sort_keys per event): FAILS at `assertEqual(dumps(got), dumps(want))`, 2 events missing (the faulted_self episode_open at 30 s and its close).
+- h2 (not faulted 40 s on the station, then faulted 40-90 s): FAILS at `assertEqual(len(opens), 1)`, 0 != 1 (FAULTED transition appears but no episode opens).
+- h3 (faulted robot on a station, adjacent off-station robot): FAILS at `assertEqual(dumps(got), dumps(want))`, the fault robot's 2 episode events are missing from the stations run (the neighbour's blocked_by_faulted episode with blocker Z0-00 is present in both; so the blocker lookup itself was not broken on 36ee8a9, the divergence is the missing faulted episode).
+- All three pass after the fix.
+- test_i pins the stations=None event-stream sha256 of results/closed_loop_sticky/phaseA/zone0-000.jsonl.gz (6000 messages, 418 events) at tests/platform_expected.json fleet_stream.darwin-arm64.s13b_sticky_phasea_zone0_event_sha256 = 880568466599e4e0059eb6ab11ec55213f8d121863b746bf42d3620e647a2420 (same serialisation and feed order as test e). The file is untracked; the test reads it from the main checkout through find_file (read-only). ok on darwin-arm64 (equal to the master value); linux has no value, so it skips visibly. Test e (s10-none) is still ok. Tests a-g and the flag tests are unchanged and ok.
+
+Fence: fleet/timebudget.py `run_is_stuck` (and deadlock.py) are not edited in this pass. `run_is_stuck` judges a run by its first cell and has no fault check, so a run on a station that is faulted part-way now has a detector episode while timebudget books its non-faulted seconds to stopped_short; faulted messages are bucketed as faulted first, so the divergence is small. Test g has no faulted case.
+
+Gate: `.venv/bin/python -m unittest discover -s tests` (root tests plus the fleet tests collected by tests/test_fleet_collect.py), run from this worktree with the main checkout's interpreter:
+
+```
+Ran 1089 tests in 648.652s
+
+OK (skipped=7)
+```
+
+(1085 in pass 1 plus h1, h2, h3, test_i.)
+
+SCHED_RESULT: OK S13B station-aware stuck rule: detector SERVICING + flags on ingest/deadlock/timebudget/moroop, stations-absent bytes equal master, pass 2 faulted-beats-servicing fix, gate 1089 ok, wr-s13b-rerun command written and smoked on a copy (157 s)
