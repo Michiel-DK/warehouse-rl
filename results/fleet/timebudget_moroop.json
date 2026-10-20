@@ -31,6 +31,11 @@
    "reason": "the brief asks rows and seconds per state / operating_mode value without a gap rule"
   },
   {
+   "deviation": "removed rows = max(id) - min(id) + 1 - rows, not max(id) - rows",
+   "item": "removed rows",
+   "reason": "ids continue across shifts (a shift's ids do not start at 1), so max(id) - rows would add the earlier shifts' rows; for shift 0 (ids from 1) the two agree"
+  },
+  {
    "deviation": "nearest rank: sorted[ceil(p * n) - 1]",
    "item": "percentiles",
    "reason": "deterministic and dependency free"

@@ -765,7 +765,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 2,
-    "removed_rows": 15900,
+    "removed_rows": 351,
     "rows_collapsed": 495,
     "state_rows": {
      "Idle": 1685,
@@ -1436,7 +1436,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 0,
-    "removed_rows": 31297,
+    "removed_rows": 359,
     "rows_collapsed": 543,
     "state_rows": {
      "Idle": 1766,
@@ -2100,7 +2100,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 0,
-    "removed_rows": 47164,
+    "removed_rows": 314,
     "rows_collapsed": 550,
     "state_rows": {
      "Idle": 1703,
@@ -2783,7 +2783,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 0,
-    "removed_rows": 62780,
+    "removed_rows": 364,
     "rows_collapsed": 538,
     "state_rows": {
      "Idle": 1652,
@@ -3472,7 +3472,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 0,
-    "removed_rows": 78285,
+    "removed_rows": 323,
     "rows_collapsed": 503,
     "state_rows": {
      "Idle": 1673,
@@ -4179,7 +4179,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 17,
-    "removed_rows": 93795,
+    "removed_rows": 342,
     "rows_collapsed": 497,
     "state_rows": {
      "Idle": 1575,
@@ -4838,7 +4838,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 0,
-    "removed_rows": 108820,
+    "removed_rows": 314,
     "rows_collapsed": 460,
     "state_rows": {
      "Idle": 1561,
@@ -5560,7 +5560,7 @@
     "overlap_rows": 0,
     "overlap_seconds": 0,
     "paused_messages": 0,
-    "removed_rows": 124692,
+    "removed_rows": 237,
     "rows_collapsed": 462,
     "state_rows": {
      "Idle": 1543,
