@@ -244,3 +244,223 @@ question and returned HTTP 429 every time. Google Scholar was not attempted.
   Shofer ICAPS 2023, Malka IROS 2024.
 
 Rerun these on Semantic Scholar when it is not rate limited, before any of these absences fronts a pitch or a paper.
+
+## Part 2: fleet management, deadlock, utilisation, connectivity (2026-10-20)
+
+Scope: the field the Sprint 12 lanes build into: S12A, a per-robot time budget, and S12B, a deadlock finder and a WiFi
+gap map (laptop-scheduler `jobs/wr-lane-s12a-time-budget.md`, `jobs/wr-lane-s12b-deadlock-gapmap.md`; neither merged
+when this was written). The rules are as in Part 1. One pass on 2026-10-20 with WebSearch and WebFetch only; the query
+log is in `reports/wr-dev-lit-fleet-management.md`. **Coverage:** Semantic Scholar was not queried and Google Scholar
+was not tried. Crossref answered 429 twice, and both queries succeeded on retry. ACM, MDPI and ISO full texts returned
+403, and VDI, ISO and SEMI texts are paywalled (only public contents pages, abstracts and a corrigendum were read).
+Every absence means "not found in the queries in the report".
+
+### 1. AGV / AMR deadlock detection and resolution
+
+The classic line treats AGVs as a resource allocation system: zones or cells are the resources, and a deadlock is a
+circular wait in the sense of Coffman, Elphick & Shoshani (1971). The canonical approaches are digraph and Petri-net
+avoidance (Fanti et al. 1997; Fanti, Maione & Turchiano 2000; Wu & Zhou 2005, Part 1), banker's-algorithm avoidance
+(Lawley, Reveliotis & Ferreira 1998; Reveliotis 2000 for AGV conflicts), zone control (Ho & Liao 2009) and time-window
+routing (Kim & Tanchoco 1991; ter Mors et al. 2010). Vis (2006) and Qiu et al. (2002) survey the field. The
+often-cited review by Fazlollahtabar & Saidi-Mehrabad (2013) is **retracted**. Almost all of this work *avoids*
+deadlock in the controller. Detection means searching the controller's own wait-for graph for cycles (Cho et al. 1995;
+Bonetti et al. 2026, Part 1).
+
+The modern line has the same split. RHCR resolves collisions only within a bounded horizon (Li et al. 2021), and the
+RHCR and traffic-flow (Chen et al. 2024) abstracts do not mention deadlock. Action dependency graphs keep execution
+deadlock-free (Hönig et al. 2019, Part 1). Open-RMF sends conflicts to a "negotiation between the fleet managers",
+warns that fleets outside it "will likely result in deadlocks", and fires a `deadlock_callback` "when a deadlock has
+occurred due to an unresolvable conflict" ("Human intervention may be required"), a negotiation signal, not one read
+from positions. Grover, Liu & Sycara define deadlock as "an equilibrium of system dynamics that causes the robots to
+stall". No method was found that detects robot deadlock **from logs** of observed state rather than planner or
+negotiation state (about three queries).
+
+**Names.** "A cycle in the robot-blocks-robot graph" is the standard **circular wait** in a **wait-for graph**. In the
+AND model, "A deadlock occurs in a schedule if and only if there is at least one cycle in the wait-for graph"; in the
+OR model a deadlock needs a **knot** (Wikipedia, wait-for graph). The ">= T seconds" persistence has **no standard
+name or definition** in anything found; Open-RMF's callback is event-based. The traffic analogue is **gridlock**, "an
+extreme traffic state where vehicle cannot move at all", formed by a "congestion loop" (Qi et al. 2015). **Our word
+"knot" collides with the standard term.** A knot is a node set where "every vertex in the knot has outgoing edges" and
+"all outgoing edges from vertices in the knot have other vertices in knot as destinations" (U. Iowa notes; Misra &
+Chandy 1982 call it "a useful concept in deadlock detection"; Holt 1972 not read, ACM 403). In the S12B graph each
+robot has at most one blocker, so a knot is exactly a cycle, which the lane calls a *deadlock*. The lane's acyclic
+chain is the opposite of a knot. No formal name for an acyclic chain was found. Fanti et al. 1997's **second level
+deadlocks** "inevitably evolve to circular waits" (snippet only), a forecast, not a chain; Bonetti et al. 2026's
+**nested acyclic deadlocks** are deadlocks. The plain term is **blocking chain**, with chain length as its depth.
+
+### 2. Fleet KPIs and utilisation
+
+**VDI** guidelines are paywalled; only contents pages, abstracts and a corrigendum were read. VDI 3581 (2004) derives
+availability from Einschaltzeit (operating plus standby) and Ausfallzeit; its corrigendum combines units in series as
+η_S = η5·η12·η13·η14 and in parallel as η_S = η5·(1 − μ12·μ13·μ14). VDI 3649 defines availability as the probability
+of finding a system "in einem funktionsfähigen Zustand" (quoted by Follert & Nagel 2006, who note that short local
+disturbances cut throughput without moving time-based availability). VDI 4486 (2012) measures availability by "waiting
+times or lead times", the closest VDI idea to a time budget. VDI 2510 (2025 draft, pp. 1-3) has no chapter on KPIs or
+time categories, and VDI 4451 Blatt 7's §4.3.3 "Statistik" is behind the paywall. **No VDI or ISO taxonomy that
+separates waiting from blocked was found**; ISO 3691-4 covers safety only.
+
+**Equipment-state standards.** SEMI E10 has "six mutually exclusive, basic equipment states": productive, standby,
+engineering, scheduled downtime, unscheduled downtime and non-scheduled. Standby "includes such equipment states as no
+operator available, no product available" (names from patent US5740429, which cites an older edition). ISO 22400-2,
+read via OPC 40001-1 C.2, separates production time APT, delay time ADET ("out of service while an order is
+registered") and down time ADOT. The one OEE adaptation for AGVs found is "Overall Transport Efficiency" (Foit et al.
+2020, abstract).
+
+**VDA 5050** (3.0.0 and 2.1.0) has **no robot state taxonomy**: no busy or waiting field, WAITING only as an action
+status. `driving` means driving "(manual or automatic)"; "Other movements (e.g., lift movements) are not included".
+`paused` leaves the robot able to "resume the order". Idle is derived (line 1241): `nodeStates` and `edgeStates` empty
+and all actions "either 'FINISHED' or 'FAILED'". `operatingMode` (3.0) adds STARTUP and INTERVENED to AUTOMATIC,
+SEMIAUTOMATIC, MANUAL, SERVICE, TEACH_IN. `errorLevel` WARNING and URGENT are "able to continue active order",
+CRITICAL and FATAL are not (line 1899). **Fleet managers:** openTCS has UNKNOWN, UNAVAILABLE, ERROR, IDLE, EXECUTING,
+CHARGING (plus AWAITING_ORDER / PROCESSING_ORDER); Open-RMF `RobotMode` has IDLE, CHARGING, MOVING, PAUSED, WAITING,
+EMERGENCY, DOCKING, ADAPTER_ERROR and others; no vendor definitions were found (MiR, ANT, NDC8, Locus).
+
+**AGV simulation.** Standridge (ch. 17) counts utilisation as "loaded travel time, travel time while empty, blocked
+time, load time, and unload time", with idle kept separate. Blocking delays "could account for 2%-20% of the
+transaction cycle times" (Roy et al. 2016).
+
+**Taxonomy to adopt:** the SEMI E10 classes on top, with VDA 5050 fields as the evidence.
+
+| our bucket (S12A) | adopt as | standard anchor | where ours disagrees |
+|---|---|---|---|
+| `moving` | productive: travel | VDA `driving`; Standridge loaded/empty travel | none |
+| `waiting_station` | productive: load/unload, or standby: queued | Standridge counts load/unload as utilised; `driving` excludes lift moves | mixes being served with queueing; the stream cannot split them without action states |
+| `waiting_shelf` | standby: no operator | SEMI E10 "no operator available" | name it "waiting for picker" |
+| `stuck` | blocked (>= 30 s) | Standridge "blocked time"; ISO delay time | the 30 s is ours (Part 1 Nav2 rule), not a standard |
+| `stopped_short` | blocked: congestion wait | Standridge congestion | none |
+| `faulted` | unscheduled downtime | SEMI E10; ISO ADOT; openTCS ERROR | ours is "errors non-empty"; WARNING/URGENT robots keep driving, so only CRITICAL/FATAL should count (our emitter writes only FATAL, `fleet/fleet_analyser/emitter.py:92`) |
+| `idle` | standby: no work | VDA §6.6.8; openTCS AWAITING_ORDER | ours tests `orderId` empty, VDA tests empty node/edge/action states |
+| (missing) | charging, paused / e-stop, manual mode, no data | openTCS CHARGING/UNKNOWN; RMF PAUSED/EMERGENCY; VDA `paused`, `operatingMode`, HIBERNATING | a paused robot with an order lands in `stuck`; seconds inside a message gap get a state nobody observed |
+
+### 3. Congestion and throughput metrics
+
+Lifelong MAPF reports **throughput**, "the average number of goal locations visited per timestep" (RHCR). The League
+of Robot Runners scores "the throughput of a solution over the best throughput among all solutions submitted" (Jiang
+et al. 2024; no organisers' paper was found), and guidance-graph work reports throughput only (Zhang et al. 2024).
+
+Congestion enters as a **planning cost**. Chen et al. 2024 define vertex congestion as "the least total delay that
+will occur assuming all agents enter the vertex at the same time". Two position-only measures were found: Arita &
+Okumura 2026 (preprint) plot a "heatmap of vertex stop counts" and fail an episode "once the number of non-moving
+agents exceeds half of the team", and Standridge counts the "average number of AGV's waiting due to contention for
+control points". No "wait ratio" or "congestion index" standard was found. RWARE reports returns only (Papoudakis et
+al. 2021); TA-RWARE reports "pick rate, defined as order-lines per hour" (Krnjaic et al., which gives no seconds per
+step: our 5 s is from upstream `scripts/run_heuristic.py:56`, `docs/SCOPE.md:46`); Kiva reports field productivity
+and no congestion metric (Wurman et al. 2008). Our per-cell stop counts (S8 cost map) match the one MAPF example;
+neither is a benchmark standard.
+
+### 4. Connectivity mapping from robot telemetry
+
+Robots map radio coverage from **signal strength**: Gaussian-process maps (Fink & Kumar 2010, snippet
+only), RCAMP's online radio map with self-repair after loss (Caccamo et al. 2017), and an AGV
+coverage-hole map (Zarour et al. 2023). Location-tagged **packet loss** comes from **active tests**. O'Brien et al.
+2025 log "latency, packet loss, bandwidth ... continuously" with "spatial localization". Simbe US11897148B2 records
+"latency, throughput, packet loss, signal strength" by location into a heatmap and scans it for "dead zones". **No
+passive inference of dead zones from gaps in ordinary telemetry, which is what the S12B gap map does, was found.**
+
+VDA 5050 supports the signal and limits it. headerId is "incremented by 1 with each sent (but not necessarily
+received) message", per topic (line 1458), so a jump is a loss; state goes out "when relevant events occur or at least
+every 30 seconds" (line 1034), so a time gap alone is not. The heartbeat is the MQTT last will: the `connection` topic
+(QoS 1; `state` is best effort) reports ONLINE, OFFLINE, HIBERNATING or CONNECTION_BROKEN, the last "detected via a
+heartbeat that is exchanged between the broker and the client". On disconnect the robot "keeps all the order
+information and fulfills the order up to the last released node" (line 187), so a gap is not a stop, a drop shorter
+than the keepalive leaves only the headerId jump, and HIBERNATING stops messages on purpose. How Open-RMF handles lost
+state updates is an unanswered forum question (2026-08-31).
+
+### 5. Log-based fleet analytics in the literature
+
+Analyses of real AGV/AMR logs are few and small. **No public multi-robot warehouse fleet log with positions, errors
+and sequence numbers was found.** What exists:
+
+| dataset | fleet | contents | size | available |
+|---|---|---|---|---|
+| MoRoOp, Klein & Jeong 2026 | 1 AMR, laboratory kit supply | jobs, dispatch events, robot state (pose, velocity, battery), delays, failed navigation | 9 × 8 h shifts, 1,382 jobs, 140,386 state rows | CC BY 4.0, Hugging Face parquet |
+| Sharma 2026, Zenodo | 1 real AGV + simulated traffic | OPC UA telemetry | 13 sessions, 25,976 1-s records | CC BY 4.0 |
+| AI4Mobile, Hernangómez et al. 2024 | 3 AGVs (10 h); 1 cleaning robot (16 h) | radio quality, delay, throughput, positions | as stated | IEEE DataPort, login, licence not stated |
+
+WINGS ICT (Zenodo, CC BY 4.0) has one AGV's location; no data was found for Benecki et al. 2024 (Part 1). MoRoOp, the
+first real AMR log in either part, can exercise the time budget but not deadlock or congestion: one robot, and by its
+own scope no multi-vehicle effects. AI4Mobile alone pairs positions with radio measurements, so it is the one public
+place a gap map could be checked.
+
+### What this means for us (Part 2)
+
+**Time budget: standard, with names we should use.** SEMI E10 (productive / standby / unscheduled downtime),
+Standridge (travel / blocked / load-unload / idle) and VDI 4486 (availability by waiting time) already cover it; the
+seven buckets are a fleet specialisation, not a new metric. Two fixes follow: `faulted` should need errorLevel
+CRITICAL or FATAL, since VDA 5050 robots with WARNING or URGENT continue their order, and seconds with no message need
+their own bucket (paused, charging and manual mode later). **Deadlock finder: standard, with a name.** A persisting
+cycle is a circular wait in a wait-for graph (Cho et al. 1995; Bonetti et al. 2026); T is our parameter, not part of
+the definition. **Stop calling the acyclic chain a "knot"**: in deadlock theory a knot is the closed set that *is* the
+deadlock, so rename it "blocking chain" in code, JSON and README table (o) before any number is written. Bonetti et
+al. 2026, which also finds nested acyclic deadlocks, is the method to compare against; ours differs only in reading
+edges from observed state. **Gap map: not found in its passive form.** Active packet-loss maps (O'Brien et al. 2025;
+Simbe) measure the link directly and are the stronger method wherever a robot can run probes. Table (p) should say
+"message-loss cells inferred from headerId gaps", not "WiFi dead zones": a VDA 5050 robot keeps driving through a
+disconnect, and a broker- or consumer-side drop leaves the same gap with no location cause. Vocabulary for (o) and
+(p): "wait-for graph", "circular wait (deadlock)", "blocking chain", productive / standby / blocked / downtime, and
+MAPF "throughput" for jobs per robot-hour. Stop claiming deadlock detection or a robot time budget as ours: only the
+from-logs, no-planner-access setting of each was not found, and that absence rests on a few queries.
+
+### Papers and sources (Part 2)
+
+All rows verified@2026-10-20. Read depth: A = text read (A\* = through a summarising fetch, wording not grep-checked);
+A- = abstract or record page; M = metadata only; S = search snippet only.
+
+| § | Authors / org, year | Title (short) | Venue | URL | Read | Used for |
+|---|---|---|---|---|---|---|
+| 1 | Coffman, Elphick, Shoshani 1971 | System deadlocks | ACM Computing Surveys 3(2) | https://doi.org/10.1145/356586.356588 | M | deadlock conditions |
+| 1 | Holt 1972 | Some deadlock properties of computer systems | ACM Computing Surveys 4(3) | https://doi.org/10.1145/356603.356607 | M (403) | knot origin, wording not read |
+| 1 | Misra, Chandy 1982 | A distributed graph algorithm: knot detection | ACM TOPLAS 4(4) | https://doi.org/10.1145/69622.357190 | A- | knot in deadlock detection |
+| 1 | U. Iowa 22C:116 (Jones) | Lecture notes 08, deadlock | course page | https://homepage.divms.uiowa.edu/~jones/opsys/spring02/notes/08.html | A | knot definition |
+| 1 | Wikipedia | Wait-for graph | web | https://en.wikipedia.org/wiki/Wait-for_graph | A | cycle / knot, AND / OR |
+| 1 | Fanti, Maione, Mascolo, Turchiano 1997 | Event-based feedback control for deadlock avoidance in FPS | IEEE T-RA 13(3) | https://doi.org/10.1109/70.585898 | M (+S) | second level deadlock |
+| 1 | Fanti, Maione, Turchiano 2000 | Comparing digraph and Petri net approaches to deadlock avoidance | IEEE T-SMC-B 30(5) | https://doi.org/10.1109/3477.875452 | M | Petri net vs digraph |
+| 1 | Lawley, Reveliotis, Ferreira 1998 | Banker's algorithm for deadlock-free buffer allocation in FMS | Int. J. Flexible Manuf. Syst. 10 | https://doi.org/10.1023/a:1007969601583 | M | banker's algorithm |
+| 1 | Reveliotis 2000 | Conflict resolution in AGV systems | IIE Transactions 32(7) | https://doi.org/10.1080/07408170008967423 | M | AGV conflicts |
+| 1 | Kim, Tanchoco 1991 | Conflict-free shortest-time bidirectional AGV routeing | Int. J. Production Research 29(12) | https://doi.org/10.1080/00207549108948090 | M | time windows |
+| 1 | ter Mors, Witteveen, Zutt, Kuipers 2010 | Context-aware route planning | MATES 2010 (LNCS) | https://doi.org/10.1007/978-3-642-16178-0_14 | M | time windows |
+| 1 | Ho, Liao 2009 | Zone design and control in a zone-control AGV system | Computers & Industrial Eng. 56(1) | https://doi.org/10.1016/j.cie.2008.07.007 | M | zone control |
+| 1 | Vis 2006 | Survey of research in design and control of AGV systems | EJOR 170(3) | https://doi.org/10.1016/j.ejor.2004.09.020 | M | survey |
+| 1 | Qiu, Hsu, Huang, Wang 2002 | Scheduling and routing algorithms for AGVs: a survey | Int. J. Production Research 40(3) | https://doi.org/10.1080/00207540110091712 | M | survey |
+| 1 | Fazlollahtabar, Saidi-Mehrabad 2013 | AGV scheduling and routing: a review | J. Intell. Robot. Syst. **RETRACTED** | https://doi.org/10.1007/s10846-023-01923-1 | M | do not cite |
+| 1,3 | Li, Tinka, Kiesel, Durham, Kumar, Koenig 2021 | Lifelong MAPF in large-scale warehouses (RHCR) | AAAI 2021 | https://arxiv.org/abs/2005.07371 | A | bounded horizon; throughput |
+| 1,3 | Chen, Harabor, Li, Stuckey 2024 | Traffic flow optimisation for lifelong MAPF | AAAI 2024 | https://doi.org/10.1609/aaai.v38i18.30054 | A\* | congestion as planning cost |
+| 1 | Grover, Liu, Sycara | The before, during and after of multi-robot deadlock | IJRR (WAFR 2020 issue) | https://arxiv.org/abs/2206.01781 | A- | dynamic definition |
+| 1 | Open-RMF | RMF core (book) and `EasyTrafficLight::Blocker` API | docs | https://osrf.github.io/ros2multirobotbook/rmf-core.html ; https://openrmf.readthedocs.io/projects/rmf-ros2/en/latest/api/classrmf__fleet__adapter_1_1agv_1_1EasyTrafficLight_1_1Blocker.html | A | negotiation, `deadlock_callback` |
+| 1 | Qi et al. 2015 | Spatial development of urban road network traffic gridlock | Int. J. Civil Engineering 13(4) | https://ijce.iust.ac.ir/article-1-1010-en.html | A | gridlock |
+| 2 | VDI 2004 (+2006 corrigendum) | VDI 3581 Availability of transport and storage systems | VDI guideline | https://www.vdi.de/fileadmin/pages/vdi_de/redakteure/richtlinien/inhaltsverzeichnisse/9774307.pdf | A- (contents, corrigendum) | availability formulas |
+| 2 | VDI 2012 | VDI 4486 Performance availability | VDI guideline | https://vdi.de/richtlinien/details/vdi-4486-reliability-for-intralogistics-performance-availability | A- | waiting-time availability |
+| 2 | VDI 2025 (draft) | VDI 2510 Fahrerlose Transportsysteme | VDI guideline | https://www.vdi.de/2510 | A (pp. 1-3) | no KPI chapter |
+| 2 | VDI 2005 | VDI 4451 Blatt 7 Leitsteuerung für FTS | VDI guideline | https://vdi.de/richtlinien/details/vdi-4451-blatt-7-compatibility-of-automated-guided-vehicle-systems-agvs-agvs-guidance-control-system | A- (contents) | §4.3.3 Statistik |
+| 2 | Follert, Nagel 2006 | Verfügbarkeit intralogistischer Systeme | Logistics Journal | https://edrev.logistics-journal.de/article/download/114/116/1044 | A | VDI 3649 quote, critique |
+| 2 | SEMI 2022 | E10 Equipment RAM and utilization | SEMI standard (store page) | https://store-us.semi.org/products/e01000-semi-e10-specification-for-definition-and-measurement-of-equipment-reliability-availability-and-maintainability-ram-and-utilization | A- | six states |
+| 2 | AMD, US5740429 (1998) | Equipment state tracking (cites SEMI E10) | patent | https://patents.google.com/patent/US5740429 | A\* | E10 state names, standby |
+| 2 | OPC Foundation | OPC 40001-1 Annex C.2 (ISO 22400-2 times) | spec page | https://reference.opcfoundation.org/specs/OPC-40001-1/c-2 | A\* | APT / ADET / ADOT |
+| 2 | Foit, Gołda, Kampa 2020 | OEE metrics for AGV intra-logistics | Processes 8(12) | https://doi.org/10.3390/pr8121648 | A- | Overall Transport Efficiency |
+| 2,4 | VDA / VDMA | VDA 5050 v3.0.0 (main) and 2.1.0 | spec, GitHub | https://github.com/VDA5050/VDA5050/blob/main/VDA5050_EN.md | A (grepped) | fields, idle, errorLevel, headerId, connection |
+| 2 | openTCS | `Vehicle.java` (master) | source | https://github.com/openTCS/opentcs/blob/master/opentcs-api-base/src/main/java/org/opentcs/data/model/Vehicle.java | A\* | vehicle states |
+| 2 | Open-RMF | `RobotMode.msg` | source | https://github.com/open-rmf/rmf_internal_msgs/blob/main/rmf_fleet_msgs/msg/RobotMode.msg | A\* | robot modes |
+| 2 | Standridge | Beyond Lean, ch. 17 AGV systems | open textbook (LibreTexts) | https://eng.libretexts.org/Bookshelves/Industrial_and_Systems_Engineering/Beyond_Lean_-_Simulation_in_Practice_(Standridge)/17%3A_Automated_Guided_Vehicle_Systems | A\* | utilisation, congestion |
+| 2 | Roy, Krishnamurthy, Heragu, Malmborg 2016 | Blocking in AVS/RS | Eur. J. Industrial Eng. 10(1) | https://ideas.repec.org/a/ids/eujine/v10y2016i1p51-80.html | A- | blocking 2-20% |
+| 3 | Jiang, Zhang, Veerapaneni, Li 2024 | Scaling lifelong MAPF (Robot Runners) | SoCS 2024 | https://arxiv.org/abs/2404.16162 | A\* | competition score |
+| 3 | Zhang, Jiang, Bhatt, Nikolaidis, Li 2024 | Guidance graph optimization | IJCAI 2024 | https://arxiv.org/abs/2402.01446 | A- | throughput |
+| 3 | Arita, Okumura 2026 | Lifelong LaCAM with local guidance | arXiv preprint | https://arxiv.org/abs/2605.16855 | A\* | stop-count heatmap, failure rule |
+| 3 | Papoudakis, Christianos, Schäfer, Albrecht 2021 | Benchmarking multi-agent deep RL | NeurIPS 2021 D&B | https://arxiv.org/abs/2006.07869 | A | RWARE returns |
+| 3 | Krnjaic et al. 2024 | TA-RWARE (Part 1 row) | IROS 2024 per arXiv | https://arxiv.org/abs/2212.11498 | A (grepped) | pick rate, no s/step |
+| 3,5 | Wurman, D'Andrea, Mountz 2008 | Coordinating hundreds of autonomous vehicles in warehouses | AI Magazine 29(1) | https://doi.org/10.1609/aimag.v29i1.2082 | A | Kiva field results |
+| 4 | Fink, Kumar 2010 | Online methods for radio signal mapping with mobile robots | ICRA 2010 | https://ieeexplore.ieee.org/document/5509574 | S | RSSI mapping |
+| 4 | Caccamo, Parasuraman, Freda, Gianni, Ögren 2017 | RCAMP | IROS 2017 | https://arxiv.org/abs/1710.09303 | A- | radio map, self-repair |
+| 4 | Zarour, Tayade, Melnyk, Schotten 2023 | Coverage hole elimination in industrial environment | VTC2023-Spring | https://arxiv.org/abs/2311.04011 | A- | coverage holes for AGVs |
+| 4 | O'Brien, Dooley, Penica, McGrath, O'Connell 2025 | Real-time diagnostics of 5G and Wi-Fi using mobile robotics | J. Sensor Actuator Netw. 14(6) | https://doi.org/10.3390/jsan14060110 | A- | active packet-loss map |
+| 4 | Simbe Robotics, US11897148B2 (2024) | Network coverage testing by a mobile robot | patent | https://patents.google.com/patent/US11897148B2 | A\* | dead-zone heatmap |
+| 4 | Open Robotics Discourse 2026 | RMF and lost state updates (thread 57782) | forum | https://discourse.openrobotics.org/t/57782 | A\* | unanswered |
+| 4,5 | Hernangómez et al. 2024 | AGV communication and sensor measurement datasets | IEEE Comm. Magazine 62(4) | https://arxiv.org/abs/2301.03364 | A- | radio + positions data |
+| 5 | Klein, Jeong 2026 | MoRoOp: AMR operations dataset | arXiv preprint (submitted to Sci. Data) | https://arxiv.org/abs/2610.02428 ; https://huggingface.co/datasets/Self-Organizing-Production-Logistics/MoRoOp | A- (+HF file list) | the one real AMR log |
+| 5 | Sharma 2026 | Availability-aware integration of dispatched plans and AGV execution | Zenodo dataset | https://doi.org/10.5281/zenodo.23393677 | M | 1 AGV + sim |
+| 5 | WINGS ICT | Use case 3 datasets | Zenodo dataset | https://doi.org/10.5281/zenodo.10204117 | M | 1 AGV location |
+
+Not verified and kept out of the text: Holt's own knot wording; the current SEMI E10 / E79 and ISO 22400-2 texts; VDI
+3581's per-element formula and VDI 4451-7 §4.3.3; Foit et al.'s OEE definitions; vendor state models; openTCS, Nav2
+and AWS RoboRunner behaviour on lost connection; MoRoOp's "stuck reason" field (summarised fetch only). The S row
+(Fink & Kumar) backs only "RSSI mapping exists". Rerun the absence claims on Semantic Scholar before any of them
+fronts a pitch.
