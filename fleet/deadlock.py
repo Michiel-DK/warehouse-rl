@@ -18,7 +18,7 @@ the batch's messages:
   exactly one adjacent robot          -> one edge to it (traffic); several or none -> no edge
 ALL qualifying neighbours, not only the lowest serial the detector records as `blocker`: with a single lowest-serial
 blocker three stuck robots in a line would read as a 2-cycle plus a hanger-on. A traffic edge always points at a robot that
-is not STUCK, so it can never close a cycle; it is inert for cycles and kept only for the length of a knot chain.
+is not STUCK, so it can never close a cycle; it is inert for cycles and kept only for the length of a blocking chain.
 
 What a "blocking cluster" is here, and why it is not called a deadlock (S12C, docs/LITERATURE.md Part 2 section 1).
 `_near` is symmetric and the grid is bipartite, so two adjacent STUCK robots with no faulted neighbour always block each

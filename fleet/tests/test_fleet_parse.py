@@ -95,7 +95,7 @@ class TestParse(unittest.TestCase):
         names = {f.name for f in dataclasses.fields(Message)}
         self.assertEqual(names, {"serial", "zone", "header_id", "ts", "order_id", "x", "y", "driving", "faulted",
                                  "loaded", "raw_len", "theta", "next_x", "next_y",
-                                 "nodes_reported"})
+                                 "nodes_reported", "paused"})
         msg, _ = parse_line(raw(custom={"stuck_count": 999, "sentinel": "SENTINEL-VALUE"}))
         values = [getattr(msg, n) for n in names]
         self.assertNotIn(999, [v for v in values if not isinstance(v, bool)])
@@ -109,6 +109,58 @@ class TestParse(unittest.TestCase):
             msg, reason = parse_line(raw(custom=custom))
             self.assertIsNone(reason)
             self.assertEqual(msg.serial, "Z3-04")
+
+
+class TestFaultedLevel(unittest.TestCase):
+    """Message.faulted is true iff some errors entry is a dict whose errorLevel is CRITICAL or FATAL; nothing is rejected."""
+
+    def faulted(self, errors):
+        msg, reason = parse_line(raw(errors=errors))
+        self.assertIsNone(reason)
+        return msg.faulted
+
+    def test_levels(self):
+        # inject: go back to bool(errors)
+        self.assertFalse(self.faulted([{"errorType": "X", "errorLevel": "WARNING"}]))
+        self.assertFalse(self.faulted([{"errorType": "X", "errorLevel": "URGENT"}]))
+        self.assertTrue(self.faulted([{"errorType": "X", "errorLevel": "CRITICAL"}]))
+        self.assertTrue(self.faulted([{"errorType": "X", "errorLevel": "FATAL"}]))
+        self.assertFalse(self.faulted([]))
+
+    def test_missing_level_and_non_dict_entries_do_not_fault(self):
+        # inject: treat a missing level or a string entry as faulted
+        self.assertFalse(self.faulted([{"errorType": "X"}]))
+        self.assertFalse(self.faulted([{"errorType": "X", "errorLevel": None}]))
+        self.assertFalse(self.faulted([{"errorType": "X", "errorLevel": "fatal"}]))
+        for entry in ("FATAL", 7, None, ["FATAL"]):
+            self.assertFalse(self.faulted([entry]), entry)
+
+    def test_any_entry_counts(self):
+        # inject: look at the first entry only
+        self.assertTrue(self.faulted([{"errorLevel": "WARNING"}, "junk", {"errorLevel": "FATAL"}]))
+
+    def test_errors_not_a_list_is_still_rejected_as_type(self):
+        # the type check is unchanged: errors must be a list
+        for bad in (None, {}, "FATAL"):
+            self.assertEqual(parse_line(raw(errors=bad)), (None, "type"))
+        self.assertEqual(parse_line(raw(errors=MISSING)), (None, "missing:errors"))
+
+
+class TestPaused(unittest.TestCase):
+    def test_paused_only_when_exactly_true(self):
+        # inject: bool(obj.get("paused")) (the string "false" or 1 would then pause)
+        self.assertTrue(parse_line(raw(paused=True))[0].paused)
+        self.assertFalse(parse_line(raw(paused=False))[0].paused)
+        for odd in (MISSING, None, "true", 1, [True]):
+            msg, reason = parse_line(raw(paused=odd))
+            self.assertIsNone(reason)
+            self.assertFalse(msg.paused, odd)
+
+    def test_paused_is_the_last_field_with_default_false(self):
+        # inject: put paused before nodes_reported or drop the default
+        fields = dataclasses.fields(Message)
+        self.assertEqual(fields[-1].name, "paused")
+        self.assertIs(fields[-1].default, False)
 
 
 if __name__ == "__main__":

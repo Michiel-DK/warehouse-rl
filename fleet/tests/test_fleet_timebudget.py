@@ -5,6 +5,7 @@ stream with run-level totals, (T11) the two-zone auto layout against the exporte
 exit and (T13) the bucket-sum check.
 Each case names its red demonstration in an `# inject:` comment. T3 and T11 skip only when fleet/data/s10-none exists
 neither in this checkout nor in the main one (CI)."""
+import dataclasses
 import gzip
 import json
 import os
@@ -620,6 +621,65 @@ class TestT14(unittest.TestCase):
             self.assertIn(rc, (None, 0))
             self.assertEqual(got, [3])
             self.assertFalse((d / "nostore").exists())
+
+
+class TestPausedAndNoData(unittest.TestCase):
+    ST = set()
+    NEAR = set()
+
+    def budget(self, kept, max_gap_s=tb.DEFAULT_MAX_GAP_S):
+        rec, _ = tb.robot_budget(kept, self.ST, self.NEAR, 3600, max_gap_s)
+        self.assertEqual(sum(rec["seconds"].values()), rec["span_s"])
+        return rec
+
+    def test_buckets_include_paused_and_no_data(self):
+        # inject: forget to add the two buckets
+        self.assertIn("paused", BUCKETS)
+        self.assertIn("no_data", BUCKETS)
+
+    def test_paused_with_order_and_not_driving_is_paused_not_stuck(self):
+        # inject: test stuck before paused
+        kept = [msg("R", 0, "o"), msg("R", 5, "o"), msg("R", 10, "o"), msg("R", 15, "o")]
+        kept = [dataclasses.replace(m, paused=True) for m in kept]
+        rec = self.budget(kept)
+        self.assertEqual(rec["seconds"], zero(paused=15))
+
+    def test_paused_and_faulted_is_faulted(self):
+        # inject: test paused before faulted
+        kept = [dataclasses.replace(msg("R", 0, "o", faulted=True), paused=True), msg("R", 5, "o", driving=True)]
+        self.assertEqual(self.budget(kept)["seconds"], zero(faulted=5))
+
+    def test_paused_does_not_change_the_runs(self):
+        # inject: let paused end or skip a stopped run
+        base = [msg("R", 5 * k, "o") for k in range(8)]
+        paused = [dataclasses.replace(m, paused=True) for m in base]
+        self.assertEqual(tb.stopped_runs(base), tb.stopped_runs(paused))
+        self.assertEqual(tb.robot_budget(base, self.ST, self.NEAR, 3600)[1], tb.robot_budget(paused, self.ST, self.NEAR, 3600)[1])
+
+    def test_gap_61_is_no_data_by_default_and_inherits_with_100(self):
+        # inject: compare the gap with >= or against the wrong default
+        kept = [msg("R", 0, "", driving=True), msg("R", 61, "", driving=True)]
+        self.assertEqual(self.budget(kept)["seconds"], zero(no_data=61))
+        self.assertEqual(self.budget(kept, 100)["seconds"], zero(moving=61))
+
+    def test_gap_of_exactly_60_is_not_no_data(self):
+        # inject: dt >= max_gap_s
+        kept = [msg("R", 0, "", driving=True), msg("R", 60, "", driving=True)]
+        self.assertEqual(self.budget(kept)["seconds"], zero(moving=60))
+
+    def test_no_data_beats_faulted_and_paused(self):
+        # inject: test faulted first
+        kept = [dataclasses.replace(msg("R", 0, "o", faulted=True), paused=True), msg("R", 90, "o")]
+        self.assertEqual(self.budget(kept)["seconds"], zero(no_data=90))
+
+    def test_max_gap_s_zero_or_negative_is_rejected(self):
+        # inject: drop the > 0 check
+        for bad in ("0", "-5", "nan", "inf"):
+            err = StringIO()
+            with redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+                tb.main(["--glob", "x", "--run", "r", "--stations", "auto", "--out", "o.json", "--max-gap-s", bad])
+            self.assertEqual(cm.exception.code, 2, bad)
+            self.assertIn("max-gap-s", err.getvalue())
 
 
 if __name__ == "__main__":

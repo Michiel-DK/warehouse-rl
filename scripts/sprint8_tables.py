@@ -1015,6 +1015,32 @@ def time_budget():
           "`zones.*.cell_classes`, `src`), from `wr-s12a-budget-run`.")
 
 
+def _as_v1(d):
+    """A fleet-deadlock/1 or /2 document in the v1 key names (deadlocks, knots, deadlock_s, kind "deadlock") that the
+    S12B tables were written against. v1 is returned as is; v2 is mapped key by key, values untouched."""
+    if d["schema_version"] == "fleet-deadlock/1":
+        return d
+    assert d["schema_version"] == "fleet-deadlock/2", d["schema_version"]
+
+    def cnt(t):
+        return dict(t, deadlocks=t["blocking_clusters"], knots=t["blocking_chains"],
+                    deadlock_s_per_robot_hour=t["blocked_s_per_robot_hour"])
+
+    zones = {z: dict(cnt(zd), top_cells=[dict(c, deadlock_s=c["blocked_s"]) for c in zd["top_cells"]])
+             for z, zd in d["zones"].items()}
+    dec = [dict(x, kind="deadlock" if x["kind"] == "blocking_cluster" else x["kind"]) for x in d["decisions"]]
+    return dict(d, schema_version="fleet-deadlock/1", zones=zones, total=cnt(d["total"]), decisions=dec,
+                _from_v2=True)
+
+
+def _cluster_definition(d):
+    """The cluster half of the tool's own DEFINITION text, v1 or v2 (a v2 file is read through _as_v1 first)."""
+    text = d["definition"]
+    if d.get("_from_v2"):
+        return text.split("blocking cluster: ", 1)[1].split(". blocking chain")[0]
+    return text.split(";")[1].strip().split(". knot")[0]
+
+
 def _top_cell(d):
     best = None
     for z, zd in sorted(d["zones"].items(), key=lambda kv: int(kv[0])):
@@ -1049,10 +1075,12 @@ def _standoffs(d):
     return [r for runs in out.values() for r in runs]
 
 
-def blocking_clusters():
+def blocking_clusters(rels=None):
+    """rels: paths of the deadlock JSONs (default: the committed results/fleet/deadlock_<run>.json); v1 and v2 are read."""
     tags = [t for t, _ in S12_RUNS]
-    runs = _load_all([f"results/fleet/deadlock_{t}.json" for t in tags if t != "s8b-medium-80-p03-07"],
-                     "Blocking clusters")
+    if rels is None:
+        rels = [f"results/fleet/deadlock_{t}.json" for t in tags if t != "s8b-medium-80-p03-07"]
+    runs = [(rel, _as_v1(d)) for rel, d in _load_all(rels, "Blocking clusters")]
     if not runs:
         return
     ref = dict(runs).get("results/fleet/deadlock_s10-none.json")
@@ -1092,7 +1120,7 @@ def blocking_clusters():
     d0 = runs[0][1]
     print("A blocking cluster is a strongly connected group of at least 2 robots in the per-batch wait-for graph "
           "(`fleet/deadlock.py`), kept when it lasts at least " f"{d0['min_s']} s. The tool's own definition: \""
-          + d0["definition"].split(";")[1].strip().split(". knot")[0] + "\". Adjacency is symmetric (Manhattan 1), so "
+          + _cluster_definition(d0) + "\". Adjacency is symmetric (Manhattan 1), so "
           "any two adjacent stuck robots with no faulted neighbour form a cluster: it is congestion that persists, not "
           "the circular wait that `docs/LITERATURE.md` Part 2 section 1 calls a deadlock (Coffman et al. 1971; a cycle "
           "in the wait-for graph), and the JSON field name `deadlocks` is renamed `blocking_cluster` in S12C. A blocking "
