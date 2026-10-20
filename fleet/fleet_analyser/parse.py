@@ -13,6 +13,7 @@ from functools import lru_cache
 
 _TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 _TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+_FAULT_LEVELS = ("CRITICAL", "FATAL")
 _ZONE_RE = re.compile(r"^Z([^-]+)-")
 
 
@@ -26,7 +27,7 @@ class Message:
     x: int
     y: int
     driving: bool
-    faulted: bool  # errors non-empty
+    faulted: bool  # some errors entry is a dict with errorLevel CRITICAL or FATAL (VDA 5050: WARNING/URGENT can continue)
     loaded: bool  # loads non-empty
     raw_len: int  # bytes of the raw line as read (including the newline when present)
     # fleet-state/2 fields, absent in /1 messages
@@ -34,6 +35,7 @@ class Message:
     next_x: int | None = None  # first nodeStates entry's nodePosition; None when absent or []
     next_y: int | None = None
     nodes_reported: bool = False  # True iff the nodeStates KEY is present (even []): [] = "no route", absent = old schema
+    paused: bool = False  # top-level `paused` is exactly true; absent or non-bool -> False
 
 
 @lru_cache(maxsize=4096)
@@ -123,6 +125,6 @@ def parse_line(raw):
             if nx is not None and ny is not None:
                 next_x, next_y = nx, ny
     return Message(serial=serial, zone=zone_of(serial), header_id=header, ts=epoch, order_id=order, x=pos["x"],
-                   y=pos["y"], driving=obj["driving"], faulted=bool(obj["errors"]), loaded=bool(obj["loads"]),
+                   y=pos["y"], driving=obj["driving"], faulted=any(isinstance(e, dict) and e.get("errorLevel") in _FAULT_LEVELS for e in obj["errors"]), loaded=bool(obj["loads"]),
                    raw_len=len(raw), theta=theta, next_x=next_x,
-                   next_y=next_y, nodes_reported=nodes_reported), None
+                   next_y=next_y, nodes_reported=nodes_reported, paused=obj.get("paused") is True), None

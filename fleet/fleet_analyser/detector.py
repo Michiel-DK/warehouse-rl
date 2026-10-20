@@ -14,6 +14,7 @@ feed / end_zone / end_all return a list of event dicts:
   {"kind": "transition", ...}      one per state change per robot
   {"kind": "episode_open", ...}    at T_entry, with the cause (resolution "open")
   {"kind": "episode_close", ...}   at the ending message (or at end of input, resolution "unresolved")
+FAULTED = some error with errorLevel CRITICAL or FATAL (VDA 5050: WARNING/URGENT can continue the order).
 Every event also has "zone", "robot", and a "decided_by" = (serial, ts) naming the message that triggered it.
 """
 from .parse import iso
