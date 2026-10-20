@@ -1,8 +1,10 @@
 """Tests for S12A fleet/timebudget.py (per-robot time budget): exact bucket seconds on a hand-made stream, the
 precedence and detector-run edge cases, station waits in the stall list, the store path, determinism, same-minute stops,
-jobs per robot-hour, and (T3) the auto layout against the exporter's env worker on s10-none zone 0.
-Each case names its red demonstration in an `# inject:` comment. T3 skips only when fleet/data/s10-none exists neither in
-this checkout nor in the main one (CI)."""
+jobs per robot-hour, (T3) the auto layout against the exporter's env worker on s10-none zone 0, (T10) a two-zone
+stream with run-level totals, (T11) the two-zone auto layout against the exporter's zone-1 worker, (T12) the store-hash
+exit and (T13) the bucket-sum check.
+Each case names its red demonstration in an `# inject:` comment. T3 and T11 skip only when fleet/data/s10-none exists
+neither in this checkout nor in the main one (CI)."""
 import gzip
 import json
 import os
@@ -11,7 +13,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 for _p in (ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
@@ -170,7 +175,8 @@ class TestT2(Fixture):
 
 class TestT3(unittest.TestCase):
     def test_t3_auto_layout_matches_exporter(self):
-        # inject: build the layout in-process / reuse one process for two layouts / drop the picker kinds
+        # inject: drop the picker kinds (kinds_of returns all agv), or swap goals and shelves in _layout_worker. NOT
+        # claimed: in-process / shared-process layouts or seed mix-ups (counter drift is unobservable on this map, see T11)
         d = data_dir()
         if d is None:
             self.skipTest("fleet/data/s10-none absent in this checkout and the main one")
@@ -243,7 +249,8 @@ class TestT5(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_t5_store_read_only(self):
-        # inject: open JsonlStore on a missing dir, or append to the store, or write a cache file next to --out
+        # inject: open JsonlStore on a missing dir, or append to the store, or write a cache file next to --out; for the
+        # stuck_runs_vs_detector literals: compare against recomputed episodes instead of the store rows
         before = tree(self.tmp)
         out = self.tmp / "o.json"
         res = run_cli("--glob", self.data / "*.jsonl.gz", "--run", "T", "--stations", self.tmp / "s.json", "--out", out)
@@ -251,6 +258,10 @@ class TestT5(unittest.TestCase):
         j = json.loads(out.read_text())
         w = j["zones"]["0"]["station_waits_in_stall_list"]
         self.assertEqual((w["source"], w["episodes"], w["at_station"]), ("store", 2, 1))
+        # the stream has 3 stuck runs (Z0-01 at BASE+20, Z0-02 at BASE, the picker Z0-04 at BASE); the store has 2 episodes
+        # (no picker row), so the (robot, start) sets differ
+        for c in (j["zones"]["0"]["stuck_runs_vs_detector"], j["run"]["stuck_runs_vs_detector"]):
+            self.assertEqual((c["timebudget_stuck_runs"], c["detector_episodes"], c["start_sets_equal"]), (3, 2, False))
         self.assertIsNotNone(j["src"]["store_sha256_before"])
         self.assertEqual(j["src"]["store_sha256_before"], j["src"]["store_sha256_after"])
         self.assertEqual(tree(self.tmp), sorted(before + [("o.json", out.stat().st_size)]))
@@ -365,6 +376,198 @@ class TestT9(unittest.TestCase):
         zones, run = tb.compute(a + b, "T", lay, [], "recomputed", 3600)
         self.assertAlmostEqual(zones["0"]["jobs_per_robot_hour"], 5 / (2 * 3150 / 3600))
         self.assertAlmostEqual(run["jobs_per_robot_hour"], 5 / (2 * 3150 / 3600))
+
+
+def two_zone_lines():
+    """Zone 0 (Z0-01 and Z0-02 as in T1) and zone 1 (three AGVs that all stop in the same minute)."""
+    z0 = [ln for ln in t1_lines() if b'"Z0-01"' in ln or b'"Z0-02"' in ln]
+    z1 = []
+    for k in range(9):  # Z1-01: moving 20 s, then stopped 20 s with an order in a corridor cell (a short run)
+        z1.append(line("Z1-01", k, "c1", k < 4, 3, 3))
+    for k in range(8):  # Z1-02: moving 20 s, then idle (no order) 15 s
+        z1.append(line("Z1-02", k, "e1" if k < 4 else "", k < 4, 0, 0))
+    for k in range(11):  # Z1-03: moving 20 s, then 30 s at the station (1,1) with an order (a stuck run at a station)
+        z1.append(line("Z1-03", k, "d1", k < 4, 0 if k < 4 else 1, 0 if k < 4 else 1))
+    return z0, z1
+
+
+class TestT10(unittest.TestCase):
+    """Two zones, literal numbers per zone and for the run (the cross-zone sums in compute())."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        d = cls.tmp / "d"
+        d.mkdir()
+        z0, z1 = two_zone_lines()
+        write_gz(d / "zone0-000.jsonl.gz", z0)
+        write_gz(d / "zone1-000.jsonl.gz", z1)
+        (cls.tmp / "s.json").write_text(json.dumps({"stations": [[1, 1]], "shelves": [[5, 5]]}))
+        out = cls.tmp / "o.json"
+        cls.res = run_cli("--glob", d / "*.jsonl.gz", "--run", "T", "--stations", cls.tmp / "s.json", "--out", out)
+        cls.j = json.loads(out.read_text()) if out.is_file() else None
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_t10_per_zone_and_run_totals(self):
+        # inject: in compute() build run_out from the last zone only (run_span = ztot["span_s"]) or add zone 0 twice
+        self.assertEqual(self.res.returncode, 0, self.res.stderr)
+        z0, z1 = self.j["zones"]["0"], self.j["zones"]["1"]
+        self.assertEqual(sorted(self.j["zones"]), ["0", "1"])
+        self.assertEqual(z0["totals"]["seconds"], zero(moving=20, waiting_station=40, stuck=60, idle=15))
+        self.assertEqual((z0["totals"]["span_s"], z0["totals"]["robots"]), (135, 2))
+        self.assertEqual(z1["totals"]["seconds"], zero(moving=60, waiting_station=30, stopped_short=20, idle=15))
+        self.assertEqual((z1["totals"]["span_s"], z1["totals"]["robots"]), (125, 3))
+        self.assertEqual(z1["robots"]["Z1-01"]["seconds"], zero(moving=20, stopped_short=20))
+        self.assertEqual(z1["robots"]["Z1-02"]["seconds"], zero(moving=20, idle=15))
+        self.assertEqual(z1["robots"]["Z1-03"]["seconds"], zero(moving=20, waiting_station=30))
+        run = self.j["run"]
+        self.assertEqual(run["totals"]["seconds"], zero(moving=80, waiting_station=70, stuck=60, stopped_short=20, idle=30))
+        self.assertEqual((run["totals"]["span_s"], run["totals"]["robots"]), (260, 5))
+
+    def test_t10_jobs_per_robot_hour(self):
+        # inject: run rate = mean of the zone rates (69.87 here) instead of total job starts / total span hours
+        z0, z1 = self.j["zones"]["0"], self.j["zones"]["1"]
+        self.assertAlmostEqual(z0["jobs_per_robot_hour"], 2 * 3600 / 135)  # 53.33
+        self.assertAlmostEqual(z1["jobs_per_robot_hour"], 3 * 3600 / 125)  # 86.4
+        self.assertAlmostEqual(self.j["run"]["jobs_per_robot_hour"], 5 * 3600 / 260)  # 69.23, not the mean 69.87
+        self.assertNotAlmostEqual(self.j["run"]["jobs_per_robot_hour"],
+                                  (z0["jobs_per_robot_hour"] + z1["jobs_per_robot_hour"]) / 2, places=1)
+
+    def test_t10_same_minute_stops(self):
+        # inject: run count = max over zones or the count of zone 0 only, or n_robots pooled over both zones
+        z0, z1 = self.j["zones"]["0"]["same_minute_stops"], self.j["zones"]["1"]["same_minute_stops"]
+        self.assertEqual((z0["count"], z0["n_robots"]), (0, 2))  # only Z0-01 ever stops from driving
+        self.assertEqual((z1["count"], z1["n_robots"]), (1, 3))  # all three stop at BASE + 20 s
+        self.assertEqual(z1["minutes"], [iso((BASE + 20) // 60 * 60)])
+        self.assertEqual(self.j["run"]["same_minute_stops_count"], 1)
+
+    def test_t10_pooled_station_waits_and_stuck_runs(self):
+        # inject: pool by averaging the zone shares (0.75), or take the run stuck_runs_vs_detector from the last zone
+        z0 = self.j["zones"]["0"]["station_waits_in_stall_list"]
+        z1 = self.j["zones"]["1"]["station_waits_in_stall_list"]
+        self.assertEqual((z0["episodes"], z0["at_station"], z0["at_shelf"]), (2, 1, 0))
+        self.assertEqual((z1["episodes"], z1["at_station"], z1["at_shelf"]), (1, 1, 0))
+        r = self.j["run"]["station_waits_in_stall_list"]
+        self.assertEqual((r["source"], r["episodes"], r["at_station"], r["at_shelf"], r["picker_episodes"]),
+                         ("recomputed", 3, 2, 0, 0))
+        self.assertAlmostEqual(r["share_station"], 2 / 3)  # the mean of the zone shares would be 0.75
+        for c, want in ((self.j["zones"]["0"], (2, 2)), (self.j["zones"]["1"], (1, 1)), (self.j["run"], (3, 3))):
+            cmp_ = c["stuck_runs_vs_detector"]
+            self.assertEqual((cmp_["timebudget_stuck_runs"], cmp_["detector_episodes"], cmp_["start_sets_equal"]),
+                             (*want, True))
+
+
+def _two_layouts_in_one_process(jobs):
+    """Deliberately wrong path (test only): two layouts built one after the other in ONE spawned process."""
+    return [tb._layout_worker(j) for j in jobs]
+
+
+class TestT11(unittest.TestCase):
+    def test_t11_zone1_layout_matches_exporter_and_isolation(self):
+        # inject: in auto_layouts call kinds_of(lay, 0) for every zone (zone 1 then has 12 AGVs and no pickers), or
+        # record the zone-0 seed in the layout of zone 1. NOT detected, by measurement: building both layouts in one
+        # process (counter drift), because env.reset() restarts Agent.counter / Shelf.counter on this map.
+        d = data_dir()
+        if d is None:
+            self.skipTest("fleet/data/s10-none absent in this checkout and the main one")
+        import concurrent.futures as cf
+        import multiprocessing as mp
+
+        import replay_export
+        from fleet_analyser.hotspot import read_messages
+
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            for name in ("zone0-000.jsonl.gz", "zone1-000.jsonl.gz", "emit_ledger.json"):
+                shutil.copy(d / name, tmp / name)
+            out = tmp / "out.json"
+            res = run_cli("--glob", tmp / "*.jsonl.gz", "--run", "s10-none", "--stations", "auto", "--out", out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            j = json.loads(out.read_text())
+            cfg = json.loads((d / "emit_ledger.json").read_text())["config"]
+            ref = replay_export.run_env_worker(dict(env_id=cfg["env_id"], steps=cfg["steps"], seed=1, zone=1, run=None))
+            z1 = j["zones"]["1"]
+            self.assertEqual(sorted(j["zones"]), ["0", "1"])
+            self.assertEqual((j["zones"]["0"]["layout"]["seed"], z1["layout"]["seed"]), (0, 1))
+            self.assertEqual((len(z1["robots"]), len(z1["pickers"])), (8, 4))
+            self.assertEqual(sorted(z1["robots"]), sorted(s for s, k in ref["kinds"].items() if k == "agv"))
+            self.assertEqual(sorted(z1["pickers"]), sorted(s for s, k in ref["kinds"].items() if k == "picker"))
+            self.assertEqual(z1["cell_classes"]["n_station_cells"], len({tuple(g) for g in ref["grid"]["goals"]}))
+            self.assertEqual(z1["cell_classes"]["n_shelf_slots"], len(ref["grid"]["shelves"]))
+            mine = tb.run_layout_worker(dict(env_id=cfg["env_id"], steps=cfg["steps"], seed=1))
+            self.assertEqual(tb.kinds_of(mine, 1), ref["kinds"])
+            self.assertEqual(mine["goals"], ref["grid"]["goals"])
+            self.assertEqual(mine["shelves"], ref["grid"]["shelves"])
+            serials = {m.serial for m in read_messages(str(tmp / "zone1-000.jsonl.gz")) if m.zone == "1"}
+            self.assertEqual(len(serials), 12)
+            self.assertLessEqual(serials, set(ref["kinds"]))
+            # Counter drift: two layouts in one process. Observed on tarware-medium-8agvs-4pickers (agent ids 1..12 and
+            # identical goals and shelves for seed 1 whether or not a seed-0 layout was built first in the same process),
+            # because reset() restarts Agent.counter / Shelf.counter. Drift cannot be seen in these outputs, so no test
+            # can turn red on it; the process per layout is a guard for envs where reset does not restart them.
+            jobs = [dict(env_id=cfg["env_id"], steps=cfg["steps"], seed=s) for s in (0, 1)]
+            with cf.ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn")) as ex:
+                wrong = ex.submit(_two_layouts_in_one_process, jobs).result()[1]
+            self.assertEqual(tb.kinds_of(wrong, 1), tb.kinds_of(mine, 1))  # characterization of the observation above
+            self.assertEqual((wrong["goals"], wrong["shelves"]), (mine["goals"], mine["shelves"]))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestT12(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.data = self.tmp / "d"
+        self.data.mkdir()
+        write_gz(self.data / "zone0-000.jsonl.gz", t1_lines())
+        (self.tmp / "s.json").write_text(json.dumps({"stations": [[1, 1]], "shelves": [[5, 5]], "pickers": ["Z0-04"]}))
+        st = JsonlStore(self.data / "store")
+        st.upsert("stuck_episodes", ["run", "episode_id"], [
+            dict(run="T", episode_id=f"Z0-02@{iso(BASE)}", zone="0", robot="Z0-02", start=BASE, cell=[3, 3])])
+        st.close()
+        self.argv = ["--glob", str(self.data / "*.jsonl.gz"), "--run", "T", "--stations", str(self.tmp / "s.json"),
+                     "--out", str(self.tmp / "o.json")]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_t12_store_hash_changed_exits_nonzero_and_writes_no_out(self):
+        # inject: delete the `if hash_after != hash_before: return 1` block in main(), or move out_path.write_text above it
+        with mock.patch.object(tb, "store_hash", side_effect=["before", "after"]) as h, \
+                redirect_stderr(StringIO()) as err, redirect_stdout(StringIO()):
+            rc = tb.main(self.argv)
+        self.assertEqual(h.call_count, 2)
+        self.assertEqual(rc, 1)
+        self.assertIn("changed during the run", err.getvalue())
+        self.assertFalse((self.tmp / "o.json").exists())
+
+    def test_t12_unchanged_store_hash_writes_out(self):
+        # inject: make main() return 1 whenever the store is present
+        with redirect_stderr(StringIO()), redirect_stdout(StringIO()):
+            rc = tb.main(self.argv)
+        self.assertEqual(rc, 0)
+        self.assertTrue((self.tmp / "o.json").is_file())
+
+
+class TestT13(unittest.TestCase):
+    def test_t13_bucket_sum_check_raises(self):
+        # inject: turn check_bucket_sum back into a bare assert (python -O strips it) or make it return silently
+        tb.check_bucket_sum("R", zero(moving=10, idle=5), 15)
+        with self.assertRaises(ValueError) as cm:
+            tb.check_bucket_sum("R7", zero(moving=10, idle=4), 15)
+        for want in ("R7", "14", "15"):
+            self.assertIn(want, str(cm.exception))
+
+    def test_t13_robot_budget_calls_the_check(self):
+        # inject: drop the check_bucket_sum call from robot_budget
+        kept = [msg("R", 0, "", False), msg("R", 5, "", False)]
+        with mock.patch.object(tb, "check_bucket_sum", side_effect=ValueError("boom")) as chk:
+            with self.assertRaises(ValueError):
+                tb.robot_budget(kept, set(), set(), 3600)
+        chk.assert_called_once_with("R", zero(idle=5), 5)
 
 
 if __name__ == "__main__":

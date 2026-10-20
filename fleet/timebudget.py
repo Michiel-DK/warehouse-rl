@@ -30,7 +30,7 @@ the other).
 Robot scope: the budget is for AGVs. Pickers are in the same stream; they are reported apart under zones[z].pickers with
 the same per-robot fields and are excluded from totals, jobs_per_robot_hour and same_minute_stops. Kinds come from the
 layout worker (--stations auto) or from an optional "pickers" list in the --stations file (absent = all AGVs).
-Per robot the bucket sum equals the span (asserted, integer seconds).
+Per robot the bucket sum equals the span (checked by check_bucket_sum, which raises ValueError; integer seconds).
 
 Layouts (--stations auto): every (env_id, seed) layout is computed by its own freshly spawned process (a new
 ProcessPoolExecutor(max_workers=1) per call), because Agent.counter / Shelf.counter are class attributes. The station
@@ -47,7 +47,6 @@ import json
 import multiprocessing as mp
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 FLEET = Path(__file__).resolve().parent
@@ -86,7 +85,7 @@ def _layout_worker(job):
 def run_layout_worker(job):
     """One layout, one new process, one env (never reuse a pool for a second layout)."""
     ctx = mp.get_context("spawn")
-    with ProcessPoolExecutor(max_workers=1, mp_context=ctx) as ex:
+    with cf.ProcessPoolExecutor(max_workers=1, mp_context=ctx) as ex:
         return ex.submit(_layout_worker, job).result()
 
 
@@ -181,6 +180,13 @@ def run_is_stuck(kept, run):
     return kept[run[1]].ts - kept[run[0]].ts >= DEFAULT_STUCK_AFTER
 
 
+def check_bucket_sum(serial, seconds, span):
+    """An explicit raise (not an assert: python -O must not strip it) when a robot's buckets do not add up to its span."""
+    total = sum(seconds.values())
+    if total != span:
+        raise ValueError(f"timebudget: robot {serial}: bucket sum {total} != span {span} ({seconds})")
+
+
 def robot_budget(kept, stations, near_shelf, shift_s):
     """(record, runs) for one robot. record = dict(seconds, share, span_s, per_shift_s, jobs)."""
     seconds = {b: 0 for b in BUCKETS}
@@ -203,7 +209,7 @@ def robot_budget(kept, stations, near_shelf, shift_s):
             b = "stuck" if stuck_flags[run_of[i]] else "stopped_short"
         seconds[b] += dt
     span = kept[-1].ts - kept[0].ts
-    assert sum(seconds.values()) == span, (kept[0].serial, seconds, span)
+    check_bucket_sum(kept[0].serial, seconds, span)
     jobs = 0
     prev = None
     for m in kept:
