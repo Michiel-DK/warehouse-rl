@@ -10,6 +10,10 @@ truth_positive(truth, zone, subject, step_from, step_to) -> frozenset of matched
                    that kind on the cell has a <= step_to and b > step_from.
                    S10G: also "frozen" iff some frozen window has `cell` == the subject and overlaps the same way (a window
                    without a `cell` key, from an older file, never matches a cell; `cells` is informational, not scored).
+                   S12B: also "deadzone" iff the cell is in the zone's `deadzones` ([x, y] pairs written by emit.py --deadzone;
+                   time-free like floor; a zone without the key never matches). A dead zone is not a stall: every caller that
+                   treats a non-empty answer as positive (grade.py, time_to_detect.py, hotspot_score's baselines) will also
+                   count a dead cell as positive in a run that has them; hotspot_score keeps 'deadzone' out of "any".
   robot "Z<z>-NN"  "frozen" iff some frozen window with that serial overlaps the same way.
 A v1 file (no window keys, no t0) answers with floor_cells only, robots are never positive, and no step is needed
 (step_from / step_to may be None). A v2 file asked for a window kind with None steps raises ValueError.
@@ -64,6 +68,8 @@ def truth_positive(truth, zone, subject, step_from, step_to):
     if "," in subject:
         if subject in zt.get("floor_cells", {}):
             kinds.add("floor")
+        if "deadzones" in zt and any(f"{x},{y}" == subject for x, y in zt["deadzones"]):
+            kinds.add("deadzone")
         for kind, key in WINDOW_KINDS:
             ws = [w for w in zt.get(key, ()) if w["cell"] == subject]
             if ws and step_from is None:

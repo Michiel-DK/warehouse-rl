@@ -33,7 +33,10 @@
   "fleet_stream": {
     "darwin-arm64": {
       "seed": 3,
-      "provenance": "hard-coded SEED in fleet/tests/test_fleet_emit.py; on macOS seeds 2 and 3 pass, seed 1 fails"
+      "provenance": "hard-coded SEED in fleet/tests/test_fleet_emit.py; on macOS seeds 2 and 3 pass, seed 1 fails",
+      "g2_content_sha256": "80b99383e1a7b50f648a4eb27ec929b86bd8e2fc32ac1cd5585036059164b6cc",
+      "g2_truth_sha256": "9a45b8520c33d0c13df4693ccbbd0b11d41f78d683ce4a4fcf463cf90c8fc552",
+      "g2_provenance": "S12B G2 (fleet/tests/test_fleet_gapmap.py): measured 2026-10-20 on master 706bab9 BEFORE the --deadzone emitter change: emit.py --zones 1 --steps 150 --env tarware-small-4agvs-2pickers-globalobs-v1 --seed-base 3 --speed 0 --workers 1; sha256 of the decompressed zone0-000.jsonl.gz and of truth.json. Kept under fleet_stream because tests/test_platform.py pins the top-level key set; the linux entries have no g2_* value yet, so G2 skips there"
     },
     "linux-x86_64": {
       "seed": 1,
