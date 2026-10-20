@@ -1,11 +1,11 @@
 {
- "schema_version": "fleet-deadlock/1",
+ "schema_version": "fleet-deadlock/2",
  "run": "closed_loop",
  "min_s": 30,
- "definition": "deadlock: strongly connected component (>= 2 robots) of the per-batch graph in which every STUCK robot has an edge to all adjacent faulted robots, else to all adjacent stuck robots, else (exactly one neighbour) to it; mutually blocked cluster that persists, not a proven circular wait. knot: maximal path of >= 2 edges among robots in no such component. length_s = end - start, start = latest stopped-run start among the members.",
+ "definition": "blocking cluster: mutually blocked robots (strongly connected component, >= 2) that persist >= min_s; every one found so far resolves, so this is a congestion measure, not a circular wait. blocking chain: maximal path of >= 2 edges among robots in no cluster. length_s = end - start, start = latest stopped-run start among the members.",
  "zones": {
   "0": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z0-02",
@@ -22,18 +22,18 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 101.00200400801603,
+   "blocked_s_per_robot_hour": 101.00200400801603,
    "top_cells": [
     {
      "cell": "18,12",
-     "deadlock_s": 420
+     "blocked_s": 420
     }
    ]
   },
   "1": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z1-06",
@@ -115,46 +115,46 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 215.2304609218437,
+   "blocked_s_per_robot_hour": 215.2304609218437,
    "top_cells": [
     {
      "cell": "11,16",
-     "deadlock_s": 745
+     "blocked_s": 745
     },
     {
      "cell": "11,17",
-     "deadlock_s": 745
+     "blocked_s": 745
     },
     {
      "cell": "12,12",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "12,15",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "12,16",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "12,7",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "12,8",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "13,12",
-     "deadlock_s": 50
+     "blocked_s": 50
     }
    ]
   },
   "10": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z10-01",
@@ -252,38 +252,38 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 526.6533066132265,
+   "blocked_s_per_robot_hour": 526.6533066132265,
    "top_cells": [
     {
      "cell": "2,5",
-     "deadlock_s": 985
+     "blocked_s": 985
     },
     {
      "cell": "3,5",
-     "deadlock_s": 985
+     "blocked_s": 985
     },
     {
      "cell": "18,15",
-     "deadlock_s": 885
+     "blocked_s": 885
     },
     {
      "cell": "18,16",
-     "deadlock_s": 885
+     "blocked_s": 885
     },
     {
      "cell": "7,8",
-     "deadlock_s": 320
+     "blocked_s": 320
     },
     {
      "cell": "7,9",
-     "deadlock_s": 320
+     "blocked_s": 320
     }
    ]
   },
   "11": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z11-02",
@@ -415,54 +415,54 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 431.062124248497,
+   "blocked_s_per_robot_hour": 431.062124248497,
    "top_cells": [
     {
      "cell": "2,7",
-     "deadlock_s": 1090
+     "blocked_s": 1090
     },
     {
      "cell": "3,7",
-     "deadlock_s": 1090
+     "blocked_s": 1090
     },
     {
      "cell": "18,20",
-     "deadlock_s": 250
+     "blocked_s": 250
     },
     {
      "cell": "19,20",
-     "deadlock_s": 250
+     "blocked_s": 250
     },
     {
      "cell": "19,21",
-     "deadlock_s": 180
+     "blocked_s": 180
     },
     {
      "cell": "19,22",
-     "deadlock_s": 150
+     "blocked_s": 150
     },
     {
      "cell": "18,19",
-     "deadlock_s": 135
+     "blocked_s": 135
     },
     {
      "cell": "20,21",
-     "deadlock_s": 135
+     "blocked_s": 135
     },
     {
      "cell": "18,22",
-     "deadlock_s": 105
+     "blocked_s": 105
     },
     {
      "cell": "19,9",
-     "deadlock_s": 70
+     "blocked_s": 70
     }
    ]
   },
   "12": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z12-05",
@@ -512,30 +512,30 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 98.59719438877755,
+   "blocked_s_per_robot_hour": 98.59719438877755,
    "top_cells": [
     {
      "cell": "13,7",
-     "deadlock_s": 235
+     "blocked_s": 235
     },
     {
      "cell": "13,8",
-     "deadlock_s": 235
+     "blocked_s": 235
     },
     {
      "cell": "13,17",
-     "deadlock_s": 175
+     "blocked_s": 175
     },
     {
      "cell": "14,17",
-     "deadlock_s": 175
+     "blocked_s": 175
     }
    ]
   },
   "13": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z13-04",
@@ -585,38 +585,38 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 209.2184368737475,
+   "blocked_s_per_robot_hour": 209.2184368737475,
    "top_cells": [
     {
      "cell": "10,12",
-     "deadlock_s": 470
+     "blocked_s": 470
     },
     {
      "cell": "11,12",
-     "deadlock_s": 470
+     "blocked_s": 470
     },
     {
      "cell": "1,3",
-     "deadlock_s": 350
+     "blocked_s": 350
     },
     {
      "cell": "2,3",
-     "deadlock_s": 350
+     "blocked_s": 350
     },
     {
      "cell": "10,9",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "11,9",
-     "deadlock_s": 50
+     "blocked_s": 50
     }
    ]
   },
   "14": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z14-09",
@@ -666,38 +666,38 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 162.3246492985972,
+   "blocked_s_per_robot_hour": 162.3246492985972,
    "top_cells": [
     {
      "cell": "7,7",
-     "deadlock_s": 370
+     "blocked_s": 370
     },
     {
      "cell": "7,8",
-     "deadlock_s": 370
+     "blocked_s": 370
     },
     {
      "cell": "10,12",
-     "deadlock_s": 205
+     "blocked_s": 205
     },
     {
      "cell": "10,13",
-     "deadlock_s": 205
+     "blocked_s": 205
     },
     {
      "cell": "18,0",
-     "deadlock_s": 100
+     "blocked_s": 100
     },
     {
      "cell": "18,1",
-     "deadlock_s": 100
+     "blocked_s": 100
     }
    ]
   },
   "15": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z15-02",
@@ -778,50 +778,50 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 365.53106212424854,
+   "blocked_s_per_robot_hour": 365.53106212424854,
    "top_cells": [
     {
      "cell": "2,7",
-     "deadlock_s": 715
+     "blocked_s": 715
     },
     {
      "cell": "3,7",
-     "deadlock_s": 715
+     "blocked_s": 715
     },
     {
      "cell": "3,12",
-     "deadlock_s": 445
+     "blocked_s": 445
     },
     {
      "cell": "3,13",
-     "deadlock_s": 445
+     "blocked_s": 445
     },
     {
      "cell": "11,12",
-     "deadlock_s": 245
+     "blocked_s": 245
     },
     {
      "cell": "12,12",
-     "deadlock_s": 245
+     "blocked_s": 245
     },
     {
      "cell": "11,8",
-     "deadlock_s": 60
+     "blocked_s": 60
     },
     {
      "cell": "11,9",
-     "deadlock_s": 60
+     "blocked_s": 60
     },
     {
      "cell": "14,9",
-     "deadlock_s": 55
+     "blocked_s": 55
     }
    ]
   },
   "16": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z16-03",
@@ -871,38 +871,38 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 296.99398797595194,
+   "blocked_s_per_robot_hour": 296.99398797595194,
    "top_cells": [
     {
      "cell": "6,3",
-     "deadlock_s": 1085
+     "blocked_s": 1085
     },
     {
      "cell": "7,3",
-     "deadlock_s": 1085
+     "blocked_s": 1085
     },
     {
      "cell": "10,8",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "10,9",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "2,5",
-     "deadlock_s": 55
+     "blocked_s": 55
     },
     {
      "cell": "3,5",
-     "deadlock_s": 55
+     "blocked_s": 55
     }
    ]
   },
   "17": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z17-06",
@@ -1015,54 +1015,54 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 290.9819639278557,
+   "blocked_s_per_robot_hour": 290.9819639278557,
    "top_cells": [
     {
      "cell": "14,9",
-     "deadlock_s": 525
+     "blocked_s": 525
     },
     {
      "cell": "3,17",
-     "deadlock_s": 370
+     "blocked_s": 370
     },
     {
      "cell": "4,17",
-     "deadlock_s": 370
+     "blocked_s": 370
     },
     {
      "cell": "15,9",
-     "deadlock_s": 175
+     "blocked_s": 175
     },
     {
      "cell": "10,13",
-     "deadlock_s": 150
+     "blocked_s": 150
     },
     {
      "cell": "9,13",
-     "deadlock_s": 150
+     "blocked_s": 150
     },
     {
      "cell": "16,14",
-     "deadlock_s": 100
+     "blocked_s": 100
     },
     {
      "cell": "17,14",
-     "deadlock_s": 100
+     "blocked_s": 100
     },
     {
      "cell": "16,10",
-     "deadlock_s": 65
+     "blocked_s": 65
     },
     {
      "cell": "16,9",
-     "deadlock_s": 65
+     "blocked_s": 65
     }
    ]
   },
   "18": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z18-02",
@@ -1159,54 +1159,54 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 210.42084168336675,
+   "blocked_s_per_robot_hour": 210.42084168336675,
    "top_cells": [
     {
      "cell": "7,17",
-     "deadlock_s": 480
+     "blocked_s": 480
     },
     {
      "cell": "6,17",
-     "deadlock_s": 315
+     "blocked_s": 315
     },
     {
      "cell": "3,14",
-     "deadlock_s": 170
+     "blocked_s": 170
     },
     {
      "cell": "4,14",
-     "deadlock_s": 170
+     "blocked_s": 170
     },
     {
      "cell": "7,16",
-     "deadlock_s": 165
+     "blocked_s": 165
     },
     {
      "cell": "1,6",
-     "deadlock_s": 90
+     "blocked_s": 90
     },
     {
      "cell": "10,21",
-     "deadlock_s": 90
+     "blocked_s": 90
     },
     {
      "cell": "10,22",
-     "deadlock_s": 90
+     "blocked_s": 90
     },
     {
      "cell": "2,6",
-     "deadlock_s": 90
+     "blocked_s": 90
     },
     {
      "cell": "10,19",
-     "deadlock_s": 45
+     "blocked_s": 45
     }
    ]
   },
   "19": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z19-02",
@@ -1272,38 +1272,38 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 74.54909819639279,
+   "blocked_s_per_robot_hour": 74.54909819639279,
    "top_cells": [
     {
      "cell": "15,18",
-     "deadlock_s": 190
+     "blocked_s": 190
     },
     {
      "cell": "15,19",
-     "deadlock_s": 190
+     "blocked_s": 190
     },
     {
      "cell": "10,10",
-     "deadlock_s": 85
+     "blocked_s": 85
     },
     {
      "cell": "10,9",
-     "deadlock_s": 85
+     "blocked_s": 85
     },
     {
      "cell": "7,9",
-     "deadlock_s": 35
+     "blocked_s": 35
     },
     {
      "cell": "8,9",
-     "deadlock_s": 35
+     "blocked_s": 35
     }
    ]
   },
   "2": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z2-10",
@@ -1417,54 +1417,54 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 283.7675350701403,
+   "blocked_s_per_robot_hour": 283.7675350701403,
    "top_cells": [
     {
      "cell": "5,13",
-     "deadlock_s": 500
+     "blocked_s": 500
     },
     {
      "cell": "6,13",
-     "deadlock_s": 500
+     "blocked_s": 500
     },
     {
      "cell": "15,14",
-     "deadlock_s": 360
+     "blocked_s": 360
     },
     {
      "cell": "15,15",
-     "deadlock_s": 360
+     "blocked_s": 360
     },
     {
      "cell": "16,11",
-     "deadlock_s": 225
+     "blocked_s": 225
     },
     {
      "cell": "16,10",
-     "deadlock_s": 175
+     "blocked_s": 175
     },
     {
      "cell": "15,10",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "15,11",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "15,9",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "3,7",
-     "deadlock_s": 45
+     "blocked_s": 45
     }
    ]
   },
   "20": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z20-06",
@@ -1553,34 +1553,34 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 239.27855711422848,
+   "blocked_s_per_robot_hour": 239.27855711422848,
    "top_cells": [
     {
      "cell": "15,12",
-     "deadlock_s": 635
+     "blocked_s": 635
     },
     {
      "cell": "15,13",
-     "deadlock_s": 635
+     "blocked_s": 635
     },
     {
      "cell": "14,12",
-     "deadlock_s": 495
+     "blocked_s": 495
     },
     {
      "cell": "4,10",
-     "deadlock_s": 45
+     "blocked_s": 45
     },
     {
      "cell": "4,11",
-     "deadlock_s": 45
+     "blocked_s": 45
     }
    ]
   },
   "21": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z21-09",
@@ -1760,54 +1760,54 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 509.81963927855713,
+   "blocked_s_per_robot_hour": 509.81963927855713,
    "top_cells": [
     {
      "cell": "7,17",
-     "deadlock_s": 1250
+     "blocked_s": 1250
     },
     {
      "cell": "7,18",
-     "deadlock_s": 1250
+     "blocked_s": 1250
     },
     {
      "cell": "18,4",
-     "deadlock_s": 360
+     "blocked_s": 360
     },
     {
      "cell": "18,3",
-     "deadlock_s": 305
+     "blocked_s": 305
     },
     {
      "cell": "18,15",
-     "deadlock_s": 245
+     "blocked_s": 245
     },
     {
      "cell": "18,16",
-     "deadlock_s": 245
+     "blocked_s": 245
     },
     {
      "cell": "11,9",
-     "deadlock_s": 140
+     "blocked_s": 140
     },
     {
      "cell": "10,9",
-     "deadlock_s": 70
+     "blocked_s": 70
     },
     {
      "cell": "11,8",
-     "deadlock_s": 70
+     "blocked_s": 70
     },
     {
      "cell": "11,10",
-     "deadlock_s": 65
+     "blocked_s": 65
     }
    ]
   },
   "22": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z22-01",
@@ -1905,54 +1905,54 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 372.74549098196394,
+   "blocked_s_per_robot_hour": 372.74549098196394,
    "top_cells": [
     {
      "cell": "18,12",
-     "deadlock_s": 1045
+     "blocked_s": 1045
     },
     {
      "cell": "18,13",
-     "deadlock_s": 1045
+     "blocked_s": 1045
     },
     {
      "cell": "17,23",
-     "deadlock_s": 230
+     "blocked_s": 230
     },
     {
      "cell": "18,23",
-     "deadlock_s": 230
+     "blocked_s": 230
     },
     {
      "cell": "16,14",
-     "deadlock_s": 125
+     "blocked_s": 125
     },
     {
      "cell": "17,14",
-     "deadlock_s": 125
+     "blocked_s": 125
     },
     {
      "cell": "2,10",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "2,11",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "10,7",
-     "deadlock_s": 55
+     "blocked_s": 55
     },
     {
      "cell": "10,8",
-     "deadlock_s": 55
+     "blocked_s": 55
     }
    ]
   },
   "23": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z23-05",
@@ -2002,38 +2002,38 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 472.5450901803607,
+   "blocked_s_per_robot_hour": 472.5450901803607,
    "top_cells": [
     {
      "cell": "6,4",
-     "deadlock_s": 1875
+     "blocked_s": 1875
     },
     {
      "cell": "6,5",
-     "deadlock_s": 1875
+     "blocked_s": 1875
     },
     {
      "cell": "15,19",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "15,20",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "15,23",
-     "deadlock_s": 40
+     "blocked_s": 40
     },
     {
      "cell": "15,24",
-     "deadlock_s": 40
+     "blocked_s": 40
     }
    ]
   },
   "24": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z24-02",
@@ -2099,42 +2099,42 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 173.14629258517036,
+   "blocked_s_per_robot_hour": 173.14629258517036,
    "top_cells": [
     {
      "cell": "11,19",
-     "deadlock_s": 510
+     "blocked_s": 510
     },
     {
      "cell": "12,19",
-     "deadlock_s": 400
+     "blocked_s": 400
     },
     {
      "cell": "10,19",
-     "deadlock_s": 110
+     "blocked_s": 110
     },
     {
      "cell": "11,14",
-     "deadlock_s": 110
+     "blocked_s": 110
     },
     {
      "cell": "12,14",
-     "deadlock_s": 110
+     "blocked_s": 110
     },
     {
      "cell": "15,10",
-     "deadlock_s": 100
+     "blocked_s": 100
     },
     {
      "cell": "15,11",
-     "deadlock_s": 100
+     "blocked_s": 100
     }
    ]
   },
   "25": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z25-05",
@@ -2282,54 +2282,54 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 542.8857715430862,
+   "blocked_s_per_robot_hour": 542.8857715430862,
    "top_cells": [
     {
      "cell": "15,9",
-     "deadlock_s": 1665
+     "blocked_s": 1665
     },
     {
      "cell": "15,8",
-     "deadlock_s": 1555
+     "blocked_s": 1555
     },
     {
      "cell": "14,18",
-     "deadlock_s": 340
+     "blocked_s": 340
     },
     {
      "cell": "15,18",
-     "deadlock_s": 340
+     "blocked_s": 340
     },
     {
      "cell": "16,9",
-     "deadlock_s": 110
+     "blocked_s": 110
     },
     {
      "cell": "12,8",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "13,8",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "3,4",
-     "deadlock_s": 70
+     "blocked_s": 70
     },
     {
      "cell": "4,4",
-     "deadlock_s": 70
+     "blocked_s": 70
     },
     {
      "cell": "21,10",
-     "deadlock_s": 50
+     "blocked_s": 50
     }
    ]
   },
   "26": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z26-01",
@@ -2413,42 +2413,42 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 462.9258517034068,
+   "blocked_s_per_robot_hour": 462.9258517034068,
    "top_cells": [
     {
      "cell": "10,5",
-     "deadlock_s": 1035
+     "blocked_s": 1035
     },
     {
      "cell": "11,5",
-     "deadlock_s": 1035
+     "blocked_s": 1035
     },
     {
      "cell": "6,5",
-     "deadlock_s": 680
+     "blocked_s": 680
     },
     {
      "cell": "6,6",
-     "deadlock_s": 680
+     "blocked_s": 680
     },
     {
      "cell": "5,14",
-     "deadlock_s": 170
+     "blocked_s": 170
     },
     {
      "cell": "6,14",
-     "deadlock_s": 170
+     "blocked_s": 170
     },
     {
      "cell": "5,13",
-     "deadlock_s": 80
+     "blocked_s": 80
     }
    ]
   },
   "27": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z27-04",
@@ -2578,54 +2578,54 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 933.0661322645291,
+   "blocked_s_per_robot_hour": 933.0661322645291,
    "top_cells": [
     {
      "cell": "6,9",
-     "deadlock_s": 1985
+     "blocked_s": 1985
     },
     {
      "cell": "7,9",
-     "deadlock_s": 1950
+     "blocked_s": 1950
     },
     {
      "cell": "2,7",
-     "deadlock_s": 1600
+     "blocked_s": 1600
     },
     {
      "cell": "3,7",
-     "deadlock_s": 1600
+     "blocked_s": 1600
     },
     {
      "cell": "3,13",
-     "deadlock_s": 180
+     "blocked_s": 180
     },
     {
      "cell": "15,10",
-     "deadlock_s": 115
+     "blocked_s": 115
     },
     {
      "cell": "15,11",
-     "deadlock_s": 115
+     "blocked_s": 115
     },
     {
      "cell": "3,12",
-     "deadlock_s": 100
+     "blocked_s": 100
     },
     {
      "cell": "4,13",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "5,9",
-     "deadlock_s": 35
+     "blocked_s": 35
     }
    ]
   },
   "28": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z28-01",
@@ -2741,54 +2741,54 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 232.66533066132266,
+   "blocked_s_per_robot_hour": 232.66533066132266,
    "top_cells": [
     {
      "cell": "2,14",
-     "deadlock_s": 350
+     "blocked_s": 350
     },
     {
      "cell": "2,15",
-     "deadlock_s": 350
+     "blocked_s": 350
     },
     {
      "cell": "11,6",
-     "deadlock_s": 325
+     "blocked_s": 325
     },
     {
      "cell": "11,5",
-     "deadlock_s": 230
+     "blocked_s": 230
     },
     {
      "cell": "3,5",
-     "deadlock_s": 125
+     "blocked_s": 125
     },
     {
      "cell": "12,6",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "14,21",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "14,22",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "3,4",
-     "deadlock_s": 70
+     "blocked_s": 70
     },
     {
      "cell": "15,10",
-     "deadlock_s": 60
+     "blocked_s": 60
     }
    ]
   },
   "29": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z29-04",
@@ -2838,30 +2838,30 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 42.08416833667335,
+   "blocked_s_per_robot_hour": 42.08416833667335,
    "top_cells": [
     {
      "cell": "4,3",
-     "deadlock_s": 125
+     "blocked_s": 125
     },
     {
      "cell": "5,3",
-     "deadlock_s": 125
+     "blocked_s": 125
     },
     {
      "cell": "15,16",
-     "deadlock_s": 50
+     "blocked_s": 50
     },
     {
      "cell": "16,16",
-     "deadlock_s": 50
+     "blocked_s": 50
     }
    ]
   },
   "3": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z3-01",
@@ -2910,34 +2910,34 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 229.65931863727457,
+   "blocked_s_per_robot_hour": 229.65931863727457,
    "top_cells": [
     {
      "cell": "18,5",
-     "deadlock_s": 800
+     "blocked_s": 800
     },
     {
      "cell": "18,6",
-     "deadlock_s": 800
+     "blocked_s": 800
     },
     {
      "cell": "6,21",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "7,21",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "3,17",
-     "deadlock_s": 60
+     "blocked_s": 60
     }
    ]
   },
   "4": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z4-05",
@@ -3082,46 +3082,46 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 413.62725450901803,
+   "blocked_s_per_robot_hour": 413.62725450901803,
    "top_cells": [
     {
      "cell": "14,7",
-     "deadlock_s": 1515
+     "blocked_s": 1515
     },
     {
      "cell": "14,8",
-     "deadlock_s": 1225
+     "blocked_s": 1225
     },
     {
      "cell": "13,7",
-     "deadlock_s": 225
+     "blocked_s": 225
     },
     {
      "cell": "3,4",
-     "deadlock_s": 95
+     "blocked_s": 95
     },
     {
      "cell": "8,10",
-     "deadlock_s": 45
+     "blocked_s": 45
     },
     {
      "cell": "9,10",
-     "deadlock_s": 45
+     "blocked_s": 45
     },
     {
      "cell": "10,11",
-     "deadlock_s": 35
+     "blocked_s": 35
     },
     {
      "cell": "10,12",
-     "deadlock_s": 35
+     "blocked_s": 35
     }
    ]
   },
   "5": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z5-03",
@@ -3251,34 +3251,34 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 520.6412825651303,
+   "blocked_s_per_robot_hour": 520.6412825651303,
    "top_cells": [
     {
      "cell": "7,15",
-     "deadlock_s": 1820
+     "blocked_s": 1820
     },
     {
      "cell": "7,14",
-     "deadlock_s": 1740
+     "blocked_s": 1740
     },
     {
      "cell": "7,24",
-     "deadlock_s": 345
+     "blocked_s": 345
     },
     {
      "cell": "8,24",
-     "deadlock_s": 345
+     "blocked_s": 345
     },
     {
      "cell": "8,15",
-     "deadlock_s": 80
+     "blocked_s": 80
     }
    ]
   },
   "6": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z6-10",
@@ -3360,42 +3360,42 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 144.28857715430863,
+   "blocked_s_per_robot_hour": 144.28857715430863,
    "top_cells": [
     {
      "cell": "2,17",
-     "deadlock_s": 245
+     "blocked_s": 245
     },
     {
      "cell": "2,18",
-     "deadlock_s": 245
+     "blocked_s": 245
     },
     {
      "cell": "7,19",
-     "deadlock_s": 180
+     "blocked_s": 180
     },
     {
      "cell": "16,10",
-     "deadlock_s": 175
+     "blocked_s": 175
     },
     {
      "cell": "16,11",
-     "deadlock_s": 175
+     "blocked_s": 175
     },
     {
      "cell": "6,19",
-     "deadlock_s": 130
+     "blocked_s": 130
     },
     {
      "cell": "8,19",
-     "deadlock_s": 50
+     "blocked_s": 50
     }
    ]
   },
   "7": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z7-08",
@@ -3542,54 +3542,54 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 291.5831663326653,
+   "blocked_s_per_robot_hour": 291.5831663326653,
    "top_cells": [
     {
      "cell": "6,15",
-     "deadlock_s": 535
+     "blocked_s": 535
     },
     {
      "cell": "7,15",
-     "deadlock_s": 535
+     "blocked_s": 535
     },
     {
      "cell": "5,11",
-     "deadlock_s": 235
+     "blocked_s": 235
     },
     {
      "cell": "6,11",
-     "deadlock_s": 235
+     "blocked_s": 235
     },
     {
      "cell": "19,20",
-     "deadlock_s": 115
+     "blocked_s": 115
     },
     {
      "cell": "20,20",
-     "deadlock_s": 115
+     "blocked_s": 115
     },
     {
      "cell": "10,14",
-     "deadlock_s": 90
+     "blocked_s": 90
     },
     {
      "cell": "10,15",
-     "deadlock_s": 90
+     "blocked_s": 90
     },
     {
      "cell": "11,15",
-     "deadlock_s": 75
+     "blocked_s": 75
     },
     {
      "cell": "11,16",
-     "deadlock_s": 75
+     "blocked_s": 75
     }
    ]
   },
   "8": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z8-01",
@@ -3622,26 +3622,26 @@
      "resolution": "broke_up"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 46.8937875751503,
+   "blocked_s_per_robot_hour": 46.8937875751503,
    "top_cells": [
     {
      "cell": "11,16",
-     "deadlock_s": 155
+     "blocked_s": 155
     },
     {
      "cell": "11,17",
-     "deadlock_s": 155
+     "blocked_s": 155
     },
     {
      "cell": "10,19",
-     "deadlock_s": 40
+     "blocked_s": 40
     }
    ]
   },
   "9": {
-   "deadlocks": [
+   "blocking_clusters": [
     {
      "robots": [
       "Z9-03",
@@ -3723,64 +3723,64 @@
      "resolution": "unresolved_at_end"
     }
    ],
-   "knots": [],
+   "blocking_chains": [],
    "robot_hours": 8.316666666666666,
-   "deadlock_s_per_robot_hour": 119.03807615230461,
+   "blocked_s_per_robot_hour": 119.03807615230461,
    "top_cells": [
     {
      "cell": "10,10",
-     "deadlock_s": 160
+     "blocked_s": 160
     },
     {
      "cell": "10,9",
-     "deadlock_s": 160
+     "blocked_s": 160
     },
     {
      "cell": "13,10",
-     "deadlock_s": 155
+     "blocked_s": 155
     },
     {
      "cell": "13,11",
-     "deadlock_s": 155
+     "blocked_s": 155
     },
     {
      "cell": "8,3",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "9,3",
-     "deadlock_s": 80
+     "blocked_s": 80
     },
     {
      "cell": "11,10",
-     "deadlock_s": 65
+     "blocked_s": 65
     },
     {
      "cell": "12,10",
-     "deadlock_s": 65
+     "blocked_s": 65
     },
     {
      "cell": "15,11",
-     "deadlock_s": 35
+     "blocked_s": 35
     },
     {
      "cell": "16,11",
-     "deadlock_s": 35
+     "blocked_s": 35
     }
    ]
   }
  },
  "total": {
-  "deadlocks": 163,
-  "knots": 0,
+  "blocking_clusters": 163,
+  "blocking_chains": 0,
   "robot_hours": 249.49999999999991,
-  "deadlock_s_per_robot_hour": 300.44088176352716
+  "blocked_s_per_robot_hour": 300.44088176352716
  },
  "decisions": [
   {
-   "id": "7892da50007cc7cf17cbb3c67b198aadc9bb5a78",
+   "id": "4cd9cca374696c56389ff09d9543cea98924401e",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,12",
    "start_iso": "2026-01-01T00:06:55Z",
    "decided_at": 1767226435,
@@ -3797,15 +3797,15 @@
     "min_s": 30,
     "zone": "0"
    },
-   "rationale": "2 robots mutually blocked for 420 s in zone 0",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 420 s in zone 0",
    "expected": 420.0,
    "grade_after": 1767226435,
-   "dedup_key": "deadlock:18,12:2026-01-01T00:06:55Z"
+   "dedup_key": "blocking_cluster:18,12:2026-01-01T00:06:55Z"
   },
   {
-   "id": "dfb41ed644699b4c5bcd74fa86a58475a7e6f740",
+   "id": "6273bb586cb72b1cd5a392492f6a6f14afe5f29d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "12,7;12,8",
    "start_iso": "2026-01-01T00:11:55Z",
    "decided_at": 1767226365,
@@ -3823,15 +3823,15 @@
     "min_s": 30,
     "zone": "1"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 1",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 1",
    "expected": 50.0,
    "grade_after": 1767226365,
-   "dedup_key": "deadlock:12,7;12,8:2026-01-01T00:11:55Z"
+   "dedup_key": "blocking_cluster:12,7;12,8:2026-01-01T00:11:55Z"
   },
   {
-   "id": "41993bd4e11e8a22bd6829baefa95e70fa4da386",
+   "id": "a9decadc5bb797e39ab65122a48049b453e6bacd",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,16;11,17",
    "start_iso": "2026-01-01T00:14:10Z",
    "decided_at": 1767226855,
@@ -3849,15 +3849,15 @@
     "min_s": 30,
     "zone": "1"
    },
-   "rationale": "2 robots mutually blocked for 405 s in zone 1",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 405 s in zone 1",
    "expected": 405.0,
    "grade_after": 1767226855,
-   "dedup_key": "deadlock:11,16;11,17:2026-01-01T00:14:10Z"
+   "dedup_key": "blocking_cluster:11,16;11,17:2026-01-01T00:14:10Z"
   },
   {
-   "id": "e82e921b99e748f2b27edc0096d15e505b79f1a4",
+   "id": "0faf782080efe41142c9158335fc167542b554cf",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,16;11,17",
    "start_iso": "2026-01-01T00:25:50Z",
    "decided_at": 1767227490,
@@ -3875,15 +3875,15 @@
     "min_s": 30,
     "zone": "1"
    },
-   "rationale": "2 robots mutually blocked for 340 s in zone 1",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 340 s in zone 1",
    "expected": 340.0,
    "grade_after": 1767227490,
-   "dedup_key": "deadlock:11,16;11,17:2026-01-01T00:25:50Z"
+   "dedup_key": "blocking_cluster:11,16;11,17:2026-01-01T00:25:50Z"
   },
   {
-   "id": "f1fdbbf09c56bf930fbbde8b3fdcf611eefdbb0e",
+   "id": "11b6b6020a60bdc4c36ef20186cc60fb0b3dd20f",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "12,15;12,16",
    "start_iso": "2026-01-01T00:32:20Z",
    "decided_at": 1767227590,
@@ -3901,15 +3901,15 @@
     "min_s": 30,
     "zone": "1"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 1",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 1",
    "expected": 50.0,
    "grade_after": 1767227590,
-   "dedup_key": "deadlock:12,15;12,16:2026-01-01T00:32:20Z"
+   "dedup_key": "blocking_cluster:12,15;12,16:2026-01-01T00:32:20Z"
   },
   {
-   "id": "b87ebcf8e2008af43ea65f1b776bd2a81c94266d",
+   "id": "e0a290f0f9f14be7f12af58a2bf8fdffa152b572",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "12,12;13,12",
    "start_iso": "2026-01-01T00:35:25Z",
    "decided_at": 1767227775,
@@ -3927,15 +3927,15 @@
     "min_s": 30,
     "zone": "1"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 1",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 1",
    "expected": 50.0,
    "grade_after": 1767227775,
-   "dedup_key": "deadlock:12,12;13,12:2026-01-01T00:35:25Z"
+   "dedup_key": "blocking_cluster:12,12;13,12:2026-01-01T00:35:25Z"
   },
   {
-   "id": "a73ed6427df0f664be644bb521f7623563475671",
+   "id": "6cbad55dc7f6ebd3f89a3c616150cd098e22458a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,5;3,5",
    "start_iso": "2026-01-01T00:09:50Z",
    "decided_at": 1767226600,
@@ -3953,15 +3953,15 @@
     "min_s": 30,
     "zone": "10"
    },
-   "rationale": "2 robots mutually blocked for 410 s in zone 10",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 410 s in zone 10",
    "expected": 410.0,
    "grade_after": 1767226600,
-   "dedup_key": "deadlock:2,5;3,5:2026-01-01T00:09:50Z"
+   "dedup_key": "blocking_cluster:2,5;3,5:2026-01-01T00:09:50Z"
   },
   {
-   "id": "73b3d3c108478b3972bf21f84c081eb13c883c79",
+   "id": "e60d75881e7e6fa0a0ac404353980affbfb936ff",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,8;7,9",
    "start_iso": "2026-01-01T00:24:35Z",
    "decided_at": 1767227185,
@@ -3979,15 +3979,15 @@
     "min_s": 30,
     "zone": "10"
    },
-   "rationale": "2 robots mutually blocked for 110 s in zone 10",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 110 s in zone 10",
    "expected": 110.0,
    "grade_after": 1767227185,
-   "dedup_key": "deadlock:7,8;7,9:2026-01-01T00:24:35Z"
+   "dedup_key": "blocking_cluster:7,8;7,9:2026-01-01T00:24:35Z"
   },
   {
-   "id": "be3064f06838b932dc41fd63de1127df5446c8ed",
+   "id": "41167f47dfa4c87c3c7a39dfb0d9ee21b0117d73",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,8;7,9",
    "start_iso": "2026-01-01T00:26:30Z",
    "decided_at": 1767227400,
@@ -4005,15 +4005,15 @@
     "min_s": 30,
     "zone": "10"
    },
-   "rationale": "2 robots mutually blocked for 210 s in zone 10",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 210 s in zone 10",
    "expected": 210.0,
    "grade_after": 1767227400,
-   "dedup_key": "deadlock:7,8;7,9:2026-01-01T00:26:30Z"
+   "dedup_key": "blocking_cluster:7,8;7,9:2026-01-01T00:26:30Z"
   },
   {
-   "id": "10930ffcc310a72477a91ff9d5527e9644fc3152",
+   "id": "19cc2021125664a166ca9eff21a00f2e4851b099",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,5;3,5",
    "start_iso": "2026-01-01T00:22:30Z",
    "decided_at": 1767227525,
@@ -4031,15 +4031,15 @@
     "min_s": 30,
     "zone": "10"
    },
-   "rationale": "2 robots mutually blocked for 575 s in zone 10",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 575 s in zone 10",
    "expected": 575.0,
    "grade_after": 1767227525,
-   "dedup_key": "deadlock:2,5;3,5:2026-01-01T00:22:30Z"
+   "dedup_key": "blocking_cluster:2,5;3,5:2026-01-01T00:22:30Z"
   },
   {
-   "id": "4fecd1ecd2160b5f76b85dc79e0477da7dc88704",
+   "id": "45e33eef766daa78eaf62a190d41b4f2b629b2e1",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,15;18,16",
    "start_iso": "2026-01-01T00:22:10Z",
    "decided_at": 1767227660,
@@ -4057,15 +4057,15 @@
     "min_s": 30,
     "zone": "10"
    },
-   "rationale": "2 robots mutually blocked for 730 s in zone 10",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 730 s in zone 10",
    "expected": 730.0,
    "grade_after": 1767227660,
-   "dedup_key": "deadlock:18,15;18,16:2026-01-01T00:22:10Z"
+   "dedup_key": "blocking_cluster:18,15;18,16:2026-01-01T00:22:10Z"
   },
   {
-   "id": "7471046231bbc3641ed85e001d839c0f45394b34",
+   "id": "629a00ecdc791948488757cb35cc7081a4bd13b2",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,15;18,16",
    "start_iso": "2026-01-01T00:39:00Z",
    "decided_at": 1767228095,
@@ -4083,15 +4083,15 @@
     "min_s": 30,
     "zone": "10"
    },
-   "rationale": "2 robots mutually blocked for 155 s in zone 10",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 155 s in zone 10",
    "expected": 155.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:18,15;18,16:2026-01-01T00:39:00Z"
+   "dedup_key": "blocking_cluster:18,15;18,16:2026-01-01T00:39:00Z"
   },
   {
-   "id": "d79b5b163e12cbb16f80546f70fdb9c8726831a4",
+   "id": "50703c585ad7b1e6e9d407e9cad378111157a1c5",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "19,9;20,9",
    "start_iso": "2026-01-01T00:06:10Z",
    "decided_at": 1767226040,
@@ -4109,15 +4109,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 70 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 70 s in zone 11",
    "expected": 70.0,
    "grade_after": 1767226040,
-   "dedup_key": "deadlock:19,9;20,9:2026-01-01T00:06:10Z"
+   "dedup_key": "blocking_cluster:19,9;20,9:2026-01-01T00:06:10Z"
   },
   {
-   "id": "074cc82d2ff71e37a13d15c80674417ed2346587",
+   "id": "b6c8b1ba9e878d2cdb63ba36b60dc16830e99082",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,19;18,20;19,20",
    "start_iso": "2026-01-01T00:22:20Z",
    "decided_at": 1767227015,
@@ -4137,15 +4137,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "3 robots mutually blocked for 75 s in zone 11",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 75 s in zone 11",
    "expected": 75.0,
    "grade_after": 1767227015,
-   "dedup_key": "deadlock:18,19;18,20;19,20:2026-01-01T00:22:20Z"
+   "dedup_key": "blocking_cluster:18,19;18,20;19,20:2026-01-01T00:22:20Z"
   },
   {
-   "id": "6d6e636d3eb24f3478c982bcce768e2868c70b8a",
+   "id": "9183d12007cb3606f305035c667b272b4080db61",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,7;3,7",
    "start_iso": "2026-01-01T00:06:20Z",
    "decided_at": 1767227070,
@@ -4163,15 +4163,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 1090 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1090 s in zone 11",
    "expected": 1090.0,
    "grade_after": 1767227070,
-   "dedup_key": "deadlock:2,7;3,7:2026-01-01T00:06:20Z"
+   "dedup_key": "blocking_cluster:2,7;3,7:2026-01-01T00:06:20Z"
   },
   {
-   "id": "78ae9afba74b799913afcc62ff3f0d7d2e5b9d4b",
+   "id": "ab978386e33dbe2aa5df68cbdd65541b5a6658f7",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,20;19,20",
    "start_iso": "2026-01-01T00:22:20Z",
    "decided_at": 1767227115,
@@ -4189,15 +4189,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 175 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 175 s in zone 11",
    "expected": 175.0,
    "grade_after": 1767227115,
-   "dedup_key": "deadlock:18,20;19,20:2026-01-01T00:22:20Z"
+   "dedup_key": "blocking_cluster:18,20;19,20:2026-01-01T00:22:20Z"
   },
   {
-   "id": "593687efd759d244a806324811da4a3b17170c12",
+   "id": "6a6bb537280ca6d669567f901699dc94749a8a05",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,22;19,22",
    "start_iso": "2026-01-01T00:26:00Z",
    "decided_at": 1767227265,
@@ -4215,15 +4215,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 105 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 105 s in zone 11",
    "expected": 105.0,
    "grade_after": 1767227265,
-   "dedup_key": "deadlock:18,22;19,22:2026-01-01T00:26:00Z"
+   "dedup_key": "blocking_cluster:18,22;19,22:2026-01-01T00:26:00Z"
   },
   {
-   "id": "23d8ca266eb3cc99e5a3d7aa7a4c91e48967467c",
+   "id": "ec855979ff93b5459090328cabe86fbd4407d16d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "19,21;19,22",
    "start_iso": "2026-01-01T00:27:25Z",
    "decided_at": 1767227290,
@@ -4241,15 +4241,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 11",
    "expected": 45.0,
    "grade_after": 1767227290,
-   "dedup_key": "deadlock:19,21;19,22:2026-01-01T00:27:25Z"
+   "dedup_key": "blocking_cluster:19,21;19,22:2026-01-01T00:27:25Z"
   },
   {
-   "id": "72b7f1a7422f0ad766ece55f6830eda895c8f899",
+   "id": "7d4acdbcc061a53ef91d88d33cfc7399f21cbdf2",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "17,19;18,19",
    "start_iso": "2026-01-01T00:28:00Z",
    "decided_at": 1767227340,
@@ -4267,15 +4267,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 60 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 60 s in zone 11",
    "expected": 60.0,
    "grade_after": 1767227340,
-   "dedup_key": "deadlock:17,19;18,19:2026-01-01T00:28:00Z"
+   "dedup_key": "blocking_cluster:17,19;18,19:2026-01-01T00:28:00Z"
   },
   {
-   "id": "ae4fc85332b1b817682597b66d6929b3152217f1",
+   "id": "805c66aafd1a27c86c8ec55a70fb35bcca9c8719",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "19,21;20,21",
    "start_iso": "2026-01-01T00:28:25Z",
    "decided_at": 1767227440,
@@ -4293,15 +4293,15 @@
     "min_s": 30,
     "zone": "11"
    },
-   "rationale": "2 robots mutually blocked for 135 s in zone 11",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 135 s in zone 11",
    "expected": 135.0,
    "grade_after": 1767227440,
-   "dedup_key": "deadlock:19,21;20,21:2026-01-01T00:28:25Z"
+   "dedup_key": "blocking_cluster:19,21;20,21:2026-01-01T00:28:25Z"
   },
   {
-   "id": "57c1b38bfe6efddb8936359761ef03fd805143ea",
+   "id": "6cbf2dd1d2c7f40bb99723d219c8486eccea7f58",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,17;14,17",
    "start_iso": "2026-01-01T00:16:30Z",
    "decided_at": 1767226765,
@@ -4319,15 +4319,15 @@
     "min_s": 30,
     "zone": "12"
    },
-   "rationale": "2 robots mutually blocked for 175 s in zone 12",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 175 s in zone 12",
    "expected": 175.0,
    "grade_after": 1767226765,
-   "dedup_key": "deadlock:13,17;14,17:2026-01-01T00:16:30Z"
+   "dedup_key": "blocking_cluster:13,17;14,17:2026-01-01T00:16:30Z"
   },
   {
-   "id": "7e25b1b9e412110d52d3e2959dfa2671a3bf404b",
+   "id": "a66a7490be30bc38ef3822696bc8d74d3c1fa25a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,7;13,8",
    "start_iso": "2026-01-01T00:35:55Z",
    "decided_at": 1767227830,
@@ -4345,15 +4345,15 @@
     "min_s": 30,
     "zone": "12"
    },
-   "rationale": "2 robots mutually blocked for 75 s in zone 12",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 75 s in zone 12",
    "expected": 75.0,
    "grade_after": 1767227830,
-   "dedup_key": "deadlock:13,7;13,8:2026-01-01T00:35:55Z"
+   "dedup_key": "blocking_cluster:13,7;13,8:2026-01-01T00:35:55Z"
   },
   {
-   "id": "4fd937a7d5e3ddde404f915a99dcd9ac1e26faf9",
+   "id": "0e57c2410c8fba894c13b5b7c7b6bf136a496f0d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,7;13,8",
    "start_iso": "2026-01-01T00:38:55Z",
    "decided_at": 1767228095,
@@ -4371,15 +4371,15 @@
     "min_s": 30,
     "zone": "12"
    },
-   "rationale": "2 robots mutually blocked for 160 s in zone 12",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 160 s in zone 12",
    "expected": 160.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:13,7;13,8:2026-01-01T00:38:55Z"
+   "dedup_key": "blocking_cluster:13,7;13,8:2026-01-01T00:38:55Z"
   },
   {
-   "id": "a6c8a33a9e26533a0e274ab77818e43cbc84dcc5",
+   "id": "8cd11dc1cbcde8c3a2a9a885feebe62991cf4812",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "1,3;2,3",
    "start_iso": "2026-01-01T00:07:05Z",
    "decided_at": 1767226375,
@@ -4397,15 +4397,15 @@
     "min_s": 30,
     "zone": "13"
    },
-   "rationale": "2 robots mutually blocked for 350 s in zone 13",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 350 s in zone 13",
    "expected": 350.0,
    "grade_after": 1767226375,
-   "dedup_key": "deadlock:1,3;2,3:2026-01-01T00:07:05Z"
+   "dedup_key": "blocking_cluster:1,3;2,3:2026-01-01T00:07:05Z"
   },
   {
-   "id": "22d809484cf084879a2795d786840c3a74138927",
+   "id": "d1cda6f3b83229f85d7d748db7897794a93dcc49",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,9;11,9",
    "start_iso": "2026-01-01T00:21:35Z",
    "decided_at": 1767226945,
@@ -4423,15 +4423,15 @@
     "min_s": 30,
     "zone": "13"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 13",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 13",
    "expected": 50.0,
    "grade_after": 1767226945,
-   "dedup_key": "deadlock:10,9;11,9:2026-01-01T00:21:35Z"
+   "dedup_key": "blocking_cluster:10,9;11,9:2026-01-01T00:21:35Z"
   },
   {
-   "id": "8309c1f44cd2d62ec9cb698af069fe70ca7e9f2c",
+   "id": "304cfe5f71c2efedb11accd0f503494049790337",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,12;11,12",
    "start_iso": "2026-01-01T00:33:45Z",
    "decided_at": 1767228095,
@@ -4449,15 +4449,15 @@
     "min_s": 30,
     "zone": "13"
    },
-   "rationale": "2 robots mutually blocked for 470 s in zone 13",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 470 s in zone 13",
    "expected": 470.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:10,12;11,12:2026-01-01T00:33:45Z"
+   "dedup_key": "blocking_cluster:10,12;11,12:2026-01-01T00:33:45Z"
   },
   {
-   "id": "1af058faeaf1f233ffb1e5084aef47f7b1968c9c",
+   "id": "703c6f3bcc2c919c6a720d4bb7ec694c5a83e1cb",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,0;18,1",
    "start_iso": "2026-01-01T00:01:25Z",
    "decided_at": 1767225785,
@@ -4475,15 +4475,15 @@
     "min_s": 30,
     "zone": "14"
    },
-   "rationale": "2 robots mutually blocked for 100 s in zone 14",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 100 s in zone 14",
    "expected": 100.0,
    "grade_after": 1767225785,
-   "dedup_key": "deadlock:18,0;18,1:2026-01-01T00:01:25Z"
+   "dedup_key": "blocking_cluster:18,0;18,1:2026-01-01T00:01:25Z"
   },
   {
-   "id": "8162e132c9bef3f75fde89216370dd701f3deaa1",
+   "id": "20770f775afe2d8fe8e71147e6140925aba9087c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,12;10,13",
    "start_iso": "2026-01-01T00:28:45Z",
    "decided_at": 1767227530,
@@ -4501,15 +4501,15 @@
     "min_s": 30,
     "zone": "14"
    },
-   "rationale": "2 robots mutually blocked for 205 s in zone 14",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 205 s in zone 14",
    "expected": 205.0,
    "grade_after": 1767227530,
-   "dedup_key": "deadlock:10,12;10,13:2026-01-01T00:28:45Z"
+   "dedup_key": "blocking_cluster:10,12;10,13:2026-01-01T00:28:45Z"
   },
   {
-   "id": "ce91c0bc62dc94e6472840e543d235fae520c4e9",
+   "id": "011fd12055824198024302a6019380c29200fe8c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,7;7,8",
    "start_iso": "2026-01-01T00:28:25Z",
    "decided_at": 1767227675,
@@ -4527,15 +4527,15 @@
     "min_s": 30,
     "zone": "14"
    },
-   "rationale": "2 robots mutually blocked for 370 s in zone 14",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 370 s in zone 14",
    "expected": 370.0,
    "grade_after": 1767227675,
-   "dedup_key": "deadlock:7,7;7,8:2026-01-01T00:28:25Z"
+   "dedup_key": "blocking_cluster:7,7;7,8:2026-01-01T00:28:25Z"
   },
   {
-   "id": "abd515cfc536bc9040564f969b2a4b9ffcef487a",
+   "id": "f3aea73c4ce42808598cdaad6d8a147cc50de01c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,12;3,13",
    "start_iso": "2026-01-01T00:12:15Z",
    "decided_at": 1767226780,
@@ -4553,15 +4553,15 @@
     "min_s": 30,
     "zone": "15"
    },
-   "rationale": "2 robots mutually blocked for 445 s in zone 15",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 445 s in zone 15",
    "expected": 445.0,
    "grade_after": 1767226780,
-   "dedup_key": "deadlock:3,12;3,13:2026-01-01T00:12:15Z"
+   "dedup_key": "blocking_cluster:3,12;3,13:2026-01-01T00:12:15Z"
   },
   {
-   "id": "e4a56ba7247b42e46d3963882132c05a202ada6e",
+   "id": "3f7950d192d9db72d25b9a19510e8e5e394219be",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,8;11,9",
    "start_iso": "2026-01-01T00:31:30Z",
    "decided_at": 1767227550,
@@ -4579,15 +4579,15 @@
     "min_s": 30,
     "zone": "15"
    },
-   "rationale": "2 robots mutually blocked for 60 s in zone 15",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 60 s in zone 15",
    "expected": 60.0,
    "grade_after": 1767227550,
-   "dedup_key": "deadlock:11,8;11,9:2026-01-01T00:31:30Z"
+   "dedup_key": "blocking_cluster:11,8;11,9:2026-01-01T00:31:30Z"
   },
   {
-   "id": "a891828da105f0cb61e5f07114807eec0e0f8ab3",
+   "id": "0cb62e2668b58e5558c617bd58300d3b05821acd",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,7;3,7",
    "start_iso": "2026-01-01T00:23:40Z",
    "decided_at": 1767227735,
@@ -4605,15 +4605,15 @@
     "min_s": 30,
     "zone": "15"
    },
-   "rationale": "2 robots mutually blocked for 715 s in zone 15",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 715 s in zone 15",
    "expected": 715.0,
    "grade_after": 1767227735,
-   "dedup_key": "deadlock:2,7;3,7:2026-01-01T00:23:40Z"
+   "dedup_key": "blocking_cluster:2,7;3,7:2026-01-01T00:23:40Z"
   },
   {
-   "id": "2db06855dafff267167d8b7c5e708ac50e959853",
+   "id": "d3e87264d0bf5c315cb01789fb6cfbfe0f1a9409",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,9",
    "start_iso": "2026-01-01T00:40:40Z",
    "decided_at": 1767228095,
@@ -4630,15 +4630,15 @@
     "min_s": 30,
     "zone": "15"
    },
-   "rationale": "2 robots mutually blocked for 55 s in zone 15",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 55 s in zone 15",
    "expected": 55.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:14,9:2026-01-01T00:40:40Z"
+   "dedup_key": "blocking_cluster:14,9:2026-01-01T00:40:40Z"
   },
   {
-   "id": "3ddfc651defb7490496fa036ae2c5c4ccb721deb",
+   "id": "e9875291c5bebb5a0422e7a9fb166db23e105700",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,12;12,12",
    "start_iso": "2026-01-01T00:37:30Z",
    "decided_at": 1767228095,
@@ -4656,15 +4656,15 @@
     "min_s": 30,
     "zone": "15"
    },
-   "rationale": "2 robots mutually blocked for 245 s in zone 15",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 245 s in zone 15",
    "expected": 245.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:11,12;12,12:2026-01-01T00:37:30Z"
+   "dedup_key": "blocking_cluster:11,12;12,12:2026-01-01T00:37:30Z"
   },
   {
-   "id": "efe547ce514c5e9896f5e430eda1a58507ea5723",
+   "id": "5f1dcbdc5954b0e0bc12819984c4d4074f74012b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,3;7,3",
    "start_iso": "2026-01-01T00:10:10Z",
    "decided_at": 1767227295,
@@ -4682,15 +4682,15 @@
     "min_s": 30,
     "zone": "16"
    },
-   "rationale": "2 robots mutually blocked for 1085 s in zone 16",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1085 s in zone 16",
    "expected": 1085.0,
    "grade_after": 1767227295,
-   "dedup_key": "deadlock:6,3;7,3:2026-01-01T00:10:10Z"
+   "dedup_key": "blocking_cluster:6,3;7,3:2026-01-01T00:10:10Z"
   },
   {
-   "id": "1850ba05735521659f40af1252445757ad36cadd",
+   "id": "a0af580c21b36f79c8e6da215a853b67a86c36ba",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,8;10,9",
    "start_iso": "2026-01-01T00:38:05Z",
    "decided_at": 1767227980,
@@ -4708,15 +4708,15 @@
     "min_s": 30,
     "zone": "16"
    },
-   "rationale": "2 robots mutually blocked for 95 s in zone 16",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 95 s in zone 16",
    "expected": 95.0,
    "grade_after": 1767227980,
-   "dedup_key": "deadlock:10,8;10,9:2026-01-01T00:38:05Z"
+   "dedup_key": "blocking_cluster:10,8;10,9:2026-01-01T00:38:05Z"
   },
   {
-   "id": "f315ec20678fa005481d68b6b5fdcd0c84a8c0ba",
+   "id": "3aaeaea09d07f3902fadfaceb5cebde7aede6f98",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,5;3,5",
    "start_iso": "2026-01-01T00:39:20Z",
    "decided_at": 1767228015,
@@ -4734,15 +4734,15 @@
     "min_s": 30,
     "zone": "16"
    },
-   "rationale": "2 robots mutually blocked for 55 s in zone 16",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 55 s in zone 16",
    "expected": 55.0,
    "grade_after": 1767228015,
-   "dedup_key": "deadlock:2,5;3,5:2026-01-01T00:39:20Z"
+   "dedup_key": "blocking_cluster:2,5;3,5:2026-01-01T00:39:20Z"
   },
   {
-   "id": "5eaae9c27d1d25651ecc8d7113b3430cec81646c",
+   "id": "605d65947675f6f9b5791311ade37a329e856792",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,9",
    "start_iso": "2026-01-01T00:07:20Z",
    "decided_at": 1767226390,
@@ -4759,15 +4759,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 350 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 350 s in zone 17",
    "expected": 350.0,
    "grade_after": 1767226390,
-   "dedup_key": "deadlock:14,9:2026-01-01T00:07:20Z"
+   "dedup_key": "blocking_cluster:14,9:2026-01-01T00:07:20Z"
   },
   {
-   "id": "6a52c78c309667e0f37b60c8f3dd5fde15127eae",
+   "id": "ffc3d42c5a6fbaad1c28b13f93d01104b260b420",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,17;4,17",
    "start_iso": "2026-01-01T00:09:25Z",
    "decided_at": 1767226535,
@@ -4785,15 +4785,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 370 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 370 s in zone 17",
    "expected": 370.0,
    "grade_after": 1767226535,
-   "dedup_key": "deadlock:3,17;4,17:2026-01-01T00:09:25Z"
+   "dedup_key": "blocking_cluster:3,17;4,17:2026-01-01T00:09:25Z"
   },
   {
-   "id": "d204a097d015afd5e552515330b633cce955ca45",
+   "id": "f8571c9a8acae7fb3f829f0816d1772f323ec48f",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,9;15,9",
    "start_iso": "2026-01-01T00:19:25Z",
    "decided_at": 1767226940,
@@ -4811,15 +4811,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 175 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 175 s in zone 17",
    "expected": 175.0,
    "grade_after": 1767226940,
-   "dedup_key": "deadlock:14,9;15,9:2026-01-01T00:19:25Z"
+   "dedup_key": "blocking_cluster:14,9;15,9:2026-01-01T00:19:25Z"
   },
   {
-   "id": "34e5c6991373c1565e4b8c09ea0ec75dae39321e",
+   "id": "01cbe2fd48030a7af75a8bed12c145f201161029",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "16,14;17,14",
    "start_iso": "2026-01-01T00:28:25Z",
    "decided_at": 1767227405,
@@ -4837,15 +4837,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 100 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 100 s in zone 17",
    "expected": 100.0,
    "grade_after": 1767227405,
-   "dedup_key": "deadlock:16,14;17,14:2026-01-01T00:28:25Z"
+   "dedup_key": "blocking_cluster:16,14;17,14:2026-01-01T00:28:25Z"
   },
   {
-   "id": "777e7aa767b48b910d3a9a37e6fb9167698376aa",
+   "id": "cc2ccfba94066109c0ccb7812c967e8de031f973",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "16,10;16,9",
    "start_iso": "2026-01-01T00:37:10Z",
    "decided_at": 1767227895,
@@ -4863,15 +4863,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 65 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 65 s in zone 17",
    "expected": 65.0,
    "grade_after": 1767227895,
-   "dedup_key": "deadlock:16,10;16,9:2026-01-01T00:37:10Z"
+   "dedup_key": "blocking_cluster:16,10;16,9:2026-01-01T00:37:10Z"
   },
   {
-   "id": "9d052f619a33966a7f37d393f8a7a55f181163c5",
+   "id": "c3d34571a5db4f1cbd092c88b6706c57ce9358b6",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,13;9,13",
    "start_iso": "2026-01-01T00:37:45Z",
    "decided_at": 1767227940,
@@ -4889,15 +4889,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 75 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 75 s in zone 17",
    "expected": 75.0,
    "grade_after": 1767227940,
-   "dedup_key": "deadlock:10,13;9,13:2026-01-01T00:37:45Z"
+   "dedup_key": "blocking_cluster:10,13;9,13:2026-01-01T00:37:45Z"
   },
   {
-   "id": "e9ca154a207169635deb87cbc7c3d4143c4daafc",
+   "id": "523882c66ba40af66ebf110dcffba1e81aaf2cad",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,13;9,13",
    "start_iso": "2026-01-01T00:39:05Z",
    "decided_at": 1767228020,
@@ -4915,15 +4915,15 @@
     "min_s": 30,
     "zone": "17"
    },
-   "rationale": "2 robots mutually blocked for 75 s in zone 17",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 75 s in zone 17",
    "expected": 75.0,
    "grade_after": 1767228020,
-   "dedup_key": "deadlock:10,13;9,13:2026-01-01T00:39:05Z"
+   "dedup_key": "blocking_cluster:10,13;9,13:2026-01-01T00:39:05Z"
   },
   {
-   "id": "5cbd46ae354cec86af45b6c6be799ddcd45473cc",
+   "id": "f35b744e627fb8461e2e58459bcbd6da13d9c502",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "1,6;2,6",
    "start_iso": "2026-01-01T00:04:00Z",
    "decided_at": 1767225930,
@@ -4941,15 +4941,15 @@
     "min_s": 30,
     "zone": "18"
    },
-   "rationale": "2 robots mutually blocked for 90 s in zone 18",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 90 s in zone 18",
    "expected": 90.0,
    "grade_after": 1767225930,
-   "dedup_key": "deadlock:1,6;2,6:2026-01-01T00:04:00Z"
+   "dedup_key": "blocking_cluster:1,6;2,6:2026-01-01T00:04:00Z"
   },
   {
-   "id": "474f273e809d2499cd8717e89edc4e46d531e270",
+   "id": "1bc27c18d380253606c047e4e2ee0248604925d9",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,19",
    "start_iso": "2026-01-01T00:09:25Z",
    "decided_at": 1767226210,
@@ -4966,15 +4966,15 @@
     "min_s": 30,
     "zone": "18"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 18",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 18",
    "expected": 45.0,
    "grade_after": 1767226210,
-   "dedup_key": "deadlock:10,19:2026-01-01T00:09:25Z"
+   "dedup_key": "blocking_cluster:10,19:2026-01-01T00:09:25Z"
   },
   {
-   "id": "bde4508cacc342a2189c8bac54447c67c88e3e84",
+   "id": "8742299ad17c7911ea155f8d22cf940804c2b570",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,21;10,22",
    "start_iso": "2026-01-01T00:10:45Z",
    "decided_at": 1767226335,
@@ -4992,15 +4992,15 @@
     "min_s": 30,
     "zone": "18"
    },
-   "rationale": "2 robots mutually blocked for 90 s in zone 18",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 90 s in zone 18",
    "expected": 90.0,
    "grade_after": 1767226335,
-   "dedup_key": "deadlock:10,21;10,22:2026-01-01T00:10:45Z"
+   "dedup_key": "blocking_cluster:10,21;10,22:2026-01-01T00:10:45Z"
   },
   {
-   "id": "cd89ac3e02feb0e70fe384c261b890a7aa31d6ea",
+   "id": "04ef8b93ff58ca5dcd42c7a6c5e3742aa36001ca",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,14;4,14",
    "start_iso": "2026-01-01T00:15:50Z",
    "decided_at": 1767226720,
@@ -5018,15 +5018,15 @@
     "min_s": 30,
     "zone": "18"
    },
-   "rationale": "2 robots mutually blocked for 170 s in zone 18",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 170 s in zone 18",
    "expected": 170.0,
    "grade_after": 1767226720,
-   "dedup_key": "deadlock:3,14;4,14:2026-01-01T00:15:50Z"
+   "dedup_key": "blocking_cluster:3,14;4,14:2026-01-01T00:15:50Z"
   },
   {
-   "id": "f03775fd02499a5af73f0132153692da5453e1c0",
+   "id": "82e5ee933a8b521fd3ea0daff3a559c44b8c07e1",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,17;7,17",
    "start_iso": "2026-01-01T00:23:40Z",
    "decided_at": 1767227335,
@@ -5044,15 +5044,15 @@
     "min_s": 30,
     "zone": "18"
    },
-   "rationale": "2 robots mutually blocked for 315 s in zone 18",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 315 s in zone 18",
    "expected": 315.0,
    "grade_after": 1767227335,
-   "dedup_key": "deadlock:6,17;7,17:2026-01-01T00:23:40Z"
+   "dedup_key": "blocking_cluster:6,17;7,17:2026-01-01T00:23:40Z"
   },
   {
-   "id": "e2216a96c93cc4990079d2bf5faea2eb67227b7a",
+   "id": "5edc55d49b66d89febb3cd95ec4da6bdb0c68681",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,16;7,17",
    "start_iso": "2026-01-01T00:31:05Z",
    "decided_at": 1767227630,
@@ -5070,15 +5070,15 @@
     "min_s": 30,
     "zone": "18"
    },
-   "rationale": "2 robots mutually blocked for 165 s in zone 18",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 165 s in zone 18",
    "expected": 165.0,
    "grade_after": 1767227630,
-   "dedup_key": "deadlock:7,16;7,17:2026-01-01T00:31:05Z"
+   "dedup_key": "blocking_cluster:7,16;7,17:2026-01-01T00:31:05Z"
   },
   {
-   "id": "9b5acb4e7ba9961bbda5fc4fe610f81410a0cdb6",
+   "id": "e0e21496f069b88ff769d2bb7bb2413b66756180",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,18;15,19",
    "start_iso": "2026-01-01T00:01:05Z",
    "decided_at": 1767225715,
@@ -5096,15 +5096,15 @@
     "min_s": 30,
     "zone": "19"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 19",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 19",
    "expected": 50.0,
    "grade_after": 1767225715,
-   "dedup_key": "deadlock:15,18;15,19:2026-01-01T00:01:05Z"
+   "dedup_key": "blocking_cluster:15,18;15,19:2026-01-01T00:01:05Z"
   },
   {
-   "id": "95323091b8e7a63021a80be0f77e473bd5491988",
+   "id": "3a83a3568b846ac463b1b3715e95114c095d4777",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,18;15,19",
    "start_iso": "2026-01-01T00:04:10Z",
    "decided_at": 1767225990,
@@ -5122,15 +5122,15 @@
     "min_s": 30,
     "zone": "19"
    },
-   "rationale": "2 robots mutually blocked for 140 s in zone 19",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 140 s in zone 19",
    "expected": 140.0,
    "grade_after": 1767225990,
-   "dedup_key": "deadlock:15,18;15,19:2026-01-01T00:04:10Z"
+   "dedup_key": "blocking_cluster:15,18;15,19:2026-01-01T00:04:10Z"
   },
   {
-   "id": "f28a2d66f506b654231abfb23c691d3884fbc476",
+   "id": "d90aceb9750642948f3ddbec2b1fb6029910dd60",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,10;10,9",
    "start_iso": "2026-01-01T00:09:45Z",
    "decided_at": 1767226270,
@@ -5148,15 +5148,15 @@
     "min_s": 30,
     "zone": "19"
    },
-   "rationale": "2 robots mutually blocked for 85 s in zone 19",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 85 s in zone 19",
    "expected": 85.0,
    "grade_after": 1767226270,
-   "dedup_key": "deadlock:10,10;10,9:2026-01-01T00:09:45Z"
+   "dedup_key": "blocking_cluster:10,10;10,9:2026-01-01T00:09:45Z"
   },
   {
-   "id": "85a1aebc6a012292bbcfc6c418ea714de8159d05",
+   "id": "f38feb400231c98148a4efd5d720c6e48cb2b2a4",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,9;8,9",
    "start_iso": "2026-01-01T00:40:30Z",
    "decided_at": 1767228065,
@@ -5174,15 +5174,15 @@
     "min_s": 30,
     "zone": "19"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 19",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 19",
    "expected": 35.0,
    "grade_after": 1767228065,
-   "dedup_key": "deadlock:7,9;8,9:2026-01-01T00:40:30Z"
+   "dedup_key": "blocking_cluster:7,9;8,9:2026-01-01T00:40:30Z"
   },
   {
-   "id": "ca54665cd80f6dc792e40d7121bebd32b12c7e20",
+   "id": "34abdd29901dad607408ef52264c570e4228db81",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,11;16,11",
    "start_iso": "2026-01-01T00:02:55Z",
    "decided_at": 1767225825,
@@ -5200,15 +5200,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 2",
    "expected": 50.0,
    "grade_after": 1767225825,
-   "dedup_key": "deadlock:15,11;16,11:2026-01-01T00:02:55Z"
+   "dedup_key": "blocking_cluster:15,11;16,11:2026-01-01T00:02:55Z"
   },
   {
-   "id": "84981f75c818e01b1df4fab24b2d7a450128a5b4",
+   "id": "565720f3687a025eb8ec9fbb94d17449f9792c6b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "16,10;16,11",
    "start_iso": "2026-01-01T00:03:20Z",
    "decided_at": 1767225975,
@@ -5226,15 +5226,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 175 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 175 s in zone 2",
    "expected": 175.0,
    "grade_after": 1767225975,
-   "dedup_key": "deadlock:16,10;16,11:2026-01-01T00:03:20Z"
+   "dedup_key": "blocking_cluster:16,10;16,11:2026-01-01T00:03:20Z"
   },
   {
-   "id": "a13fa22eff2b4f9f738684c2ef83202c037b3f02",
+   "id": "5a438ec727f89b077ecf9c3bbb127b0e3e125469",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,14;15,15",
    "start_iso": "2026-01-01T00:09:10Z",
    "decided_at": 1767226510,
@@ -5252,15 +5252,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 360 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 360 s in zone 2",
    "expected": 360.0,
    "grade_after": 1767226510,
-   "dedup_key": "deadlock:15,14;15,15:2026-01-01T00:09:10Z"
+   "dedup_key": "blocking_cluster:15,14;15,15:2026-01-01T00:09:10Z"
   },
   {
-   "id": "87dd1873fc3baced8c676c4e8f01e256a1a8157a",
+   "id": "e3c1bc03694a7bb787291de776dac8506f51cf5c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "5,13;6,13",
    "start_iso": "2026-01-01T00:22:40Z",
    "decided_at": 1767227425,
@@ -5278,15 +5278,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 465 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 465 s in zone 2",
    "expected": 465.0,
    "grade_after": 1767227425,
-   "dedup_key": "deadlock:5,13;6,13:2026-01-01T00:22:40Z"
+   "dedup_key": "blocking_cluster:5,13;6,13:2026-01-01T00:22:40Z"
   },
   {
-   "id": "aff4ee1102a0e0499065503147e1a96b68e11eea",
+   "id": "9ec8eed5470c9b9890bdef6329fdf17ef7002164",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,7;4,7",
    "start_iso": "2026-01-01T00:35:20Z",
    "decided_at": 1767227765,
@@ -5304,15 +5304,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 2",
    "expected": 45.0,
    "grade_after": 1767227765,
-   "dedup_key": "deadlock:3,7;4,7:2026-01-01T00:35:20Z"
+   "dedup_key": "blocking_cluster:3,7;4,7:2026-01-01T00:35:20Z"
   },
   {
-   "id": "95ad8df6f1d95a234ba651653b3bbbfed2a78ff4",
+   "id": "d9b32919355343d230c1a69987483c588bbf768a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,10;15,9",
    "start_iso": "2026-01-01T00:38:55Z",
    "decided_at": 1767227985,
@@ -5330,15 +5330,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 2",
    "expected": 50.0,
    "grade_after": 1767227985,
-   "dedup_key": "deadlock:15,10;15,9:2026-01-01T00:38:55Z"
+   "dedup_key": "blocking_cluster:15,10;15,9:2026-01-01T00:38:55Z"
   },
   {
-   "id": "28a9ec57dfddf5d24480467c8525973cc30a2ba6",
+   "id": "cd0b06828c99adbbd03d5c8a5099210a068f86ae",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "5,13;6,13",
    "start_iso": "2026-01-01T00:41:00Z",
    "decided_at": 1767228095,
@@ -5356,15 +5356,15 @@
     "min_s": 30,
     "zone": "2"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 2",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 2",
    "expected": 35.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:5,13;6,13:2026-01-01T00:41:00Z"
+   "dedup_key": "blocking_cluster:5,13;6,13:2026-01-01T00:41:00Z"
   },
   {
-   "id": "4f9078facceb301e8a29237e90d34577f3f6dc61",
+   "id": "ba7caa92c5fb69eae893ad6cf751c3d8e2bc6a83",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "4,10;4,11",
    "start_iso": "2026-01-01T00:01:20Z",
    "decided_at": 1767225725,
@@ -5382,15 +5382,15 @@
     "min_s": 30,
     "zone": "20"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 20",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 20",
    "expected": 45.0,
    "grade_after": 1767225725,
-   "dedup_key": "deadlock:4,10;4,11:2026-01-01T00:01:20Z"
+   "dedup_key": "blocking_cluster:4,10;4,11:2026-01-01T00:01:20Z"
   },
   {
-   "id": "a39fc847a62ee858bff19b7e979d5c31b409e819",
+   "id": "11041b7bbf22916a2445959bc8012022e4646bb4",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,12;15,13",
    "start_iso": "2026-01-01T00:29:35Z",
    "decided_at": 1767227515,
@@ -5408,15 +5408,15 @@
     "min_s": 30,
     "zone": "20"
    },
-   "rationale": "2 robots mutually blocked for 140 s in zone 20",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 140 s in zone 20",
    "expected": 140.0,
    "grade_after": 1767227515,
-   "dedup_key": "deadlock:15,12;15,13:2026-01-01T00:29:35Z"
+   "dedup_key": "blocking_cluster:15,12;15,13:2026-01-01T00:29:35Z"
   },
   {
-   "id": "76b827681b8c5b61de471bd8331a30d2689aed79",
+   "id": "43f2042ca4d07a54d0cb9abca5929bf24489c15b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,12;15,12;15,13",
    "start_iso": "2026-01-01T00:31:25Z",
    "decided_at": 1767227705,
@@ -5436,15 +5436,15 @@
     "min_s": 30,
     "zone": "20"
    },
-   "rationale": "3 robots mutually blocked for 220 s in zone 20",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 220 s in zone 20",
    "expected": 220.0,
    "grade_after": 1767227705,
-   "dedup_key": "deadlock:14,12;15,12;15,13:2026-01-01T00:31:25Z"
+   "dedup_key": "blocking_cluster:14,12;15,12;15,13:2026-01-01T00:31:25Z"
   },
   {
-   "id": "b328b9cb1252a861cb9744a01f911317e162a4a0",
+   "id": "47935ee72a5c9d83036ed172c90df9c67ba9f8c3",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,12;15,12;15,13",
    "start_iso": "2026-01-01T00:35:10Z",
    "decided_at": 1767227845,
@@ -5465,15 +5465,15 @@
     "min_s": 30,
     "zone": "20"
    },
-   "rationale": "4 robots mutually blocked for 135 s in zone 20",
+   "rationale": "blocking cluster: 4 robots mutually blocked for 135 s in zone 20",
    "expected": 135.0,
    "grade_after": 1767227845,
-   "dedup_key": "deadlock:14,12;15,12;15,13:2026-01-01T00:35:10Z"
+   "dedup_key": "blocking_cluster:14,12;15,12;15,13:2026-01-01T00:35:10Z"
   },
   {
-   "id": "b328b9cb1252a861cb9744a01f911317e162a4a0",
+   "id": "47935ee72a5c9d83036ed172c90df9c67ba9f8c3",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,12;15,12;15,13",
    "start_iso": "2026-01-01T00:35:10Z",
    "decided_at": 1767227850,
@@ -5493,15 +5493,15 @@
     "min_s": 30,
     "zone": "20"
    },
-   "rationale": "3 robots mutually blocked for 140 s in zone 20",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 140 s in zone 20",
    "expected": 140.0,
    "grade_after": 1767227850,
-   "dedup_key": "deadlock:14,12;15,12;15,13:2026-01-01T00:35:10Z"
+   "dedup_key": "blocking_cluster:14,12;15,12;15,13:2026-01-01T00:35:10Z"
   },
   {
-   "id": "78c3bcd3338e2dfa150f23a45d766ae1664cc5f8",
+   "id": "ce11276d27a28db4c9f52a2b2e428288c9077dbb",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,10;11,11",
    "start_iso": "2026-01-01T00:10:05Z",
    "decided_at": 1767226270,
@@ -5519,15 +5519,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 65 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 65 s in zone 21",
    "expected": 65.0,
    "grade_after": 1767226270,
-   "dedup_key": "deadlock:11,10;11,11:2026-01-01T00:10:05Z"
+   "dedup_key": "blocking_cluster:11,10;11,11:2026-01-01T00:10:05Z"
   },
   {
-   "id": "24b50e823f89c64eb04200c470fd90d393341146",
+   "id": "0081ead581e8a06fa7642a05f881663cc4ce2a47",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,3;18,4",
    "start_iso": "2026-01-01T00:08:55Z",
    "decided_at": 1767226440,
@@ -5545,15 +5545,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 305 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 305 s in zone 21",
    "expected": 305.0,
    "grade_after": 1767226440,
-   "dedup_key": "deadlock:18,3;18,4:2026-01-01T00:08:55Z"
+   "dedup_key": "blocking_cluster:18,3;18,4:2026-01-01T00:08:55Z"
   },
   {
-   "id": "0bba7895cddd0c78874da8c31bf30f15f7971143",
+   "id": "7d26e5ed863cbf89b1482174de19a21f13987112",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "17,4;18,4",
    "start_iso": "2026-01-01T00:14:40Z",
    "decided_at": 1767226535,
@@ -5571,15 +5571,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 55 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 55 s in zone 21",
    "expected": 55.0,
    "grade_after": 1767226535,
-   "dedup_key": "deadlock:17,4;18,4:2026-01-01T00:14:40Z"
+   "dedup_key": "blocking_cluster:17,4;18,4:2026-01-01T00:14:40Z"
   },
   {
-   "id": "d95ea10a12d7a2e7b771ae2dd0ec7c27185b227a",
+   "id": "74a401978dc5c991771abcc924eba247038464aa",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,17;7,18",
    "start_iso": "2026-01-01T00:02:00Z",
    "decided_at": 1767226840,
@@ -5597,15 +5597,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 1120 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1120 s in zone 21",
    "expected": 1120.0,
    "grade_after": 1767226840,
-   "dedup_key": "deadlock:7,17;7,18:2026-01-01T00:02:00Z"
+   "dedup_key": "blocking_cluster:7,17;7,18:2026-01-01T00:02:00Z"
   },
   {
-   "id": "f4fb1dd3ae8012ee3c42271d15d7855e35e37120",
+   "id": "65ef2c54b3a793b472a9bb47421253c0f6368012",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,17;7,18",
    "start_iso": "2026-01-01T00:23:10Z",
    "decided_at": 1767227120,
@@ -5623,15 +5623,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 130 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 130 s in zone 21",
    "expected": 130.0,
    "grade_after": 1767227120,
-   "dedup_key": "deadlock:7,17;7,18:2026-01-01T00:23:10Z"
+   "dedup_key": "blocking_cluster:7,17;7,18:2026-01-01T00:23:10Z"
   },
   {
-   "id": "a856093c79e2bd8d2d3b01155b41b4a7058a9c1c",
+   "id": "e6f89e96d6e63e6c14f47fe451e12f4daec7809d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,8;11,9",
    "start_iso": "2026-01-01T00:35:00Z",
    "decided_at": 1767227770,
@@ -5649,15 +5649,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 70 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 70 s in zone 21",
    "expected": 70.0,
    "grade_after": 1767227770,
-   "dedup_key": "deadlock:11,8;11,9:2026-01-01T00:35:00Z"
+   "dedup_key": "blocking_cluster:11,8;11,9:2026-01-01T00:35:00Z"
   },
   {
-   "id": "84a6eeaa31eb0740054d0152c40c31ed18b96cf9",
+   "id": "56107aa985873492497270905c7a93cce23f854c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,9;11,9",
    "start_iso": "2026-01-01T00:35:50Z",
    "decided_at": 1767227820,
@@ -5675,15 +5675,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 70 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 70 s in zone 21",
    "expected": 70.0,
    "grade_after": 1767227820,
-   "dedup_key": "deadlock:10,9;11,9:2026-01-01T00:35:50Z"
+   "dedup_key": "blocking_cluster:10,9;11,9:2026-01-01T00:35:50Z"
   },
   {
-   "id": "5146ff0d0f9b51359a899049b9d304bdba1461d1",
+   "id": "99782a5d0808642684e34a9a0ba4fe285bc6874e",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,15;18,16",
    "start_iso": "2026-01-01T00:39:20Z",
    "decided_at": 1767228010,
@@ -5701,15 +5701,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 21",
    "expected": 50.0,
    "grade_after": 1767228010,
-   "dedup_key": "deadlock:18,15;18,16:2026-01-01T00:39:20Z"
+   "dedup_key": "blocking_cluster:18,15;18,16:2026-01-01T00:39:20Z"
   },
   {
-   "id": "4ae2c96fc8531211dbd8bffd7e2e03ce00b438a7",
+   "id": "78199e2797fc63e01dffb11381151bbf8e0e94a2",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "17,16;18,15;18,16",
    "start_iso": "2026-01-01T00:39:40Z",
    "decided_at": 1767228040,
@@ -5729,15 +5729,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "3 robots mutually blocked for 60 s in zone 21",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 60 s in zone 21",
    "expected": 60.0,
    "grade_after": 1767228040,
-   "dedup_key": "deadlock:17,16;18,15;18,16:2026-01-01T00:39:40Z"
+   "dedup_key": "blocking_cluster:17,16;18,15;18,16:2026-01-01T00:39:40Z"
   },
   {
-   "id": "5146ff0d0f9b51359a899049b9d304bdba1461d1",
+   "id": "99782a5d0808642684e34a9a0ba4fe285bc6874e",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,15;18,16",
    "start_iso": "2026-01-01T00:39:20Z",
    "decided_at": 1767228095,
@@ -5755,15 +5755,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 135 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 135 s in zone 21",
    "expected": 135.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:18,15;18,16:2026-01-01T00:39:20Z"
+   "dedup_key": "blocking_cluster:18,15;18,16:2026-01-01T00:39:20Z"
   },
   {
-   "id": "6529a09ce8281205eb10eefb636e32fca6add60e",
+   "id": "bdd4c8dc80f06a32a9a9e60496ad3f90d8266db3",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,14;14,14",
    "start_iso": "2026-01-01T00:41:05Z",
    "decided_at": 1767228095,
@@ -5781,15 +5781,15 @@
     "min_s": 30,
     "zone": "21"
    },
-   "rationale": "2 robots mutually blocked for 30 s in zone 21",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 30 s in zone 21",
    "expected": 30.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:13,14;14,14:2026-01-01T00:41:05Z"
+   "dedup_key": "blocking_cluster:13,14;14,14:2026-01-01T00:41:05Z"
   },
   {
-   "id": "171798c067c5047a82287c9802e0c94ec6a50480",
+   "id": "18562970b14b60455189aa9c88b0d3c3208cc970",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "16,14;17,14",
    "start_iso": "2026-01-01T00:07:40Z",
    "decided_at": 1767226140,
@@ -5807,15 +5807,15 @@
     "min_s": 30,
     "zone": "22"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 22",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 22",
    "expected": 80.0,
    "grade_after": 1767226140,
-   "dedup_key": "deadlock:16,14;17,14:2026-01-01T00:07:40Z"
+   "dedup_key": "blocking_cluster:16,14;17,14:2026-01-01T00:07:40Z"
   },
   {
-   "id": "c498fd494f43289537bfbd74c7a6b908c45a48b5",
+   "id": "5e8e3a8632a9e7a5e62c6119e29fb6ff99bc0841",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "16,14;17,14",
    "start_iso": "2026-01-01T00:09:05Z",
    "decided_at": 1767226190,
@@ -5833,15 +5833,15 @@
     "min_s": 30,
     "zone": "22"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 22",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 22",
    "expected": 45.0,
    "grade_after": 1767226190,
-   "dedup_key": "deadlock:16,14;17,14:2026-01-01T00:09:05Z"
+   "dedup_key": "blocking_cluster:16,14;17,14:2026-01-01T00:09:05Z"
   },
   {
-   "id": "bea957b3fee5dea6652bfd039fd9f08b2c51b6a6",
+   "id": "e0f22659702038af8adb4920e8a8a5f5b2bad459",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,7;10,8",
    "start_iso": "2026-01-01T00:20:35Z",
    "decided_at": 1767226890,
@@ -5859,15 +5859,15 @@
     "min_s": 30,
     "zone": "22"
    },
-   "rationale": "2 robots mutually blocked for 55 s in zone 22",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 55 s in zone 22",
    "expected": 55.0,
    "grade_after": 1767226890,
-   "dedup_key": "deadlock:10,7;10,8:2026-01-01T00:20:35Z"
+   "dedup_key": "blocking_cluster:10,7;10,8:2026-01-01T00:20:35Z"
   },
   {
-   "id": "2198017214f4f27d80b11b32aab44146ee1a695a",
+   "id": "a4cfb7bf46a3fcc5c6a70fe41f460bd7a141a91c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,10;2,11",
    "start_iso": "2026-01-01T00:20:20Z",
    "decided_at": 1767226915,
@@ -5885,15 +5885,15 @@
     "min_s": 30,
     "zone": "22"
    },
-   "rationale": "2 robots mutually blocked for 95 s in zone 22",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 95 s in zone 22",
    "expected": 95.0,
    "grade_after": 1767226915,
-   "dedup_key": "deadlock:2,10;2,11:2026-01-01T00:20:20Z"
+   "dedup_key": "blocking_cluster:2,10;2,11:2026-01-01T00:20:20Z"
   },
   {
-   "id": "5317da3f3f2797fdbcce32d4341992aaa5edd630",
+   "id": "e6a4b2651884dbb0a6be76ae0c3092811e61e467",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,12;18,13",
    "start_iso": "2026-01-01T00:10:40Z",
    "decided_at": 1767227285,
@@ -5911,15 +5911,15 @@
     "min_s": 30,
     "zone": "22"
    },
-   "rationale": "2 robots mutually blocked for 1045 s in zone 22",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1045 s in zone 22",
    "expected": 1045.0,
    "grade_after": 1767227285,
-   "dedup_key": "deadlock:18,12;18,13:2026-01-01T00:10:40Z"
+   "dedup_key": "blocking_cluster:18,12;18,13:2026-01-01T00:10:40Z"
   },
   {
-   "id": "087bd779df1518f2adbd408d3d618ca87150aec2",
+   "id": "a85246e58f4a9d26ea5917f416aa9c1892a26105",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "17,23;18,23",
    "start_iso": "2026-01-01T00:31:15Z",
    "decided_at": 1767227705,
@@ -5937,15 +5937,15 @@
     "min_s": 30,
     "zone": "22"
    },
-   "rationale": "2 robots mutually blocked for 230 s in zone 22",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 230 s in zone 22",
    "expected": 230.0,
    "grade_after": 1767227705,
-   "dedup_key": "deadlock:17,23;18,23:2026-01-01T00:31:15Z"
+   "dedup_key": "blocking_cluster:17,23;18,23:2026-01-01T00:31:15Z"
   },
   {
-   "id": "0fd5a6fff0ca14d9c66dd518e1e891add1731e4b",
+   "id": "e1b884e2d004b672f5c689bbc8bda092e0eee5b9",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,19;15,20",
    "start_iso": "2026-01-01T00:01:05Z",
    "decided_at": 1767225715,
@@ -5963,15 +5963,15 @@
     "min_s": 30,
     "zone": "23"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 23",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 23",
    "expected": 50.0,
    "grade_after": 1767225715,
-   "dedup_key": "deadlock:15,19;15,20:2026-01-01T00:01:05Z"
+   "dedup_key": "blocking_cluster:15,19;15,20:2026-01-01T00:01:05Z"
   },
   {
-   "id": "35833fdf300dfaa9187af29f353412f25eb216f8",
+   "id": "20b86d3f2a08c0df35a014701a4cfc74d7f2176d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,23;15,24",
    "start_iso": "2026-01-01T00:04:25Z",
    "decided_at": 1767225905,
@@ -5989,15 +5989,15 @@
     "min_s": 30,
     "zone": "23"
    },
-   "rationale": "2 robots mutually blocked for 40 s in zone 23",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 40 s in zone 23",
    "expected": 40.0,
    "grade_after": 1767225905,
-   "dedup_key": "deadlock:15,23;15,24:2026-01-01T00:04:25Z"
+   "dedup_key": "blocking_cluster:15,23;15,24:2026-01-01T00:04:25Z"
   },
   {
-   "id": "785c2b1ca3d2fee2fe5ce43441bd7f6e63781f7b",
+   "id": "2b03bfda5e4e7a9233f077120bffb75e23e8a68d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,4;6,5",
    "start_iso": "2026-01-01T00:10:20Z",
    "decided_at": 1767228095,
@@ -6015,15 +6015,15 @@
     "min_s": 30,
     "zone": "23"
    },
-   "rationale": "2 robots mutually blocked for 1875 s in zone 23",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1875 s in zone 23",
    "expected": 1875.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:6,4;6,5:2026-01-01T00:10:20Z"
+   "dedup_key": "blocking_cluster:6,4;6,5:2026-01-01T00:10:20Z"
   },
   {
-   "id": "cde39d238189cb125637aaf86cb82c8c7832ef01",
+   "id": "d68ecd02aa3121d84c6b9fd90443d22fd2f55c37",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,10;15,11",
    "start_iso": "2026-01-01T00:02:20Z",
    "decided_at": 1767225840,
@@ -6041,15 +6041,15 @@
     "min_s": 30,
     "zone": "24"
    },
-   "rationale": "2 robots mutually blocked for 100 s in zone 24",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 100 s in zone 24",
    "expected": 100.0,
    "grade_after": 1767225840,
-   "dedup_key": "deadlock:15,10;15,11:2026-01-01T00:02:20Z"
+   "dedup_key": "blocking_cluster:15,10;15,11:2026-01-01T00:02:20Z"
   },
   {
-   "id": "e7efaf0ae1ecc87d0b64dcb79d83323330411d29",
+   "id": "9c6081aee15198307eb07e2bccd9255f282bae3a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,19;11,19",
    "start_iso": "2026-01-01T00:06:10Z",
    "decided_at": 1767226080,
@@ -6067,15 +6067,15 @@
     "min_s": 30,
     "zone": "24"
    },
-   "rationale": "2 robots mutually blocked for 110 s in zone 24",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 110 s in zone 24",
    "expected": 110.0,
    "grade_after": 1767226080,
-   "dedup_key": "deadlock:10,19;11,19:2026-01-01T00:06:10Z"
+   "dedup_key": "blocking_cluster:10,19;11,19:2026-01-01T00:06:10Z"
   },
   {
-   "id": "d19ba9b19021ef0add705e7b67729a4ee9fddb6d",
+   "id": "49a132ab8012197c1790e56890355c72658b1ef4",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,19;12,19",
    "start_iso": "2026-01-01T00:11:25Z",
    "decided_at": 1767226685,
@@ -6093,15 +6093,15 @@
     "min_s": 30,
     "zone": "24"
    },
-   "rationale": "2 robots mutually blocked for 400 s in zone 24",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 400 s in zone 24",
    "expected": 400.0,
    "grade_after": 1767226685,
-   "dedup_key": "deadlock:11,19;12,19:2026-01-01T00:11:25Z"
+   "dedup_key": "blocking_cluster:11,19;12,19:2026-01-01T00:11:25Z"
   },
   {
-   "id": "25b934b7588b6785c2f4066760794cce8bcfe7ac",
+   "id": "6757809da0a415769d60b9767bd6f4e5140549c6",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,14;12,14",
    "start_iso": "2026-01-01T00:35:30Z",
    "decided_at": 1767227840,
@@ -6119,15 +6119,15 @@
     "min_s": 30,
     "zone": "24"
    },
-   "rationale": "2 robots mutually blocked for 110 s in zone 24",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 110 s in zone 24",
    "expected": 110.0,
    "grade_after": 1767227840,
-   "dedup_key": "deadlock:11,14;12,14:2026-01-01T00:35:30Z"
+   "dedup_key": "blocking_cluster:11,14;12,14:2026-01-01T00:35:30Z"
   },
   {
-   "id": "08017ea62e1dd7283e5f90c4aecf1ebcbbe60a45",
+   "id": "23facb03841fdcffb775a301b801ac67769197e9",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,12;14,11;14,12",
    "start_iso": "2026-01-01T00:01:20Z",
    "decided_at": 1767225715,
@@ -6147,15 +6147,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "3 robots mutually blocked for 35 s in zone 25",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 35 s in zone 25",
    "expected": 35.0,
    "grade_after": 1767225715,
-   "dedup_key": "deadlock:13,12;14,11;14,12:2026-01-01T00:01:20Z"
+   "dedup_key": "blocking_cluster:13,12;14,11;14,12:2026-01-01T00:01:20Z"
   },
   {
-   "id": "bddc50b60200ca3b3f3b83191539dc198e5fed0a",
+   "id": "08f9dadda4f5bde29d6abf99e435fb1c1ae0f454",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "21,10;21,11",
    "start_iso": "2026-01-01T00:01:40Z",
    "decided_at": 1767225750,
@@ -6173,15 +6173,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 25",
    "expected": 50.0,
    "grade_after": 1767225750,
-   "dedup_key": "deadlock:21,10;21,11:2026-01-01T00:01:40Z"
+   "dedup_key": "blocking_cluster:21,10;21,11:2026-01-01T00:01:40Z"
   },
   {
-   "id": "0a44b42aedf23912579aebe7f7bbeefe4a2eb107",
+   "id": "763117bb5d444db7f314cbc5c6118dd0edcad29a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,9;16,9",
    "start_iso": "2026-01-01T00:05:35Z",
    "decided_at": 1767225995,
@@ -6199,15 +6199,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 60 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 60 s in zone 25",
    "expected": 60.0,
    "grade_after": 1767225995,
-   "dedup_key": "deadlock:15,9;16,9:2026-01-01T00:05:35Z"
+   "dedup_key": "blocking_cluster:15,9;16,9:2026-01-01T00:05:35Z"
   },
   {
-   "id": "b358c5b38fa75991f5c65ff573a4cbd52c08ffa5",
+   "id": "e4a6b06cb4f6dc99ffe1e49442605864f47b862f",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,8;15,9",
    "start_iso": "2026-01-01T00:06:50Z",
    "decided_at": 1767227080,
@@ -6225,15 +6225,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 1070 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1070 s in zone 25",
    "expected": 1070.0,
    "grade_after": 1767227080,
-   "dedup_key": "deadlock:15,8;15,9:2026-01-01T00:06:50Z"
+   "dedup_key": "blocking_cluster:15,8;15,9:2026-01-01T00:06:50Z"
   },
   {
-   "id": "2fbe36a9218e86a6f0276255c8a433c82311305d",
+   "id": "6237c8667281981f8eaf943c4bf9a54cb5133a60",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,9;16,9",
    "start_iso": "2026-01-01T00:29:30Z",
    "decided_at": 1767227420,
@@ -6251,15 +6251,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 25",
    "expected": 50.0,
    "grade_after": 1767227420,
-   "dedup_key": "deadlock:15,9;16,9:2026-01-01T00:29:30Z"
+   "dedup_key": "blocking_cluster:15,9;16,9:2026-01-01T00:29:30Z"
   },
   {
-   "id": "6c9580a24fe9dbba6ef4daa1e1b58d2ec4789cfd",
+   "id": "b6fbb01bea4bf513df18822d401c55964a5d00bf",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,8;15,9",
    "start_iso": "2026-01-01T00:30:35Z",
    "decided_at": 1767227920,
@@ -6277,15 +6277,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 485 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 485 s in zone 25",
    "expected": 485.0,
    "grade_after": 1767227920,
-   "dedup_key": "deadlock:15,8;15,9:2026-01-01T00:30:35Z"
+   "dedup_key": "blocking_cluster:15,8;15,9:2026-01-01T00:30:35Z"
   },
   {
-   "id": "738b07421b37db3893531a88ca48fbcc5cb82b5d",
+   "id": "4f2f70d0cf0b499126bdfa2e7b58443a33674846",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,4;4,4",
    "start_iso": "2026-01-01T00:39:00Z",
    "decided_at": 1767228010,
@@ -6303,15 +6303,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 70 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 70 s in zone 25",
    "expected": 70.0,
    "grade_after": 1767228010,
-   "dedup_key": "deadlock:3,4;4,4:2026-01-01T00:39:00Z"
+   "dedup_key": "blocking_cluster:3,4;4,4:2026-01-01T00:39:00Z"
   },
   {
-   "id": "615fffa1a0af3d1f27569bb46c6f13c310503380",
+   "id": "b30c8528541b26d28a98eb457351c784820c8681",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "12,8;13,8",
    "start_iso": "2026-01-01T00:39:10Z",
    "decided_at": 1767228030,
@@ -6329,15 +6329,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 25",
    "expected": 80.0,
    "grade_after": 1767228030,
-   "dedup_key": "deadlock:12,8;13,8:2026-01-01T00:39:10Z"
+   "dedup_key": "blocking_cluster:12,8;13,8:2026-01-01T00:39:10Z"
   },
   {
-   "id": "268c9b79436e4884cd659052038c3b4442426675",
+   "id": "cd7d25e88805b12ad9c0e04ad76bfabf0b4391c8",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,18;15,18",
    "start_iso": "2026-01-01T00:35:55Z",
    "decided_at": 1767228095,
@@ -6355,15 +6355,15 @@
     "min_s": 30,
     "zone": "25"
    },
-   "rationale": "2 robots mutually blocked for 340 s in zone 25",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 340 s in zone 25",
    "expected": 340.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:14,18;15,18:2026-01-01T00:35:55Z"
+   "dedup_key": "blocking_cluster:14,18;15,18:2026-01-01T00:35:55Z"
   },
   {
-   "id": "67b45deb3c0cc0945e6c1d0fcdb55e11c72ce706",
+   "id": "5407a62cfbb739464ee5ecdc6672b13bc0aac431",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "5,13;5,14;6,14",
    "start_iso": "2026-01-01T00:13:25Z",
    "decided_at": 1767226485,
@@ -6383,15 +6383,15 @@
     "min_s": 30,
     "zone": "26"
    },
-   "rationale": "3 robots mutually blocked for 80 s in zone 26",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 80 s in zone 26",
    "expected": 80.0,
    "grade_after": 1767226485,
-   "dedup_key": "deadlock:5,13;5,14;6,14:2026-01-01T00:13:25Z"
+   "dedup_key": "blocking_cluster:5,13;5,14;6,14:2026-01-01T00:13:25Z"
   },
   {
-   "id": "2434833b88a0b8afeaa074242206395f4e084d70",
+   "id": "fe7cff0a8081ff0bbed44e4eb0c69eec9f2088a6",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "5,14;6,14",
    "start_iso": "2026-01-01T00:13:25Z",
    "decided_at": 1767226495,
@@ -6409,15 +6409,15 @@
     "min_s": 30,
     "zone": "26"
    },
-   "rationale": "2 robots mutually blocked for 90 s in zone 26",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 90 s in zone 26",
    "expected": 90.0,
    "grade_after": 1767226495,
-   "dedup_key": "deadlock:5,14;6,14:2026-01-01T00:13:25Z"
+   "dedup_key": "blocking_cluster:5,14;6,14:2026-01-01T00:13:25Z"
   },
   {
-   "id": "76f013cbfe5bf982fde292c391b183a5195faabc",
+   "id": "7257eb3372e58e99ca9def304aefd541cfee394b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,5;11,5",
    "start_iso": "2026-01-01T00:16:40Z",
    "decided_at": 1767227225,
@@ -6435,15 +6435,15 @@
     "min_s": 30,
     "zone": "26"
    },
-   "rationale": "2 robots mutually blocked for 625 s in zone 26",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 625 s in zone 26",
    "expected": 625.0,
    "grade_after": 1767227225,
-   "dedup_key": "deadlock:10,5;11,5:2026-01-01T00:16:40Z"
+   "dedup_key": "blocking_cluster:10,5;11,5:2026-01-01T00:16:40Z"
   },
   {
-   "id": "20d1fbf66519beada84dadc8d1bf986418d96b25",
+   "id": "8bbcc5ba290b07f732b08fbdb54cb6a4e2de3023",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,5;6,6",
    "start_iso": "2026-01-01T00:16:25Z",
    "decided_at": 1767227265,
@@ -6461,15 +6461,15 @@
     "min_s": 30,
     "zone": "26"
    },
-   "rationale": "2 robots mutually blocked for 680 s in zone 26",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 680 s in zone 26",
    "expected": 680.0,
    "grade_after": 1767227265,
-   "dedup_key": "deadlock:6,5;6,6:2026-01-01T00:16:25Z"
+   "dedup_key": "blocking_cluster:6,5;6,6:2026-01-01T00:16:25Z"
   },
   {
-   "id": "eb3e72b998992471af95cc5e7bedd6dbedc4d2f3",
+   "id": "2b3a688868316ea072ba21463070fb843ee097cc",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,5;11,5",
    "start_iso": "2026-01-01T00:30:55Z",
    "decided_at": 1767227865,
@@ -6487,15 +6487,15 @@
     "min_s": 30,
     "zone": "26"
    },
-   "rationale": "2 robots mutually blocked for 410 s in zone 26",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 410 s in zone 26",
    "expected": 410.0,
    "grade_after": 1767227865,
-   "dedup_key": "deadlock:10,5;11,5:2026-01-01T00:30:55Z"
+   "dedup_key": "blocking_cluster:10,5;11,5:2026-01-01T00:30:55Z"
   },
   {
-   "id": "d8e48dfb416742799f8f9b155e4e311abf76130a",
+   "id": "2a7b89e723471fbccb694fbc5ebb024f44f717f5",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "5,9;6,9",
    "start_iso": "2026-01-01T00:01:30Z",
    "decided_at": 1767225725,
@@ -6513,15 +6513,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 27",
    "expected": 35.0,
    "grade_after": 1767225725,
-   "dedup_key": "deadlock:5,9;6,9:2026-01-01T00:01:30Z"
+   "dedup_key": "blocking_cluster:5,9;6,9:2026-01-01T00:01:30Z"
   },
   {
-   "id": "f804d443167fbf0c326c161ddd235027ad0ed2d6",
+   "id": "3a7c0b7e169797d6d0f71f566271d9798642fd9d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,10;15,11",
    "start_iso": "2026-01-01T00:05:45Z",
    "decided_at": 1767226060,
@@ -6539,15 +6539,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 115 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 115 s in zone 27",
    "expected": 115.0,
    "grade_after": 1767226060,
-   "dedup_key": "deadlock:15,10;15,11:2026-01-01T00:05:45Z"
+   "dedup_key": "blocking_cluster:15,10;15,11:2026-01-01T00:05:45Z"
   },
   {
-   "id": "946c5337b65ac5fe042b1185a85a1b68393827eb",
+   "id": "873213f877860e9223705564fb4e427889a82f21",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,7;3,7",
    "start_iso": "2026-01-01T00:06:25Z",
    "decided_at": 1767227220,
@@ -6565,15 +6565,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 1235 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1235 s in zone 27",
    "expected": 1235.0,
    "grade_after": 1767227220,
-   "dedup_key": "deadlock:2,7;3,7:2026-01-01T00:06:25Z"
+   "dedup_key": "blocking_cluster:2,7;3,7:2026-01-01T00:06:25Z"
   },
   {
-   "id": "914acc1488940d4310833f524e089bf00a38ef91",
+   "id": "88c758fc1a0ca4ab21e314256d7357ecb9cf508c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,9;7,9",
    "start_iso": "2026-01-01T00:01:45Z",
    "decided_at": 1767227275,
@@ -6591,15 +6591,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 1570 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1570 s in zone 27",
    "expected": 1570.0,
    "grade_after": 1767227275,
-   "dedup_key": "deadlock:6,9;7,9:2026-01-01T00:01:45Z"
+   "dedup_key": "blocking_cluster:6,9;7,9:2026-01-01T00:01:45Z"
   },
   {
-   "id": "5693798700dfd2dd6d23e8ba0f44d23d5f8ed645",
+   "id": "1872e6deab2db0ee57403e94c4483ed787ebbb47",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,12;3,13",
    "start_iso": "2026-01-01T00:27:40Z",
    "decided_at": 1767227360,
@@ -6617,15 +6617,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 100 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 100 s in zone 27",
    "expected": 100.0,
    "grade_after": 1767227360,
-   "dedup_key": "deadlock:3,12;3,13:2026-01-01T00:27:40Z"
+   "dedup_key": "blocking_cluster:3,12;3,13:2026-01-01T00:27:40Z"
   },
   {
-   "id": "6bcc70654f402e12345cacff3cc69d18fd008064",
+   "id": "43d604ccb89d5266e85f53948f82227e936d6749",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,13;4,13",
    "start_iso": "2026-01-01T00:29:35Z",
    "decided_at": 1767227455,
@@ -6643,15 +6643,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 27",
    "expected": 80.0,
    "grade_after": 1767227455,
-   "dedup_key": "deadlock:3,13;4,13:2026-01-01T00:29:35Z"
+   "dedup_key": "blocking_cluster:3,13;4,13:2026-01-01T00:29:35Z"
   },
   {
-   "id": "376c5eaf924ee3106e1099e09a98acd442f61da1",
+   "id": "61e6d100078a33052912192bf6942e3e7e2905a1",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,9;7,9",
    "start_iso": "2026-01-01T00:32:55Z",
    "decided_at": 1767227955,
@@ -6669,15 +6669,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 380 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 380 s in zone 27",
    "expected": 380.0,
    "grade_after": 1767227955,
-   "dedup_key": "deadlock:6,9;7,9:2026-01-01T00:32:55Z"
+   "dedup_key": "blocking_cluster:6,9;7,9:2026-01-01T00:32:55Z"
   },
   {
-   "id": "874631e160977fade32231d9759bd1aa20680b19",
+   "id": "984d64f84f162416090e89230807c8c90dc81414",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,7;3,7",
    "start_iso": "2026-01-01T00:35:30Z",
    "decided_at": 1767228095,
@@ -6695,15 +6695,15 @@
     "min_s": 30,
     "zone": "27"
    },
-   "rationale": "2 robots mutually blocked for 365 s in zone 27",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 365 s in zone 27",
    "expected": 365.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:2,7;3,7:2026-01-01T00:35:30Z"
+   "dedup_key": "blocking_cluster:2,7;3,7:2026-01-01T00:35:30Z"
   },
   {
-   "id": "b0259493d08d5bc1969e8b3ad18aa8bfd5c452b0",
+   "id": "d2559159a6f0ad0119c3eedc449d41eeadfb0cb5",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,10;16,10",
    "start_iso": "2026-01-01T00:15:05Z",
    "decided_at": 1767226565,
@@ -6721,15 +6721,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "2 robots mutually blocked for 60 s in zone 28",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 60 s in zone 28",
    "expected": 60.0,
    "grade_after": 1767226565,
-   "dedup_key": "deadlock:15,10;16,10:2026-01-01T00:15:05Z"
+   "dedup_key": "blocking_cluster:15,10;16,10:2026-01-01T00:15:05Z"
   },
   {
-   "id": "d05ef361969657c4894782b9a4a160c3594605fa",
+   "id": "0ee64dad27913a5dad2084ea16590917273f5ff6",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,5;11,6",
    "start_iso": "2026-01-01T00:16:35Z",
    "decided_at": 1767226825,
@@ -6747,15 +6747,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "2 robots mutually blocked for 230 s in zone 28",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 230 s in zone 28",
    "expected": 230.0,
    "grade_after": 1767226825,
-   "dedup_key": "deadlock:11,5;11,6:2026-01-01T00:16:35Z"
+   "dedup_key": "blocking_cluster:11,5;11,6:2026-01-01T00:16:35Z"
   },
   {
-   "id": "cc586b0a04f878959bf3b2307592b91982e3a5cf",
+   "id": "82f01d630928d056fcdb6ef2c8714a68629bdf76",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,21;14,22",
    "start_iso": "2026-01-01T00:23:05Z",
    "decided_at": 1767227065,
@@ -6773,15 +6773,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 28",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 28",
    "expected": 80.0,
    "grade_after": 1767227065,
-   "dedup_key": "deadlock:14,21;14,22:2026-01-01T00:23:05Z"
+   "dedup_key": "blocking_cluster:14,21;14,22:2026-01-01T00:23:05Z"
   },
   {
-   "id": "d390e3b5db328fe053542e09109515340bedeb00",
+   "id": "f9a7140778170259c8f277611eb7d7df360b0f13",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,6;12,6",
    "start_iso": "2026-01-01T00:31:40Z",
    "decided_at": 1767227595,
@@ -6799,15 +6799,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "2 robots mutually blocked for 95 s in zone 28",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 95 s in zone 28",
    "expected": 95.0,
    "grade_after": 1767227595,
-   "dedup_key": "deadlock:11,6;12,6:2026-01-01T00:31:40Z"
+   "dedup_key": "blocking_cluster:11,6;12,6:2026-01-01T00:31:40Z"
   },
   {
-   "id": "20ef63611346aa66527da132292edb579ad361b1",
+   "id": "1dd4bc7225ecd0213324dd55a8aceee5a33d3f32",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,6;3,5;3,6",
    "start_iso": "2026-01-01T00:38:40Z",
    "decided_at": 1767227975,
@@ -6827,15 +6827,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "3 robots mutually blocked for 55 s in zone 28",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 55 s in zone 28",
    "expected": 55.0,
    "grade_after": 1767227975,
-   "dedup_key": "deadlock:2,6;3,5;3,6:2026-01-01T00:38:40Z"
+   "dedup_key": "blocking_cluster:2,6;3,5;3,6:2026-01-01T00:38:40Z"
   },
   {
-   "id": "6c20bbfce17441468613df086c93231b7b22fbbb",
+   "id": "4727a77dab1b2a0a3655c55841f423e6ea1139ce",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,4;3,5",
    "start_iso": "2026-01-01T00:40:25Z",
    "decided_at": 1767228095,
@@ -6853,15 +6853,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "2 robots mutually blocked for 70 s in zone 28",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 70 s in zone 28",
    "expected": 70.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:3,4;3,5:2026-01-01T00:40:25Z"
+   "dedup_key": "blocking_cluster:3,4;3,5:2026-01-01T00:40:25Z"
   },
   {
-   "id": "260281ffcc1531470f09a8ca6dbefa214ab17526",
+   "id": "66db2df8902f54d5d0d72b0eba6dbf7443b6947b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,14;2,15",
    "start_iso": "2026-01-01T00:35:45Z",
    "decided_at": 1767228095,
@@ -6879,15 +6879,15 @@
     "min_s": 30,
     "zone": "28"
    },
-   "rationale": "2 robots mutually blocked for 350 s in zone 28",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 350 s in zone 28",
    "expected": 350.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:2,14;2,15:2026-01-01T00:35:45Z"
+   "dedup_key": "blocking_cluster:2,14;2,15:2026-01-01T00:35:45Z"
   },
   {
-   "id": "fcda58235a5ede945e1226f228abbd11713fe451",
+   "id": "8708a266d5f9e7abaf725483d187f634fb9fb847",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "4,3;5,3",
    "start_iso": "2026-01-01T00:26:55Z",
    "decided_at": 1767227260,
@@ -6905,15 +6905,15 @@
     "min_s": 30,
     "zone": "29"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 29",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 29",
    "expected": 45.0,
    "grade_after": 1767227260,
-   "dedup_key": "deadlock:4,3;5,3:2026-01-01T00:26:55Z"
+   "dedup_key": "blocking_cluster:4,3;5,3:2026-01-01T00:26:55Z"
   },
   {
-   "id": "80bb5579a45c984c46faeaf08d1c407be0fe020f",
+   "id": "f199c8478e22f2906f0458c5316b1175a8b119b0",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "4,3;5,3",
    "start_iso": "2026-01-01T00:27:45Z",
    "decided_at": 1767227345,
@@ -6931,15 +6931,15 @@
     "min_s": 30,
     "zone": "29"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 29",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 29",
    "expected": 80.0,
    "grade_after": 1767227345,
-   "dedup_key": "deadlock:4,3;5,3:2026-01-01T00:27:45Z"
+   "dedup_key": "blocking_cluster:4,3;5,3:2026-01-01T00:27:45Z"
   },
   {
-   "id": "20cb62367f9ec0f46786da8d503334db8508df0b",
+   "id": "7047a22bebe2b64e9e0e5dc61ea6f318a244fb4b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,16;16,16",
    "start_iso": "2026-01-01T00:29:20Z",
    "decided_at": 1767227410,
@@ -6957,15 +6957,15 @@
     "min_s": 30,
     "zone": "29"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 29",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 29",
    "expected": 50.0,
    "grade_after": 1767227410,
-   "dedup_key": "deadlock:15,16;16,16:2026-01-01T00:29:20Z"
+   "dedup_key": "blocking_cluster:15,16;16,16:2026-01-01T00:29:20Z"
   },
   {
-   "id": "215a42bedfc695a415519160159f9cbf4645f1d4",
+   "id": "be4617b2f4e1e2ffda72d609a7912785b869b179",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,21;7,21",
    "start_iso": "2026-01-01T00:07:10Z",
    "decided_at": 1767226125,
@@ -6983,15 +6983,15 @@
     "min_s": 30,
     "zone": "3"
    },
-   "rationale": "2 robots mutually blocked for 95 s in zone 3",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 95 s in zone 3",
    "expected": 95.0,
    "grade_after": 1767226125,
-   "dedup_key": "deadlock:6,21;7,21:2026-01-01T00:07:10Z"
+   "dedup_key": "blocking_cluster:6,21;7,21:2026-01-01T00:07:10Z"
   },
   {
-   "id": "891272ca68388b14b909e42373be0e6e9a24afae",
+   "id": "e047c3ca15e2c41a5cb7e528be0b2ce58b503c93",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,17",
    "start_iso": "2026-01-01T00:20:05Z",
    "decided_at": 1767226865,
@@ -7008,15 +7008,15 @@
     "min_s": 30,
     "zone": "3"
    },
-   "rationale": "2 robots mutually blocked for 60 s in zone 3",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 60 s in zone 3",
    "expected": 60.0,
    "grade_after": 1767226865,
-   "dedup_key": "deadlock:3,17:2026-01-01T00:20:05Z"
+   "dedup_key": "blocking_cluster:3,17:2026-01-01T00:20:05Z"
   },
   {
-   "id": "13df0ce45f667450e767c0407ad49a5739cbf312",
+   "id": "b2610582b771327a554f4efff0e59a3a4bf8a123",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "18,5;18,6",
    "start_iso": "2026-01-01T00:28:15Z",
    "decided_at": 1767228095,
@@ -7034,15 +7034,15 @@
     "min_s": 30,
     "zone": "3"
    },
-   "rationale": "2 robots mutually blocked for 800 s in zone 3",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 800 s in zone 3",
    "expected": 800.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:18,5;18,6:2026-01-01T00:28:15Z"
+   "dedup_key": "blocking_cluster:18,5;18,6:2026-01-01T00:28:15Z"
   },
   {
-   "id": "40366086eec4d7069b2f432fa8782b64a0b6b028",
+   "id": "40400b11a17524e036234120a0044b1a0901b8a7",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "8,10;9,10",
    "start_iso": "2026-01-01T00:03:50Z",
    "decided_at": 1767225875,
@@ -7060,15 +7060,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 4",
    "expected": 45.0,
    "grade_after": 1767225875,
-   "dedup_key": "deadlock:8,10;9,10:2026-01-01T00:03:50Z"
+   "dedup_key": "blocking_cluster:8,10;9,10:2026-01-01T00:03:50Z"
   },
   {
-   "id": "48cb199a9cbd0234e188c8f5735242903f9b51c9",
+   "id": "a74d4480fa708f9dfa93008c2ca188af109b7dfe",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,7;14,8",
    "start_iso": "2026-01-01T00:05:10Z",
    "decided_at": 1767226505,
@@ -7086,15 +7086,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 595 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 595 s in zone 4",
    "expected": 595.0,
    "grade_after": 1767226505,
-   "dedup_key": "deadlock:14,7;14,8:2026-01-01T00:05:10Z"
+   "dedup_key": "blocking_cluster:14,7;14,8:2026-01-01T00:05:10Z"
   },
   {
-   "id": "7552f4c1b7e512e374823bd0d6521da58c437422",
+   "id": "715db95aeda914b9a307ac9d2567fc7d71d5c377",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,7;14,8",
    "start_iso": "2026-01-01T00:15:10Z",
    "decided_at": 1767226570,
@@ -7113,15 +7113,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "3 robots mutually blocked for 60 s in zone 4",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 60 s in zone 4",
    "expected": 60.0,
    "grade_after": 1767226570,
-   "dedup_key": "deadlock:14,7;14,8:2026-01-01T00:15:10Z"
+   "dedup_key": "blocking_cluster:14,7;14,8:2026-01-01T00:15:10Z"
   },
   {
-   "id": "7552f4c1b7e512e374823bd0d6521da58c437422",
+   "id": "715db95aeda914b9a307ac9d2567fc7d71d5c377",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,7;14,8",
    "start_iso": "2026-01-01T00:15:10Z",
    "decided_at": 1767226650,
@@ -7139,15 +7139,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 140 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 140 s in zone 4",
    "expected": 140.0,
    "grade_after": 1767226650,
-   "dedup_key": "deadlock:14,7;14,8:2026-01-01T00:15:10Z"
+   "dedup_key": "blocking_cluster:14,7;14,8:2026-01-01T00:15:10Z"
   },
   {
-   "id": "ca7b92b8742f2d72ea6ffa98096235bbc042e268",
+   "id": "feca2c1743af28b29f32abe84f2439f427f71073",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,11;10,12",
    "start_iso": "2026-01-01T00:17:35Z",
    "decided_at": 1767226690,
@@ -7165,15 +7165,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 4",
    "expected": 35.0,
    "grade_after": 1767226690,
-   "dedup_key": "deadlock:10,11;10,12:2026-01-01T00:17:35Z"
+   "dedup_key": "blocking_cluster:10,11;10,12:2026-01-01T00:17:35Z"
   },
   {
-   "id": "e9b51591b189f1ccc249c2a593f60b04824cf8bf",
+   "id": "b6fc4367bdf087595be5f85abcf22e31894fd663",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,7;14,8",
    "start_iso": "2026-01-01T00:26:00Z",
    "decided_at": 1767227590,
@@ -7191,15 +7191,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 430 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 430 s in zone 4",
    "expected": 430.0,
    "grade_after": 1767227590,
-   "dedup_key": "deadlock:14,7;14,8:2026-01-01T00:26:00Z"
+   "dedup_key": "blocking_cluster:14,7;14,8:2026-01-01T00:26:00Z"
   },
   {
-   "id": "ee1c35ee1f38aa52264b4ea61d1589d35f4a1d34",
+   "id": "ac3e5acf0f05c6dd172de4ce66b2e3b5c411b4e2",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "14,7",
    "start_iso": "2026-01-01T00:33:35Z",
    "decided_at": 1767227680,
@@ -7216,15 +7216,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 65 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 65 s in zone 4",
    "expected": 65.0,
    "grade_after": 1767227680,
-   "dedup_key": "deadlock:14,7:2026-01-01T00:33:35Z"
+   "dedup_key": "blocking_cluster:14,7:2026-01-01T00:33:35Z"
   },
   {
-   "id": "92bbee4b05a3f15c582fe652701056a9e6d48ba9",
+   "id": "1544a273fe31fa75b72ae4cd789e77697b270d96",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,7;14,7",
    "start_iso": "2026-01-01T00:34:45Z",
    "decided_at": 1767227910,
@@ -7242,15 +7242,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 225 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 225 s in zone 4",
    "expected": 225.0,
    "grade_after": 1767227910,
-   "dedup_key": "deadlock:13,7;14,7:2026-01-01T00:34:45Z"
+   "dedup_key": "blocking_cluster:13,7;14,7:2026-01-01T00:34:45Z"
   },
   {
-   "id": "86d8204d9e3e4e800c883311ae05222a95819556",
+   "id": "528a96b7c9db61fb2b81db2ab59e09ff25daaa74",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "3,4",
    "start_iso": "2026-01-01T00:37:05Z",
    "decided_at": 1767227920,
@@ -7267,15 +7267,15 @@
     "min_s": 30,
     "zone": "4"
    },
-   "rationale": "2 robots mutually blocked for 95 s in zone 4",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 95 s in zone 4",
    "expected": 95.0,
    "grade_after": 1767227920,
-   "dedup_key": "deadlock:3,4:2026-01-01T00:37:05Z"
+   "dedup_key": "blocking_cluster:3,4:2026-01-01T00:37:05Z"
   },
   {
-   "id": "f857ff13434408961771e84eb53b7fbaab031ba1",
+   "id": "218e7efb13f19cb828f845fb31ee7ad80a9de721",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,14;7,15",
    "start_iso": "2026-01-01T00:02:15Z",
    "decided_at": 1767226850,
@@ -7293,15 +7293,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 1115 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 1115 s in zone 5",
    "expected": 1115.0,
    "grade_after": 1767226850,
-   "dedup_key": "deadlock:7,14;7,15:2026-01-01T00:02:15Z"
+   "dedup_key": "blocking_cluster:7,14;7,15:2026-01-01T00:02:15Z"
   },
   {
-   "id": "ad623ca6b3e1627dde1cf138367e2d312e85547f",
+   "id": "1edb2e55543d8665bb88914e3118bdd095b7b7ed",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,24;8,24",
    "start_iso": "2026-01-01T00:22:25Z",
    "decided_at": 1767227030,
@@ -7319,15 +7319,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 85 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 85 s in zone 5",
    "expected": 85.0,
    "grade_after": 1767227030,
-   "dedup_key": "deadlock:7,24;8,24:2026-01-01T00:22:25Z"
+   "dedup_key": "blocking_cluster:7,24;8,24:2026-01-01T00:22:25Z"
   },
   {
-   "id": "08b044f3a15eeb58ff41e3760fda952c6479c970",
+   "id": "65898d71b1d92b508793870c2c67a4595e354102",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,24;8,24",
    "start_iso": "2026-01-01T00:23:55Z",
    "decided_at": 1767227110,
@@ -7345,15 +7345,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 75 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 75 s in zone 5",
    "expected": 75.0,
    "grade_after": 1767227110,
-   "dedup_key": "deadlock:7,24;8,24:2026-01-01T00:23:55Z"
+   "dedup_key": "blocking_cluster:7,24;8,24:2026-01-01T00:23:55Z"
   },
   {
-   "id": "acb7bc3962f90c84a872f64bc0241f07078da873",
+   "id": "1d1773a253ea529d9336851ce0960242d780bc7a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,24;8,24",
    "start_iso": "2026-01-01T00:25:15Z",
    "decided_at": 1767227190,
@@ -7371,15 +7371,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 75 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 75 s in zone 5",
    "expected": 75.0,
    "grade_after": 1767227190,
-   "dedup_key": "deadlock:7,24;8,24:2026-01-01T00:25:15Z"
+   "dedup_key": "blocking_cluster:7,24;8,24:2026-01-01T00:25:15Z"
   },
   {
-   "id": "4c67f4e82ca70df0d5aa7d21e62a57605bfdc9e2",
+   "id": "cdb805c2eadbe78c6221b1584d23916dbb78669c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,24;8,24",
    "start_iso": "2026-01-01T00:26:35Z",
    "decided_at": 1767227270,
@@ -7397,15 +7397,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 75 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 75 s in zone 5",
    "expected": 75.0,
    "grade_after": 1767227270,
-   "dedup_key": "deadlock:7,24;8,24:2026-01-01T00:26:35Z"
+   "dedup_key": "blocking_cluster:7,24;8,24:2026-01-01T00:26:35Z"
   },
   {
-   "id": "105a172142f6ab7fe4189467190e0c1aeb9c242a",
+   "id": "14ef31b091a5bcfd6dc1590f6527a59e641eae97",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,24;8,24",
    "start_iso": "2026-01-01T00:27:55Z",
    "decided_at": 1767227310,
@@ -7423,15 +7423,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 5",
    "expected": 35.0,
    "grade_after": 1767227310,
-   "dedup_key": "deadlock:7,24;8,24:2026-01-01T00:27:55Z"
+   "dedup_key": "blocking_cluster:7,24;8,24:2026-01-01T00:27:55Z"
   },
   {
-   "id": "ab5cb11ac399c94e2ba39a2e183a9faefd49d1b7",
+   "id": "a4746a0b4a4673c6df9c810d1516d6fec999a2fa",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,15;8,15",
    "start_iso": "2026-01-01T00:29:35Z",
    "decided_at": 1767227455,
@@ -7449,15 +7449,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 5",
    "expected": 80.0,
    "grade_after": 1767227455,
-   "dedup_key": "deadlock:7,15;8,15:2026-01-01T00:29:35Z"
+   "dedup_key": "blocking_cluster:7,15;8,15:2026-01-01T00:29:35Z"
   },
   {
-   "id": "109060512507a639ea3d1eb2cd5e0a25b598e4c0",
+   "id": "6300ca4befd664110603c79aada68c50f5c249f2",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,14;7,15",
    "start_iso": "2026-01-01T00:31:10Z",
    "decided_at": 1767228095,
@@ -7475,15 +7475,15 @@
     "min_s": 30,
     "zone": "5"
    },
-   "rationale": "2 robots mutually blocked for 625 s in zone 5",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 625 s in zone 5",
    "expected": 625.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:7,14;7,15:2026-01-01T00:31:10Z"
+   "dedup_key": "blocking_cluster:7,14;7,15:2026-01-01T00:31:10Z"
   },
   {
-   "id": "e846aed88bad6db0e010b27ef645460d7b010ac6",
+   "id": "c75b6986cdf7d81655cc4643ecb63bbe1182707a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "16,10;16,11",
    "start_iso": "2026-01-01T00:03:10Z",
    "decided_at": 1767225965,
@@ -7501,15 +7501,15 @@
     "min_s": 30,
     "zone": "6"
    },
-   "rationale": "2 robots mutually blocked for 175 s in zone 6",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 175 s in zone 6",
    "expected": 175.0,
    "grade_after": 1767225965,
-   "dedup_key": "deadlock:16,10;16,11:2026-01-01T00:03:10Z"
+   "dedup_key": "blocking_cluster:16,10;16,11:2026-01-01T00:03:10Z"
   },
   {
-   "id": "4f7b75a8bb460f454534810620082ea04002e88f",
+   "id": "1c263b8d6da59bd4c2ccafe787b979dd235ee116",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,19;7,19",
    "start_iso": "2026-01-01T00:10:55Z",
    "decided_at": 1767226300,
@@ -7527,15 +7527,15 @@
     "min_s": 30,
     "zone": "6"
    },
-   "rationale": "2 robots mutually blocked for 45 s in zone 6",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 45 s in zone 6",
    "expected": 45.0,
    "grade_after": 1767226300,
-   "dedup_key": "deadlock:6,19;7,19:2026-01-01T00:10:55Z"
+   "dedup_key": "blocking_cluster:6,19;7,19:2026-01-01T00:10:55Z"
   },
   {
-   "id": "74220a043b10e462a78c29b9227ae1f979da62a4",
+   "id": "cf55ba58d04fb808f62e3ba351b625de2f16db07",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,19;8,19",
    "start_iso": "2026-01-01T00:11:15Z",
    "decided_at": 1767226325,
@@ -7553,15 +7553,15 @@
     "min_s": 30,
     "zone": "6"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 6",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 6",
    "expected": 50.0,
    "grade_after": 1767226325,
-   "dedup_key": "deadlock:7,19;8,19:2026-01-01T00:11:15Z"
+   "dedup_key": "blocking_cluster:7,19;8,19:2026-01-01T00:11:15Z"
   },
   {
-   "id": "7a812ea40054cd651537ce050f7d016f15b2a071",
+   "id": "6ae2b22de9861bbeb51707e69b985a2d3b7df6b0",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,19;7,19",
    "start_iso": "2026-01-01T00:18:45Z",
    "decided_at": 1767226810,
@@ -7579,15 +7579,15 @@
     "min_s": 30,
     "zone": "6"
    },
-   "rationale": "2 robots mutually blocked for 85 s in zone 6",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 85 s in zone 6",
    "expected": 85.0,
    "grade_after": 1767226810,
-   "dedup_key": "deadlock:6,19;7,19:2026-01-01T00:18:45Z"
+   "dedup_key": "blocking_cluster:6,19;7,19:2026-01-01T00:18:45Z"
   },
   {
-   "id": "d5c026e907f84380a6a05852c9c0d0adba8c50b1",
+   "id": "a19024b47805a1cca61f63f073601a73243bf4cd",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,17;2,18",
    "start_iso": "2026-01-01T00:37:30Z",
    "decided_at": 1767228095,
@@ -7605,15 +7605,15 @@
     "min_s": 30,
     "zone": "6"
    },
-   "rationale": "2 robots mutually blocked for 245 s in zone 6",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 245 s in zone 6",
    "expected": 245.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:2,17;2,18:2026-01-01T00:37:30Z"
+   "dedup_key": "blocking_cluster:2,17;2,18:2026-01-01T00:37:30Z"
   },
   {
-   "id": "584992b0d64273791d9b69d19f7bb29814e42b39",
+   "id": "b5ee90d33b1a64b5e8d61cbc52aa32c9a8ff1fbb",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "19,20;20,20",
    "start_iso": "2026-01-01T00:04:50Z",
    "decided_at": 1767226005,
@@ -7631,15 +7631,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 115 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 115 s in zone 7",
    "expected": 115.0,
    "grade_after": 1767226005,
-   "dedup_key": "deadlock:19,20;20,20:2026-01-01T00:04:50Z"
+   "dedup_key": "blocking_cluster:19,20;20,20:2026-01-01T00:04:50Z"
   },
   {
-   "id": "b2a8d689fc123a2c216beeac80924926317d15b5",
+   "id": "da5ed1d303ec28691de475f80f08843c9684ddf1",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,14;10,15",
    "start_iso": "2026-01-01T00:06:50Z",
    "decided_at": 1767226100,
@@ -7657,15 +7657,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 90 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 90 s in zone 7",
    "expected": 90.0,
    "grade_after": 1767226100,
-   "dedup_key": "deadlock:10,14;10,15:2026-01-01T00:06:50Z"
+   "dedup_key": "blocking_cluster:10,14;10,15:2026-01-01T00:06:50Z"
   },
   {
-   "id": "7568594dcc6bd2d2d29a1babb25ae76214b3e0d0",
+   "id": "7e91af0ec8859f800deefcbd799cb9e51b6d3800",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "5,11;6,11",
    "start_iso": "2026-01-01T00:11:55Z",
    "decided_at": 1767226550,
@@ -7683,15 +7683,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 235 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 235 s in zone 7",
    "expected": 235.0,
    "grade_after": 1767226550,
-   "dedup_key": "deadlock:5,11;6,11:2026-01-01T00:11:55Z"
+   "dedup_key": "blocking_cluster:5,11;6,11:2026-01-01T00:11:55Z"
   },
   {
-   "id": "e95c802c5f1efcc4c475b3203d2d60d069b64a98",
+   "id": "b87ea92b5153c6fbead70563f9af90fedcb33e5b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,15;11,16",
    "start_iso": "2026-01-01T00:17:40Z",
    "decided_at": 1767226695,
@@ -7710,15 +7710,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "3 robots mutually blocked for 35 s in zone 7",
+   "rationale": "blocking cluster: 3 robots mutually blocked for 35 s in zone 7",
    "expected": 35.0,
    "grade_after": 1767226695,
-   "dedup_key": "deadlock:11,15;11,16:2026-01-01T00:17:40Z"
+   "dedup_key": "blocking_cluster:11,15;11,16:2026-01-01T00:17:40Z"
   },
   {
-   "id": "e95c802c5f1efcc4c475b3203d2d60d069b64a98",
+   "id": "b87ea92b5153c6fbead70563f9af90fedcb33e5b",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,15;11,16",
    "start_iso": "2026-01-01T00:17:40Z",
    "decided_at": 1767226700,
@@ -7736,15 +7736,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 40 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 40 s in zone 7",
    "expected": 40.0,
    "grade_after": 1767226700,
-   "dedup_key": "deadlock:11,15;11,16:2026-01-01T00:17:40Z"
+   "dedup_key": "blocking_cluster:11,15;11,16:2026-01-01T00:17:40Z"
   },
   {
-   "id": "b6809fa47685ad118b317313cd79f1dc11af71e7",
+   "id": "809196373c5d2e21d698e2f76e6d73f6916db977",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "9,10;9,11",
    "start_iso": "2026-01-01T00:25:45Z",
    "decided_at": 1767227205,
@@ -7762,15 +7762,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 60 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 60 s in zone 7",
    "expected": 60.0,
    "grade_after": 1767227205,
-   "dedup_key": "deadlock:9,10;9,11:2026-01-01T00:25:45Z"
+   "dedup_key": "blocking_cluster:9,10;9,11:2026-01-01T00:25:45Z"
   },
   {
-   "id": "b173f1471094379443dd3e3747d96c79421064dc",
+   "id": "c1f2f4736262395ebb541ef8e222818f44ca2dd1",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "2,24;3,24",
    "start_iso": "2026-01-01T00:26:40Z",
    "decided_at": 1767227250,
@@ -7788,15 +7788,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 50 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 50 s in zone 7",
    "expected": 50.0,
    "grade_after": 1767227250,
-   "dedup_key": "deadlock:2,24;3,24:2026-01-01T00:26:40Z"
+   "dedup_key": "blocking_cluster:2,24;3,24:2026-01-01T00:26:40Z"
   },
   {
-   "id": "ef74ac99644586697dd38b862b1a9d4604c8eadb",
+   "id": "1170a14756173b339bd757b30e7b67c7d987fb8e",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "7,10;7,11",
    "start_iso": "2026-01-01T00:27:40Z",
    "decided_at": 1767227295,
@@ -7814,15 +7814,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 7",
    "expected": 35.0,
    "grade_after": 1767227295,
-   "dedup_key": "deadlock:7,10;7,11:2026-01-01T00:27:40Z"
+   "dedup_key": "blocking_cluster:7,10;7,11:2026-01-01T00:27:40Z"
   },
   {
-   "id": "8c747dc760a4488caaf661aab12daebe39e62b48",
+   "id": "34429c2b7335750bde2534d3dc9ecd97e597e8a1",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "6,15;7,15",
    "start_iso": "2026-01-01T00:32:40Z",
    "decided_at": 1767228095,
@@ -7840,15 +7840,15 @@
     "min_s": 30,
     "zone": "7"
    },
-   "rationale": "2 robots mutually blocked for 535 s in zone 7",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 535 s in zone 7",
    "expected": 535.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:6,15;7,15:2026-01-01T00:32:40Z"
+   "dedup_key": "blocking_cluster:6,15;7,15:2026-01-01T00:32:40Z"
   },
   {
-   "id": "88d7b10613596953bc56f7229d88f320029aadfd",
+   "id": "1f2fb6fa2eeaa73588e14c10567f565df0094f6c",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,19",
    "start_iso": "2026-01-01T00:29:45Z",
    "decided_at": 1767227425,
@@ -7865,15 +7865,15 @@
     "min_s": 30,
     "zone": "8"
    },
-   "rationale": "2 robots mutually blocked for 40 s in zone 8",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 40 s in zone 8",
    "expected": 40.0,
    "grade_after": 1767227425,
-   "dedup_key": "deadlock:10,19:2026-01-01T00:29:45Z"
+   "dedup_key": "blocking_cluster:10,19:2026-01-01T00:29:45Z"
   },
   {
-   "id": "6087a27b11025f7d5bb9a7272c7bd8439b9f5f4e",
+   "id": "e46d8f4d079cdcfc1a4d0784c39795ab4f5c9b8a",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,16;11,17",
    "start_iso": "2026-01-01T00:29:50Z",
    "decided_at": 1767227545,
@@ -7891,15 +7891,15 @@
     "min_s": 30,
     "zone": "8"
    },
-   "rationale": "2 robots mutually blocked for 155 s in zone 8",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 155 s in zone 8",
    "expected": 155.0,
    "grade_after": 1767227545,
-   "dedup_key": "deadlock:11,16;11,17:2026-01-01T00:29:50Z"
+   "dedup_key": "blocking_cluster:11,16;11,17:2026-01-01T00:29:50Z"
   },
   {
-   "id": "76111ed204f53cc8ee057db9d58b22f5188ad5b2",
+   "id": "9af2971546804c7399b6de59a105f6897e77877e",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "8,3;9,3",
    "start_iso": "2026-01-01T00:18:40Z",
    "decided_at": 1767226800,
@@ -7917,15 +7917,15 @@
     "min_s": 30,
     "zone": "9"
    },
-   "rationale": "2 robots mutually blocked for 80 s in zone 9",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 80 s in zone 9",
    "expected": 80.0,
    "grade_after": 1767226800,
-   "dedup_key": "deadlock:8,3;9,3:2026-01-01T00:18:40Z"
+   "dedup_key": "blocking_cluster:8,3;9,3:2026-01-01T00:18:40Z"
   },
   {
-   "id": "aa1588adb9c42215c8970477868818a11a993a2a",
+   "id": "baab752730d0342828a546f4640f99f8365912cf",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "15,11;16,11",
    "start_iso": "2026-01-01T00:25:05Z",
    "decided_at": 1767227140,
@@ -7943,15 +7943,15 @@
     "min_s": 30,
     "zone": "9"
    },
-   "rationale": "2 robots mutually blocked for 35 s in zone 9",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 35 s in zone 9",
    "expected": 35.0,
    "grade_after": 1767227140,
-   "dedup_key": "deadlock:15,11;16,11:2026-01-01T00:25:05Z"
+   "dedup_key": "blocking_cluster:15,11;16,11:2026-01-01T00:25:05Z"
   },
   {
-   "id": "c4406101797515311163fdd174a4226a8c20dd15",
+   "id": "b19a48694f273f6ce4a64d87a13731da4434e9d9",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "10,10;10,9",
    "start_iso": "2026-01-01T00:24:10Z",
    "decided_at": 1767227210,
@@ -7969,15 +7969,15 @@
     "min_s": 30,
     "zone": "9"
    },
-   "rationale": "2 robots mutually blocked for 160 s in zone 9",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 160 s in zone 9",
    "expected": 160.0,
    "grade_after": 1767227210,
-   "dedup_key": "deadlock:10,10;10,9:2026-01-01T00:24:10Z"
+   "dedup_key": "blocking_cluster:10,10;10,9:2026-01-01T00:24:10Z"
   },
   {
-   "id": "1639b4c18aa1353f15a27cfffd0bfd03d918e698",
+   "id": "12eacee6c9ca6be0c0ede54af724aca9cd9ea90d",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "13,10;13,11",
    "start_iso": "2026-01-01T00:37:50Z",
    "decided_at": 1767228025,
@@ -7995,15 +7995,15 @@
     "min_s": 30,
     "zone": "9"
    },
-   "rationale": "2 robots mutually blocked for 155 s in zone 9",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 155 s in zone 9",
    "expected": 155.0,
    "grade_after": 1767228025,
-   "dedup_key": "deadlock:13,10;13,11:2026-01-01T00:37:50Z"
+   "dedup_key": "blocking_cluster:13,10;13,11:2026-01-01T00:37:50Z"
   },
   {
-   "id": "d4ec6358f2066e91563bd50e4b1b5ccb0a61e92a",
+   "id": "678674255b485c411dd52ea1e2a639dc01f22ff3",
    "run": "closed_loop",
-   "kind": "deadlock",
+   "kind": "blocking_cluster",
    "subject": "11,10;12,10",
    "start_iso": "2026-01-01T00:40:30Z",
    "decided_at": 1767228095,
@@ -8021,10 +8021,10 @@
     "min_s": 30,
     "zone": "9"
    },
-   "rationale": "2 robots mutually blocked for 65 s in zone 9",
+   "rationale": "blocking cluster: 2 robots mutually blocked for 65 s in zone 9",
    "expected": 65.0,
    "grade_after": 1767228095,
-   "dedup_key": "deadlock:11,10;12,10:2026-01-01T00:40:30Z"
+   "dedup_key": "blocking_cluster:11,10;12,10:2026-01-01T00:40:30Z"
   }
  ]
 }
