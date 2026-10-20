@@ -2,7 +2,7 @@
 
 ## 1. Sources read
 
-Demand side only. Six scouts ran on 2026-10-20 (WebFetch/WebSearch). Every quote below was then checked string-for-string
+Demand side only. Six scouts ran on 2026-10-20 (WebFetch/WebSearch; curl and pdftotext read-only for raw text). Every quote below was then checked string-for-string
 against the page's raw text on 2026-10-20: GitHub, Discourse JSON, job-board APIs, press pages, PDFs via pdftotext, Reddit
 comments through the arctic-shift archive API (reddit.com itself did not render), Hacker News through the Algolia API.
 Rows that failed the check, or came only from a search snippet or a summarised fetch, are not here. The search log, the
@@ -143,54 +143,58 @@ duties a company pays for, not complaints, so role = recruiter.
 
 ## 3. Ranking
 
-Counted by script over the 80 rows above (`sources` = distinct threads, postings or articles; `roles` = distinct role
-words; `op` = sources where an operator or maintainer, not a developer or recruiter, says it). Ties are broken by roles.
-`timebudget` is a cross-cutting tag and is answered in section 5, not ranked. Floor obstructions (3 sources, 1 role, all
-r/AmazonFC) and idle robots (2 sources) are 16th and lower.
+Counted by script over the 80 rows above. `sources` = distinct threads, postings or articles. The exception is r/AmazonFC:
+its nine threads count as one source, because they come from one employer, one week and one archive query (`body=pods`).
+Counted separately they would put waiting first on operator sources (7) by query artifact. `roles` = distinct role words.
+`op` = sources where an operator or maintainer says it, not a developer or recruiter. Order: sources, then roles.
+`timebudget` is answered in section 5, not ranked. Floor obstructions (r/AmazonFC only) and idle robots are 16th and
+lower.
 
 | # | theme | sources | roles | op | best quote | our pipeline today |
 |---|---|---|---|---|---|---|
-| 1 | stalls, stuck robots, recovery | 13 | 5 | 3 | "there was a tendency for AMRs to get stuck while moving between two zones, causing pickers to wait" (ASKUL) | measures it: stuck episodes from `orderId` + `driving` + `errors`, with a cause and a resolution (S5B) |
+| 1 | stalls, stuck robots, recovery | 12 | 5 | 2 | "there was a tendency for AMRs to get stuck while moving between two zones, causing pickers to wait" (ASKUL) | measures it: stuck episodes from `orderId` + `driving` + `errors`, with a cause and a resolution (S5B) |
 | 2 | congestion, deadlock, traffic jams | 10 | 5 | 4 | "added more drives onto the floor and didn't increase the floor space and got confused why the pod gaps and drive utilization kept going up" (r/AmazonFC) | measures part of it: episode cause `traffic` / `blocked_by_stuck` (`fleet/fleet_analyser/detector.py:26`); no deadlock-cycle or robots-per-area view |
-| 3 | waiting at stations, for pickers, queues, starved stations | 10 | 4 | 7 | "every time you get a waiting for work or a stuck pod, hit that andon and jot down the time." (r/AmazonFC) | could with the stream we already read: robot busy, not driving, at a station cell; needs a station cell list from the site map, which the stream does not carry. Today such a wait over 30 s is a stuck episode |
-| 4 | integration: WMS, mixed vendor, VDA 5050 | 9 | 3 | 3 | "The ROI killers are comms issues with the WMS." (r/Warehousing) | not ours (we parse one VDA 5050-shaped schema; per-vendor mapping is the integrator's job) |
-| 5 | commissioning, go-live | 8 | 5 | 4 | "commissioning fifty vehicles from four manufacturers means four different procedures, repeated fifty times" (VDA5050 #647) | not ours |
-| 6 | monitoring and dashboards | 8 | 4 | 0 | "When a failure mode recurs, the instinct should be to build the detection before the next incident" (Simbe posting) | measures it: every flag is in the decision ledger and graded later; false alarms per zone-hour in README (k), (l) |
-| 7 | KPI and rate disputes | 6 | 2 | 4 | "I can hit 400 but then i get pod gaps and its impossible to maintain." (r/AmazonFC) | could with the stream: jobs per robot-hour from `orderId` changes; picks per station-hour needs WMS data we do not have |
-| 8 | logs and field debugging | 5 | 3 | 1 | "It would be great if they could analyze the logs and propose improvements based on the data." (ASKUL) | measures it: reads the state log as it is written, volume and decision ledgers, `report.md` (S5B, S5C) |
-| 9 | localisation, maps, re-mapping | 5 | 3 | 0 | "Robots tend to get lost in certain areas, either because the area is featureless or because the features are blocked by dynamic obstacles" (Open-RMF #726) | needs data we do not have: `agvPosition.localizationScore` / `positionInitialized` are VDA 5050 fields our emitter and parser do not carry |
-| 10 | recurring faults, root cause | 5 | 2 | 1 | "Locate sources of problems by observing and monitoring the automation field" (GXO posting) | could with the stream: `errors[]` per robot and per cell over time; our sim emits one errorType (BREAKDOWN), so untested on real codes |
-| 11 | software updates, version drift | 4 | 3 | 4 | "Usually a system update on either side causing the AGV to not run." (r/Warehousing) | needs data we do not have: software version per robot and update times; the stream shows the outage, not the update |
-| 12 | charging | 4 | 3 | 1 | "We are having a ton of chargers shuts down on us just after an update." (r/autostore) | needs data we do not have: `batteryState` (not emitted, not parsed) |
+| 3 | integration: WMS, mixed vendor, VDA 5050 | 9 | 3 | 3 | "The ROI killers are comms issues with the WMS." (r/Warehousing) | not ours (we parse one VDA 5050-shaped schema; per-vendor mapping is the integrator's job) |
+| 4 | commissioning, go-live | 8 | 5 | 4 | "commissioning fifty vehicles from four manufacturers means four different procedures, repeated fifty times" (VDA5050 #647) | not ours |
+| 5 | monitoring and dashboards | 8 | 4 | 0 | "When a failure mode recurs, the instinct should be to build the detection before the next incident" (Simbe posting) | measures it: every flag is in the decision ledger and graded later; false alarms per zone-hour in README (k), (l) |
+| 6 | waiting at stations, for pickers, queues, starved stations | 5 | 4 | 2 | "every time you get a waiting for work or a stuck pod, hit that andon and jot down the time." (r/AmazonFC) | could with the stream we already read: robot busy, not driving, at a station cell; needs a station cell list from the site map, which the stream does not carry. Today such a wait over 30 s is a stuck episode |
+| 7 | logs and field debugging | 5 | 3 | 1 | "It would be great if they could analyze the logs and propose improvements based on the data." (ASKUL) | measures it: reads the state log as it is written, volume and decision ledgers, `report.md` (S5B, S5C) |
+| 8 | localisation, maps, re-mapping | 5 | 3 | 0 | "Robots tend to get lost in certain areas, either because the area is featureless or because the features are blocked by dynamic obstacles" (Open-RMF #726) | needs data we do not have: `agvPosition.localizationScore` / `positionInitialized` are VDA 5050 fields our emitter and parser do not carry |
+| 9 | recurring faults, root cause | 5 | 2 | 1 | "Locate sources of problems by observing and monitoring the automation field" (GXO posting) | could with the stream: `errors[]` per robot and per cell over time; our sim emits one errorType (BREAKDOWN), so untested on real codes |
+| 10 | software updates, version drift | 4 | 3 | 4 | "Usually a system update on either side causing the AGV to not run." (r/Warehousing) | needs data we do not have: software version per robot and update times; the stream shows a fleet-wide outage, not the update |
+| 11 | charging | 4 | 3 | 1 | "We are having a ton of chargers shuts down on us just after an update." (r/autostore) | needs data we do not have: `batteryState` (not emitted, not parsed) |
+| 12 | KPI and rate disputes | 4 | 2 | 2 | "I can hit 400 but then i get pod gaps and its impossible to maintain." (r/AmazonFC) | could with the stream: jobs per robot-hour from `orderId` changes; picks per station-hour needs WMS data we do not have |
 | 13 | WiFi, connectivity | 4 | 2 | 0 | "Wi-Fi dead zones → invisible in testing, devastating in production" (newsletter, rank D) | could with the stream: `headerId` gaps are counted (`sequence_gaps`, `missing_messages`, `fleet/fleet_analyser/ledger.py:125`) per minute, not per cell; placing each gap at the robot's last position gives a dead-zone map |
 | 14 | doors and lifts | 3 | 3 | 0 | "multiple mobile robots may be simultaneously blocked waiting for the same resource, such as a lift" (Open-RMF #214) | needs data we do not have: door and lift states are not in the robot state stream |
 | 15 | maintenance, downtime | 3 | 2 | 0 | "Once a robot was operational, the most common pain points were lack of maintenance prediction, costly downtime, and too much manual intervention required." (Interact, n=300) | could, partly: time in FAULTED per robot from `errors[]`; prediction needs component data we do not have |
 
 ## 4. What we missed
 
-Waiting is the theme with the most operator sources (7 of its 10), and Sprints 5-10 never separate it from stalling. Our
-own page says "30 seconds waiting with a job means stuck", so a drive queued at a station or waiting for a picker lands
-in the stall list. The stream already carries the evidence (`orderId`, `driving`, `agvPosition`); what is missing is a
-station or pick-location list from the site map, plus a state for it. Starved stations ("pod gaps", "No pods en route")
-are the other side of waiting: no robot arrives. That shows in the stream only as arrivals per station cell, and we do
-not count them. KPI disputes (rank 7) could use the same arrivals and jobs per robot-hour, which we never report. WiFi
-(rank 13) has evidence in the stream we already parse: gaps are counted per minute but never placed on the floor, and
-one Open-RMF maintainer reports no latency or network complaints, so the theme is contested. Charging, updates and
-version drift, localisation, and doors and lifts need fields we do not emit or parse (`batteryState`, a software
-version, `localizationScore`, door and lift events). A real VDA 5050 log has the first and third. Integration and
-commissioning are named often but are integrator work, not an analysis we could sell.
+No Sprint 5-10 stage separates waiting from stalling. The detector knows five causes and no station
+(`fleet/fleet_analyser/detector.py:26`), and our page says "30 seconds waiting with a job means stuck", so a robot queued at
+a station or waiting for a picker lands in the stall list. Waiting is 6th here, but its operator voices (ASKUL, Amazon
+associates) tie it to pickers standing and rates missed. The stream already carries the evidence (`orderId`,
+`driving`, `agvPosition`); a station cell list from the site map is what is missing. Software updates (rank 10) come from
+operators or maintainers at all 4 of its sites. The stream cannot show the update, but it can show every robot of a zone
+stopping in the same minute, which we never test for. KPI disputes (rank 12) could use jobs per robot-hour and arrivals
+per station cell, which we never report. WiFi (rank 13) has evidence in the stream: gaps are counted per minute but
+never placed on the floor, and one Open-RMF maintainer reports no network complaints, so the theme is contested.
+Charging, localisation, and doors and lifts need fields we do not emit or parse (`batteryState`, `localizationScore`,
+door and lift events); a real VDA 5050 log carries the first two. Integration and commissioning rank 3rd and 4th but are
+integrator work, not an analysis we could sell.
 
 ## 5. Verdict
 
-The build with the most operator demand behind it is a per-robot time budget from the stream we already read. It
-separates waiting at a station, waiting for a picker or queue, and starved stations from stuck, faulted, moving and idle,
-and needs only a station cell list from the site map. Waiting has the most operator sources (7), stalls the most sources
-overall (13), and Ocado and Amazon both pay people to recover stuck robots. That is evidence of demand, not of
-willingness to pay: no source names a price. The claim an operator would push back on is the overview headline "Robots
-get stuck. Nobody knows why." Operators name the why themselves: "a system update on either side", "a whole ass box
-sticking a foot out of the bin", a monitor's "beacon lit stopping your pods". The time budget is never named in full in
-operators' own words; three of the 80 rows ask for a piece of it: ASKUL's "We currently do not have log data on the
-waiting times of the robots", the associate's "jot down the time", and the "drive utilization" comment. The Locus posting
-("maximize uptime") and the Interact survey ("costly downtime") name only uptime and downtime.
+The build most likely to find buyers, given what exists, is a per-robot time budget from the stream we already read. It
+splits waiting at a station or for a picker from stuck, faulted, moving and idle, and needs only a station cell list
+from the site map. It rests on one buyer-type operator asking for it outright (ASKUL: no waiting-time log data, and "It
+would be great if they could analyze the logs"), on stalls and congestion being the two most-sourced themes, and on Ocado
+and Amazon paying staff to recover stuck robots: demand evidence, not a price. The claim an operator would push back on
+is the overview headline "Robots get stuck. Nobody knows why." Operators name the why themselves: "a system update on
+either side", "a whole ass box sticking a foot out of the bin", "beacon lit stopping your pods". The full time budget per
+robot, state and flow never appears in operators' own words; three of the 80 rows ask for a piece of it (ASKUL's "We
+currently do not have log data on the waiting times of the robots", an associate's "jot down the time", the "drive
+utilization" comment), two of them from r/AmazonFC. The Locus posting ("maximize uptime") and the Interact survey
+("costly downtime") name only uptime and downtime.
 
-DEMAND_SCORE: stalls=3 waiting=3 congestion=2 integration=3 trust_in_alerts=1
+DEMAND_SCORE: stalls=2 waiting=2 congestion=2 integration=3 trust_in_alerts=1
