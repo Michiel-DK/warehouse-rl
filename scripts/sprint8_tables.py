@@ -33,6 +33,9 @@ Reads:
   results/fleet/deadlock_{s10-none,s10c-blind,s10-breakdown,closed-loop-sticky}.json, results/fleet/gapmap_s12-deadzone.json
   and `gap_grading` of results/fleet/hotspot_s12-deadzone.json
                                                -> (p) blocking clusters and chains (S12B) and the message-loss cell line
+  results/fleet/timebudget_moroop.json, results/fleet/timebudget_moroop_shifts.json
+                                               -> (q) a real shift: the time budget on the MoRoOp log (S13A), per shift
+                                                  and pooled, against the robot's own stuck label
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -82,9 +85,13 @@ S12_RUNS = [("s10-none", "undisturbed"), ("s10c-blind", "planner-blind blockage"
 BUCKETS = [("moving", "productive: travel"), ("waiting_station", "productive: load/unload, or standby: queued"),
            ("waiting_shelf", "standby: no operator"), ("stuck", "blocked, >= 30 s"),
            ("stopped_short", "blocked: congestion wait, < 30 s"), ("faulted", "unscheduled downtime"),
-           ("idle", "standby: no work")]
+           ("idle", "standby: no work"), ("paused", "standby: paused or manual mode, VDA `paused`"),
+           ("no_data", "unobserved: no message for more than max_gap_s")]
 STREAM_T0_MINUTE = "2026-01-01T00:00:00Z"  # fleet/fleet_analyser/emitter.py DEFAULT_T0, the zone-start minute
 GAPMAP, GAP_HOTSPOT = "results/fleet/gapmap_s12-deadzone.json", "results/fleet/hotspot_s12-deadzone.json"
+MOROOP, MOROOP_SHIFTS = "results/fleet/timebudget_moroop.json", "results/fleet/timebudget_moroop_shifts.json"
+# vendor/tarware/tarware/warehouse.py:15 (_STUCK_THRESHOLD) and :494 (replan once the stuck count passes it)
+VENDOR_STUCK_THRESHOLD = 5
 
 
 def load(rel):
@@ -997,7 +1004,8 @@ def time_budget():
     src = runs[0][1]["src"]
     print("Shares are of AGV-seconds over the zone's span, summed over zones (`run.totals.share`; pickers are reported "
           "apart by the tool and are not in the shares, the AGV count or the jobs rate). Every second goes to one bucket, "
-          "in the precedence faulted > moving > waiting_station > waiting_shelf > stuck / stopped_short > idle, so a "
+          "in the precedence no_data > faulted > paused > moving > waiting_station > waiting_shelf > stuck / "
+          "stopped_short > idle, so a "
           "stop next to a shelf is `waiting_shelf` even when it lasts past the stuck threshold "
           f"({src['stuck_after']} s, the detector's own). The term in brackets is the standard class "
           "`docs/LITERATURE.md` Part 2 section 2 maps each bucket to (SEMI E10 classes, Standridge's blocked time, VDA "
@@ -1010,9 +1018,13 @@ def time_budget():
           "from the run's store (pickers included, last column); a station or shelf episode is one whose first cell is a "
           "station or shelf-adjacent cell. Asserted per run: the time-budget stuck runs and the detector episodes have "
           "the same start sets (`stuck_runs_vs_detector`), and the bucket seconds sum to the span. `faulted` counts "
-          "robots with any error; the emitter writes only FATAL errors, so a CRITICAL/FATAL-only rule would not move "
-          "these numbers. Sources: " + ", ".join(f"`{rel}`" for rel, _ in runs) + " (`run`, `zones.*.same_minute_stops`, "
-          "`zones.*.cell_classes`, `src`), from `wr-s12a-budget-run`.")
+          "robots with an error of error level CRITICAL or FATAL (S12C; the emitter writes only FATAL errors). "
+          "`paused` is a message with VDA 5050 `paused` true; `no_data` is the whole interval between two messages "
+          f"more than {src['max_gap_s']} s apart (`src.max_gap_s`). The simulator emitter never sets `paused` and "
+          "sends every robot every step, so both shares are zero on these runs, as the JSONs show. Sources: "
+          + ", ".join(f"`{rel}`" for rel, _ in runs) + " (`run`, `zones.*.same_minute_stops`, "
+          "`zones.*.cell_classes`, `src`), from `wr-s12a-budget-run`, re-run after S12C with the new buckets "
+          "(every other value unchanged).")
 
 
 def _as_v1(d):
@@ -1085,8 +1097,8 @@ def blocking_clusters(rels=None):
         return
     ref = dict(runs).get("results/fleet/deadlock_s10-none.json")
     ref_rate = ref["total"]["deadlock_s_per_robot_hour"] if ref else None
-    print("| run | blocking clusters (JSON `deadlocks`) | broke up / still open at stream end | blocking chains (JSON "
-          "`knots`) | cluster length, s: median (max) | robots per cluster, max | blocked robot-s in clusters per "
+    print("| run | blocking clusters (JSON `blocking_clusters`) | broke up / still open at stream end | blocking chains "
+          "(JSON `blocking_chains`) | cluster length, s: median (max) | robots per cluster, max | blocked robot-s in clusters per "
           "robot-hour | vs s10-none | top cell by cluster seconds (cells tied at that value) | standoffs (same robots, "
           "gaps of at most one step merged) | longest standoff: zone, span s, clusters, end | longest standoff's share "
           "of blocked robot-s |")
@@ -1123,11 +1135,15 @@ def blocking_clusters(rels=None):
           + _cluster_definition(d0) + "\". Adjacency is symmetric (Manhattan 1), so "
           "any two adjacent stuck robots with no faulted neighbour form a cluster: it is congestion that persists, not "
           "the circular wait that `docs/LITERATURE.md` Part 2 section 1 calls a deadlock (Coffman et al. 1971; a cycle "
-          "in the wait-for graph), and the JSON field name `deadlocks` is renamed `blocking_cluster` in S12C. A blocking "
-          "chain (JSON `knots`) is a path of at least 2 edges among robots in no cluster; Part 2 names it so because a "
-          "knot in deadlock theory is the closed set that is the deadlock. Still open at stream end = censored, its "
+          "in the wait-for graph). So the table is a congestion measure: no circular wait survives in TA-RWARE, "
+          f"because the vendor replans a robot once it has been stuck more than {VENDOR_STUCK_THRESHOLD} steps "
+          "(`_STUCK_THRESHOLD`, `vendor/tarware/tarware/warehouse.py:15` and `:494`), and every cluster that ends "
+          "inside the stream broke up. The clusters still open at stream end (third column) are censored, not shown "
+          "to clear. A blocking chain (JSON `blocking_chains`; S12B called it a knot) is a path of at least 2 edges "
+          "among robots in no cluster; Part 2 renames it because a knot in deadlock theory is the closed set that is "
+          "the deadlock. Still open at stream end = censored, its "
           "length is a lower bound. Broke up = the group was gone at the next batch, which can be a single step: the "
-          "vendor planner replans a robot after a few stuck steps, frees one cell, and the same robots can block each "
+          f"vendor planner replans a robot after more than {VENDOR_STUCK_THRESHOLD} stuck steps, frees one cell, and the same robots can block each "
           f"other again. A standoff merges clusters of the same zone and robot set that start at most one step "
           f"({SECONDS_PER_STEP} s) after the previous one ends; its span runs from the first start to the last end. Blocked robot-s per robot-hour = sum(length x robots) / robot-hours, where "
           "robot-hours include the pickers (12 robots per zone), unlike (o), which counts AGVs only. Top cell: each "
@@ -1159,6 +1175,75 @@ def blocking_clusters(rels=None):
           "driving through a disconnect. The stall-map truth grades in the same hotspot JSON count the dead cells as "
           f"truth hits and are not read here. Sources: `{GAPMAP}` (`zones.*.cells`, `unplaced_leading_missing`, "
           f"`store_duplicates`), `{GAP_HOTSPOT}` (`gap_grading` only).")
+
+
+def _pct(share, b):
+    v = share[b]
+    return v if isinstance(v, str) else f"{100 * v:.1f}%"
+
+
+def real_shift():
+    pooled, shifts = load(MOROOP), load(MOROOP_SHIFTS)
+    if pooled is None or shifts is None:
+        print(f"Real shift: `{MOROOP}` or `{MOROOP_SHIFTS}` MISSING")
+        return
+    strings = {"faulted": pooled["faulted"], "waiting_shelf": shifts["waiting_shelf"]}
+    assert shifts["faulted"] == pooled["faulted"] and pooled["share"]["waiting_shelf"] == strings["waiting_shelf"]
+    print("| shift | span, h | " + " | ".join(f"{b} ({std})" for b, std in BUCKETS)
+          + " | throughput: jobs per robot-hour |")
+    print("|---|---|" + "---|" * len(BUCKETS) + "---|")
+    ss = sorted(shifts["shifts"].items(), key=lambda kv: int(kv[0]))
+    for k, s in ss:
+        tr = s["timebudget_robot"]
+        assert sum(tr["seconds"].values()) == tr["span_s"], k
+        share = dict(tr["share"], **strings)
+        print(f"| {k}: {s['name']} | {tr['span_s'] / 3600:.2f} | " + " | ".join(_pct(share, b) for b, _ in BUCKETS)
+              + f" | {s['jobs_per_robot_hour']:.2f} |")
+    num = {b: v for b, v in pooled["seconds"].items() if not isinstance(v, str)}
+    assert sum(num.values()) == pooled["span_s"]
+    assert all(sum(s["timebudget_robot"]["seconds"][b] for _, s in ss) == v for b, v in num.items())
+    print(f"| **pooled, {pooled['shifts']} shifts** | {pooled['span_s'] / 3600:.2f} | "
+          + " | ".join(_pct(pooled["share"], b) for b, _ in BUCKETS) + f" | {pooled['jobs_per_robot_hour']:.2f} |")
+    print()
+    lab, c = pooled["label"], pooled["label"]["counts"]
+    lsec = lab["seconds_per_bucket"]
+    stuck_by_shift = {k: s["timebudget_robot"]["seconds"]["stuck"] for k, s in ss}
+    top = max(stuck_by_shift, key=stuck_by_shift.get)
+    on_station = sum(f["on_station_cell"] for f in lab["false_alarms"])
+    st_dur = sorted(f["duration_s"] for f in lab["false_alarms"] if f["on_station_cell"])
+    would = {}
+    for _, s in ss:
+        for b, v in s["no_data"]["would_have_been_bucket_without_gap_rule"].items():
+            would[b] = would.get(b, 0) + v
+    assert sum(would.values()) == num["no_data"], would
+    assert len(lab["false_alarms"]) == c["false_alarms"]
+    hf, prm = pooled["src"]["hf"], pooled["src"]["params"]
+    print(f"**Against the robot's own label.** The stuck bucket holds {num['stuck']:,} s of the pooled "
+          f"{pooled['span_s']:,} s; {stuck_by_shift[top]:,} of them are in shift {top} "
+          f"({shifts['shifts'][top]['name']}, a manual intervention per the S13A lane report). The robot's stuck "
+          f"label (`stuck_reason` not None) covers {sum(lsec.values())} s, of which {lsec['stuck']} s fall in the "
+          f"stuck bucket. Of its {c['episodes']} episodes, {c['lt30']} are shorter than the {prm['stuck_after_s']} s "
+          f"threshold; the {c['ge30']} longer ones are both detected ({c['hits']} hits, {c['misses']} misses), too "
+          f"few for a rate. Of the detector's {c['stuck_runs']} stuck runs, {c['false_alarms']} have no label within {prm['stuck_after_s']} s, "
+          f"and {on_station} of those {c['false_alarms']} sit on a station cell "
+          f"(median {st_dur[(len(st_dur) - 1) // 2]} s, a dwell just over the threshold). "
+          "Failed navigation: no label in the data. The closest is the operations that ended in TIMEOUT: "
+          f"{c['timeouts']}, all {c['timeouts_detected']} overlapped by a stuck run (the lane report finds only 2 of "
+          "them overlap a run off a station cell, `laptop-scheduler/reports/wr-lane-s13a-moroop-budget.md` section 5 (d), "
+          f"not stored). Paused (joystick or non-autonomous rows): {num['paused']} s. `faulted` is \"" + pooled["faulted"] + "\" (the diagnostics levels "
+          "are undocumented) and `waiting_shelf` is \"" + shifts["waiting_shelf"] + "\" (no shelves, no picker). "
+          f"`no_data` is mostly station dwell: the log stores a row only when a value changes, and the {prm['max_gap_s']} "
+          f"s rule moved {num['no_data']:,} s there, {would.get('waiting_station', 0):,} of which would otherwise be "
+          f"waiting_station (`shifts.*.no_data.would_have_been_bucket_without_gap_rule`).")
+    print()
+    print(f"**Data.** MoRoOp ({hf['paper']}, licence {hf['license'].upper().replace('CC-BY-', 'CC BY ')}), "
+          f"`{hf['repo']}` revision {hf['revision']}: one wheel.me AMR in a lab, {pooled['shifts']} shifts, "
+          f"{pooled['messages']:,} messages, {pooled['parse_rejects']} parse rejects. Shares are of the shift's span "
+          "(`timebudget_robot.share` per shift, `share` pooled; the pooled row sums the nine per-shift runs). The "
+          "station share is set by the job generator's dwell and is not a finding. **Limit:** one robot, so no "
+          "deadlock, congestion or hotspot result. Sources: "
+          f"`{MOROOP}` (`seconds`, `share`, `label`, `no_data`, `src.hf`), `{MOROOP_SHIFTS}` "
+          "(`shifts.*.timebudget_robot`, `shifts.*.jobs_per_robot_hour`), from the S13A lane (PR #49).")
 
 
 def main():
@@ -1198,8 +1283,10 @@ def main():
     fast_vs_map()
     print("\n### (o) Where the shift goes (S12A time budget)\n")
     time_budget()
-    print("\n### (p) Blocking clusters and chains (S12B), and message-loss cells\n")
+    print("\n### (p) Blocking clusters and chains (S12B): a congestion measure, and message-loss cells\n")
     blocking_clusters()
+    print("\n### (q) Sprint 13: a real shift (S13A, MoRoOp, one robot)\n")
+    real_shift()
 
 
 if __name__ == "__main__":
