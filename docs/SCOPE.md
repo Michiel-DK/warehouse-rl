@@ -1020,10 +1020,28 @@ repo's untracked `reports/wr-lane-s12a-time-budget.md` and `reports/wr-dev-lit-f
     (merged clusters) instead of clusters?
   - `same_minute_stops`: should the zone-start minute be excluded and the count reported against the undisturbed
     rate (13 later minutes on s10-none) before it goes on a page?
-- Open (queued): S12C renames `deadlock` / `knot` to `blocking_cluster` / `blocking_chain` (schema v2), makes
-  `faulted` need CRITICAL or FATAL, and adds the `paused` and `no_data` buckets. After S12C, the hotspot scorer's
-  truth hits on dead-zone runs still count dead cells (S12B caveat 1), and `gap_cell` dedup across zones still
-  collapses rows (3 on s12-deadzone).
+- [x] S12C literature corrections (PR #48, fdce880): `deadlock` / `knot` renamed `blocking_cluster` /
+      `blocking_chain` (schema v2), `faulted` needs error level CRITICAL or FATAL, `paused` and `no_data` buckets.
+      Rerun `wr-s12c-rerun`: v2 counts equal v1 on all four runs (results commit 708763b). Time budgets re-run with
+      the new buckets: `paused` and `no_data` 0 s on all five simulator runs, every other value unchanged
+      (8a17a0b). README (o) and (p) regenerated.
+- Open (not fixed): the hotspot scorer's truth hits on dead-zone runs still count dead cells (S12B caveat 1),
+  `gap_cell` dedup across zones still collapses rows (3 on s12-deadzone), and `fleet/fleet_analyser/score.py:41`
+  still counts any error as frozen (no committed number moves; the emitter writes only FATAL).
+
+### Sprint 13: a real shift (2026-10-20)
+
+Results are in README "Sprint 13", printed by `scripts/sprint8_tables.py` section (q). Reports: laptop-scheduler
+`reports/wr-lane-s13a-moroop-budget.md`; data notes in `docs/LITERATURE.md` Part 2b.
+
+- [x] S13A MoRoOp adapter and time budget (PR #49, e5d0808). `fleet/adapters/moroop.py`; results
+      `results/fleet/timebudget_moroop.json` and `results/fleet/timebudget_moroop_shifts.json`, README (q). One
+      wheel.me AMR, 9 shifts, 0 parse rejects; moving 40.4%, at a station 41.0%, 18.59 jobs per robot-hour; stuck
+      1,113 s, 1,107 of them in one shift (30 Jul morning, manual intervention). The robot's stuck label: 0 of
+      765 s in the stuck bucket, 2/2 episodes of 30 s or more detected. 542 of 544 false alarms are station dwells.
+      No failed-navigation label in the data. One robot, so no deadlock, congestion or hotspot result.
+- Open (operator):
+  - **Is a one-robot real log enough to show a client, or do we wait for a fleet log?**
 
 ## Compute and timing
 
