@@ -15,6 +15,14 @@ feed / end_zone / end_all return a list of event dicts:
   {"kind": "episode_open", ...}    at T_entry, with the cause (resolution "open")
   {"kind": "episode_close", ...}   at the ending message (or at end of input, resolution "unresolved")
 FAULTED = some error with errorLevel CRITICAL or FATAL (VDA 5050: WARNING/URGENT can continue the order).
+
+SERVICING (S13B, only when the Detector is given `stations`): a stopped run whose cell is at a station (productive
+load/unload or a standby queue, docs/LITERATURE.md Part 2: never "blocked") and that has lasted >= stuck_after seconds.
+It takes the place of STUCK for that run: no episode opens, no cause is computed, the transitions are still emitted. The
+run's cell is the cell of the run's FIRST stopped message (the same definition in fleet/timebudget.py). A robot that
+moves off the station and stops again starts a new run, judged on its own cell. `at_station(x, y, stations, radius)` is
+the one predicate (Manhattan distance <= radius to any station goal cell; False when stations is None). With
+stations=None nothing here changes: every output is byte-identical to the detector without this option.
 Every event also has "zone", "robot", and a "decided_by" = (serial, ts) naming the message that triggered it.
 """
 from .parse import iso
@@ -22,8 +30,8 @@ from .parse import iso
 STEP_S = 5
 DEFAULT_STUCK_AFTER = 30
 
-FAULTED, IDLE, MOVING, STUCK, STOPPED_WITH_ORDER, RECOVERED = (
-    "FAULTED", "IDLE", "MOVING", "STUCK", "STOPPED_WITH_ORDER", "RECOVERED")
+FAULTED, IDLE, MOVING, STUCK, STOPPED_WITH_ORDER, RECOVERED, SERVICING = (
+    "FAULTED", "IDLE", "MOVING", "STUCK", "STOPPED_WITH_ORDER", "RECOVERED", "SERVICING")
 CAUSES = ("faulted_self", "blocked_by_faulted", "blocked_by_stuck", "traffic", "unknown")
 RESOLUTIONS = ("moved", "order_dropped", "fault_cleared", "unresolved")
 
@@ -51,14 +59,39 @@ def _near(a, b):
     return abs(a.x - b.x) + abs(a.y - b.y) <= 1
 
 
+def at_station(x, y, stations, radius=0):
+    """True iff (x, y) is within Manhattan distance <= radius of a station goal cell. False when stations is None/empty."""
+    if not stations:
+        return False
+    return any(abs(x - sx) + abs(y - sy) <= radius for sx, sy in stations)
+
+
 class Detector:
-    def __init__(self, stuck_after=DEFAULT_STUCK_AFTER, resumed=False):
+    def __init__(self, stuck_after=DEFAULT_STUCK_AFTER, resumed=False, stations=None, station_radius=0):
         """resumed=True: this detector starts mid-stream at a checkpoint. A stopped run that begins at a robot's first
         message seen here may have started before the checkpoint; episodes from such a run carry left_censored=True
-        (their start and duration are lower bounds)."""
+        (their start and duration are lower bounds).
+        stations: a set of (x, y) station GOAL cells, or a mapping zone -> such a set (key "*" = every other zone), or
+        None (default: the rule is unaware of stations). A stopped run starting within `station_radius` (Manhattan) of
+        one is SERVICING instead of STUCK. servicing_runs counts the runs that became SERVICING.
+        A FAULTED message is never SERVICING and never suppresses an episode: the state is FAULTED and an episode opens
+        (cause faulted_self, start = run start) at the first faulted message once the run is >= stuck_after old, as with
+        stations=None. A run that was servicing and then faulted stays counted in servicing_runs (it was counted when it
+        became SERVICING); if the fault clears while still stopped on the station the state returns to SERVICING and the
+        open episode stays open until the run ends."""
         self.stuck_after = stuck_after
         self.resumed = resumed
+        self.stations = stations
+        self.station_radius = station_radius
+        self.servicing_runs = 0
         self._zones = {}
+
+    def _stations_of(self, zone):
+        st = self.stations
+        if st is None or not hasattr(st, "get"):
+            return st
+        got = st.get(zone)
+        return got if got is not None else st.get("*")
 
     # ------------------------------------------------------------------ input
     def feed(self, msg):
@@ -145,9 +178,15 @@ class Detector:
         if run is None and not m.driving and m.order_id != "":
             r.run = run = dict(order=m.order_id, since=m.ts, cell=[m.x, m.y], faulted_last=m.faulted,
                                censored=self.resumed and r.last_ts is None)
+            if self.stations is not None:
+                run["station"] = at_station(m.x, m.y, self._stations_of(zone), self.station_radius)
         elif run is not None:
             run["faulted_last"] = m.faulted
         stuck_now = run is not None and m.ts - run["since"] >= self.stuck_after
+        servicing = stuck_now and run.get("station", False) and not m.faulted
+        if servicing and not run.get("counted"):
+            run["counted"] = True
+            self.servicing_runs += 1
         if recovered:
             state = RECOVERED
         elif m.faulted:
@@ -156,12 +195,14 @@ class Detector:
             state = IDLE
         elif m.driving:
             state = MOVING
+        elif servicing:
+            state = SERVICING
         elif stuck_now:
             state = STUCK
         else:
             state = STOPPED_WITH_ORDER
         opened = None
-        if stuck_now and r.episode is None:
+        if stuck_now and not servicing and r.episode is None:
             start = run["since"]
             r.episode = opened = dict(episode_id=f"{m.serial}@{iso(start)}", zone=zone, robot=m.serial,
                                       order_id=run["order"], start=start, start_iso=iso(start), t_entry=m.ts,

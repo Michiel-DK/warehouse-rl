@@ -74,7 +74,7 @@ class Pipeline:
     row per consumed chunk and calls `_maybe_ledger`; everything else is shared, so both sources produce the same rows."""
 
     def __init__(self, run, store, source, label, emit_path=None, stuck_after=DEFAULT_STUCK_AFTER,
-                 ledger_interval=10.0, clock=time.time, log=None):
+                 ledger_interval=10.0, clock=time.time, log=None, stations=None, station_radius=0):
         self.run, self.store, self.source, self.glob = run, store, source, label
         self.stuck_after, self.ledger_interval, self.clock = stuck_after, ledger_interval, clock
         self._stop = threading.Event()
@@ -84,7 +84,8 @@ class Pipeline:
         self._checkpoints = {}
         self._cp_seq = 0
         resuming = bool(store.select("ingest_checkpoints", {"run": run}))
-        self.det = Detector(stuck_after, resumed=resuming)
+        self.det = Detector(stuck_after, resumed=resuming, stations=stations, station_radius=station_radius)
+        self.station_aware = stations is not None
         self.ledger = IngestLedger(run, source, clock)
         self.seq = SequenceTracker()
         self.exit_code = 0
@@ -305,10 +306,13 @@ class Pipeline:
         if rows:
             self.store.upsert("ingest_ledger", ("run", "source", "minute"), rows)
         expected = ((self.emit or {}).get("total") or {}).get("expected_messages")
-        self.store.upsert("ingest_runs", ("run",), [dict(
+        row = dict(
             run=self.run, glob=self.glob, emit_ledger=str(self.emit_path) if self.emit else None,
             emit_status=(self.emit or {}).get("status"), emit_config=(self.emit or {}).get("config"),
-            expected_messages=expected, updated_at=self.clock())])
+            expected_messages=expected, updated_at=self.clock())
+        if self.station_aware:  # S13B: stopped runs the detector filed as SERVICING (no episode), key only with stations
+            row["servicing_runs"] = self.det.servicing_runs
+        self.store.upsert("ingest_runs", ("run",), [row])
         self._after_ledger()
 
     def finish(self):
@@ -332,12 +336,13 @@ class Pipeline:
 
 class Ingester(Pipeline):
     def __init__(self, glob, run, store, stuck_after=DEFAULT_STUCK_AFTER, poll=2.0, ledger_interval=10.0, once=False,
-                 clock=time.time, sleep=None, truncate_after=TRUNCATE_AFTER_S, log=None):
+                 clock=time.time, sleep=None, truncate_after=TRUNCATE_AFTER_S, log=None, stations=None,
+                 station_radius=0):
         self.poll, self.once, self.truncate_after = poll, once, truncate_after
         self._sleep = sleep or self._stop_wait
         self.files = {}
         super().__init__(run, store, "file", glob, os.path.join(os.path.dirname(glob) or ".", "emit_ledger.json"),
-                         stuck_after, ledger_interval, clock, log)
+                         stuck_after, ledger_interval, clock, log, stations, station_radius)
 
     def _stop_wait(self, timeout):
         return self._stop.wait(timeout)

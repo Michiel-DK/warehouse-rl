@@ -25,6 +25,7 @@ for _p in (ROOT / "fleet", ROOT / "src", ROOT / "scripts"):
         sys.path.insert(0, str(_p))
 
 import timebudget as tb  # noqa: E402
+from fleet_analyser import stations as stations_mod  # noqa: E402
 from fleet_analyser.parse import Message, iso  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
@@ -598,7 +599,7 @@ class TestT14(unittest.TestCase):
                 seen.append(max_workers)
                 return real(max_workers=max_workers, **kw)
 
-            with mock.patch.object(tb, "run_layout_worker", return_value=lay), \
+            with mock.patch.object(stations_mod, "run_layout_worker", return_value=lay), \
                     mock.patch.object(tb.cf, "ThreadPoolExecutor", side_effect=spy):
                 tb.auto_layouts(str(d), ["0", "1", "2"], 2)
                 with mock.patch.dict(os.environ, {"SCHED_WORKERS": "1"}):
@@ -612,7 +613,7 @@ class TestT14(unittest.TestCase):
                 got.append(workers)
                 return real_auto(glob_dir, zones, workers)
 
-            with mock.patch.object(tb, "run_layout_worker", return_value=lay), \
+            with mock.patch.object(stations_mod, "run_layout_worker", return_value=lay), \
                     mock.patch.object(tb, "auto_layouts", side_effect=auto_spy), \
                     mock.patch.object(tb, "read_messages", return_value=[msg("Z0-01", 0), msg("Z0-01", 5)]), \
                     redirect_stdout(StringIO()):
