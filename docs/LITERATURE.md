@@ -640,7 +640,10 @@ detect much larger events, and the road work points to traffic absence and detou
 
 The definitions differ, and that matters. Our persistence baseline ranks the *same window* by raw stall count, so
 decay is the only difference (README table (j), `fleet/baselines.py` docstring). The brief's "the same top-K
-cells as last window" is the literature's previous-period persistence, which we have not run. Our paired
+cells as last window" is the literature's previous-period persistence, which we have not run. On the NIJ challenge
+no naive benchmark was found: the auto-theft prize entry (Lee, O & Eck 2017) is itself a persistence ranking (12-month
+rate, previous month as tie-break), Mohler & Porter 2017 report no naive baseline, and the 32-paper review (Kounadi
+et al. 2020) lists autoregressive, logistic and KDE comparators, not last period. Our paired
 map-minus-persistence truth precision, 1,000-resample zone bootstrap (`baselines_*.json`, `paired`): s8b K 20
 −0.008 (−0.020 to +0.005, within noise), K 40 −0.023 (−0.034 to −0.011, worse); closed-loop-sticky K 20 +0.002
 (−0.010 to +0.017), K 40 −0.018 (−0.029 to −0.008, worse); s8e K 20 −0.008 (−0.019 to −0.002) and K 40 −0.019 (worse,
@@ -665,7 +668,7 @@ learned model beats "delays from the past 10s" on RMSE, 0.92 vs 1.19 s at 0-10 s
 |---|---|---|---|
 | Crime | previous week or month (Liu & Brown, Gorr); tuned moving average (Pittsburgh); decayed ProMap (Hu) | small-sample tests only; the tuned moving average was not beaten | **rare** |
 | Traffic accidents | long-run historical average per cell | beaten on MSE in every deep-model paper, never with a CI | **normal without a CI; with a CI unreported** |
-| Road-safety hotspots | raw-count ranking, next period | beaten by empirical Bayes (abstract only, numbers not read) | normal (by shrinkage, not decay) |
+| Road-safety hotspots | raw-count ranking, next period | beaten by empirical Bayes | reported (one abstract, numbers not read) |
 | Earthquakes (CSEP) | smoothed long-run seismicity | usually ties or wins; GEAR1 wins at 2 years and contains it | **rare** |
 | Warehouse / AGV / AMR | past 10 s per vertex (sim only) | RMSE without a CI; no real-log study found | **unreported** |
 
@@ -687,9 +690,9 @@ warehouse-33-36; Chen et al. 2024, +22 % to +76 %; Zang et al. 2025, ×2.7 at 60
 hundreds to thousands of agents. At the lowest count Zhang et al. test (150 agents), RHCR on unweighted costs (4.95)
 still beats guided PIBT (4.77). Chen et al.'s guided planner loses to RHCR at 200 agents (5.0 vs 5.7 / 6.0). The
 closest mechanism, a learned per-vertex delay added to A* costs (Yu & Wolf, Amazon, 810-850 robots, simulation), gains
-"an average of 4.4%" (1.0-7.7 % by scenario, std over 10 seeds 0.24-0.97 points). Its throughput baseline is a
-planner fed the past-10-s delays, not plain costs. That changes this page's reading: Part 1 §5 read Zhang 2024 at
-depth A- and Part 2 read Chen 2024 at A\*. Both are now read at A (PDF tables).
+"an average of 4.4%" (1.0-7.7 % by scenario, std over 10 seeds 0.24-0.97 points). Its results text names the baseline as a
+planner fed the past-10-s delays (the abstract says "versus without predictions"). Part 1 §5 read Zhang 2024 at A-
+and Part 2 read Chen 2024 at A\*. Both are now read at A (PDF tables), and nothing in those parts changes.
 
 | Source | Map, agents (density) | Baseline | Gain | Spread reported |
 |---|---|---|---|---|
@@ -718,8 +721,8 @@ slow cells.**
    tuned on calibration seeds (MAVG), and empirical-Bayes shrinkage to the zone mean as the challenger.
 3. **Routing feedback: retest only with more power.** At 30 seeds the CI spans −1.5 to +5.6 %, which cannot separate
    0 from the one comparable published gain (4.4 %). The half-width is now ±1.7 lines/h (±3.5 %); halving it needs about
-   4× the seeds (120), ±1 % about 12× (360), or a denser fleet where congestion gains are known to appear. Until then, write it up as "within noise, consistent
-   with near-zero gains at low agent counts", not as "does not work".
+   4× the seeds (120), ±1 % about 12× (360), or a denser fleet where congestion gains are known to appear. Until then, write it up as within noise and consistent
+   with near-zero gains at low agent counts, not as a shown absence of effect.
 
 ### Papers and sources (Part 3)
 
@@ -749,7 +752,7 @@ All rows verified@2026-10-21. Read depth as in Part 2 (A\* = through a summarisi
 | 2 | Zechar et al. 2013 | RELM I: first-order results | BSSA 103(2A) | https://doi.org/10.1785/0120120186 | A- | smoothed seismicity wins |
 | 2 | Strader, Schorlemmer, Cotton 2018 | Testing strain rate in global seismicity models | EGU2018-9733 abstract | https://meetingorganizer.copernicus.org/EGU2018/EGU2018-9733.pdf | A- | GEAR1 contains KJSS |
 | 2 | Kounadi, Ristea, Araujo, Leitner 2020 | Systematic review on spatial crime forecasting | Crime Science 9 | https://doi.org/10.1186/s40163-020-00116-7 | A\* | baselines used in 32 papers |
-| 2 | Rosser, Davies, Bowers, Johnson, Cheng 2017 | Predictive crime mapping: grids or street networks | J. Quant. Criminology 33 | https://doi.org/10.1007/s10940-016-9321-x | A\* | Wilcoxon on 90 paired days |
+| 2 | Rosser, Davies, Bowers, Johnson, Cheng 2017 | Predictive crime mapping: grids or street networks | J. Quant. Criminology 33 | https://doi.org/10.1007/s10940-016-9321-x | A\* | Wilcoxon on 90 paired days (context only) |
 | 2,3 | Yu, Wolf (Amazon) 2023 | Congestion prediction for large fleets of mobile robots | amazon.science (venue not confirmed) | https://cdn.amazon.science/8c/e5/80b4bc184aebb861fa764f8173cc/congestion-prediction-for-large-fleets-of-mobile-robots.pdf | A | past-10 s persistence, +4.4 % |
 | 3 | Jiang, Zhang, Veerapaneni, Li 2024 | Scaling lifelong MAPF (Part 2 row) | SoCS 2024 | https://arxiv.org/abs/2404.16162 | A (PDF Table 3) | guidance ablation by density |
 | 3 | Han, Yu 2022 | Optimizing space utilization for MRPP (SU-I) | ICRA 2022 | https://arxiv.org/abs/2109.04677 | A (PDF Table I) | ±0.6 % at 40-160 robots |
