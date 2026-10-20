@@ -551,16 +551,16 @@ Rows: `robot_state_cleaned`, one `zone<k>-000.jsonl.gz` per shift. Whole-second 
 | `timestamp` | `created_at` floored to the second; keep the **last** row of each second (the state at the end of that second). Report rows collapsed, and how many collapsed rows had stuck_reason ≠ None | A (column) / rule ours |
 | `headerId` | contiguous 1..n over the emitted messages, **not** `id` (gaps in `id` are screening removals, not lost messages); report removed-row count = max id − rows | B |
 | `serialNumber`, `manufacturer` | constant `moroop-amr-1`, `wheel.me` | A (paper names the robot) |
-| `orderId` | `jobs.id` of the job with `start_time <= t < finish_time` (jobs do not overlap for one robot; assert it). Tabulate the `job_type` values first. Charging jobs → `""`, with their seconds reported apart from `is_robot_charging` | A (columns) / B (charging choice) |
+| `orderId` | `job_id` of the operation running at t (`operations.start_time <= t < finish_time`); the ~1 s gaps between consecutive operations of one job keep that job's id. No overlap in the first 100 jobs and operations (A-); report overlap seconds, do not assert. Tabulate `job_type` first; charging jobs → `""`, seconds reported apart from `is_robot_charging` | A (columns) / B (rule) |
 | `agvPosition{x,y,theta}` | `pos_x`, `pos_y` quantised to `--cell-m` (default 0.5 at this map size; report the four station cells and assert they are distinct), `pos_theta` | A frame, B units |
 | `driving` | `hypot(velocity_x, velocity_y) > 0.05` m/s **or** `abs(velocity_omega) > 0.05` rad/s. VDA 5050 3.0 §3.3 has driving = "non zero translational and/or rotational velocity". Never `state == "Navigating"`, which stays on while the robot is blocked; report seconds where only omega counts | B |
-| `paused` | `state == "Paused"` or `operating_mode != "Autonomous"` (Joystick, Reconnecting, Initializing, PoweredOff: 17 cleaned rows, 27 Jul evening and 30 Jul morning); report per value | A values / B meaning |
-| `errors` | diagnostics statuses with `level != "Ok"`: tabulate the observed levels first. Only "Ok" appears in the first 81 rows, and the level vocabulary is undocumented. If a level reads as error, map it to `errorLevel` FATAL only when the robot did not move for the rest of that operation, else WARNING. Do **not** turn `stuck_reason`, operation TIMEOUTs or start_denied into errors | F until tabulated |
+| `paused` | `state == "Paused"` or `operating_mode != "Autonomous"` (17 cleaned rows, 27 Jul evening and 30 Jul morning; Joystick / Nonautonomous is VDA manual mode, folded in for lack of a bucket); report per value | A values / B meaning |
+| `errors` | `[]` for S13A. Tabulate and report the diagnostics `level` values (only "Ok" in the first 81 rows; vocabulary undocumented). Any level → errorLevel mapping is F and not used; `stuck_reason`, TIMEOUTs and start_denied are never errors | F (mapping) |
 | `loads` | `[]`: no payload column in robot state (inferring it from operation goals would be a guess) | A (absence) |
-| stations file | station cell = quantised median pose of rows with `state == "Idle"` and `current_position_id` = 135..138, named by the paper's mapping; `shelves: []`. `--stations auto` builds TA-RWARE layouts and **must not** be used | A ids / B poses |
+| stations file | per id 135..138 (paper's names), every cell holding ≥ 5 % of the `state == "Idle"` rows at that `current_position_id` (docking jitter: a 3-box kitting dwell averages ~30.7 s, so a missed cell turns it into stuck); report the share of those Idle rows outside the station set (target ≈ 0); `shelves: []`. `--stations auto` builds TA-RWARE layouts, **do not use** | A ids / B poses |
 
 **Buckets.** From state rows: moving, idle, paused. State rows + jobs (orderId): waiting_station, stuck, stopped_short.
-faulted: only after the diagnostics tabulation. no_data: report the interval p50 / p99 / max, the largest gap inside any
+faulted: not computed in S13A. no_data: report the interval p50 / p99 / max, the largest gap inside any
 stopped run, and the seconds S12C's 60 s rule would move. waiting_shelf (waiting for picker): **cannot be computed**, no
 shelves or picker; report n/a, not 0. Job counts, failures, lateness (`finish_time − due_date`, kit supply only) and
 dispatcher pauses need the **event tables**.
@@ -574,7 +574,7 @@ a finding (the generator sets it, "waiting periods ... rather than measurements"
 warehouse" (an 8 x 2.3 m lab moving toy bricks).
 
 **Detection comparison (the robot's own label supports it).** Label episode = maximal run of consecutive native rows with
-`stuck_reason ≠ "None"`, owning [first row ts, ts of the next `None` row). (a) Label seconds per our bucket (stuck,
+`stuck_reason ≠ "None"`, owning [first row ts, ts of the next `None` row), on the same whole-second grid. (a) Label seconds per our bucket (stuck,
 stopped_short, waiting_station, moving, idle); `GoalObstructed` near a station may land in waiting_station. (b) A label
 episode is **detected** if one of our stuck runs overlaps [label start, label end + 30 s]; split episodes at 30 s, since
 shorter ones cannot reach `DEFAULT_STUCK_AFTER` = 30 (`fleet/fleet_analyser/detector.py:22`) and are not detector misses.
@@ -582,5 +582,5 @@ shorter ones cannot reach `DEFAULT_STUCK_AFTER` = 30 (`fleet/fleet_analyser/dete
 operation, a paused row or a station cell. The 8 TIMEOUT operations are a second, long-event label (B: the paper never
 ties timeouts to obstruction): detected if a stuck run overlaps the operation's [start_time, finish_time].
 
-**Sanity checks.** Exact: Table 7 rows per shift, the 207 label rows, the 8 failed operations. Within 5 %: non-charging
-jobs from orderId changes vs `jobs`; span per shift (8.03-8.26 h); jobs per robot-hour vs 1,382 / 72.99 h = 18.9.
+**Sanity checks.** Exact: Table 7 rows per shift, the 207 label rows, the 8 failed operations. Within 5 %: unique non-empty
+orderIds vs non-charging `jobs`; span per shift (8.03-8.26 h); jobs per robot-hour vs 1,382 / 72.99 h = 18.9.
