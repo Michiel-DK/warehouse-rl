@@ -28,6 +28,11 @@ Reads:
   results/fleet/amoc_{blind,shortmap,fast}.json -> (n) fast detector (S10I per-cell CUSUM) vs the decayed map, with the
                                                   short-memory map published at the CUSUM's 60 s as cadence control
                                                   (CUSUM parameters from fleet/data/s10c-blind/fastmap.json if present)
+  results/fleet/timebudget_{s10-none,s10c-blind,s10-breakdown,closed-loop-sticky,s8b-medium-80-p03-07}.json
+                                               -> (o) where the shift goes (S12A time budget, `run` block)
+  results/fleet/deadlock_{s10-none,s10c-blind,s10-breakdown,closed-loop-sticky}.json, results/fleet/gapmap_s12-deadzone.json
+  and `gap_grading` of results/fleet/hotspot_s12-deadzone.json
+                                               -> (p) blocking clusters and chains (S12B) and the message-loss cell line
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -70,6 +75,16 @@ S10_KS = ("20", "40")
 GATES = ("baseline", "persistence")
 GATE_RUNS = [("s10-none", NONE), ("s10c-blind", BLIND), ("closed-loop-sticky", None)]
 SECONDS_PER_STEP = 5
+# (o) and (p): tag -> what the run is; the tag names the results file
+S12_RUNS = [("s10-none", "undisturbed"), ("s10c-blind", "planner-blind blockage"),
+            ("s10-breakdown", "robot breakdowns"), ("s8b-medium-80-p03-07", "floor, 80 cells, p 0.3-0.7"),
+            ("closed-loop-sticky", "sticky floor, 80 cells, p 0.9-0.99 (phase A, 30 zones)")]
+BUCKETS = [("moving", "productive: travel"), ("waiting_station", "productive: load/unload, or standby: queued"),
+           ("waiting_shelf", "standby: no operator"), ("stuck", "blocked, >= 30 s"),
+           ("stopped_short", "blocked: congestion wait, < 30 s"), ("faulted", "unscheduled downtime"),
+           ("idle", "standby: no work")]
+STREAM_T0_MINUTE = "2026-01-01T00:00:00Z"  # fleet/fleet_analyser/emitter.py DEFAULT_T0, the zone-start minute
+GAPMAP, GAP_HOTSPOT = "results/fleet/gapmap_s12-deadzone.json", "results/fleet/hotspot_s12-deadzone.json"
 
 
 def load(rel):
@@ -951,6 +966,139 @@ def frozen_cells():
           "`wr-s10g-breakdown-rerun` (bit-identical re-emit, lessons `--window-h 0.2`).")
 
 
+def time_budget():
+    runs = _load_all([f"results/fleet/timebudget_{t}.json" for t, _ in S12_RUNS], "Time budget")
+    if not runs:
+        return
+    label = dict(S12_RUNS)
+    print("| run | disturbance | AGVs (zones) | " + " | ".join(f"{b} ({std})" for b, std in BUCKETS)
+          + " | throughput: jobs per AGV-hour | same-minute stops: zone-start minute / later | stall list: episodes "
+          "starting on a station cell, n/N (share) | starting next to a shelf, n/N (share) | picker episodes in N |")
+    print("|---|---|---|" + "---|" * len(BUCKETS) + "---|---|---|---|---|")
+    for rel, d in runs:
+        r, t = d["run"], d["run"]["totals"]
+        tag = rel.split("timebudget_", 1)[1][:-len(".json")]
+        assert sum(t["seconds"].values()) == t["span_s"], rel
+        assert r["stuck_runs_vs_detector"]["start_sets_equal"], rel
+        w = r["station_waits_in_stall_list"]
+        assert w["source"] == "store", rel
+        minutes = [m for z in d["zones"].values() for m in z["same_minute_stops"]["minutes"]]
+        assert len(minutes) == r["same_minute_stops_count"], rel
+        at0 = sum(m == STREAM_T0_MINUTE for m in minutes)
+        print(f"| {tag} | {label[tag]} | {t['robots']} ({len(d['zones'])}) | "
+              + " | ".join(f"{100 * t['share'][b]:.1f}%" for b, _ in BUCKETS)
+              + f" | {r['jobs_per_robot_hour']:.2f} | {at0} / {len(minutes) - at0} | "
+              f"{w['at_station']}/{w['episodes']} ({100 * w['share_station']:.1f}%) | "
+              f"{w['at_shelf']}/{w['episodes']} ({100 * w['share_shelf']:.1f}%) | {w['picker_episodes']} |")
+    print()
+    cc = {json.dumps(z["cell_classes"], sort_keys=True) for _, d in runs for z in d["zones"].values()}
+    assert len(cc) == 1, cc
+    cc = json.loads(cc.pop())
+    src = runs[0][1]["src"]
+    print("Shares are of AGV-seconds over the zone's span, summed over zones (`run.totals.share`; pickers are reported "
+          "apart by the tool and are not in the shares, the AGV count or the jobs rate). Every second goes to one bucket, "
+          "in the precedence faulted > moving > waiting_station > waiting_shelf > stuck / stopped_short > idle, so a "
+          "stop next to a shelf is `waiting_shelf` even when it lasts past the stuck threshold "
+          f"({src['stuck_after']} s, the detector's own). The term in brackets is the standard class "
+          "`docs/LITERATURE.md` Part 2 section 2 maps each bucket to (SEMI E10 classes, Standridge's blocked time, VDA "
+          "5050 fields); where the bucket does not measure that class, the reading below says so. Station cells: "
+          f"{cc['n_station_cells']} per zone. Shelf-adjacent cells: {cc['n_shelf_adjacent_cells']} per zone (the "
+          f"{cc['n_shelf_slots']} shelf slots plus every cell within Manhattan {src['shelf_adjacent_manhattan']} of one, "
+          "stations excluded). Throughput is jobs per AGV-hour, the MAPF word for goals reached per unit time. Same-minute "
+          f"stops: minutes in which at least {100 * src['same_minute_share']:.0f}% of a zone's AGVs stop, split into the "
+          f"zone-start minute ({STREAM_T0_MINUTE[11:16]}) and later minutes. Stall list: the detector's stuck episodes "
+          "from the run's store (pickers included, last column); a station or shelf episode is one whose first cell is a "
+          "station or shelf-adjacent cell. Asserted per run: the time-budget stuck runs and the detector episodes have "
+          "the same start sets (`stuck_runs_vs_detector`), and the bucket seconds sum to the span. `faulted` counts "
+          "robots with any error; the emitter writes only FATAL errors, so a CRITICAL/FATAL-only rule would not move "
+          "these numbers. Sources: " + ", ".join(f"`{rel}`" for rel, _ in runs) + " (`run`, `zones.*.same_minute_stops`, "
+          "`zones.*.cell_classes`, `src`), from `wr-s12a-budget-run`.")
+
+
+def _top_cell(d):
+    best = None
+    for z, zd in sorted(d["zones"].items(), key=lambda kv: int(kv[0])):
+        for c in zd["top_cells"]:
+            key = (-c["deadlock_s"], int(z), c["cell"])
+            if best is None or key < best[0]:
+                best = (key, z, c)
+    if best is None:
+        return "none", 0
+    _, z, c = best
+    ties = sum(1 for zd in d["zones"].values() for x in zd["top_cells"] if x["deadlock_s"] == c["deadlock_s"])
+    n = sum(1 for x in d["decisions"] if x["claim"]["zone"] == z and c["cell"] in x["claim"]["cells"])
+    return f"zone {z}, cell {c['cell']}: {c['deadlock_s']} s in {n} clusters", ties
+
+
+def blocking_clusters():
+    tags = [t for t, _ in S12_RUNS]
+    runs = _load_all([f"results/fleet/deadlock_{t}.json" for t in tags if t != "s8b-medium-80-p03-07"],
+                     "Blocking clusters")
+    if not runs:
+        return
+    ref = dict(runs).get("results/fleet/deadlock_s10-none.json")
+    ref_rate = ref["total"]["deadlock_s_per_robot_hour"] if ref else None
+    print("| run | blocking clusters (JSON `deadlocks`) | broke up / still open at stream end | blocking chains (JSON "
+          "`knots`) | cluster length, s: median (max) | robots per cluster, max | blocked robot-s in clusters per "
+          "robot-hour | vs s10-none | top cell by cluster seconds (cells tied at that value) |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    for rel, d in runs:
+        tot, dec = d["total"], d["decisions"]
+        assert d["schema_version"] == "fleet-deadlock/1", rel
+        assert len(dec) == tot["deadlocks"] and all(x["kind"] == "deadlock" for x in dec), rel
+        lengths = sorted(x["claim"]["length_s"] for x in dec)
+        res = [x["claim"]["resolution"] for x in dec]
+        assert set(res) <= {"broke_up", "unresolved_at_end"}, set(res)
+        mid = len(lengths) // 2
+        med = lengths[mid] if len(lengths) % 2 else (lengths[mid - 1] + lengths[mid]) / 2
+        top, ties = _top_cell(d)
+        rate = tot["deadlock_s_per_robot_hour"]
+        vs = f"{rate / ref_rate:.2f}x" if ref_rate else "n/a"
+        print(f"| {d['run'] if d['run'] != 'closed_loop' else 'closed-loop-sticky'} | {tot['deadlocks']} | "
+              f"{res.count('broke_up')} / {res.count('unresolved_at_end')} | {tot['knots']} | {med:g} ({lengths[-1]}) | "
+              f"{max(len(x['claim']['robots']) for x in dec)} | {rate:.1f} | {vs} | {top} ({ties}) |")
+    print()
+    d0 = runs[0][1]
+    print("A blocking cluster is a strongly connected group of at least 2 robots in the per-batch wait-for graph "
+          "(`fleet/deadlock.py`), kept when it lasts at least " f"{d0['min_s']} s. The tool's own definition: \""
+          + d0["definition"].split(";")[1].strip().split(". knot")[0] + "\". Adjacency is symmetric (Manhattan 1), so "
+          "any two adjacent stuck robots with no faulted neighbour form a cluster: it is congestion that persists, not "
+          "the circular wait that `docs/LITERATURE.md` Part 2 section 1 calls a deadlock (Coffman et al. 1971; a cycle "
+          "in the wait-for graph), and the JSON field name `deadlocks` is renamed `blocking_cluster` in S12C. A blocking "
+          "chain (JSON `knots`) is a path of at least 2 edges among robots in no cluster; Part 2 names it so because a "
+          "knot in deadlock theory is the closed set that is the deadlock. Still open at stream end = censored, its "
+          "length is a lower bound. Blocked robot-s per robot-hour = sum(length x robots) / robot-hours, where "
+          "robot-hours include the pickers (12 robots per zone), unlike (o), which counts AGVs only. Top cell: each "
+          "cluster adds its length to every cell it covers, so cells of one cluster tie; the tie rule is most seconds, "
+          "then lowest zone, then cell string. Sources: " + ", ".join(f"`{rel}`" for rel, _ in runs)
+          + " (`total`, `decisions`, `zones.*.top_cells`), from `wr-s12b-run`; no run of the s8b floor store.")
+    print()
+    g, h = load(GAPMAP), load(GAP_HOTSPOT)
+    if g is None or h is None or "gap_grading" not in h:
+        print(f"Message-loss cells: `{GAPMAP}` or `gap_grading` in `{GAP_HOTSPOT}` MISSING")
+        return
+    gg = h["gap_grading"]
+    nz = len(gg["per_zone"])
+    planted = gg["deadzone_cells"] // nz
+    assert planted * nz == gg["deadzone_cells"]
+    assert sum(z["decisions"] for z in gg["per_zone"].values()) == gg["decisions"]
+    dropped = sum(c["dropped"] for z in g["zones"].values() for c in z["cells"])
+    print(f"**Message-loss cells inferred from headerId gaps (S12B gap map, run `{g['run']}`).** precision@{g['top_k']} "
+          f"of `gap_cell` against the {planted} planted dead cells per zone, pooled over {nz} zones: "
+          f"{gg['precision_at_10']['pooled']:.2f} (ceiling {min(planted, g['top_k']) / g['top_k']:.2f}: only {planted} "
+          f"of {g['top_k']} can be right); {gg['hits']} of {gg['decisions']} `gap_cell` decisions hit, and "
+          f"{gg['hits']} of {gg['deadzone_cells']} planted cells are found (recall {gg['recall']:.2f}). "
+          f"{dropped:g} dropped messages placed, {g['unplaced_leading_missing']} unplaced. The graded count is "
+          f"{gg['decisions']}, not {nz} x {g['top_k']}: the gap map wrote {len(g['decisions'])} decisions (some zones "
+          f"place fewer than {g['top_k']} cells), and the store refused {g['store_duplicates']} as duplicates of another "
+          "zone's row (same cell and first-gap time; the dedup key has no zone, S12B caveat 2). **Synthetic:** the dead cells are planted by the project's own emitter (`emit.py "
+          "--deadzone`, which drops every message sent from them), so the only cause of a gap is the planted cell. In a "
+          "real log a gap can also be a broker- or consumer-side drop with no location cause, and a VDA 5050 robot keeps "
+          "driving through a disconnect. The stall-map truth grades in the same hotspot JSON count the dead cells as "
+          f"truth hits and are not read here. Sources: `{GAPMAP}` (`zones.*.cells`, `unplaced_leading_missing`, "
+          f"`store_duplicates`), `{GAP_HOTSPOT}` (`gap_grading` only).")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -986,6 +1134,10 @@ def main():
     frozen_cells()
     print("\n### (n) Fast detector vs decayed map (S10I, planner-blind blockage)\n")
     fast_vs_map()
+    print("\n### (o) Where the shift goes (S12A time budget)\n")
+    time_budget()
+    print("\n### (p) Blocking clusters and chains (S12B), and message-loss cells\n")
+    blocking_clusters()
 
 
 if __name__ == "__main__":

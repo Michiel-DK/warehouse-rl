@@ -989,6 +989,38 @@ laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md
     with the active counting rule (S10I's finding: the map's end-time count cannot see a blockage while it is
     open) was not measured.
 
+### Sprint 12: where the shift goes (2026-10-20)
+
+Results are in README "Sprint 12", printed by `scripts/sprint8_tables.py` sections (o) and (p). Reports: this
+repo's untracked `reports/wr-lane-s12a-time-budget.md` and `reports/wr-dev-lit-fleet-management.md`; laptop-scheduler
+`reports/wr-lane-s12b-deadlock-gapmap.md` and `reports/wr-dev-s12a-readme.md`. Names follow
+`docs/LITERATURE.md` Part 2.
+
+- [x] S12A per-robot time budget (PR #47, 6daac2d). `fleet/timebudget.py`: seven buckets per robot from the stream,
+      the detector's own stopped runs, `--stations auto` from the emit ledger.
+- [x] Run (queue item `wr-s12a-budget-run`; results `results/fleet/timebudget_{s10-none,s10c-blind,s10-breakdown,
+      s8b-medium-80-p03-07,closed-loop-sticky}.json`, README (o)). 1.1% to 1.9% of stall episodes start on a
+      station cell. 76.3% to 97.2% start on a shelf-adjacent cell, but that class is 360 cells per zone, so it is
+      not a picker-wait measure. Undisturbed AGVs move 40.0% of the time, at 22.18 jobs per AGV-hour. The detector
+      is unchanged.
+- [x] S12B blocking finder and gap map (PR #46, e8a9bb0). `fleet/deadlock.py`, `fleet/gapmap.py`,
+      `emit.py --deadzone`.
+- [x] Run (queue item `wr-s12b-run`; results `results/fleet/deadlock_{s10-none,s10c-blind,s10-breakdown,
+      closed-loop-sticky}.json`, `gapmap_s12-deadzone.json`, `hotspot_s12-deadzone.json`, README (p)). The
+      "deadlocks" are congestion (blocking clusters), with symmetric adjacency, not circular waits. Undisturbed
+      108.2 blocked robot-s per robot-hour; sticky 2.78x that. Gap map on 6 planted cells per zone: recall 57/60,
+      precision@10 0.57 (ceiling 0.60), synthetic.
+- Open (operator):
+  - **Exclude station and shelf waits from the stall list?** This changes every Sprint 5-10 stall count. Stations
+    are 1-2% of episodes, and the shelf-adjacent class is a 360-cell catch-all. A tighter shelf signal, a stopped
+    robot with empty `nodeStates`, is not built.
+  - `same_minute_stops`: should the zone-start minute be excluded and the count reported against the undisturbed
+    rate (13 later minutes on s10-none) before it goes on a page?
+- Open (queued): S12C renames `deadlock` / `knot` to `blocking_cluster` / `blocking_chain` (schema v2), makes
+  `faulted` need CRITICAL or FATAL, and adds the `paused` and `no_data` buckets. After S12C, the hotspot scorer's
+  truth hits on dead-zone runs still count dead cells (S12B caveat 1), and `gap_cell` dedup across zones still
+  collapses rows (3 on s12-deadzone).
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are
