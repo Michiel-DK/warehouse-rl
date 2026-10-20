@@ -35,7 +35,10 @@ Definitions, per zone and per batch:
   knot      a batch-level path of >= 2 edges (A -> B -> C) among robots that are in no component of size >= 2 that batch;
             reported as the maximal such paths (sources to sinks of that acyclic part, robots ordered along the path, `head`
             = the last robot), tracked by robot set with the same start / end / length / min_s rule. A weaker class: a chain
-            of waiting robots that ends at a robot with no out-edge (a faulted robot, a robot with several neighbours).
+            of waiting robots that ends at a robot with no out-edge. With the edge rules above the head is always a FAULTED
+            robot: the middle robot B of A -> B -> C is STUCK, and if it had no faulted neighbour it would point back at the
+            stuck A (adjacency is symmetric) and A, B would be a deadlock; a traffic edge ends at a robot with no other
+            neighbour, which cannot be a middle robot. So knots are rare (a stuck line feeding a faulted robot).
 Per zone: deadlock_s_per_robot_hour = sum(length_s * robots) over kept deadlocks / (distinct robots * (last ts - first ts)
 / 3600); top_cells = the 10 cells with the most deadlock seconds (each deadlock adds its length_s to each of its cells at
 its first batch), ranked by (-deadlock_s, cell). Output schema "fleet-deadlock/1".
