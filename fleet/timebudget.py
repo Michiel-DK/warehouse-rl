@@ -1,7 +1,7 @@
 """S12A per-robot time budget: where does each AGV's shift go, with waiting split from stuck.
 
 Usage: python fleet/timebudget.py --glob 'DIR/*.jsonl.gz' --run RUN --stations PATH|auto --out PATH
-       [--shift-s 3600] [--store jsonl:DIR] [--workers N]
+       [--shift-s 3600] [--max-gap-s 60] [--store jsonl:DIR] [--workers N]
 Workers (layout processes in flight for --stations auto): --workers, else SCHED_WORKERS, else os.cpu_count() - 2,
 capped at the number of layouts (scripts/evaluate.resolve_workers).
 
@@ -12,9 +12,11 @@ message and no scoring file.
 
 Interval rule: message i of a robot owns [ts_i, ts_{i+1}); the robot's last message owns 0 s; span = last ts - first
 ts. Per robot, messages are sorted by (ts, header_id) and any message whose ts <= the previous kept ts is dropped (the
-rule of Detector._process_batch). Each owned interval goes to exactly one of seven buckets, decided by message i and the
+rule of Detector._process_batch). Each owned interval goes to exactly one of nine buckets, decided by message i and the
 stopped run it belongs to. Precedence, highest first:
-  faulted        errors non-empty (Message.faulted), even when driving is true
+  no_data        the interval is longer than --max-gap-s (default 60 s): the WHOLE interval, whatever message i says
+  > faulted      some error with errorLevel CRITICAL or FATAL (Message.faulted), even when driving is true
+  > paused       Message.paused (VDA 5050 `paused` is true), even when driving is false and an order is set
   > moving       driving true
   > waiting_station  driving false, orderId non-empty, (x, y) in the station cell set
   > waiting_shelf    driving false, orderId non-empty, (x, y) within Manhattan distance <= 1 of a shelf slot (the slot
@@ -62,8 +64,9 @@ from fleet_analyser.hotspot import read_messages  # noqa: E402
 from fleet_analyser.parse import iso  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
-BUCKETS = ("faulted", "moving", "waiting_station", "waiting_shelf", "stuck", "stopped_short", "idle")
+BUCKETS = ("no_data", "faulted", "paused", "moving", "waiting_station", "waiting_shelf", "stuck", "stopped_short", "idle")
 SHELF_ADJACENT_MANHATTAN = 1
+DEFAULT_MAX_GAP_S = 60
 SAME_MINUTE_SHARE = 0.8
 
 
@@ -200,7 +203,7 @@ def check_bucket_sum(serial, seconds, span):
         raise ValueError(f"timebudget: robot {serial}: bucket sum {total} != span {span} ({seconds})")
 
 
-def robot_budget(kept, stations, near_shelf, shift_s):
+def robot_budget(kept, stations, near_shelf, shift_s, max_gap_s=DEFAULT_MAX_GAP_S):
     """(record, runs) for one robot. record = dict(seconds, share, span_s, per_shift_s, jobs)."""
     seconds = {b: 0 for b in BUCKETS}
     runs, run_of = stopped_runs(kept)
@@ -208,8 +211,12 @@ def robot_budget(kept, stations, near_shelf, shift_s):
     for i in range(len(kept) - 1):
         m = kept[i]
         dt = kept[i + 1].ts - m.ts
-        if m.faulted:
+        if dt > max_gap_s:
+            b = "no_data"
+        elif m.faulted:
             b = "faulted"
+        elif m.paused:
+            b = "paused"
         elif m.driving:
             b = "moving"
         elif m.order_id == "":
@@ -315,7 +322,7 @@ def _pool_waits(parts, source):
 
 
 # ------------------------------------------------------------------------------------------------ main computation
-def compute(messages, run, layouts, episodes, source, shift_s):
+def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT_MAX_GAP_S):
     by_zone = {}
     for m in messages:
         by_zone.setdefault(m.zone, {}).setdefault(m.serial, []).append(m)
@@ -331,7 +338,7 @@ def compute(messages, run, layouts, episodes, source, shift_s):
         robots, pick, agv_kept, starts = {}, {}, {}, set()
         for serial in sorted(by_zone[z]):
             kept = kept_messages(by_zone[z][serial])
-            rec, s = robot_budget(kept, stations, near, shift_s)
+            rec, s = robot_budget(kept, stations, near, shift_s, max_gap_s)
             starts |= s
             if serial in pickers:
                 pick[serial] = rec
@@ -372,6 +379,13 @@ def parse_store_arg(arg):
     return arg[len("jsonl:"):]
 
 
+def _positive(text):
+    v = float(text)
+    if not 0 < v < float("inf"):
+        raise argparse.ArgumentTypeError(f"must be > 0 and finite, got {text}")
+    return v
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Per-robot time budget (S12A)")
     ap.add_argument("--glob", required=True)
@@ -379,6 +393,8 @@ def main(argv=None):
     ap.add_argument("--stations", required=True, help="PATH or auto")
     ap.add_argument("--out", required=True)
     ap.add_argument("--shift-s", type=float, default=3600)
+    ap.add_argument("--max-gap-s", type=_positive, default=DEFAULT_MAX_GAP_S,
+                    help="an interval between two messages of a robot longer than this is no_data (default 60; must be > 0)")
     ap.add_argument("--store", default=None, help="jsonl:DIR (default: DIR/store, DIR = the glob's directory)")
     ap.add_argument("--workers", type=int, default=None, help="default: SCHED_WORKERS, else os.cpu_count() - 2")
     args = ap.parse_args(argv)
@@ -406,7 +422,7 @@ def main(argv=None):
         episodes, source = store_episodes(store_dir, args.run), "store"
     else:
         episodes, source = recompute_episodes(messages), "recomputed"
-    zones, run_out = compute(messages, args.run, layouts, episodes, source, args.shift_s)
+    zones, run_out = compute(messages, args.run, layouts, episodes, source, args.shift_s, args.max_gap_s)
     hash_after = store_hash(store_dir) if present else None
     if hash_after != hash_before:
         print(f"timebudget: store {store_dir} changed during the run", file=sys.stderr)
@@ -415,7 +431,7 @@ def main(argv=None):
                stations_sha256=stations_sha, emit_ledger=ledger_path, store=store_dir if present else None,
                store_sha256_before=hash_before, store_sha256_after=hash_after, stuck_after=DEFAULT_STUCK_AFTER,
                shelf_adjacent_manhattan=SHELF_ADJACENT_MANHATTAN, same_minute_share=SAME_MINUTE_SHARE,
-               shift_s=args.shift_s, script="timebudget.py")
+               shift_s=args.shift_s, max_gap_s=args.max_gap_s, script="timebudget.py")
     out_path.write_text(json.dumps(dict(zones=zones, run=run_out, src=src), sort_keys=True, indent=1) + "\n")
 
     for z, d in zones.items():

@@ -1,7 +1,8 @@
-"""Mutual-blocking finder (S12B): deadlocks and knots among stuck robots, read from the fleet state stream alone.
+"""Mutual-blocking finder (S12B, renamed S12C): blocking clusters and blocking chains among stuck robots, read from
+the fleet state stream alone.
 
 Usage: python fleet/deadlock.py --glob 'DIR/*.jsonl.gz' --run NAME --out PATH [--min-s 30] [--store jsonl:COPY]
-Stdout: "deadlock RUN: deadlocks N knots M deadlock_s_per_robot_hour R -> PATH".
+Stdout: "blocking RUN: blocking_clusters N blocking_chains M blocked_s_per_robot_hour R -> PATH".
 Why: congestion and deadlock are the second most named operator theme (docs/scouting/operator-problems.md). The stream
 carries every robot's cell at every step, so who waits for whom can be read off it. This tool does not change what a stall
 is: the detector (fleet_analyser/detector.py) and its episodes are untouched and it is not a second detector.
@@ -17,14 +18,18 @@ the batch's messages:
   exactly one adjacent robot          -> one edge to it (traffic); several or none -> no edge
 ALL qualifying neighbours, not only the lowest serial the detector records as `blocker`: with a single lowest-serial
 blocker three stuck robots in a line would read as a 2-cycle plus a hanger-on. A traffic edge always points at a robot that
-is not STUCK, so it can never close a cycle; it is inert for cycles and kept only for the length of a knot chain.
+is not STUCK, so it can never close a cycle; it is inert for cycles and kept only for the length of a blocking chain.
 
-What a "deadlock" is here. `_near` is symmetric and the grid is bipartite, so two adjacent STUCK robots with no faulted
-neighbour always block each other. A deadlock is therefore a mutually-blocked cluster that persists, NOT a proven circular
-wait; a queue of stuck robots behind a non-robot obstacle (a blind blockage, a floor problem) counts as one too.
+What a "blocking cluster" is here, and why it is not called a deadlock (S12C, docs/LITERATURE.md Part 2 section 1).
+`_near` is symmetric and the grid is bipartite, so two adjacent STUCK robots with no faulted neighbour always block each
+other. A blocking cluster is therefore a mutually-blocked group that persists, NOT a proven circular wait; a queue of stuck
+robots behind a non-robot obstacle (a blind blockage, a floor problem) counts as one too. On the undisturbed run 49
+clusters with median length 75 s all resolve, because the vendor planner replans after five stuck steps; a true deadlock
+(a circular wait in a wait-for graph, Coffman 1971) cannot survive in this simulator. In deadlock theory a knot IS the
+deadlock set, so the acyclic chain must not be called a knot.
 
 Definitions, per zone and per batch:
-  deadlock  a strongly connected component of >= 2 robots in the batch's graph, tracked across batches by the identity of
+  cluster   a strongly connected component of >= 2 robots in the batch's graph, tracked across batches by the identity of
             its robot set (a change of membership closes the old one and opens a new one). start = the latest stopped-run
             start (the run `since`, the detector's stuck-episode start convention) among its members at the first batch
             the component appears; end = ts of the first batch in which that exact component no longer exists
@@ -32,17 +37,18 @@ Definitions, per zone and per batch:
             with no message in a batch is not in that batch's graph (it splits a component). Kept iff length_s >= --min-s
             (default 30). With this backdating every STUCK cycle already has length_s >= stuck_after, so min_s = 30 filters
             nothing at the detector default; min_s is compared against length_s.
-  knot      a batch-level path of >= 2 edges (A -> B -> C) among robots that are in no component of size >= 2 that batch;
+  chain     a batch-level path of >= 2 edges (A -> B -> C) among robots that are in no component of size >= 2 that batch;
             reported as the maximal such paths (sources to sinks of that acyclic part, robots ordered along the path, `head`
             = the last robot), tracked by robot set with the same start / end / length / min_s rule. A weaker class: a chain
             of waiting robots that ends at a robot with no out-edge. With the edge rules above the head is always a FAULTED
             robot: the middle robot B of A -> B -> C is STUCK, and if it had no faulted neighbour it would point back at the
-            stuck A (adjacency is symmetric) and A, B would be a deadlock; a traffic edge ends at a robot with no other
-            neighbour, which cannot be a middle robot. So knots are rare (a stuck line feeding a faulted robot).
-Per zone: deadlock_s_per_robot_hour = sum(length_s * robots) over kept deadlocks / (distinct robots * (last ts - first ts)
-/ 3600); top_cells = the 10 cells with the most deadlock seconds (each deadlock adds its length_s to each of its cells at
-its first batch), ranked by (-deadlock_s, cell). Output schema "fleet-deadlock/1".
-Decisions: one row per kept deadlock (kind "deadlock", subject = its sorted cells joined with ";", start_iso, decided_at =
+            stuck A (adjacency is symmetric) and A, B would be a cluster; a traffic edge ends at a robot with no other
+            neighbour, which cannot be a middle robot. So chains are rare (a stuck line feeding a faulted robot).
+Per zone: blocked_s_per_robot_hour = sum(length_s * robots) over kept clusters / (distinct robots * (last ts - first ts)
+/ 3600); top_cells = the 10 cells with the most blocked seconds (each cluster adds its length_s to each of its cells at
+its first batch), ranked by (-blocked_s, cell). Output schema "fleet-deadlock/2" (v1 had the keys deadlocks, knots,
+deadlock_s_per_robot_hour, top_cells[].deadlock_s and decision kind "deadlock"; same values).
+Decisions: one row per kept cluster (kind "blocking_cluster", subject = its sorted cells joined with ";", start_iso, decided_at =
 end, claim {robots, cells, length_s, resolution, min_s, zone}); they are always in the output JSON under "decisions" and,
 with --store, also written by decisions.record_decision. --store must be a jsonl: COPY (fastmap.check_copy, exit 2
 otherwise): an existing copy is appended to, a missing one is a copy of <glob dir>/store; the original store is never
@@ -67,13 +73,13 @@ from fleet_analyser import decisions, hotspot, store as store_mod  # noqa: E402
 from fleet_analyser.detector import DEFAULT_STUCK_AFTER, FAULTED, STUCK, Detector, _near  # noqa: E402
 from fleet_analyser.parse import iso  # noqa: E402
 
-SCHEMA_VERSION = "fleet-deadlock/1"
+SCHEMA_VERSION = "fleet-deadlock/2"
 DEFAULT_MIN_S = 30
 TOP_CELLS = 10
-DEFINITION = ("deadlock: strongly connected component (>= 2 robots) of the per-batch graph in which every STUCK robot has an "
-              "edge to all adjacent faulted robots, else to all adjacent stuck robots, else (exactly one neighbour) to it; "
-              "mutually blocked cluster that persists, not a proven circular wait. knot: maximal path of >= 2 edges among "
-              "robots in no such component. length_s = end - start, start = latest stopped-run start among the members.")
+DEFINITION = ("blocking cluster: mutually blocked robots (strongly connected component, >= 2) that persist >= min_s; every one "
+              "found so far resolves, so this is a congestion measure, not a circular wait. blocking chain: maximal path of "
+              ">= 2 edges among robots in no cluster. length_s = end - start, start = latest stopped-run start among the "
+              "members.")
 
 
 # ------------------------------------------------------------------------------------------------ the graph
@@ -142,7 +148,7 @@ def sccs(graph):
     return sorted(out)
 
 
-def deadlocks_of(graph):
+def clusters_of(graph):
     """The components of >= 2 robots, as frozensets."""
     return {frozenset(c) for c in sccs(graph) if len(c) >= 2}
 
@@ -243,7 +249,7 @@ def _row(item):
 
 
 def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
-    """{zone: dict(deadlocks, knots, robots, first_ts, last_ts)} with every deadlock / knot (kept or not) as rows."""
+    """{zone: dict(blocking_clusters, blocking_chains, n_robots, first_ts, last_ts)}: the clusters / chains kept by min_s, as rows."""
     trackers, spans = {}, {}
 
     def observe(zone, ts, batch, states, edges, events, since):
@@ -252,7 +258,7 @@ def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
         sp["last"] = ts
         sp["robots"].update(batch)
         graph = {s: list(t) for s, (_, t) in edges.items()}
-        cur = deadlocks_of(graph)
+        cur = clusters_of(graph)
         members = set().union(*cur) if cur else set()
         chains = chains_of(graph, members)
 
@@ -270,7 +276,8 @@ def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER):
         sp = spans[zone]
         dl = [_row(i) for i in trackers[zone][0].finish(sp["last"])]
         kn = [_row(i) for i in trackers[zone][1].finish(sp["last"])]
-        out[zone] = dict(deadlocks=[r for r in dl if r["length_s"] >= min_s], knots=[r for r in kn if r["length_s"] >= min_s],
+        out[zone] = dict(blocking_clusters=[r for r in dl if r["length_s"] >= min_s],
+                         blocking_chains=[r for r in kn if r["length_s"] >= min_s],
                          n_robots=len(sp["robots"]), first_ts=sp["first"], last_ts=sp["last"])
     return out
 
@@ -282,29 +289,29 @@ def build_document(messages, run, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK
     n_dl = n_kn = 0
     for zone, z in sorted(per.items(), key=lambda kv: str(kv[0])):
         rh = z["n_robots"] * (z["last_ts"] - z["first_ts"]) / 3600
-        zn = sum(d["length_s"] * len(d["robots"]) for d in z["deadlocks"])
+        zn = sum(d["length_s"] * len(d["robots"]) for d in z["blocking_clusters"])
         by_cell = {}
-        for d in z["deadlocks"]:
+        for d in z["blocking_clusters"]:
             for c in d["cells"]:
                 by_cell[c] = by_cell.get(c, 0) + d["length_s"]
         top = sorted(by_cell.items(), key=lambda kv: (-kv[1], kv[0]))[:TOP_CELLS]
-        zones[str(zone)] = dict(deadlocks=z["deadlocks"], knots=z["knots"], robot_hours=rh,
-                                deadlock_s_per_robot_hour=zn / rh if rh else 0.0,
-                                top_cells=[dict(cell=c, deadlock_s=s) for c, s in top])
+        zones[str(zone)] = dict(blocking_clusters=z["blocking_clusters"], blocking_chains=z["blocking_chains"],
+                                robot_hours=rh, blocked_s_per_robot_hour=zn / rh if rh else 0.0,
+                                top_cells=[dict(cell=c, blocked_s=s) for c, s in top])
         num, hours = num + zn, hours + rh
-        n_dl, n_kn = n_dl + len(z["deadlocks"]), n_kn + len(z["knots"])
-        for d in z["deadlocks"]:
+        n_dl, n_kn = n_dl + len(z["blocking_clusters"]), n_kn + len(z["blocking_chains"])
+        for d in z["blocking_clusters"]:
             subject = ";".join(d["cells"])
             claim = dict(robots=d["robots"], cells=d["cells"], length_s=d["length_s"], resolution=d["resolution"],
                          min_s=min_s, zone=str(zone))
-            key = decisions.dedup_key("deadlock", subject, d["start_iso"])
-            rows.append(dict(id=decisions.decision_id(key), run=run, kind="deadlock", subject=subject,
+            key = decisions.dedup_key("blocking_cluster", subject, d["start_iso"])
+            rows.append(dict(id=decisions.decision_id(key), run=run, kind="blocking_cluster", subject=subject,
                              start_iso=d["start_iso"], decided_at=d["end"], claim=claim,
-                             rationale=f"{len(d['robots'])} robots mutually blocked for {d['length_s']} s in zone {zone}",
+                             rationale=f"blocking cluster: {len(d['robots'])} robots mutually blocked for {d['length_s']} s in zone {zone}",
                              expected=float(d["length_s"]), grade_after=d["end"], dedup_key=key))
     return dict(schema_version=SCHEMA_VERSION, run=run, min_s=min_s, definition=DEFINITION, zones=zones,
-                total=dict(deadlocks=n_dl, knots=n_kn, robot_hours=hours,
-                           deadlock_s_per_robot_hour=num / hours if hours else 0.0),
+                total=dict(blocking_clusters=n_dl, blocking_chains=n_kn, robot_hours=hours,
+                           blocked_s_per_robot_hour=num / hours if hours else 0.0),
                 decisions=rows)
 
 
@@ -332,7 +339,7 @@ def build_parser():
     p.add_argument("--glob", required=True, help="zone<z>-<nnn>.jsonl.gz files of the run")
     p.add_argument("--run", required=True)
     p.add_argument("--out", required=True, metavar="PATH")
-    p.add_argument("--min-s", type=float, default=DEFAULT_MIN_S, help="keep deadlocks / knots with length_s >= this")
+    p.add_argument("--min-s", type=float, default=DEFAULT_MIN_S, help="keep blocking clusters / chains with length_s >= this")
     p.add_argument("--store", default=None, help="jsonl:<COPY of the run store>; never the original")
     return p
 
@@ -360,8 +367,8 @@ def main(argv=None):
         doc["store_duplicates"] = write_store(copy, a.glob, a.run, doc["decisions"])
     costmap.write_json(a.out, doc)
     t = doc["total"]
-    print(f"deadlock {a.run}: deadlocks {t['deadlocks']} knots {t['knots']} deadlock_s_per_robot_hour "
-          f"{t['deadlock_s_per_robot_hour']:.4f} ({time.monotonic() - t0:.1f} s) -> {a.out}")
+    print(f"blocking {a.run}: blocking_clusters {t['blocking_clusters']} blocking_chains {t['blocking_chains']} "
+          f"blocked_s_per_robot_hour {t['blocked_s_per_robot_hour']:.4f} ({time.monotonic() - t0:.1f} s) -> {a.out}")
     return 0
 
 

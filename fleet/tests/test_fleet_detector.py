@@ -2,6 +2,7 @@
 stuck_after threshold, the transition sequence, avoidable, precedence, and that the detector never touches `custom`.
 Each case names its red demonstration in an `# inject:` comment. One step = 5 s; stuck_after is 30 s."""
 import inspect
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -12,7 +13,7 @@ if str(ROOT / "fleet") not in sys.path:
 
 from fleet_analyser import detector as detector_mod  # noqa: E402
 from fleet_analyser.detector import Detector  # noqa: E402
-from fleet_analyser.parse import Message  # noqa: E402
+from fleet_analyser.parse import Message, iso, parse_line  # noqa: E402
 
 BASE = 1767225600  # 2026-01-01T00:00:00Z
 
@@ -247,6 +248,36 @@ class TestStatesAndAvoidable(unittest.TestCase):
         body = code.split('"""', 2)[2]  # drop the module docstring, which names the rule
         for word in ("custom", "stuck_count", "stuck_event", "clash_event", "recovery_action", "carrying"):
             self.assertNotIn(word, body)
+
+
+def raw_line(step, level=None, driving=True, order="o1"):
+    """One raw VDA-shaped line for robot Z0-01, parsed by parse_line (not a hand-built Message)."""
+    errors = [] if level is None else [{"errorType": "X", "errorLevel": level}]
+    return (json.dumps({"headerId": step, "timestamp": iso(BASE + 5 * step), "serialNumber": "Z0-01", "orderId": order,
+                        "agvPosition": {"x": 0, "y": 0}, "driving": driving, "errors": errors, "loads": []})
+            + "\n").encode()
+
+
+class TestFaultedLevelThroughParse(unittest.TestCase):
+    """Raw JSON through parse_line into the Detector: the errorLevel rule is the parse seam, not a hand-built flag."""
+
+    def to_states(self, level):
+        d = Detector(30)
+        ev = []
+        for step in range(2):
+            msg, reason = parse_line(raw_line(step, level))
+            self.assertIsNone(reason)
+            ev.extend(d.feed(msg))
+        ev.extend(d.end_all())
+        return [e["to_state"] for e in ev if e["kind"] == "transition"]
+
+    def test_warning_with_driving_and_order_is_moving(self):
+        # inject: parse faulted = bool(errors)
+        self.assertEqual(self.to_states("WARNING"), [detector_mod.MOVING])
+
+    def test_fatal_is_faulted(self):
+        # inject: ignore errorLevel FATAL
+        self.assertEqual(self.to_states("FATAL"), [detector_mod.FAULTED])
 
 
 if __name__ == "__main__":
