@@ -570,5 +570,57 @@ class TestT13(unittest.TestCase):
         chk.assert_called_once_with("R", zero(idle=5), 5)
 
 
+class TestT14(unittest.TestCase):
+    """Worker count follows the repo rule: --workers, else SCHED_WORKERS, else os.cpu_count() - 2, capped at the layouts."""
+
+    def test_t14_resolve_workers_rule(self):
+        # inject: hard-code the layout thread count (the pass-2 LAYOUT_THREADS = 4) or ignore SCHED_WORKERS
+        self.assertEqual(tb.resolve_workers(3, environ={"SCHED_WORKERS": "7"}), 3)
+        self.assertEqual(tb.resolve_workers(None, environ={"SCHED_WORKERS": "7"}), 7)
+        with mock.patch("os.cpu_count", return_value=10):
+            self.assertEqual(tb.resolve_workers(None, environ={}), 8)
+        self.assertEqual(tb.resolve_workers(None, environ={"SCHED_WORKERS": "7"}, n_tasks=2), 2)
+        with self.assertRaises(ValueError):
+            tb.resolve_workers(0, environ={})
+
+    def test_t14_cli_workers_reaches_the_layout_pool(self):
+        # inject: drop args.workers from the auto_layouts call in main, or size the pool with a constant
+        lay = dict(goals=[[0, 0]], shelves=[[5, 5]], agent_ids=[1, 2], num_agvs=1)
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            ledger = dict(config=dict(env_id="E", steps=10), zones=[dict(zone=z, seed=z) for z in range(3)])
+            (d / "emit_ledger.json").write_text(json.dumps(ledger))
+            seen = []
+            real = tb.cf.ThreadPoolExecutor
+
+            def spy(max_workers=None, **kw):
+                seen.append(max_workers)
+                return real(max_workers=max_workers, **kw)
+
+            with mock.patch.object(tb, "run_layout_worker", return_value=lay), \
+                    mock.patch.object(tb.cf, "ThreadPoolExecutor", side_effect=spy):
+                tb.auto_layouts(str(d), ["0", "1", "2"], 2)
+                with mock.patch.dict(os.environ, {"SCHED_WORKERS": "1"}):
+                    tb.auto_layouts(str(d), ["0", "1", "2"], None)
+            self.assertEqual(seen, [2, 1])  # 3 layouts: --workers 2 -> 2; SCHED_WORKERS 1 -> 1
+            write_gz(d / "zone0-000.jsonl.gz", [])
+            got = []
+            real_auto = tb.auto_layouts
+
+            def auto_spy(glob_dir, zones, workers=None):
+                got.append(workers)
+                return real_auto(glob_dir, zones, workers)
+
+            with mock.patch.object(tb, "run_layout_worker", return_value=lay), \
+                    mock.patch.object(tb, "auto_layouts", side_effect=auto_spy), \
+                    mock.patch.object(tb, "read_messages", return_value=[msg("Z0-01", 0), msg("Z0-01", 5)]), \
+                    redirect_stdout(StringIO()):
+                rc = tb.main(["--glob", str(d / "*.jsonl.gz"), "--run", "r", "--stations", "auto",
+                              "--out", str(d / "o.json"), "--store", f"jsonl:{d / 'nostore'}", "--workers", "3"])
+            self.assertIn(rc, (None, 0))
+            self.assertEqual(got, [3])
+            self.assertFalse((d / "nostore").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,9 @@
 """S12A per-robot time budget: where does each AGV's shift go, with waiting split from stuck.
 
 Usage: python fleet/timebudget.py --glob 'DIR/*.jsonl.gz' --run RUN --stations PATH|auto --out PATH
-       [--shift-s 3600] [--store jsonl:DIR]
+       [--shift-s 3600] [--store jsonl:DIR] [--workers N]
+Workers (layout processes in flight for --stations auto): --workers, else SCHED_WORKERS, else os.cpu_count() - 2,
+capped at the number of layouts (scripts/evaluate.resolve_workers).
 
 An accounting on top of the existing message stream. It does not change what a stall is: the detector
 (fleet_analyser.detector.Detector, DEFAULT_STUCK_AFTER) is imported unchanged, nothing under fleet_analyser/ is edited,
@@ -63,10 +65,21 @@ from fleet_analyser.store import JsonlStore  # noqa: E402
 BUCKETS = ("faulted", "moving", "waiting_station", "waiting_shelf", "stuck", "stopped_short", "idle")
 SHELF_ADJACENT_MANHATTAN = 1
 SAME_MINUTE_SHARE = 0.8
-LAYOUT_THREADS = 4
 
 
 # ------------------------------------------------------------------------------------------------ layouts
+def resolve_workers(cli_value, environ=None, n_tasks=None):
+    """--workers, else SCHED_WORKERS, else os.cpu_count() - 2 (the repo's rule, scripts/evaluate.resolve_workers)."""
+    import os
+
+    scripts = str(REPO / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import evaluate as ev
+
+    return ev.resolve_workers(cli_value, os.environ if environ is None else environ, n_tasks=n_tasks)
+
+
 def _layout_worker(job):
     """Runs in a fresh spawned process: exactly one env is built here."""
     from warehouse_rl.env import WarehouseEnv
@@ -94,7 +107,7 @@ def kinds_of(layout, zone):
             for k, i in enumerate(layout["agent_ids"])}
 
 
-def auto_layouts(glob_dir, zones):
+def auto_layouts(glob_dir, zones, workers=None):
     """{zone: dict(goals, shelves, pickers (set of serials), layout (description))} for the zones present."""
     ledger_path = Path(glob_dir) / "emit_ledger.json"
     if not ledger_path.is_file():
@@ -109,7 +122,7 @@ def auto_layouts(glob_dir, zones):
     for z in zones:
         jobs[(cfg["env_id"], seeds[z])] = dict(env_id=cfg["env_id"], steps=cfg["steps"], seed=seeds[z])
     results = {}
-    with cf.ThreadPoolExecutor(max_workers=LAYOUT_THREADS) as pool:
+    with cf.ThreadPoolExecutor(max_workers=resolve_workers(workers, n_tasks=len(jobs))) as pool:
         futs = {k: pool.submit(run_layout_worker, j) for k, j in sorted(jobs.items())}
         for k, f in futs.items():
             results[k] = f.result()
@@ -367,6 +380,7 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--shift-s", type=float, default=3600)
     ap.add_argument("--store", default=None, help="jsonl:DIR (default: DIR/store, DIR = the glob's directory)")
+    ap.add_argument("--workers", type=int, default=None, help="default: SCHED_WORKERS, else os.cpu_count() - 2")
     args = ap.parse_args(argv)
     t_start = time.time()
     out_path = Path(args.out)
@@ -383,7 +397,7 @@ def main(argv=None):
     messages = read_messages(args.glob)
     zones_present = sorted({m.zone for m in messages}, key=lambda s: (len(s), s))
     if args.stations == "auto":
-        layouts, ledger_path = auto_layouts(glob_dir, zones_present)
+        layouts, ledger_path = auto_layouts(glob_dir, zones_present, args.workers)
         stations_sha = None
     else:
         layouts, ledger_path = path_layouts(args.stations, zones_present), None
