@@ -463,3 +463,124 @@ Not verified and kept out of the text: Holt's own knot wording; the current SEMI
 and AWS RoboRunner behaviour on lost connection; MoRoOp's "stuck reason" field (summarised fetch only). The S row
 (Fink & Kumar) backs only "RSSI mapping exists". Rerun the absence claims on Semantic Scholar before any of them
 fronts a pitch.
+
+## Part 2b: MoRoOp and single-robot operation logs (2026-10-21)
+
+Scope: the check before S13A (laptop-scheduler `jobs/wr-lane-s13a-moroop-budget.md`). WebFetch, WebSearch, curl and the
+GitHub API, no parquet downloaded; all fetches ran 2026-10-20 (the brief expected the 21st), hence `verified@2026-10-20`;
+query log `laptop-scheduler/reports/wr-dev-lit-moroop.md`. Ranks: **A** = paper full text or card; **A-** = counts the
+Hugging Face viewer computed from the released files (`/info`, `/statistics`, `/first-rows`: beyond "card and file
+listing", no parquet); **B** = authors' toolkit code or inferred from A; **F** = guess, do not use. **Overrides the Part 2
+§5 MoRoOp row** (summarising fetch): "delays" and "failed navigation" are retained phenomena, not tables or columns, and
+140,386 is the *raw* state-row total.
+
+### 1. The dataset
+
+Klein & Jeong, "Autonomous mobile robot operations in production logistics: a dataset of jobs, dispatch events and
+robot states", arXiv 2610.02428v1, submitted to Scientific Data (https://arxiv.org/html/2610.02428v1, A,
+verified@2026-10-20). One wheel.me AMR, KTH IPU lab, four stations, nine 8 h shifts on 27-31 Jul 2026 (30 Jul evening
+excluded for a job-generator bug). Rule-based dispatch of stochastic jobs: kit supply (operations warehouse, kitting,
+assembly, warehouse; inter-arrival Tri(225,250,275) s, due offset Tri(275,285,295) s), empty-box refill (assembly,
+kitting), charging. Station times are triangular 5-25 s and "represent waiting periods of the AMR rather than
+measurements of physical human work"; personnel "could cross or temporarily obstruct the planned trajectory";
+multi-vehicle effects "are consequently not represented" (A). **Licence:** card `license: cc-by-4.0`, arXiv "License: CC
+BY 4.0" (https://huggingface.co/datasets/Self-Organizing-Production-Logistics/MoRoOp, A, verified@2026-10-20). **Version:**
+card "current release (1.0.0)", paper and toolkit 1.0.1 (pin HF revision `1.0.1`); version of record KTH
+https://doi.org/10.71775/kth.vx0cq-w7h93; HF main sha `880a249d...`; 26.8 MB.
+
+| table (per shift) | columns (paper Tables 3-6, A; dtypes from HF `/info`, A-) | meaning that matters here |
+|---|---|---|
+| `jobs` | id, created_at, payload (JSON job_type, kit_id), operations (JSON id list), state, outcome, termination_reason, release_date, start_time, due_date, finish_time | one row per job, final state; release/due are null on 39 of 154 jobs in 27 Jul morning (inferred: the non-kit-supply jobs, B) |
+| `operations` | id, created_at, payload (JSON goal: warehouse / kitting / assembly / charging, opt. goal_soc), priority, job_id, dependencies, state, outcome, termination_reason, retry_count, start_time, finish_time | one row per operation; FAILURE rows carry termination_reason TIMEOUT |
+| `dispatch_events` | id, created_at, event_type, operation_id, changes (JSON), meta_data (JSON) | operation_added / start_requested / started / completed / failed / start_denied, dispatcher paused / resumed / started / stopped; a failure's meta_data holds `elapsed_time`, `timeout_seconds: 300` |
+| `robot_state_raw`, `robot_state_cleaned` | id, created_at, operating_mode, state, stuck_reason, pos_x, pos_y, pos_theta, velocity_x, velocity_y, velocity_omega, current_position_id, navigating_to_position_id, last_navigated_position_id, next_goal_timestamp, {tl,tr,bl,br}_charge_state, is_robot_charging, {tl,tr,bl,br}_charging, robot_uptime, diagnostics (JSON statuses with name / level / message) | cleaned = raw minus "invalid localization states or physically implausible values"; ids are kept, so a gap in `id` marks a removed row |
+
+**Cadence:** "queried at a frequency of 1 Hz", a row stored "only when at least one reported value differed" (A), so
+irregular: median 0.91 s, max 9.07 s in the first 81 rows; shift mean 1.85-1.99 s (A-); UTC, sub-second. **Poses:** "map
+reference frame" (A), metres (B: toolkit label "Position x-coordinate (m)"), x 0.38-8.24, y -1.84-0.43 (A-): an 8 x 2.3 m
+lab. `pos_theta` in ±π (radians, B); velocity m/s (B: toolkit label); `velocity_y` up to 0.20, so holonomic (B). **Named
+positions:** "135, 136, 137, and 138 correspond to the charging station, warehouse, kitting station, and assembly station"
+(A); no table carries station coordinates. **`stuck_reason` confirmed:** "Reported reason the robot was stuck, if any"
+(A); values `None`, `ObstacleInTheWay`, `GoalObstructed` (A-), wheel.me enum names with no documentation found (one
+search). `state`: Navigating, Idle, rarely Waiting / Paused / Nonautonomous / Initializing; `operating_mode`: Autonomous,
+rarely Joystick / Reconnecting / Initializing / PoweredOff (A-).
+
+**Authors' statistics:** Table 7 counts only; **no delay shares, stuck, failure or time-in-state figures** in the full text.
+Per shift in order 27m 27e 28m 28e 29m 29e 30m 31m 31e:
+
+| quantity | per shift | total | rank |
+|---|---|---|---|
+| jobs | 154 154 156 155 155 155 148 152 153 | 1,382 | A (Table 7) |
+| operations | 536 535 540 538 541 539 520 533 533 | 4,815 | A |
+| dispatch events | 2149 2145 2173 2159 2170 2167 2103 2149 2137 | 19,352 | A |
+| state rows raw / cleaned | 15549/15194 15389/15038 15912/15553 15566/15252 15546/15182 15491/15168 15053/14711 15949/15635 15931/15694 | 140,386 / 137,427 | A |
+| cleaned rows with stuck_reason ≠ None | 37 3 52 20 3 17 48 17 10 | 207 (raw: same) | A- |
+| failed operations (TIMEOUT, ~300 s) = failed jobs | 0 1 0 0 0 1 2 3 1 | 8 | A- |
+| operation_start_denied events | 2 2 6 3 3 5 9 7 2 | 39 | A- |
+| state-row span (h) | 8.12 8.04 8.26 8.10 8.03 8.10 8.15 8.03 8.16 | 72.99 | A- |
+
+### 2. Prior use
+
+No time budget or stuck analysis found. Semantic Scholar record `citationCount` 0 (search 429 three times, a gap);
+Google Scholar "MoRoOp": the paper, no "Cited by"; OpenAlex: 0 citations; HF: no models or spaces (485 downloads).
+GitHub code search: the authors' toolkit (`JaFeKl/moroop-dataset-toolkit`, MIT, loaders + paper figures) and one third
+party, `CrazyEther/robotization-agent-lab` `research/calibration/derive_moroop_transitions.py`, which only extracts
+(state, is_robot_charging) transitions from one shift. The toolkit's `figures.py` `_segments` splits an operation into "navigating" (state Navigating), "station_process"
+(non-Navigating after driving) and "latency" (before it): the authors' only time split, never published as numbers (B).
+All verified@2026-10-20.
+
+### 3. Single-robot log analyses elsewhere
+
+| source (rank) | robot, setting | log size | states / measures | stuck definition | stuck / failure share |
+|---|---|---|---|---|---|
+| Lee et al. 2026, Digital Health, doi 10.1177/20552076261437181 (A, Europe PMC full text) | DOGU medication robot, Korea Univ. Guro hospital | 122 missions, 18-29 Jun 2025, logs at 1 Hz | elevator waiting time, elevator travel time, corridor navigation time per mission | "delivery failure was defined as the robot remaining stationary for > 1 min at any point or requiring manual assistance" | 87.03 % success; 14 failures (8 elevator blockage, 4 corridor self-drive, 2 call communication) |
+| Hawes et al., STRANDS, IEEE RAM, doi 10.1109/MRA.2016.2636359 (arXiv 1604.04384, A, PDF) | SCITOS G5, care and security sites | 104 d 7 h cumulative, 8,444 tasks | total system lifetime; autonomy % = time "actively performing tasks" / time allowed | reset on "unrecoverable failure" or "unrequested expert intervention" | A% 38.80 / 18.27 / 53.51 / 51.10 % per deployment |
+| Gerling et al. 2016, Z. Gerontol. Geriatr., doi 10.1007/s00391-016-1065-6 (A, Europe PMC) | SCITOS G5, Vienna care hospital | 30 days | qualitative issue categories from system logs | "stopped moving and ... after a significant waiting time (in the order of minutes) could not continue" vs "appeared to be stuck but continued" | "rare"; no share |
+| Sharma 2026, Zenodo 10.5281/zenodo.23393677 (A-, record) | 1 real AGV + simulated traffic, OPC UA | 13 sessions, 25,976 1-s records, 342 dispatches | plan vs execution, per-second classification | not stated in record | not stated |
+
+Not found: a published time-in-state share (moving / waiting / blocked / idle) of one real AMR or AGV from its logs
+(queries on TUG / Aethon: press only; MiR case studies: throughput and distance, no utilisation; verified@2026-10-20). The
+written rules are "stationary for > 1 min" (Lee 2026) and "minutes" (Gerling 2016); the S12A 30 s is tighter than both.
+
+### 4. Column mapping verdict (for S13A task 2)
+
+Rows: `robot_state_cleaned`, one `zone<k>-000.jsonl.gz` per shift. Whole-second UTC only (`fleet/fleet_analyser/parse.py:15`).
+
+| our field | MoRoOp source and rule | conf. |
+|---|---|---|
+| `timestamp` | `created_at` floored to the second; keep the **last** row of each second (the state at the end of that second). Report rows collapsed, and how many collapsed rows had stuck_reason ≠ None | A (column) / rule ours |
+| `headerId` | contiguous 1..n over the emitted messages, **not** `id` (gaps in `id` are screening removals, not lost messages); report removed-row count = max id − rows | B |
+| `serialNumber`, `manufacturer` | constant `moroop-amr-1`, `wheel.me` | A (paper names the robot) |
+| `orderId` | `jobs.id` of the job with `start_time <= t < finish_time` (jobs do not overlap for one robot; assert it). Tabulate the `job_type` values first. Charging jobs → `""`, with their seconds reported apart from `is_robot_charging` | A (columns) / B (charging choice) |
+| `agvPosition{x,y,theta}` | `pos_x`, `pos_y` quantised to `--cell-m` (default 0.5 at this map size; report the four station cells and assert they are distinct), `pos_theta` | A frame, B units |
+| `driving` | `hypot(velocity_x, velocity_y) > 0.05` m/s **or** `abs(velocity_omega) > 0.05` rad/s. VDA 5050 3.0 §3.3 has driving = "non zero translational and/or rotational velocity". Never `state == "Navigating"`, which stays on while the robot is blocked; report seconds where only omega counts | B |
+| `paused` | `state == "Paused"` or `operating_mode != "Autonomous"` (Joystick, Reconnecting, Initializing, PoweredOff: 17 cleaned rows, 27 Jul evening and 30 Jul morning); report per value | A values / B meaning |
+| `errors` | diagnostics statuses with `level != "Ok"`: tabulate the observed levels first. Only "Ok" appears in the first 81 rows, and the level vocabulary is undocumented. If a level reads as error, map it to `errorLevel` FATAL only when the robot did not move for the rest of that operation, else WARNING. Do **not** turn `stuck_reason`, operation TIMEOUTs or start_denied into errors | F until tabulated |
+| `loads` | `[]`: no payload column in robot state (inferring it from operation goals would be a guess) | A (absence) |
+| stations file | station cell = quantised median pose of rows with `state == "Idle"` and `current_position_id` = 135..138, named by the paper's mapping; `shelves: []`. `--stations auto` builds TA-RWARE layouts and **must not** be used | A ids / B poses |
+
+**Buckets.** From state rows: moving, idle, paused. State rows + jobs (orderId): waiting_station, stuck, stopped_short.
+faulted: only after the diagnostics tabulation. no_data: report the interval p50 / p99 / max, the largest gap inside any
+stopped run, and the seconds S12C's 60 s rule would move. waiting_shelf (waiting for picker): **cannot be computed**, no
+shelves or picker; report n/a, not 0. Job counts, failures, lateness (`finish_time − due_date`, kit supply only) and
+dispatcher pauses need the **event tables**.
+
+### 5. What this means for S13A
+
+**Credible on one robot:** a per-shift time budget (moving / waiting_station / stuck / stopped_short / idle / paused, plus
+charging seconds) and jobs per robot-hour: the pipeline runs on a real, irregularly sampled log. **Must not be claimed:**
+anything multi-robot (deadlock, blocking chain, congestion, hotspot map, message-loss cells); the waiting_station share as
+a finding (the generator sets it, "waiting periods ... rather than measurements"; check it against Table 1 only); "real
+warehouse" (an 8 x 2.3 m lab moving toy bricks).
+
+**Detection comparison (the robot's own label supports it).** Label episode = maximal run of consecutive native rows with
+`stuck_reason ≠ "None"`, owning [first row ts, ts of the next `None` row). (a) Label seconds per our bucket (stuck,
+stopped_short, waiting_station, moving, idle); `GoalObstructed` near a station may land in waiting_station. (b) A label
+episode is **detected** if one of our stuck runs overlaps [label start, label end + 30 s]; split episodes at 30 s, since
+shorter ones cannot reach `DEFAULT_STUCK_AFTER` = 30 (`fleet/fleet_analyser/detector.py:22`) and are not detector misses.
+(c) Our stuck runs with no label episode within ±30 s are false alarms; say for each whether it overlaps a TIMEOUT
+operation, a paused row or a station cell. The 8 TIMEOUT operations are a second, long-event label (B: the paper never
+ties timeouts to obstruction): detected if a stuck run overlaps the operation's [start_time, finish_time].
+
+**Sanity checks.** Exact: Table 7 rows per shift, the 207 label rows, the 8 failed operations. Within 5 %: non-charging
+jobs from orderId changes vs `jobs`; span per shift (8.03-8.26 h); jobs per robot-hour vs 1,382 / 72.99 h = 18.9.
