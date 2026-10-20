@@ -38,6 +38,14 @@ verdict (a count of forecasts: a cell flagged at two publishes and hit twice is 
 (null at 0), hit_cells = distinct (zone, cell) with a truth hit, positive_cells = truth_kinds["any"].positives, recall =
 hit_cells / positive_cells (null at 0), flags_per_zone_publish = dict(max, mean) of the forecasts per (zone, decided_at)
 pair holding at least one forecast of that gate (publishes with no flag are not pairs). Absent for ungated runs.
+S12B: truth_kinds gains a `deadzone` entry {positives, k} ONLY when at least one zone of the truth has a non-empty `deadzones`
+(emit.py --deadzone; positives = the dead cells summed over zones, k scored like floor). 'deadzone' does NOT join "any": any
+feeds gate_grading's positives and a dead zone is not a stall. gap_grading (S12B, present only when the store holds
+gap_cell decisions of the run, i.e. fleet/gapmap.py --store was used; after gate_grading): {decisions, hits (decisions whose
+cell is a dead cell of its zone, by truth.truth_positive), precision = hits / decisions, deadzone_cells, recall = distinct hit
+(zone, cell) / deadzone_cells (null at 0), per_zone {zone: {hits, decisions}}, precision_at_10 {per_zone {zone: hits among the
+decisions with claim rank <= 10 / 10}, pooled: those hits / (10 * zones with decisions)}}. A run without deadzones and
+without gap_cell decisions produces the same output as before. time_to_detect's TRUTH_KINDS is unchanged.
 --baselines (S10D) adds ONE top-level key `baselines` after every other key (persistence baseline, chance lines, paired
 CI; see fleet/baselines.py); without it the output is unchanged. --window-h never reaches it: the baselines use the
 costmap's own window. Candidate cells = the env's highway non-goal cells (DisturbedWarehouse._blockable_cells).
@@ -154,7 +162,49 @@ def truth_kinds(truth, costmap, ks=KS):
         out[kind] = dict(positives=pos, k=k_out)
     out["frozen"] = dict(positives=sum(len(f) for _, _, f in per_zone), cells=out["frozen"]["positives"],
                          k=out["frozen"]["k"])
+    dead = [(ranked_cells(costmap["zones"].get(z, {})), _deadzone_cells(truth["zones"][z])) for z in zones]
+    if any(cells for _, cells in dead):
+        pos = sum(len(cells) for _, cells in dead)
+        k_out = {}
+        for k in ks:
+            hits = sum(1 for order, cells in dead for c in order[:k] if c in cells)
+            k_out[str(k)] = dict(precision=hits / (k * len(dead)), recall=hits / pos, hits=hits)
+        out["deadzone"] = dict(positives=pos, k=k_out)  # S12B: never part of "any" (a dead zone is not a stall)
     return out
+
+
+def _deadzone_cells(zone_truth):
+    return {f"{x},{y}" for x, y in zone_truth.get("deadzones", ())}
+
+
+def gap_grading(truth, gap_decisions):
+    """The gap_grading block (module docstring), or None when the run has no gap_cell decision."""
+    from truth import truth_positive
+
+    if not gap_decisions:
+        return None
+    v2 = "t0" in truth
+    s0, s1 = (0, truth["steps"]) if v2 else (None, None)
+    per_zone, hit_cells, at10 = {}, set(), {}
+    hits = 0
+    for d in gap_decisions:
+        claim = lessons.claim_of(d)
+        zone, cell = str(claim.get("zone")), d["subject"]
+        hit = zone in truth["zones"] and "deadzone" in truth_positive(truth, zone, cell, s0, s1)
+        row = per_zone.setdefault(zone, dict(hits=0, decisions=0))
+        row["decisions"] += 1
+        if hit:
+            hits += 1
+            row["hits"] += 1
+            hit_cells.add((zone, cell))
+            if claim.get("rank", 10 ** 9) <= 10:
+                at10[zone] = at10.get(zone, 0) + 1
+    n_cells = sum(len(_deadzone_cells(zt)) for zt in truth["zones"].values())
+    return dict(decisions=len(gap_decisions), hits=hits, precision=hits / len(gap_decisions), deadzone_cells=n_cells,
+                recall=len(hit_cells) / n_cells if n_cells else None,
+                per_zone={z: per_zone[z] for z in sorted(per_zone)},
+                precision_at_10=dict(per_zone={z: at10.get(z, 0) / 10 for z in sorted(per_zone)},
+                                     pooled=sum(at10.values()) / (10 * len(per_zone))))
 
 
 def gate_grading(decisions, grades, positive_cells):
@@ -397,6 +447,7 @@ def main(argv=None):
     grades = st.select("forecast_grades", {"run": run})
     lesson_decisions = st.select("decisions", {"run": run, "kind": "lesson"})
     forecast_decisions = st.select("decisions", {"run": run, "kind": "hotspot_forecast"})
+    gap_decisions = st.select("decisions", {"run": run, "kind": "gap_cell"})
     try:
         chance = persist_chance(st, run, a.window_h)
     except WindowMismatch as e:
@@ -417,6 +468,9 @@ def main(argv=None):
     gated = gate_grading(forecast_decisions, grades, res["truth_kinds"]["any"]["positives"])
     if gated is not None:
         res["gate_grading"] = gated
+    gaps = gap_grading(truth, gap_decisions)
+    if gaps is not None:
+        res["gap_grading"] = gaps
     if base is not None:
         res["baselines"] = base
     out = Path(a.out) if a.out else REPO / "results" / "fleet" / f"hotspot_{a.tag}.json"

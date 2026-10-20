@@ -43,5 +43,12 @@
       "seed": 1,
       "provenance": "searched whole TestStream class in Docker linux/arm64 seeds 0-15; passing seeds [1,2,4,7,8,9,13,14,15]"
     }
+  },
+  "fleet_deadzone_g2": {
+    "darwin-arm64": {
+      "content_sha256": "80b99383e1a7b50f648a4eb27ec929b86bd8e2fc32ac1cd5585036059164b6cc",
+      "truth_sha256": "9a45b8520c33d0c13df4693ccbbd0b11d41f78d683ce4a4fcf463cf90c8fc552",
+      "provenance": "measured 2026-10-20 on master (706bab9) BEFORE the --deadzone emitter change: emit.py --zones 1 --steps 150 --env tarware-small-4agvs-2pickers-globalobs-v1 --seed-base 3 --speed 0 --workers 1; sha256 of the decompressed zone0-000.jsonl.gz and of truth.json; no linux value yet, the test skips there"
+    }
   }
 }

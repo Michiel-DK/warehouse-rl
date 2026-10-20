@@ -1170,7 +1170,7 @@ class TestAnalystIsolation(unittest.TestCase):
         # inject: mention truth.json / floor_cells in costmap.py, hotspot.py or any new analyst module
         names = {p.name for p in self.analyst_files()}
         self.assertTrue({"hotspot.py", "parse.py", "costmap.py", "ingest.py", "ledger.py", "detector.py",
-                         "forecast_grade.py", "grade.py", "fastmap.py"} <= names)
+                         "forecast_grade.py", "grade.py", "fastmap.py", "deadlock.py", "gapmap.py"} <= names)
         self.assertTrue({"emitter.py", "emit_ledger.py", "sinks.py", "hotspot_score.py", "time_to_detect.py",
                           "fastmap_smoke.py"}.isdisjoint(names))
         hits = []
