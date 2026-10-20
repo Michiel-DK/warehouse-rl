@@ -50,6 +50,17 @@ one per message) and max(1, round(0.01 * messages)) duplicates, at positions dra
 run exercises every kind. The ledger's `messages` and `expected_messages` stay the count of REAL messages (robots * steps);
 extra lines count in `bytes_uncompressed` (the robots "sent" them) but not in `messages`. Per-file `files[].messages` come
 from the sink and DO include the extra lines. A cfg with demo_noise and no demo_mode raises ValueError.
+Dead zones (S12B, `cfg["deadzones"]`, emit.py --deadzone "x1,y1;x2,y2"; default absent): a WiFi dead-zone simulation that is
+a pure write filter. While a robot's emitted position (the message's agvPosition x, y at that step) is in a dead-zone cell
+its message is built-over but NOT written to the sink, and the robot's headerId still advances, so the ingester sees a
+sequence gap when the robot reappears. The env, the policy and the disturbance draws are untouched, so the same seed gives
+the same trajectory with and without the filter (the written lines are the unfiltered lines minus the dropped ones). Per
+zone truth.json then gains `deadzones` (sorted [x, y] lists) and `dropped_messages` (int); the ledger's `messages` and
+`expected_messages` stay the REAL messages generated (robots * steps): dropped messages count in `messages` (the snapshot adds
+them back) but not in `files[].messages`, which comes from the sink. A robot that ends the stream inside a dead zone
+produces no gap (nothing follows the missing ids), so the ingester cannot see those. Demo noise extras of a dropped message
+are not written either. A cfg without `deadzones` adds no key to truth.json, the ledger or the config and writes the same
+bytes as before. A cell outside the map raises ValueError before the first step.
 """
 import datetime as _dt
 import json
@@ -228,6 +239,44 @@ def build_message(zone, agent, env_id, header_id, timestamp, order_id, driving, 
 
 def encode(msg):
     return (json.dumps(msg, separators=(",", ":"), sort_keys=False, allow_nan=False) + "\n").encode()
+
+
+# ------------------------------------------------------------------------------------------------ dead zones
+def parse_deadzones(spec):
+    """'x1,y1;x2,y2' -> sorted list of distinct (x, y) tuples (x = column). ValueError on any malformed or negative cell
+    or an empty spec; the map-bounds check is check_deadzones."""
+    if not isinstance(spec, str) or not spec.strip():
+        raise ValueError("--deadzone must be like '3,4;5,6' (x,y cells separated by ';')")
+    cells = set()
+    for part in spec.split(";"):
+        m = re.fullmatch(r"\s*(\d+)\s*,\s*(\d+)\s*", part)
+        if not m:
+            raise ValueError(f"--deadzone cell {part!r} must look like 'x,y' with non-negative integers")
+        cells.add((int(m.group(1)), int(m.group(2))))
+    return sorted(cells)
+
+
+def check_deadzones(cells, grid_size):
+    """ValueError for a cell outside the map; grid_size = (rows, cols), a cell is (x = column, y = row)."""
+    rows, cols = grid_size
+    for x, y in cells:
+        if not (0 <= x < cols and 0 <= y < rows):
+            raise ValueError(f"dead-zone cell {x},{y} is outside the {cols}x{rows} map")
+
+
+def grid_size_of(env_id):
+    """(rows, cols) of an env id, read off a throw-away env (call it in a process that has no live env)."""
+    import gymnasium as gym
+    import tarware  # noqa: F401  (registers the env ids)
+    from warehouse_rl.disturb import DisturbedWarehouse
+
+    kw = dict(gym.spec(env_id).kwargs)
+    kw["max_steps"] = 1
+    env = DisturbedWarehouse(disturb={}, **kw)
+    try:
+        return tuple(env.grid_size)
+    finally:
+        env.close()
 
 
 # ------------------------------------------------------------------------------------------------ demo noise
@@ -523,12 +572,16 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             state["injections"] = 0  # reaches the ledger through the snapshot, live
 
         noise = None  # set after reset; the snapshot reads it live
+        deadzones = None  # set of (x, y) cells whose messages are not written (S12B); None = feature off
+        dropped = 0
 
         def snapshot():
             snap = dict(sink.stats(), **robots, **state)
             if noise is not None:  # extra lines are bytes the robots sent, not messages
                 snap["messages"] -= noise.extra_lines
                 snap["injected_noise"] = noise.counts()
+            if deadzones is not None:  # dropped messages were generated: the ledger counts REAL messages
+                snap["messages"] += dropped
             return snap
 
         obs, info = env.reset(seed=seed)
@@ -543,6 +596,10 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
             report(snapshot())
         if cfg.get("demo_noise"):
             noise = DemoNoise(seed, n, steps)
+        if cfg.get("deadzones"):
+            cells = [tuple(c) for c in cfg["deadzones"]]
+            check_deadzones(cells, hook.grid_size)
+            deadzones = set(cells)
         orders = OrderTracker(zone, n)
         headers = [0] * n
         prev_pos = [(a.x, a.y) for a in agents]
@@ -576,6 +633,11 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
                 order = orders.update(i, agent.id, agent.busy, agent.target)
                 if noise is not None:
                     headers[i] += noise.header_bump(step, i)
+                if deadzones is not None and (int(agent.x), int(agent.y)) in deadzones:
+                    dropped += 1  # not written; the id is consumed, so the reader sees a gap on reappearance
+                    headers[i] += 1
+                    prev_pos[i] = pos
+                    continue
                 msg = build_message(zone, agent, env_id, headers[i], ts, order, pos != prev_pos[i], bool(frozen[i]),
                                     hook.stuck_counters[i].count, recorded.get(agent.id, ()))
                 line = encode(msg)
@@ -609,6 +671,8 @@ def run_zone(cfg, sink, report=None, on_step=None, on_ready=None, clock=time.mon
     if demo:
         result.update(injections=control.injections, malformed_commands=control.malformed,
                       unapplied_commands=control.unapplied)
+    if deadzones is not None:
+        result.update(deadzones=[list(c) for c in sorted(deadzones)], dropped_messages=dropped)
     if cmap is not None:
         result.update(map_refreshes=cmap.refreshes, map_unparsed=cmap.unparsed)
     return result
@@ -637,7 +701,8 @@ def write_truth(path, run, results):
                step_seconds=STEP_SECONDS,
                zones={str(z): dict(seed=r["seed"], floor_cells=r["floor_cells"], floor_skips=r["floor_skips"],
                                    floor_skips_total=sum(r["floor_skips"]),
-                                   **{k: r[k] for k in WINDOW_KEYS}, **{k: r[k] for k in demo_keys})
+                                   **{k: r[k] for k in WINDOW_KEYS}, **{k: r[k] for k in demo_keys},
+                                   **{k: r[k] for k in ("deadzones", "dropped_messages") if k in r})
                       for z, r in sorted(results.items())})
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

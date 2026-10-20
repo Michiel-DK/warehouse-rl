@@ -11,6 +11,8 @@ Demo (NOT a measurement; roadblocks appended while it runs; --demo and --control
   echo '{"t": null, "floor": {"5,3": 0.9}}' >> /tmp/ctl.jsonl     # or {"t": 40, "breakdown": {"agent": 2, "duration": 30}}
 Demo noise (S8I, needs --demo): --demo-noise adds malformed and duplicate lines and one headerId jump per zone (extra lines
 only, see fleet_analyser/emitter.py), for the replay page's log panel.
+Dead zones (S12B): --deadzone "x1,y1;x2,y2" drops the messages sent from those cells (headerId still advances, so the
+ingester sees gaps); a pure write filter, see fleet_analyser/emitter.py. Without it nothing changes.
 Live mode (S8G, fleet/live.py; demo only): --cost-map-file PATH [--cost-alpha A] re-reads a published costmap.json before
 every step, and the file sink sync-flushes after every step so a reader sees the stream live.
 """
@@ -62,6 +64,9 @@ def build_parser():
                    help="demo only: costmap.json re-read before every step; the router uses it with --cost-alpha")
     p.add_argument("--cost-alpha", type=float, default=None,
                    help="demo only, needs --cost-map-file: router weight 1 + alpha * cost (default 4)")
+    p.add_argument("--deadzone", default=None, metavar="X,Y;X,Y",
+                   help="WiFi dead-zone cells (x = column): messages sent from these cells are not written, headerId "
+                        "still advances (a gap for the ingester); default none, nothing changes without it")
     return p
 
 
@@ -91,6 +96,13 @@ def main(argv=None):
         workers = ev.resolve_workers(a.workers, os.environ)
     except ValueError as e:
         p.error(str(e))
+    deadzones = None
+    if a.deadzone is not None:
+        try:
+            deadzones = emitter.parse_deadzones(a.deadzone)
+            emitter.check_deadzones(deadzones, emitter.grid_size_of(a.env))
+        except Exception as e:  # noqa: BLE001  (bad syntax, out-of-map cell or an unknown env id: one usage line)
+            p.error(str(e))
     if a.rate == "realtime" and a.zones > workers:
         p.error(f"--rate realtime needs --zones <= workers (zones {a.zones} > workers {workers}): "
                 f"queued zones would stall; raise --workers or lower --zones")
@@ -112,6 +124,8 @@ def main(argv=None):
     run = dict(env_id=a.env, steps=a.steps, seed_base=a.seed_base, zones=a.zones, disturb_tag=disturb_tag,
                disturb=disturb, recovery=recovery, policy=a.policy, t0=t0, t0_mode="now" if a.t0 == "now" else "fixed",
                rate=a.rate, speed=a.speed, report_interval=a.ledger_interval)
+    if deadzones is not None:
+        run.update(deadzones=[list(c) for c in deadzones])
     if a.demo:
         run.update(demo_mode=True, control_file=str(a.control_file))
         if a.demo_noise:
