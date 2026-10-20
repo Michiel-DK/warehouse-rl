@@ -50,4 +50,7 @@ The `full` files are the measurement itself: a bug there moves every number in t
   or every finding fixed and re-verified, gate green) merges itself with `gh pr merge --squash`, then the checkout
   on `master` is fast-forwarded so the queue's measurement items run on the merged code. Halt to the operator only
   on an unresolved refutation or when a lane wants to change the metric definition or the vendored env.
+- **Literature before the build (operator, 2026-10-20).** Every new sprint starts with a queued literature item
+  (opus, about an hour) that names the planned build; the lanes depend on it and their briefs are written after its
+  verdict, using the standard names it found. A check after the fact is only for results already measured.
 - **Kill criteria are in `docs/SCOPE.md` "Premises and kill criteria"** and are the operator's to apply.
