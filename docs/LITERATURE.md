@@ -584,3 +584,199 @@ ties timeouts to obstruction): detected if a stuck run overlaps the operation's 
 
 **Sanity checks.** Exact: Table 7 rows per shift, the 207 label rows, the 8 failed operations. Within 5 %: unique non-empty
 orderIds vs non-charging `jobs`; span per shift (8.03-8.26 h); jobs per robot-hour vs 1,382 / 72.99 h = 18.9.
+
+## Part 3: are our negative results known? (2026-10-21)
+
+Scope: three measured negative results, each set against published numbers for the same question: did someone beat
+it, get the same, or not try? One pass on 2026-10-21 with WebSearch, WebFetch, curl to the arXiv / OpenAlex APIs and
+`pdftotext` on downloaded PDFs, as three parallel research passes. The main session re-checked these numbers
+against the PDF or abstract text: Stephanedes 1992, Pietrobon 2019, Jiang 2024 Table 3, Yu & Wolf (4.4 % and the
+baseline sentence), Han & Yu Table I and the Pittsburgh MAVG 1.31. The query log is in
+`laptop-scheduler/reports/wr-dev-lit-negative-results.md`. **Coverage:** the Semantic Scholar API answered HTTP 429
+once in each of the three passes, so again **no Semantic Scholar search ran**, and Google Scholar was not tried. ACM
+and ScienceDirect full texts returned 403. Every absence means "not found in the queries listed". The rules are those
+of Part 1. Read depth (A text read, A- abstract or record, M metadata, S snippet) is the rank column, as in Parts 1
+and 2. The skill's A-F scale is written for vendor claims; for papers, peer-review status is stated per row
+(preprint, patent, report). Every row is verified@2026-10-21.
+
+### 1. Hidden blockage: early warning from fleet traces alone
+
+Detecting a closure from traffic traces is studied for roads, not for robot fleets. HERE's method (Pietrobon,
+Lewis & Heverly-Coulson 2019) "triggers an alert whenever the likelihood of the observed probe activity is too small
+given a historical model", which is a per-segment Poisson test like our CUSUM, but it reports only precision. T-Closure
+(Zhang et al. 2023, UESTC with Didi Chuxing) is supervised and uses the planned route, so it is not planner-blind. It
+reports volume and delay, not a detection rate. Pan et al. 2013 detect anomalies from drivers' *route changes* (86.7 %
+recall vs 46.7 % for a flow baseline) and leave out precision by design. Classic loop-detector incident detection
+(AID) is the only field that reports detection rate, delay and false alarms together, and its
+false-alarm rate is a share of station-intervals: Stephanedes et al. 1992 is the one source found that converts it to
+false alarms per hour. Every AID incident is lane-scale, a much stronger signal than one blocked cell among 380.
+Neill et al. 2005 (Part 1 §4, now read in full) report a floor: at 1 false positive a month, the injected outbreaks
+they miss "consisted of a very small number of cases (less than 5 in total), and as a result there was essentially
+no signal to detect". In robotics, the nearby work senses the obstacle on board (OSCAR, Sahak et al. 2026, preprint)
+or is told where the anomaly is (Ogorelysheva et al. 2026, preprint). The road patents (HERE US 11270578, TomTom)
+describe tests on *missing* traffic (elapsed time between probes, detour counts), not on stalls, and give no
+evaluation numbers.
+
+| Method (source) | Data | Detection rate | Delay | False alarms (unit) |
+|---|---|---|---|---|
+| Our decayed map K 20 (README (n), `amoc_blind.json`) | sim, 50 planner-blind blocked cells, 10 zones | 6 / 50 | median 295 s | 177.8 per zone-hour (flag-publishes) |
+| Our short-memory map K 20 (`amoc_shortmap.json`) | same | 6 / 50 | median 402.5 s | 451.9 per zone-hour |
+| Our CUSUM k 1 h 3 (`amoc_fast.json`) | same | 2 / 50 | median 525 s | 0.000 per zone-hour |
+| Our CUSUM k 0 h 3, **in-sample tuned** (`laptop-scheduler/reports/wr-lane-s10i-fast-detector.md:37`) | same, tuned on the 50 scored windows | 17 / 50 | median 425 s | 0.000 per zone-hour |
+| Pietrobon et al. 2019, HERE (abstract only) | real probes, 12 metro areas | n/a (precision 92 % low-volume, 80 % overall) | n/a | n/a, precision only |
+| T-Closure, Zhang et al. 2023 (abstract only) | real GPS + planned route | n/a ("7000+ closure events monthly") | "within 1.5 hours" | n/a |
+| California #7 / #8 (TTI 2917-1F citing Payne) | real loop detectors | 67 % / 68 % | 2.91 / 3.04 min | 0.134 % / 0.177 % of incident-free intervals |
+| McMaster (same report, QEW on-line) | real loop detectors | 68 % | 1.4 min | "20 false alarms over 64 days" (≈0.013 / h, our arithmetic, 24 h assumed) |
+| Stephanedes et al. 1992 | real, 14 stations, 140 h | 50 % (operating point) | ~3 min structural | 3.5 / h (Calif. #7), 1.5 / h (theirs) per 5.5-mi segment |
+| Zhang & Kianfar 2022 | sim (VISSIM), V2I probes, 10 incidents | 100 % (≥50 % penetration) | 0.9-1.9 min | % of intervals, not per hour |
+| Pan et al. 2013 | real, 13,597 Beijing taxis | 86.7 % recall | 30-min slots | not reported, by design |
+| Neill et al. 2005 | real ED baseline + injected outbreaks | 53/60 (low release) | 3.68 days | 1 per month (fixed) |
+
+**Verdict 1: not found. No paper found infers an unmapped blocked cell or edge from multi-robot traces with a
+detection rate, delay and false-alarm rate (queries at the end of Part 3). The nearest fields (road closures, AID)
+detect much larger events, and the road work points to traffic absence and detours, not stall counts, as the signal.**
+
+### 2. The map against persistence
+
+The definitions differ, and that matters. Our persistence baseline ranks the *same window* by raw stall count, so
+decay is the only difference (README table (j), `fleet/baselines.py` docstring). The brief's "the same top-K
+cells as last window" is the literature's previous-period persistence, which we have not run. Our paired
+map-minus-persistence truth precision, 1,000-resample zone bootstrap (`baselines_*.json`, `paired`): s8b K 20
+−0.008 (−0.020 to +0.005, within noise), K 40 −0.023 (−0.034 to −0.011, worse); closed-loop-sticky K 20 +0.002
+(−0.010 to +0.017), K 40 −0.018 (−0.029 to −0.008, worse); s8e K 20 −0.008 (−0.019 to −0.002) and K 40 −0.019 (worse,
+3 zones only). s10-none has no truth positives and s10c-blind's precision is about 0.008, so only three of the five
+runs carry information. In the literature, a tuned recent-window count is hard to beat. In Pittsburgh (Fitzpatrick,
+Gorr & Neill 2020, arXiv SI) "The MAVG model shows the best prediction performance in the top-predicted areas, from
+zero up to 3% of the city area": pAUC 1.31 against 1.23 for the best of nine models (CNN, MLP, GP, two self-exciting
+point processes, KDE, LASSO), with no CI. Hu et al. 2018 find the decayed ProMap (Bowers 2004) no better than a static
+KDE (no significant difference between the two), the same shape as our decay-vs-raw result. Their STKDE won on PAI at an area share chosen
+on the test weeks, with no significant difference in hit rate. The tested wins over previous-period persistence are
+small: Liu & Brown 2003 (72 and 140 test incidents, 90 % level, and "Best vs. Best" weekly indistinguishable), and
+Gorr & Olligschlaeger 2002, which is precinct count error, not cell ranking. Traffic-accident deep models beat a
+*long-run* historical average on MSE (Hetero-ConvLSTM urban 0.021 vs HA 0.050; HintNet a little better than HA in
+rural cells), on one test year without a CI, and every off-the-shelf ML baseline in those papers lost to HA. In road
+safety, empirical-Bayes shrinkage beats raw-count ranking on next-period site consistency (Cheng & Washington 2008,
+abstract only), so the gain there comes from pooling over sites, not from decay. In CSEP earthquake tests, smoothed
+past seismicity won the 5-year RELM test (Zechar et al. 2013, 31 events), and the hybrid that later beat it (GEAR1)
+contains it. The only fleet forecast found with a persistence baseline is a simulation (Yu & Wolf, Amazon): the
+learned model beats "delays from the past 10s" on RMSE, 0.92 vs 1.19 s at 0-10 s, but it gets planned paths as input.
+
+| Field | Persistence definition used | Beats it with a CI or test? | Label |
+|---|---|---|---|
+| Crime | previous week or month (Liu & Brown, Gorr); tuned moving average (Pittsburgh); decayed ProMap (Hu) | small-sample tests only; the tuned moving average was not beaten | **rare** |
+| Traffic accidents | long-run historical average per cell | beaten on MSE in every deep-model paper, never with a CI | **normal without a CI; with a CI unreported** |
+| Road-safety hotspots | raw-count ranking, next period | beaten by empirical Bayes (abstract only, numbers not read) | normal (by shrinkage, not decay) |
+| Earthquakes (CSEP) | smoothed long-run seismicity | usually ties or wins; GEAR1 wins at 2 years and contains it | **rare** |
+| Warehouse / AGV / AMR | past 10 s per vertex (sim only) | RMSE without a CI; no real-log study found | **unreported** |
+
+**Verdict 2: someone got the same. A tuned recent-window count beats richer models in Pittsburgh, and a decayed map
+does not beat a static count in Hu et al. 2018. Beating persistence with a CI is rare in crime and earthquakes,
+done without a CI in traffic, and unreported for robot fleets.**
+
+### 3. Feeding the map back to routing
+
+As a throughput share of 47.52 lines/h, our gain is map +2.0 % (95 % CI −1.5 to +5.6 %) and oracle +2.9 % (−0.8 to
++6.6 %), on the medium map (25 × 22 = 550 cells, 390 aisle cells, checked with `gym.make`) with 8 AGVs and 4 pickers,
+which is 2.2 % agent density. The disturbance is a hidden slow floor; every paper below targets congestion between
+agents. The same-planner ablations find almost nothing at low density. In Jiang et al. 2024 Table 3 (League of Robot
+Runners winner, no seeds or spread reported), WPPL with no guidance vs manual guidance scores 3.20 vs 3.08 at Random
+100 (12.2 % density), 5.69 vs 5.72 at Random 200, and 4.72 vs 4.70 at City 1000 (2.1 % density). It gains ×5.3 only
+at Warehouse 8000. In Han & Yu 2022 Table I, a congestion tie-break changes throughput by −0.4 % at 40 robots and
++0.3 % at 160 (1.981 → 1.974, 6.873 → 6.896). The large gains (Zhang et al. 2024, +46 % at 400 agents on
+warehouse-33-36; Chen et al. 2024, +22 % to +76 %; Zang et al. 2025, ×2.7 at 600 agents) are against plain PIBT at
+hundreds to thousands of agents. At the lowest count Zhang et al. test (150 agents), RHCR on unweighted costs (4.95)
+still beats guided PIBT (4.77). Chen et al.'s guided planner loses to RHCR at 200 agents (5.0 vs 5.7 / 6.0). The
+closest mechanism, a learned per-vertex delay added to A* costs (Yu & Wolf, Amazon, 810-850 robots, simulation), gains
+"an average of 4.4%" (1.0-7.7 % by scenario, std over 10 seeds 0.24-0.97 points). Its throughput baseline is a
+planner fed the past-10-s delays, not plain costs. That changes this page's reading: Part 1 §5 read Zhang 2024 at
+depth A- and Part 2 read Chen 2024 at A\*. Both are now read at A (PDF tables).
+
+| Source | Map, agents (density) | Baseline | Gain | Spread reported |
+|---|---|---|---|---|
+| This repo, Sprint 8 (README) | TA-RWARE medium 25×22, 8 AGV + 4 pickers (2.2 %) | no map | +2.0 % map, +2.9 % oracle | 95 % CI, 30 paired seeds |
+| Jiang et al. 2024 | random-32-32, 100 / 200 (12 / 24 %); City 256², 1,000 (2.1 %) | WPPL, no guidance | −3.8 % / +0.5 %; −0.4 % | none |
+| Han & Yu 2022 | 37×20 warehouse, 40-160 | bounded-horizon search | −0.6 % to +0.3 % | none |
+| Zhang et al. 2024 | warehouse-33-36, 400 (42 %); 150 (16 %) | unweighted PIBT | +46 %; at 150, RHCR plain 4.95 > guided 4.77 | SE, 50 runs |
+| Chen et al. 2024 | Sortation 33×57, 600; 200 (13 %) | PIBT; RHCR | +76 %; at 200, guided 5.0 < RHCR 5.7 / 6.0 | ± (meaning not stated), 24 instances |
+| Zang et al. 2025 | warehouse 33×57, 600 (55 %) | no guidance | ×2.7 (3.18 → 8.66) | std, 10 runs |
+| Arita & Okumura 2026 (preprint) | random-64-64-10, empty-48-48, 1,000 | LaCAM, no guidance | +23 %, +28 % | min / max, 10 instances |
+| Yu & Wolf (Amazon, venue not confirmed) | sortation 179×69, 810-850 (6.6-6.9 %) | planner with past-10 s delays | +4.4 % (1.0-7.7 %) | std, 10 seeds |
+
+**Verdict 3: someone got the same. Congestion-aware costs add about nothing below a few hundred agents in the
+same-planner ablations found. A +2-3 % gain at 12 agents is consistent with them. Our CI upper ends (+5.6 % and
++6.6 %) still contain Yu & Wolf's +4.4 %, so the result is underpowered rather than negative. No paper tests hidden
+slow cells.**
+
+### What this means for us (Part 3)
+
+1. **Hidden blockage: retest with a different signal.** Stall counts are the wrong evidence for a cell robots now
+   avoid. Add a per-cell *traffic-absence* test: time since the last pass against the expected inter-arrival time,
+   the HERE / TomTom form. Add a detour count too (Pan et al. 2013). Then count stall events on the 44-48 missed
+   windows to test the Neill-type signal floor. Keep the in-sample 17/50 out of any text until a held-out run exists.
+2. **Map vs persistence: keep the negative, reword it.** It matches Pittsburgh and Hu et al. 2018. Drop "decay"
+   as a claimed improvement. If it is ever retested, use the literature's baselines: previous-window top-K, a window
+   tuned on calibration seeds (MAVG), and empirical-Bayes shrinkage to the zone mean as the challenger.
+3. **Routing feedback: retest only with more power.** At 30 seeds the CI spans −1.5 to +5.6 %, which cannot separate
+   0 from the one comparable published gain (4.4 %). The half-width is now ±1.7 lines/h (±3.5 %); halving it needs about
+   4× the seeds (120), ±1 % about 12× (360), or a denser fleet where congestion gains are known to appear. Until then, write it up as "within noise, consistent
+   with near-zero gains at low agent counts", not as "does not work".
+
+### Papers and sources (Part 3)
+
+All rows verified@2026-10-21. Read depth as in Part 2 (A\* = through a summarising fetch). § = question.
+
+| § | Authors / org, year | Title (short) | Venue | URL | Read | Used for |
+|---|---|---|---|---|---|---|
+| 1 | Pietrobon, Lewis, Heverly-Coulson 2019 | Road closure detection from vehicle probe data | ACM TSAS 5 | https://doi.org/10.1145/3325912 | A- (abstract only) | Poisson probe test, precision |
+| 1 | Zhang, An, Liu, Wen, Hu, Shao 2023 | T-Closure: GPS trajectories for road closure detection | KDD 2023 | https://doi.org/10.1145/3580305.3599926 | A- (abstract only) | volume, 1.5 h delay |
+| 1 | HERE Global, US 11270578 B2 | Detecting road closures based on probe activity | patent | https://patents.google.com/patent/US11270578 | A\* (first 100k chars) | Poisson absence test, no eval |
+| 1 | Texas Transportation Institute (Chang et al.) | San Antonio incident detection algorithm study, 2917-1F | report (year not checked) | http://tti.tamu.edu/documents/2917-1F.pdf | A | California #7/#8, McMaster |
+| 1 | Stephanedes, Chassiakos, Michalopoulos 1992 | Comparative evaluation of incident detection algorithms | TRR 1360 | https://onlinepubs.trb.org/Onlinepubs/trr/1992/1360/1360-009.pdf | A | FA per hour |
+| 1 | Zhang, Kianfar 2022 | AID for V2I, I-64 Missouri | Sensors 22(23) | https://pmc.ncbi.nlm.nih.gov/articles/PMC9735737/ | A\* | probe AID in sim |
+| 1 | Pan, Zheng, Wilkie, Shahabi 2013 | Crowd sensing of traffic anomalies | SIGSPATIAL 2013 | https://doi.org/10.1145/2525314.2525343 | A (MSR PDF) | route-change signal |
+| 1 | Neill, Moore, Sabhnani, Daniel 2005 | Detection of emerging space-time clusters (Part 1 row) | KDD 2005 | https://cs.nyu.edu/~neill/papers/sss-kdd05.pdf | A | signal floor at 1 FP / month |
+| 1 | Sahak, Jiao, Rhinehart, Barfoot 2026 | OSCAR: obstacle survival curves | arXiv preprint | https://arxiv.org/abs/2606.00990 | A- | onboard sensing, not traces |
+| 1 | Ogorelysheva, Howar, Chen 2026 | Localized anomaly isolation via dead zones in AGV fleets | arXiv preprint | https://arxiv.org/abs/2610.08524 | A- | location given, not detected |
+| 2 | Fitzpatrick, Gorr, Neill 2020 | Policing chronic and temporary hot spots (SI) | arXiv preprint | https://arxiv.org/abs/2011.06019 | A | MAVG best of 10 |
+| 2 | Hu, Wang, Guin, Zhu 2018 | STKDE for crime hotspots (Part 1 row) | Applied Geography 99 | https://arxiv.org/abs/2006.00272 | A | ProMap = static KDE |
+| 2 | Liu, Brown 2003 | Point-pattern density model (NIJ report version) | Int. J. Forecasting 19(4) | https://www.ojp.gov/pdffiles1/nij/grants/197634.pdf | A- (OCR tables) | beats last week, 90 % |
+| 2 | Gorr, Olligschlaeger 2002 | Crime hot spot forecasting (NIJ 195168) | NIJ report | https://www.ojp.gov/pdffiles1/nij/grants/195168.pdf | A | random walk, lag-12 naive |
+| 2 | Lee, O, Eck 2017 | Theory-driven hot spot forecasting (NIJ 251179) | NIJ report | https://www.ojp.gov/pdffiles1/nij/grants/251179.pdf | A | persistence method won a category |
+| 2 | Mohler, Porter 2017 | Rotational grid, PAI-maximizing forecasts (NIJ 251203) | NIJ report | https://www.ojp.gov/pdffiles1/nij/grants/251203.pdf | A | no naive baseline |
+| 2 | Yuan, Zhou, Yang 2018 | Hetero-ConvLSTM traffic accident prediction | KDD 2018 | https://doi.org/10.1145/3219819.3219922 | A (author PDF) | HA baseline MSE |
+| 2 | An, Vahedian, Zhou, Street, Li 2022 | HintNet | SIAM SDM 2022 | https://arxiv.org/abs/2203.03100 | A | HA baseline MSE |
+| 2 | Cheng, Washington 2008 | New criteria for evaluating hot spot methods | TRR 2083 | https://doi.org/10.3141/2083-09 | A- (abstract only) | EB beats raw-count ranking |
+| 2 | Zechar et al. 2013 | RELM I: first-order results | BSSA 103(2A) | https://doi.org/10.1785/0120120186 | A- | smoothed seismicity wins |
+| 2 | Strader, Schorlemmer, Cotton 2018 | Testing strain rate in global seismicity models | EGU2018-9733 abstract | https://meetingorganizer.copernicus.org/EGU2018/EGU2018-9733.pdf | A- | GEAR1 contains KJSS |
+| 2 | Kounadi, Ristea, Araujo, Leitner 2020 | Systematic review on spatial crime forecasting | Crime Science 9 | https://doi.org/10.1186/s40163-020-00116-7 | A\* | baselines used in 32 papers |
+| 2 | Rosser, Davies, Bowers, Johnson, Cheng 2017 | Predictive crime mapping: grids or street networks | J. Quant. Criminology 33 | https://doi.org/10.1007/s10940-016-9321-x | A\* | Wilcoxon on 90 paired days |
+| 2,3 | Yu, Wolf (Amazon) 2023 | Congestion prediction for large fleets of mobile robots | amazon.science (venue not confirmed) | https://cdn.amazon.science/8c/e5/80b4bc184aebb861fa764f8173cc/congestion-prediction-for-large-fleets-of-mobile-robots.pdf | A | past-10 s persistence, +4.4 % |
+| 3 | Jiang, Zhang, Veerapaneni, Li 2024 | Scaling lifelong MAPF (Part 2 row) | SoCS 2024 | https://arxiv.org/abs/2404.16162 | A (PDF Table 3) | guidance ablation by density |
+| 3 | Han, Yu 2022 | Optimizing space utilization for MRPP (SU-I) | ICRA 2022 | https://arxiv.org/abs/2109.04677 | A (PDF Table I) | ±0.6 % at 40-160 robots |
+| 3 | Zhang, Jiang, Bhatt, Nikolaidis, Li 2024 | Guidance graph optimization (Part 1 row) | IJCAI 2024 | https://arxiv.org/abs/2402.01446 | A (PDF Tables 2-3) | +46 %; RHCR plain at N 150 |
+| 3 | Chen, Harabor, Li, Stuckey 2024 | Traffic flow optimisation (Part 2 row) | AAAI 2024 | https://arxiv.org/abs/2308.11234 | A (PDF Tables 1-2) | +22-76 %; loses at N 200 |
+| 3 | Zang et al. 2025 | Online guidance graph optimization (Part 1 row) | AAAI 2025 | https://arxiv.org/abs/2411.16506 | A (plots; Fig. 1 only numeric) | ×2.7 at 55 % density |
+| 3 | Arita, Okumura 2026 | Lifelong LaCAM with local guidance (Part 2 row) | arXiv preprint (SoCS 2026 per comment) | https://arxiv.org/abs/2605.16855 | A | +23-28 % at 1,000 |
+| 3 | Cohen, Uras, Koenig 2015 | Highways for bounded-suboptimal MAPF | SoCS 2015 | https://idm-lab.org/bib/abstracts/papers/socs15b.pdf | A | one-shot, solve-rate effect; not used for a number |
+
+Not verified and kept out of the text: Liu & Brown's table values (OCR garbled), the Montella 2010 and Bartlett 2014
+congestion-routing numbers (snippet only, Bartlett 403), Cohen et al. IJCAI 2016 (wrong PDF fetched), the 2023 Seismic
+Record regional CSEP result (403), the low-agent curves of Zhang, Chen, Zang and Arita (plots only), and Zhang & Kianfar's
+Table 3 FAR values, whose relayed numbers contradict the text. The Mohler-Porter "a remark on" note and NIJ challenge
+naive-baseline scores were not found or not searched.
+
+**Absence queries (Part 3).** Q1, blocked-edge inference from multi-robot traces with DR / delay / FA: WebSearch
+"multi-robot fleet infer blocked edge unknown obstacle from robot delays lifelong MAPF roadmap update observed
+traversal times", "warehouse AGV AMR fleet logs detect blocked aisle obstruction from robot position data anomaly
+detection evaluation"; arXiv API `all:AGV AND all:anomaly AND all:trajectory`, `all:warehouse AND all:robots AND
+all:anomaly AND all:detection`, `all:"blocked edges" AND all:robots`, `all:fleet AND all:obstacle AND all:inference
+AND all:traces` (0); OpenAlex "anomaly detection AGV trajectories warehouse", "lifelong multi-agent path finding
+unknown obstacles detection", "detecting decreases counts spatial surveillance absence". Q2, a fleet forecast against
+persistence on real logs: WebSearch "warehouse AGV congestion prediction hotspot forecast baseline historical average
+robot traffic", "AMR fleet real log deadlock congestion hotspot prediction "persistence baseline" OR "naive baseline"
+multi-robot warehouse"; arXiv API `all:warehouse AND all:robot AND all:congestion AND all:prediction`; and an NIJ
+naive benchmark, WebSearch "NIJ crime forecasting challenge results analysis "naive" OR "baseline" PAI PEI entries
+compared simple hot spot prior period". Q3, hidden slow cells as the routing disturbance: none of the twelve Q3
+papers read uses it, and WebSearch "congestion-aware AGV routing dynamic edge weights small fleet throughput
+improvement warehouse simulation 10 AGVs" found no small-fleet number. Rerun on Semantic Scholar before any of these
+fronts a pitch.
