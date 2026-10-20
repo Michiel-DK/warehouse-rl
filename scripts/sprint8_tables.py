@@ -1030,6 +1030,25 @@ def _top_cell(d):
     return f"zone {z}, cell {c['cell']}: {c['deadlock_s']} s in {n} clusters", ties
 
 
+def _standoffs(d):
+    """Clusters of the same zone and robot set, each starting within one step of the previous one's end, merged."""
+    out = {}
+    for x in sorted(d["decisions"], key=lambda x: (x["claim"]["zone"], sorted(x["claim"]["robots"]), x["decided_at"]
+                                                     - x["claim"]["length_s"])):
+        c = x["claim"]
+        end = x["decided_at"]
+        start = end - c["length_s"]
+        runs = out.setdefault((c["zone"], frozenset(c["robots"])), [])
+        if runs and start <= runs[-1]["end"] + SECONDS_PER_STEP:
+            r = runs[-1]
+            r.update(end=max(r["end"], end), n=r["n"] + 1, res=c["resolution"],
+                     robot_s=r["robot_s"] + c["length_s"] * len(c["robots"]))
+        else:
+            runs.append(dict(zone=c["zone"], robots=sorted(c["robots"]), start=start, end=end, n=1,
+                             res=c["resolution"], robot_s=c["length_s"] * len(c["robots"])))
+    return [r for runs in out.values() for r in runs]
+
+
 def blocking_clusters():
     tags = [t for t, _ in S12_RUNS]
     runs = _load_all([f"results/fleet/deadlock_{t}.json" for t in tags if t != "s8b-medium-80-p03-07"],
@@ -1040,8 +1059,10 @@ def blocking_clusters():
     ref_rate = ref["total"]["deadlock_s_per_robot_hour"] if ref else None
     print("| run | blocking clusters (JSON `deadlocks`) | broke up / still open at stream end | blocking chains (JSON "
           "`knots`) | cluster length, s: median (max) | robots per cluster, max | blocked robot-s in clusters per "
-          "robot-hour | vs s10-none | top cell by cluster seconds (cells tied at that value) |")
-    print("|---|---|---|---|---|---|---|---|---|")
+          "robot-hour | vs s10-none | top cell by cluster seconds (cells tied at that value) | standoffs (same robots, "
+          "gaps of at most one step merged) | longest standoff: zone, span s, clusters, end | longest standoff's share "
+          "of blocked robot-s |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for rel, d in runs:
         tot, dec = d["total"], d["decisions"]
         assert d["schema_version"] == "fleet-deadlock/1", rel
@@ -1052,11 +1073,21 @@ def blocking_clusters():
         mid = len(lengths) // 2
         med = lengths[mid] if len(lengths) % 2 else (lengths[mid - 1] + lengths[mid]) / 2
         top, ties = _top_cell(d)
+        for zd in d["zones"].values():
+            for x in zd["deadlocks"]:
+                assert x["end"] - x["start"] == x["length_s"], rel
+        st = _standoffs(d)
+        assert sum(r["n"] for r in st) == len(dec), rel
+        lg = max(st, key=lambda r: (r["end"] - r["start"], r["robot_s"]))
+        total_rs = sum(x["claim"]["length_s"] * len(x["claim"]["robots"]) for x in dec)
         rate = tot["deadlock_s_per_robot_hour"]
         vs = f"{rate / ref_rate:.2f}x" if ref_rate else "n/a"
         print(f"| {d['run'] if d['run'] != 'closed_loop' else 'closed-loop-sticky'} | {tot['deadlocks']} | "
               f"{res.count('broke_up')} / {res.count('unresolved_at_end')} | {tot['knots']} | {med:g} ({lengths[-1]}) | "
-              f"{max(len(x['claim']['robots']) for x in dec)} | {rate:.1f} | {vs} | {top} ({ties}) |")
+              f"{max(len(x['claim']['robots']) for x in dec)} | {rate:.1f} | {vs} | {top} ({ties}) | {len(st)} | "
+              f"zone {lg['zone']}, {lg['end'] - lg['start']} s, {lg['n']}, "
+              f"{'open at stream end' if lg['res'] == 'unresolved_at_end' else 'broke up'} | "
+              f"{100 * lg['robot_s'] / total_rs:.1f}% |")
     print()
     d0 = runs[0][1]
     print("A blocking cluster is a strongly connected group of at least 2 robots in the per-batch wait-for graph "
@@ -1067,7 +1098,10 @@ def blocking_clusters():
           "in the wait-for graph), and the JSON field name `deadlocks` is renamed `blocking_cluster` in S12C. A blocking "
           "chain (JSON `knots`) is a path of at least 2 edges among robots in no cluster; Part 2 names it so because a "
           "knot in deadlock theory is the closed set that is the deadlock. Still open at stream end = censored, its "
-          "length is a lower bound. Blocked robot-s per robot-hour = sum(length x robots) / robot-hours, where "
+          "length is a lower bound. Broke up = the group was gone at the next batch, which can be a single step: the "
+          "vendor planner replans a robot after a few stuck steps, frees one cell, and the same robots can block each "
+          f"other again. A standoff merges clusters of the same zone and robot set that start at most one step "
+          f"({SECONDS_PER_STEP} s) after the previous one ends; its span runs from the first start to the last end. Blocked robot-s per robot-hour = sum(length x robots) / robot-hours, where "
           "robot-hours include the pickers (12 robots per zone), unlike (o), which counts AGVs only. Top cell: each "
           "cluster adds its length to every cell it covers, so cells of one cluster tie; the tie rule is most seconds, "
           "then lowest zone, then cell string. Sources: " + ", ".join(f"`{rel}`" for rel, _ in runs)

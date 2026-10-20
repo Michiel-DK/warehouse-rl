@@ -1014,6 +1014,10 @@ repo's untracked `reports/wr-lane-s12a-time-budget.md` and `reports/wr-dev-lit-f
   - **Exclude station and shelf waits from the stall list?** This changes every Sprint 5-10 stall count. Stations
     are 1-2% of episodes, and the shelf-adjacent class is a 360-cell catch-all. A tighter shelf signal, a stopped
     robot with empty `nodeStates`, is not built.
+  - **"Broke up" includes one-step breaks.** In undisturbed zone 4, one robot pair stands off from minute 19 to stream
+    end: 16 clusters, 1,260 s, open at the end, 26.3% of the run's blocked robot-seconds (README (p), standoff
+    columns). The "congestion, every cluster resolves" reading needs this exception. Should S12C report standoffs
+    (merged clusters) instead of clusters?
   - `same_minute_stops`: should the zone-start minute be excluded and the count reported against the undisturbed
     rate (13 later minutes on s10-none) before it goes on a page?
 - Open (queued): S12C renames `deadlock` / `knot` to `blocking_cluster` / `blocking_chain` (schema v2), makes
