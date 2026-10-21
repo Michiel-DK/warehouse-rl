@@ -1,8 +1,9 @@
 """The causes table of S14A: what stopped the robots, per cause, in the words a client reads.
 
 causes_table(episodes) -> rows [{cause, cause_label, episodes, seconds}] ordered by seconds descending, then cause key
-ascending. Seconds are EPISODE seconds (duration_s, start to end of each episode). An episode without a duration (still
-open) is not counted. cause_label comes from detector.CAUSE_LABELS (the one map); a cause outside the map keeps its key as
+and label ascending. S14D: rows are grouped by (cause, cause_label), so one cause key gives two rows when its episodes split
+by blocker_on_route (True = "Blocked by ...", False/None = "Stopped next to ..."). Seconds are EPISODE seconds (duration_s, start to end of each episode). An episode without a duration (still
+open) is not counted. cause_label comes from detector.cause_label(cause, blocker_on_route); a cause outside the maps keeps its key as
 its label.
 
 causes_block(episodes, stuck_bucket_s) -> dict(table=rows with `share` added, episode_seconds, stuck_bucket_s,
@@ -14,7 +15,7 @@ faulted_self episode is mostly FAULTED seconds (the faulted bucket outranks stuc
 paused message loses those seconds, and a left-censored or unresolved-at-end episode is counted for its recorded length.
 share_total is the sum of the shares so the difference is visible, never forced to 1.
 """
-from .detector import CAUSE_LABELS
+from .detector import cause_label
 
 
 def causes_table(episodes):
@@ -23,10 +24,11 @@ def causes_table(episodes):
         if e.get("duration_s") is None:
             continue
         c = e.get("cause") or "unknown"
-        row = acc.setdefault(c, dict(cause=c, cause_label=CAUSE_LABELS.get(c, c), episodes=0, seconds=0))
+        label = cause_label(c, e.get("blocker_on_route"))
+        row = acc.setdefault((c, label), dict(cause=c, cause_label=label, episodes=0, seconds=0))
         row["episodes"] += 1
         row["seconds"] += e["duration_s"]
-    return sorted(acc.values(), key=lambda r: (-r["seconds"], r["cause"]))
+    return sorted(acc.values(), key=lambda r: (-r["seconds"], r["cause"], r["cause_label"]))
 
 
 def causes_block(episodes, stuck_bucket_s):

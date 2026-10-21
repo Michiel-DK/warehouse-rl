@@ -31,7 +31,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from . import decisions
-from .detector import CAUSE_LABELS, DEFAULT_STUCK_AFTER, Detector
+from .detector import DEFAULT_STUCK_AFTER, Detector, cause_label
 from .ledger import IngestLedger, SequenceTracker, coverage, lag_enabled
 from .parse import epoch_of, parse_line
 
@@ -224,7 +224,7 @@ class Pipeline:
                 continue
             row = {k: v for k, v in ev.items() if k not in ("kind", "decided_by")}
             row["run"] = self.run
-            row["cause_label"] = CAUSE_LABELS.get(row.get("cause"))  # S14A: the client-readable text; cause stays the key
+            row["cause_label"] = cause_label(row.get("cause"), row.get("blocker_on_route"))  # S14A/S14D: the client-readable text; cause stays the key
             self.store.upsert("stuck_episodes", ("run", "episode_id"), [row])
             if ev.get("left_censored"):
                 continue  # start unknown after a resume: no decision (its dedup_key would be a second key)

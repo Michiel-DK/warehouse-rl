@@ -20,7 +20,7 @@ for _p in (ROOT / "fleet", ROOT / "src", ROOT / "tests"):
 import _platform  # noqa: E402
 import timebudget as tb  # noqa: E402
 from fleet_analyser import causes, ingest as ingest_mod, servicing, store as store_mod  # noqa: E402
-from fleet_analyser.detector import CAUSE_LABELS, SERVICING, STUCK, Detector  # noqa: E402
+from fleet_analyser.detector import CAUSE_LABELS, ROUTE_LABELS, SERVICING, STUCK, Detector, cause_label  # noqa: E402
 from fleet_analyser.hotspot import read_messages  # noqa: E402
 from fleet_analyser.parse import Message, parse_line  # noqa: E402
 from fleet_analyser.stations import load_stations  # noqa: E402
@@ -296,9 +296,11 @@ class TestLabels(unittest.TestCase):
     def test_r_label_map_is_the_six_entry_table(self):
         # inject: reword a label or drop a cause
         self.assertEqual(CAUSE_LABELS, {
-            "faulted_self": "Robot fault", "blocked_by_faulted": "Blocked by a faulted robot",
-            "blocked_by_stuck": "Blocked by a stuck robot", "traffic": "Traffic wait",
+            "faulted_self": "Robot error, cannot continue order", "blocked_by_faulted": "Stopped next to a broken robot",
+            "blocked_by_stuck": "Stopped next to a stuck robot", "traffic": "Stopped next to another robot",
             "unknown": "Stopped, cause not identified", "station_overrun": "Station stop over time limit"})
+        self.assertEqual(ROUTE_LABELS, {"blocked_by_faulted": "Blocked by a broken robot",
+                                        "blocked_by_stuck": "Blocked by a stuck robot", "traffic": "Traffic wait"})
 
     def test_s_every_episode_row_of_the_ingested_s10_none_zone0_store_has_the_label(self):
         # inject: attach the label only on episode_open rows, or in the Detector
@@ -314,19 +316,31 @@ class TestLabels(unittest.TestCase):
         closed = [r for r in rows if r["resolution"] != "open"]
         self.assertGreater(len(closed), 10)
         for r in rows:
-            self.assertEqual(r["cause_label"], CAUSE_LABELS[r["cause"]])
+            self.assertIn("blocker_on_route", r)
+            self.assertEqual(r["cause_label"], cause_label(r["cause"], r["blocker_on_route"]))
             self.assertNotIn("servicing_s", r)
         self.assertNotIn("servicing_max_s", st.select("ingest_runs", {"run": "r"})[0])
 
 
-def event_stream_sha(path, stations, **kw):
+def event_stream(path, stations, **kw):
     det = Detector(stations=stations, station_radius=0, **kw)
     evs = []
     for m in read_messages(str(path)):
         evs.extend(det.feed(m))
     evs.extend(det.end_all())
     assert all("servicing_s" not in e for e in evs)
+    return evs
+
+
+def stream_sha(evs):
     return hashlib.sha256("\n".join(json.dumps(e, sort_keys=True) for e in evs).encode()).hexdigest()
+
+
+def event_stream_sha(path, stations, **kw):
+    evs = event_stream(path, stations, **kw)
+    for e in evs:  # S14D: blocker_on_route is a new key; the pins are the master stream without it (all other keys equal)
+        e.pop("blocker_on_route", None)
+    return stream_sha(evs)
 
 
 class TestByteIdentity(unittest.TestCase):
@@ -339,6 +353,16 @@ class TestByteIdentity(unittest.TestCase):
         stations = load_stations("auto", str(path.parent))
         self.assertEqual(event_stream_sha(path, stations), want)
         self.assertEqual(event_stream_sha(path, stations, servicing_max_s=None), want)
+
+    def test_u_s14d_stream_with_blocker_on_route_is_pinned(self):
+        # inject: change the on-route rule or the blocker choice on a routed stream (the S14A pin above drops the key)
+        want = _platform.expected("fleet_stream", "s14d_s10_none_zone0_stations_auto_event_sha256")
+        path = find_file("fleet", "data", "s10-none", "zone0-000.jsonl.gz")
+        if path is None or not (path.parent / "emit_ledger.json").is_file():
+            self.skipTest("fleet/data/s10-none (with emit_ledger.json) absent in this checkout and the main one")
+        evs = event_stream(path, load_stations("auto", str(path.parent)))
+        self.assertEqual(stream_sha(evs), want)
+        self.assertTrue(all("blocker_on_route" in e for e in evs if e["kind"].startswith("episode")))
 
 
 class TestCli(unittest.TestCase):

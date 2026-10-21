@@ -37,7 +37,8 @@ opens faulted_self as above, that episode stays the run's only one (no conversio
 SERVICING again). A faulted message after the conversion makes the state FAULTED and leaves the open station_overrun
 episode as it is (the cause is decided once, as for every open episode); when the fault clears the state is STUCK again.
 With the bound None no key is added to any event: servicing_s exists only on overrun episodes. CAUSE_LABELS maps each
-cause key to the client-facing text; the ingest and export layers attach it, never this module's events.
+cause key to the default client text and cause_label(cause, blocker_on_route) picks the on-route wording (S14D); the ingest
+and export layers attach it, never this module's events. Every episode event carries blocker_on_route (see _cause).
 Every event also has "zone", "robot", and a "decided_by" = (serial, ts) naming the message that triggered it.
 """
 from .parse import iso
@@ -48,14 +49,30 @@ DEFAULT_STUCK_AFTER = 30
 FAULTED, IDLE, MOVING, STUCK, STOPPED_WITH_ORDER, RECOVERED, SERVICING = (
     "FAULTED", "IDLE", "MOVING", "STUCK", "STOPPED_WITH_ORDER", "RECOVERED", "SERVICING")
 CAUSES = ("faulted_self", "blocked_by_faulted", "blocked_by_stuck", "traffic", "unknown", "station_overrun")
+# S14D: CAUSE_LABELS is the per-key default text, the NOT-on-route (or route unknown) wording: a neighbour at
+# Manhattan <= 1 only licenses "Stopped next to ...". ROUTE_LABELS is the wording when that neighbour stands on the
+# robot's reported next route node (blocker_on_route True). cause_label(cause, blocker_on_route) is the one function.
 CAUSE_LABELS = {
-    "faulted_self": "Robot fault",
-    "blocked_by_faulted": "Blocked by a faulted robot",
-    "blocked_by_stuck": "Blocked by a stuck robot",
-    "traffic": "Traffic wait",
+    "faulted_self": "Robot error, cannot continue order",
+    "blocked_by_faulted": "Stopped next to a broken robot",
+    "blocked_by_stuck": "Stopped next to a stuck robot",
+    "traffic": "Stopped next to another robot",
     "unknown": "Stopped, cause not identified",
     "station_overrun": "Station stop over time limit",
 }
+ROUTE_LABELS = {
+    "blocked_by_faulted": "Blocked by a broken robot",
+    "blocked_by_stuck": "Blocked by a stuck robot",
+    "traffic": "Traffic wait",
+}
+
+
+def cause_label(cause, blocker_on_route=None):
+    """The client text of a stop cause: ROUTE_LABELS when blocker_on_route is True, else CAUSE_LABELS; a key outside the
+    maps is its own label."""
+    if blocker_on_route is True and cause in ROUTE_LABELS:
+        return ROUTE_LABELS[cause]
+    return CAUSE_LABELS.get(cause, cause)
 RESOLUTIONS = ("moved", "order_dropped", "fault_cleared", "unresolved")
 
 
@@ -185,10 +202,10 @@ class Detector:
                 entering.append((r, m, opened))
         for r, m, ep in entering:
             if "servicing_s" in ep:  # S14A: a converted station stop, its cause is fixed
-                cause, blocker, blocker_faulted_s = "station_overrun", None, None
+                cause, blocker, blocker_faulted_s, on_route = "station_overrun", None, None, None
             else:
-                cause, blocker, blocker_faulted_s = self._cause(z, m, batch, states)
-            ep.update(cause=cause, blocker=blocker, blocker_faulted_s=blocker_faulted_s)
+                cause, blocker, blocker_faulted_s, on_route = self._cause(z, m, batch, states)
+            ep.update(cause=cause, blocker=blocker, blocker_faulted_s=blocker_faulted_s, blocker_on_route=on_route)
             events.append(self._row("episode_open", zone, m.serial, ep, (m.serial, m.ts)))
         return events
 
@@ -249,6 +266,7 @@ class Detector:
             r.episode = opened = dict(episode_id=f"{m.serial}@{iso(start)}", zone=zone, robot=m.serial,
                                       order_id=run["order"], start=start, start_iso=iso(start), t_entry=m.ts,
                                       cell=list(run["cell"]), cause=None, blocker=None, blocker_faulted_s=None,
+                                      blocker_on_route=None,
                                       end=None, duration_s=None, resolution="open", avoidable=False,
                                       avoidable_s=None, left_censored=run["censored"])
             if overrun:
@@ -256,19 +274,34 @@ class Detector:
         return state, closed, opened
 
     def _cause(self, z, m, batch, states):
+        """(cause, blocker serial, blocker_faulted_s, blocker_on_route) of an episode entered on message m.
+
+        The category precedence is faulted_self > blocked_by_faulted > blocked_by_stuck > traffic > unknown. Within the
+        chosen category only, a robot standing on m's next route node (m.next_x, m.next_y, same batch) is the blocker,
+        else the lowest serial; an on-route stuck robot never beats an off-route faulted one. blocker_faulted_s comes
+        from the chosen blocker; traffic has no blocker (None). blocker_on_route (neighbour causes only): None when m
+        reports no route (nodeStates absent, [] or unusable), else True iff the chosen blocker (traffic: any robot of
+        the adjacent set) stands on the next node. faulted_self and unknown have no neighbour: None."""
         if m.faulted:
-            return "faulted_self", None, None
+            return "faulted_self", None, None, None
         others = [o for s, o in sorted(batch.items()) if s != m.serial and _near(m, o)]
+        routed = m.nodes_reported and m.next_x is not None
+
+        def pick(group):
+            on = [o for o in group if routed and o.x == m.next_x and o.y == m.next_y]
+            return (on or group)[0], (bool(on) if routed else None)
+
         faulted = [o for o in others if o.faulted]
         if faulted:
-            b = faulted[0]  # sorted by serial: the lowest
-            return "blocked_by_faulted", b.serial, m.ts - z.robots[b.serial].fault_since
+            b, on_route = pick(faulted)
+            return "blocked_by_faulted", b.serial, m.ts - z.robots[b.serial].fault_since, on_route
         stuck = [o for o in others if states[o.serial] == STUCK]
         if stuck:
-            return "blocked_by_stuck", stuck[0].serial, None
+            b, on_route = pick(stuck)
+            return "blocked_by_stuck", b.serial, None, on_route
         if others:
-            return "traffic", None, None
-        return "unknown", None, None
+            return "traffic", None, None, pick(others)[1]
+        return "unknown", None, None, None
 
     def _close(self, zone, serial, r, end, resolution, decided_by):
         ep = r.episode
