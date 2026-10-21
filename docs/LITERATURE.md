@@ -914,6 +914,20 @@ rule (r·gap ≥ 10, about 1,300 s or more) no cell is testable while a blockage
   makes it likely; it would close the hidden-blockage warning at this density. The in-sample tuned CUSUM is not a
   comparison.
 
+- **S14A measured (README (s), `results/fleet/*-sb.json`, 2026-10-21): positive on every bar.** The 1,107 s stop is a
+  `station_overrun` episode again (3,245 s; shift-6 stuck bucket 7 s to 1,107 s), TIMEOUT overlaps are 5 of 8 (above
+  1), unlabelled station-cell stuck runs are 3 (bar <= 54), and the simulator stall lists grow by 0, 1, 0, 0 and 25
+  episodes (fewer than the 4-47 that (r) removed). T = 300 s on MoRoOp (the cap, the dispatcher's own timeout) and
+  80 s on the simulator. No source gave a delay or false-alarm figure for this rule, so there was none to reach.
+  Every closed episode carries one of the six labels; there is no earlier `unknown` share to compare with.
+- **S14B measured (README (t), `results/fleet/amoc_absence*.json`, 2026-10-21): negative.** Alpha 1e-3 and 1e-4
+  flag nothing (0 forecast rows), and alpha 1e-2 detects 0 of 50 windows at 18.1 false alarms per zone-hour on
+  `s10-none` (K 20). The bar against the CUSUM (2/50 at 0) and the map (6/50 at 177.8) is not reached. The sources'
+  numbers were not reached either. HERE and TomTom publish no delay or false-alarm figure (precision only, and a
+  closure under 15 minutes may go undetected), the SPC chart's ARL0 of about 370 assumes a rate this run cannot
+  estimate, and the loop-detector rates of Part 3 (0.013 to 3.5 per hour, about 3 min delay) belong to lane-scale
+  incidents. The sizing above predicted the outcome.
+
 **Absence queries (Part 4)** (WebSearch; full log in the report): "VDA 5050 action timeout blockingType actionParameters
 specification", "MiR robot mission "wait for" action timeout docking", "Open-RMF dispenser ingestor timeout task phase
 "dispense" request timeout", "openTCS vehicle operation timeout load cargo "timeout" peripheral job", "OTTO Fleet
