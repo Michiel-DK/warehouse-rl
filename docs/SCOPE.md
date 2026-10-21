@@ -1011,9 +1011,11 @@ repo's untracked `reports/wr-lane-s12a-time-budget.md` and `reports/wr-dev-lit-f
       108.2 blocked robot-s per robot-hour; sticky 2.78x that. Gap map on 6 planted cells per zone: recall 57/60,
       precision@10 0.57 (ceiling 0.60), synthetic.
 - Open (operator):
-  - **Exclude station and shelf waits from the stall list?** This changes every Sprint 5-10 stall count. Stations
-    are 1-2% of episodes, and the shelf-adjacent class is a 360-cell catch-all. A tighter shelf signal, a stopped
-    robot with empty `nodeStates`, is not built.
+  - ~~**Exclude station and shelf waits from the stall list?**~~ Stations: answered by S13B (2026-10-21). Station
+    waits leave the stall list (detector state SERVICING). On the five simulator runs no map, precision, S10D verdict
+    or AMOC number moves; only the station episodes leave the list (README (r)). Shelves: still open. The
+    shelf-adjacent class is a 360-cell catch-all, and a tighter shelf signal (a stopped robot with empty
+    `nodeStates`) is not built.
   - **"Broke up" includes one-step breaks.** In undisturbed zone 4, one robot pair stands off from minute 19 to stream
     end: 16 clusters, 1,260 s, open at the end, 26.3% of the run's blocked robot-seconds (README (p), standoff
     columns). The "congestion, every cluster resolves" reading needs this exception. Should S12C report standoffs
@@ -1040,8 +1042,19 @@ Results are in README "Sprint 13", printed by `scripts/sprint8_tables.py` sectio
       1,113 s, 1,107 of them in one shift (30 Jul morning, manual intervention). The robot's stuck label: 0 of
       765 s in the stuck bucket, 2/2 episodes of 30 s or more detected. 542 of 544 false alarms are station dwells.
       No failed-navigation label in the data. One robot, so no deadlock, congestion or hotspot result.
+- [x] S13B station-aware stuck rule (PR #50, 5d8d51b) and rerun (queue item `wr-s13b-rerun`; results
+      `results/fleet/*-st.json`, commit 2970c17; README (r), printed by `scripts/sprint8_tables.py` section (r)).
+      Simulator runs, radius 0: top-20 truth precision, forecast grades, S10D verdicts and AMOC unchanged (asserted
+      equal blocks). 4 to 47 station episodes leave the stall list per run, with stuck share unchanged, and blocking
+      clusters fall by 3 to 8 per run. MoRoOp, radius 1: stuck runs 567 to 2, unlabelled 544 to 1, label hits 2/2
+      kept; but stuck seconds 1,113 to 13 and TIMEOUT overlaps 8 to 1, because the 1,107 s manual-intervention stop
+      started within one cell of a station. From README (r) on, the station-aware numbers are the headline.
 - Open (operator):
   - **Is a one-robot real log enough to show a client, or do we wait for a fleet log?**
+  - **Should a station stop that lasts far longer than a normal dwell count as stuck again?** On MoRoOp, radius 1
+    files the 1,107 s manual-intervention stop as SERVICING; it ends up in `stopped_short` (defined as < 30 s). An
+    upper bound on servicing time (e.g. a multiple of the 39 s median of the 542 station-cell false alarms in README (q)) would bring it back.
+    The bound is not built, and no other radius was run.
 
 ## Compute and timing
 
