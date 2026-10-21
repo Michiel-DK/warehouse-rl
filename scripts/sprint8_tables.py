@@ -1737,6 +1737,66 @@ def absence_vs_map():
           + ", ".join(f"`{rel}`" for _, rel, _ in docs) + f", `{sweep_rel}`.")
 
 
+def eight_hour():
+    shifts = [("500 steps (S14B)", ""), ("8 hours (S14C)", "-8h")]
+    arms = [("decayed map K 20 (S10E)", "blind", None), ("CUSUM (S10I)", "fast", "cusum"),
+            ("traffic absence, alpha 1e-3 (S14B)", "absence", "absence")]
+    rels = {(a, t): f"results/fleet/amoc_{a}{t}.json" for _, a, _ in arms for _, t in shifts}
+    docs = {k: load(rel) for k, rel in rels.items()}
+    if any(d is None for d in docs.values()):
+        print("Eight-hour shift: a results file is MISSING")
+        return
+    # the map file of each shift carries the meta; every live arm of that shift must match it, stubs carry none
+    maps = {t: docs[("blind", t)]["meta"] for _, t in shifts}
+    for (a, t), d in docs.items():
+        if d.get("amoc") is None:
+            det = next(x for _, s, x in arms if s == a)
+            assert det and d["detector"] == det and d["store_suffix"] == a and d["measured_forecast_rows"] == 0, rels[a, t]
+            continue
+        m = d["meta"]
+        for f in ("phase_a_dir", "reference_dir", "run", "reference_run", "truth_kind", "n_windows", "steps", "zones",
+                  "disturb", "sim_hours", "sim_hours_reference"):
+            assert m[f] == maps[t][f], (rels[a, t], f)
+        for f in ("store_hash", "reference_store_hash"):
+            assert m[f + "_before"] == m[f + "_after"] == maps[t][f + "_before"], (rels[a, t], f)
+    assert maps["-8h"]["steps"] == 5760 and maps["-8h"]["sim_hours"] == 8.0 and maps[""]["steps"] == 500
+    for f in ("disturb", "env", "zones", "truth_kind"):
+        assert maps["-8h"][f] == maps[""][f], f
+    print("| detector | shift | publish every, s (publishes) | detected / windows | miss share "
+          "| first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, undisturbed reference "
+          "| false alarms per zone-hour, blind run outside windows | file |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for name, a, _ in arms:
+        for label, t in shifts:
+            d, rel, m0 = docs[a, t], rels[a, t], maps[t]
+            if d["amoc"] is None:
+                print(f"| {name} | {label} | n/a | flagged nothing: {d['measured_forecast_rows']} forecast rows on "
+                      f"{m0['run']}, 0 / {m0['n_windows']} | 1.00 | none | n/a | not in the file | not in the file "
+                      f"| `{rel}` |")
+                continue
+            m = d["meta"]
+            r = next(x for x in d["amoc"]["k"] if x["K"] == 20)
+            fmt = ".3f" if r["fa_per_hour_reference"] < 1 else ".1f"
+            print(f"| {name} | {label} | {m['publish_every_s']} ({m['n_publishes']}) "
+                  + _amoc_row(20, r, fmt)[len("| 20 "):] + f" `{rel}` |")
+    print()
+    m8, m5 = maps["-8h"], maps[""]
+    print(f"500-step rows: `{m5['phase_a_dir']}` ({m5['n_windows']} planner-blind blocked windows, {m5['sim_hours']:.2f} "
+          f"simulated hours per zone) against `{m5['reference_dir']}`, the same rows as (t). 8-hour rows: "
+          f"`{m8['phase_a_dir']}` ({m8['n_windows']} windows, median {m8['window_len_steps_median']} steps, "
+          f"{m8['sim_hours']:g} simulated hours per zone, {len(m8['zones'])} zones x {m8['steps']:,} steps) against "
+          f"`{m8['reference_dir']}`. Every live row of a shift has the same runs, windows and store hashes before and "
+          "after as that shift's map row (asserted). The detectors, their defaults and the disturbance "
+          f"({json.dumps(m8['disturb'])}) are those of (t); only the shift length and the seeds changed. K is 20 per "
+          "zone for every live row. A stub (`amoc` null) means the detector wrote no forecast row on the blind run, so "
+          "it detects 0 windows; it records the blind run only, so its reference false alarms are not in the file. "
+          "Column definitions are those of (k). Reference false alarms per zone-hour at K 20 on the 8-hour run, by zone: "
+          + "; ".join(f"{name.split(',')[0].split(' K ')[0]}: " + ", ".join(
+              f"zone {z} {v:.1f}" for z, v in next(x for x in docs[a, '-8h']['amoc']['k'] if x['K'] == 20)
+              ['fa_per_hour_reference_by_zone'].items())
+              for name, a, _ in arms if docs[a, "-8h"]["amoc"] is not None) + ".")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -1784,6 +1844,8 @@ def main():
     bounded()
     print("\n### (t) Traffic absence against the map and the CUSUM (S14B)\n")
     absence_vs_map()
+    print("\n### (u) Eight-hour shift: map, CUSUM and absence on the blind blockage (S14C)\n")
+    eight_hour()
 
 
 if __name__ == "__main__":
