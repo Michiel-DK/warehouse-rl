@@ -36,6 +36,9 @@ Reads:
   results/fleet/timebudget_moroop.json, results/fleet/timebudget_moroop_shifts.json
                                                -> (q) a real shift: the time budget on the MoRoOp log (S13A), per shift
                                                   and pooled, against the robot's own stuck label
+  every results/fleet/*-st.json of wr-s13b-rerun next to its station-unaware file
+                                               -> (r) the station-aware stuck rule (S13B): old / station-aware / delta
+                                                  for the headline numbers of (f), (h)-(q) that rest on the stall list
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -1246,6 +1249,197 @@ def real_shift():
           "(`shifts.*.timebudget_robot`, `shifts.*.jobs_per_robot_hour`), from the S13A lane (PR #49).")
 
 
+def _st(rel):
+    """The station-aware twin of a results file: results/fleet/x.json -> results/fleet/x-st.json."""
+    return rel[:-len(".json")] + "-st.json"
+
+
+def _old_truth(tag):
+    """(path, doc) of the station-unaware file that carries `truth_kinds` for this run: the hotspot JSON, else the S10D
+    baselines JSON (same scorer, same costmap; the s8b and sticky hotspot JSONs on disk predate or lack it)."""
+    for rel in (f"results/fleet/hotspot_{tag}.json", f"results/fleet/baselines_{tag}.json"):
+        d = load(rel)
+        if d is not None and "any" in d.get("truth_kinds", {}):
+            return rel, d
+    return None, None
+
+
+def station_aware():
+    tags = [t for t, _ in S12_RUNS]
+    rows = []
+
+    def row(measure, run, old, new, dl, files):
+        rows.append(f"| {measure} | {run} | {old} | {new} | {dl} | {', '.join(f'`{f}`' for f in files)} |")
+
+    def num(o, n, fmt):
+        return format(o, fmt), format(n, fmt), "n/a" if o is None else format(n - o, "+" + fmt)
+
+    # top-20 truth precision, run level (f), (h), (i), (m), S8B
+    for t in tags:
+        orel, o = _old_truth(t)
+        nrel = f"results/fleet/hotspot_{t}-st.json"
+        n = load(nrel)
+        assert o["zones"] == n["zones"], t  # the final map is the same cells, same costs
+        oa, na = o["truth_kinds"]["any"], n["truth_kinds"]["any"]
+        ok, nk = oa["k"]["20"], na["k"]["20"]
+        assert oa["positives"] == na["positives"], t
+        if na["positives"] == 0:
+            row("top-20 truth precision", t, f"{ok['precision']:.3f} (no truth cells)",
+                f"{nk['precision']:.3f} (no truth cells)", f"{nk['precision'] - ok['precision']:+.3f}", [orel, nrel])
+            continue
+        row("top-20 truth precision (hits / truth cells)", t, f"{ok['precision']:.3f} ({ok['hits']} / {oa['positives']})",
+            f"{nk['precision']:.3f} ({nk['hits']} / {na['positives']})", f"{nk['precision'] - ok['precision']:+.3f}",
+            [orel, nrel])
+    # frozen truth cells (m)
+    orel, nrel = "results/fleet/hotspot_s10-breakdown.json", "results/fleet/hotspot_s10-breakdown-st.json"
+    o, n = load(orel), load(nrel)
+    of, nf = o["truth_kinds"]["frozen"], n["truth_kinds"]["frozen"]
+    row("frozen cells hit at K 20 / frozen cells (m)", "s10-breakdown", f"{of['k']['20']['hits']} / {of['cells']}",
+        f"{nf['k']['20']['hits']} / {nf['cells']}", f"{nf['k']['20']['hits'] - of['k']['20']['hits']:+d}", [orel, nrel])
+    # forecast truth grades: the ungated rows of (l) and the time-matched row of (m)
+    for t in ("s10-none", "s10c-blind", "s10-breakdown"):
+        orel, nrel = f"results/fleet/hotspot_{t}.json", f"results/fleet/hotspot_{t}-st.json"
+        og, ng = load(orel)["grading_counts"]["truth"], load(nrel)["grading_counts"]["truth"]
+        oh, nh = og.get("hit", 0), ng.get("hit", 0)
+        row("ungated forecasts: truth hits / graded (l), (m)", t, f"{oh} / {oh + og.get('false_alarm', 0)}",
+            f"{nh} / {nh + ng.get('false_alarm', 0)}", f"{nh - oh:+d} hits", [orel, nrel])
+    for t in ("s10-none", "s10c-blind", "closed-loop-sticky"):
+        row("gated forecasts, baseline and persistence gate (l)", t, "see (l)", "not rerun", "n/a",
+            [f"results/fleet/hotspot_{t}-gate-{g}.json" for g in GATES])
+    # S10D paired verdict (j)
+    for t in tags + ["s8e-long-w0.5"]:
+        orel = f"results/fleet/baselines_{t}.json"
+        nrel = _st(orel)
+        o, n = load(orel), load(nrel)
+        if n is None:
+            row("S10D map - persistence, truth precision, K 20 / K 40 (j)", t, "see (j)", "not rerun", "n/a", [orel])
+            continue
+        cells = []
+        for d in (o, n):
+            if d is None:
+                cells.append("n/a (no station-unaware file)")
+                continue
+            parts = []
+            for k in S10_KS:
+                dl, v = _paired(d["baselines"]["paired"][k]["truth_precision"], d, k, "truth_precision")
+                parts.append(f"K {k}: {dl}, {v}")
+            cells.append("; ".join(parts))
+        if o is None:
+            dl = "n/a"
+        else:
+            for key in ("k", "paired", "chance"):
+                assert o["baselines"][key] == n["baselines"][key], (t, key)
+            dl = "unchanged (`k`, `paired`, `chance` blocks equal)"
+        row("S10D map - persistence, truth precision, K 20 / K 40 (j)", t, cells[0], cells[1], dl,
+            [r for r, d in ((orel, o), (nrel, n)) if d is not None])
+    # lesson_persist against chance (e), (j)
+    for t in ("s10-none", "s10c-blind"):
+        orel, nrel = f"results/fleet/hotspot_{t}.json", f"results/fleet/hotspot_{t}-st.json"
+        ol, nl = load(orel)["lesson_persist_chance"], load(nrel)["lesson_persist_chance"]
+        row("lesson_persist hot_cell: held / graded, lift over chance", t,
+            f"{ol['observed_ok']} / {ol['n_lessons']}, lift {ol['lift']:.2f}",
+            f"{nl['observed_ok']} / {nl['n_lessons']}, lift {nl['lift']:.2f}", f"lift {nl['lift'] - ol['lift']:+.2f}",
+            [orel, nrel])
+    # AMOC (k), (n)
+    orel = AMOC
+    nrel = _st(orel)
+    o, n = load(orel), load(nrel)
+    assert o["amoc"] == n["amoc"] and o["by_k"] == n["by_k"]
+    assert n["meta"]["phase_a_dir"].endswith("-st") and n["meta"]["reference_dir"].endswith("-st")
+    ok = next(r for r in o["amoc"]["k"] if r["K"] == 20)
+    nk = next(r for r in n["amoc"]["k"] if r["K"] == 20)
+    row("AMOC, decayed map K 20: detected while open / windows (k)", "s10c-blind", f"{ok['n_detected']} / {ok['n_windows']}",
+        f"{nk['n_detected']} / {nk['n_windows']}", f"{nk['n_detected'] - ok['n_detected']:+d}", [orel, nrel])
+    row("AMOC, decayed map K 20: false alarms per zone-hour, s10-none / s10c-blind outside windows (k)", "s10c-blind",
+        f"{ok['fa_per_hour_reference']:.1f} / {ok['fa_per_hour_measured_outside_windows']:.1f}",
+        f"{nk['fa_per_hour_reference']:.1f} / {nk['fa_per_hour_measured_outside_windows']:.1f}",
+        "unchanged (`amoc` and `by_k` blocks equal)", [orel, nrel])
+    row("CUSUM and short-memory map (n)", "s10c-blind", "see (n)", "not rerun", "n/a",
+        ["results/fleet/amoc_fast.json", "results/fleet/amoc_shortmap.json"])
+    # time budget (o)
+    for t in tags:
+        orel = f"results/fleet/timebudget_{t}.json"
+        nrel = _st(orel)
+        o, n = load(orel), load(nrel)
+        assert n["src"]["station_aware"] is True and n["src"]["station_radius"] == 0, t
+        os_, ns = o["run"]["totals"]["share"]["stuck"], n["run"]["totals"]["share"]["stuck"]
+        row("time budget: stuck share of AGV time (o)", t, f"{100 * os_:.2f}%", f"{100 * ns:.2f}%",
+            f"{100 * (ns - os_):+.2f} pts", [orel, nrel])
+        ow, nw = o["run"]["station_waits_in_stall_list"], n["run"]["station_waits_in_stall_list"]
+        row("stall list: episodes starting on a station cell / episodes (o)", t,
+            f"{ow['at_station']} / {ow['episodes']}", f"{nw['at_station']} / {nw['episodes']}",
+            f"{nw['episodes'] - ow['episodes']:+d} episodes", [orel, nrel])
+    # blocking clusters (p)
+    ref = {}
+    for t in tags:
+        orel = f"results/fleet/deadlock_{t}.json"
+        nrel = _st(orel)
+        o, n = load(orel), load(nrel)
+        assert n["station_rule"]["radius"] == 0, t
+        nt = n["total"]
+        ot = _as_v1(o)["total"] if o is not None else None
+        if t == "s10-none":
+            ref = {"old": ot["deadlock_s_per_robot_hour"], "new": nt["blocked_s_per_robot_hour"]}
+        files = [r for r, d in ((orel, o), (nrel, n)) if d is not None]
+        if ot is None:
+            row("blocking clusters; blocked robot-s per robot-hour (x s10-none) (p)", t, "n/a (no station-unaware run)",
+                f"{nt['blocking_clusters']}; {nt['blocked_s_per_robot_hour']:.1f} "
+                f"({nt['blocked_s_per_robot_hour'] / ref['new']:.2f}x)", "n/a", files)
+            continue
+        orate, nrate = ot["deadlock_s_per_robot_hour"], nt["blocked_s_per_robot_hour"]
+        row("blocking clusters; blocked robot-s per robot-hour (x s10-none) (p)", t,
+            f"{ot['deadlocks']}; {orate:.1f} ({orate / ref['old']:.2f}x)",
+            f"{nt['blocking_clusters']}; {nrate:.1f} ({nrate / ref['new']:.2f}x)",
+            f"{nt['blocking_clusters'] - ot['deadlocks']:+d}; {nrate - orate:+.1f}", files)
+    # MoRoOp (q)
+    orel, nrel, lrel = MOROOP, _st(MOROOP), "results/fleet/moroop_label-st.json"
+    shrel, nshrel = MOROOP_SHIFTS, _st(MOROOP_SHIFTS)
+    o, n, lab = load(orel), load(nrel), load(lrel)
+    r = n["src"]["station_rule"]["radius"]
+    assert lab["station_radius"] == r and lab["pooled"]["counts"] == n["label"]["counts"]
+    run = f"MoRoOp, 9 shifts (radius {r})"
+    row("stuck share of the span; stuck s (q)", run, f"{100 * o['share']['stuck']:.2f}%; {o['seconds']['stuck']:.0f}",
+        f"{100 * n['share']['stuck']:.3f}%; {n['seconds']['stuck']:.0f}",
+        f"{n['seconds']['stuck'] - o['seconds']['stuck']:+.0f} s", [orel, nrel])
+    osh, nsh = load(shrel)["shifts"], load(nshrel)["shifts"]
+    for b in ("stuck", "stopped_short"):
+        ov, nv = osh["6"]["timebudget_robot"]["seconds"][b], nsh["6"]["timebudget_robot"]["seconds"][b]
+        row(f"shift 6 (2026_07_30_morning, the manual intervention): {b} s (q)", run, f"{ov:.0f}", f"{nv:.0f}",
+            f"{nv - ov:+.0f}", [shrel, nshrel])
+    oc, nc = o["label"]["counts"], n["label"]["counts"]
+    for key, what in (("stuck_runs", "detector stuck runs"), ("false_alarms", "stuck runs with no label within 30 s"),
+                      ("hits", "label episodes >= 30 s detected"), ("timeouts_detected", "TIMEOUT operations overlapped "
+                                                                                          "by a stuck run")):
+        den = {"hits": "ge30", "timeouts_detected": "timeouts"}.get(key)
+        ov = f"{oc[key]}" + (f" / {oc[den]}" if den else "")
+        nv = f"{nc[key]}" + (f" / {nc[den]}" if den else "")
+        row(f"{what} (q)", run, ov, nv, f"{nc[key] - oc[key]:+d}", [orel, nrel, lrel])
+    on_st = [sum(1 for f in d["label"]["false_alarms"] if f["on_station_cell"]) for d in (o, n)]
+    row("unlabelled stuck runs on a station cell (q)", run, f"{on_st[0]}", f"{on_st[1]}", f"{on_st[1] - on_st[0]:+d}",
+        [orel, nrel])
+
+    print("| measure | run | old rule | station-aware | delta | files |")
+    print("|---|---|---|---|---|---|")
+    print("\n".join(rows))
+    print()
+    print("Old rule = the station-unaware detector of Sprints 5 to 13A; station-aware = S13B (PR #50): a stopped run "
+          "whose first stopped cell is within the station radius of a station goal cell becomes SERVICING after the "
+          "30 s threshold, not a stuck episode. Simulator runs: stations `auto` from the emit ledger, radius 0 "
+          "(asserted: `src.station_radius`, `station_rule.radius`); MoRoOp: `fleet/data/moroop/stations.json`, "
+          f"radius {r} (asserted). The station-aware files come from queue item `wr-s13b-rerun`, which rebuilt each "
+          "store as `store-st` with `ingest --stations auto` and re-ran costmap, lessons, grade, hotspot_score, "
+          "baselines, timebudget and deadlock on it, with the original publish schedules and lesson windows, and "
+          "checked that no original store or results file changed. Unchanged rows are asserted, not eyeballed: the "
+          "final map (`zones`) is equal in every run, and the S10D `k`, `paired` and `chance` blocks and the AMOC "
+          "`amoc` and `by_k` blocks are equal. Old top-20 precision for s8b-medium-80-p03-07 and closed-loop-sticky "
+          "is read from the S10D baselines JSON, because their hotspot JSON on disk predates `truth_kinds` (s8b) or "
+          "does not exist (sticky). The sticky baselines files differ in `params.horizon_s` (3600 old, 1245 new); "
+          "the asserted blocks are equal anyway. s10-breakdown has no station-unaware S10D file and s8b no "
+          "station-unaware blocking run, so those rows have no old value. The ratio in the blocking rows is the run's "
+          "rate over the s10-none rate under the same rule. MoRoOp unlabelled runs on a station cell are counted from "
+          "`label.false_alarms[].on_station_cell`.")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -1287,6 +1481,8 @@ def main():
     blocking_clusters()
     print("\n### (q) Sprint 13: a real shift (S13A, MoRoOp, one robot)\n")
     real_shift()
+    print("\n### (r) The stuck rule knows where stations are (S13B): old / station-aware\n")
+    station_aware()
 
 
 if __name__ == "__main__":
