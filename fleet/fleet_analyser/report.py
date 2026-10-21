@@ -8,6 +8,7 @@ docs/SCOPE.md "S5C1".
 import math
 from pathlib import Path
 
+from .causes import causes_block
 from .ledger import countable, excluded_counts
 from .parse import iso
 
@@ -57,7 +58,38 @@ def hotspots(eps):
     return [(z, c, n) for (z, c), n in ranked[:HOTSPOTS]]
 
 
-def report_run(store, run):
+def _cause_lines(block):
+    out = []
+    for r in block["table"]:
+        share = "n/a" if r["share"] is None else f"{r['share']:.2f}"
+        out.append(f"- {r['cause_label']} ({r['cause']}): {r['episodes']} episodes, {num(r['seconds'])} s, share {share}")
+    return out or ["- none"]
+
+
+def causes_section(eps, budget=None):
+    """The causes table per run and per robot over the countable episodes. budget = a timebudget result document (its
+    `run` totals and per-robot stuck bucket are the share denominators); None: no denominator, shares are n/a."""
+    robot_stuck = {}
+    run_stuck = None
+    if budget is not None:
+        run_stuck = budget["run"]["totals"]["seconds"]["stuck"]
+        for z in budget["zones"].values():
+            for group in ("robots", "pickers"):
+                for serial, rec in z.get(group, {}).items():
+                    robot_stuck[serial] = rec["seconds"]["stuck"]
+    note = ("share = episode seconds / the time budget's stuck bucket (--timebudget); it need not sum to 1: the bucket leaves "
+            "out seconds that faulted, paused or no_data intervals claim, the episodes count their whole length"
+            if budget is not None else "share n/a: no --timebudget file, so no stuck bucket to divide by")
+    whole = causes_block(eps, run_stuck)
+    out = ["", "## Causes (episode seconds; ordered by seconds, then cause key)", "", note, ""] + _cause_lines(whole)
+    out += ["", f"## Causes per robot (same columns)"]
+    for robot in sorted({e["robot"] for e in eps}):
+        out += ["", f"### {robot}", ""] + _cause_lines(causes_block([e for e in eps if e["robot"] == robot],
+                                                                     robot_stuck.get(robot) if budget is not None else None))
+    return out
+
+
+def report_run(store, run, budget=None):
     all_eps = store.select("stuck_episodes", {"run": run})
     eps = countable(all_eps)
     ex = excluded_counts(all_eps)
@@ -80,6 +112,7 @@ def report_run(store, run):
             f"- p50: {num(nearest_rank(durations, 0.5))}", f"- p95: {num(nearest_rank(durations, 0.95))}"]
 
     out += ["", "## Cause mix", ""] + _mix_lines(_mix(e["cause"] for e in eps))
+    out += causes_section(eps, budget)
     out += ["", "## Resolution mix", ""] + _mix_lines(_mix(e["resolution"] for e in eps))
 
     avoid = [e for e in eps if e["avoidable"]]
@@ -138,10 +171,10 @@ def plot_hotspots(eps, path):
     return path
 
 
-def write_report(store, run, out_path):
+def write_report(store, run, out_path, budget=None):
     """Write report.md and hotspots.png (next to it); returns the two paths."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(report_run(store, run), encoding="utf-8")
+    out_path.write_text(report_run(store, run, budget), encoding="utf-8")
     png = plot_hotspots(countable(store.select("stuck_episodes", {"run": run})), out_path.parent / "hotspots.png")
     return out_path, png

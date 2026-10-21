@@ -3,7 +3,7 @@
 Usage: python fleet/adapters/moroop.py --raw DIR --out DIR [--shift N] [--cell-m 0.5] [--moving-eps 0.05]
                                        [--omega-eps 0.05] [--stations PATH]
        python fleet/adapters/moroop.py --analyse [--raw DIR] [--jsonl DIR] [--budget DIR] [--stations PATH] [--results DIR]
-                                       [--station-radius N] [--suffix S]
+                                       [--station-radius N] [--servicing-max-s S|auto] [--suffix S]
 
 Build mode writes OUT/zone<k>-000.jsonl.gz per shift (only k = N with --shift) and OUT/adapter_stats.json, and derives the
 stations file from ALL nine shifts (default fleet/data/moroop/stations.json). The time budget is then run UNCHANGED once
@@ -412,18 +412,24 @@ def _tb():
     return timebudget
 
 
-def second_buckets(kept, stations, near, tb, max_gap_s=None, shift_s=3600, radius=None):
+def second_buckets(kept, stations, near, tb, max_gap_s=None, shift_s=3600, radius=None, servicing_max_s=None):
     """Bucket of every integer second of [first ts, last ts), via timebudget.robot_budget on the pair (i, i+1);
-    stuck vs stopped_short decided on the full stream with timebudget.stopped_runs / run_is_stuck."""
+    stuck vs stopped_short decided on the full stream with timebudget.stopped_runs / run_is_stuck. servicing_max_s (S14A,
+    needs radius): an overrun station stop is stuck and any other station stop of >= 30 s is waiting_station, in every
+    stopped-with-order bucket the pair rule gave (faulted / paused / moving / idle / no_data are untouched)."""
     runs, run_of = tb.stopped_runs(kept)
-    stuck_flags = [tb.run_is_stuck(kept, r) if radius is None else tb.run_is_stuck(kept, r, stations, radius)
+    stuck_flags = [tb.run_is_stuck(kept, r) if radius is None else tb.run_is_stuck(kept, r, stations, radius, servicing_max_s)
                    for r in runs]
+    sv = servicing_max_s is not None and radius is not None
+    station_run = [sv and tb.run_is_station_stop(kept, r, stations, radius) for r in runs]
     out = []
     for i in range(len(kept) - 1):
         kw = {} if max_gap_s is None else dict(max_gap_s=max_gap_s)
         rec, _ = tb.robot_budget(kept[i:i + 2], stations, near, shift_s, **kw)
         b = next(b for b in tb.BUCKETS if rec["seconds"][b])
-        if b in ("stuck", "stopped_short"):
+        if sv and b in ("waiting_station", "waiting_shelf", "stuck", "stopped_short") and station_run[run_of[i]]:
+            b = "stuck" if stuck_flags[run_of[i]] else "waiting_station"
+        elif b in ("stuck", "stopped_short"):
             b = "stuck" if stuck_flags[run_of[i]] else "stopped_short"
         out.extend([b] * (kept[i + 1].ts - kept[i].ts))
     return out
@@ -447,21 +453,25 @@ def label_episodes(native_rows, grid_end_ts):
     return eps
 
 
-def run_intervals(kept, tb, stations=None, radius=None):
+def run_intervals(kept, tb, stations=None, radius=None, servicing_max_s=None):
     """Stuck runs as (start ts, end ts, first index, last index); end = ts owning-end of the last message."""
     runs, _ = tb.stopped_runs(kept)
     out = []
     for a, b in runs:
-        if tb.run_is_stuck(kept, (a, b)) if radius is None else tb.run_is_stuck(kept, (a, b), stations, radius):
+        if tb.run_is_stuck(kept, (a, b)) if radius is None else tb.run_is_stuck(kept, (a, b), stations, radius,
+                                                                                 servicing_max_s):
             end = kept[b + 1].ts if b + 1 < len(kept) else kept[b].ts
             out.append((kept[a].ts, end, a, b))
     return out
 
 
-def label_comparison(native_rows, kept, buckets, operations, stations, tb, radius=None):
+def label_comparison(native_rows, kept, buckets, operations, stations, tb, radius=None, servicing_max_s=None):
+    from fleet_analyser.causes import causes_block
+
     t0, t_end = kept[0].ts, kept[-1].ts
     eps = label_episodes(native_rows, t_end)
-    sruns = run_intervals(kept, tb, stations, radius)
+    sruns = run_intervals(kept, tb, stations, radius, servicing_max_s)
+    sec_bucket_all = collections.Counter(buckets)
     sec_bucket = collections.Counter()
     for e in eps:
         for s in range(max(e["start"], t0), min(e["end"], t_end)):
@@ -486,6 +496,18 @@ def label_comparison(native_rows, kept, buckets, operations, stations, tb, radiu
                                            for o in timeouts),
             overlaps_paused_message=any(kept[i].paused for i in range(a, b + 1)),
             on_station_cell=any((kept[i].x, kept[i].y) in stations for i in range(a, b + 1))))
+    # S14A: the detector's episodes with their cause (recomputed from the same kept messages, same rule) and the
+    # overruns among them; seconds are episode seconds, the share denominator is this shift's stuck bucket
+    ep_rows = tb.recompute_episodes(kept, stations if radius is not None else None, radius or 0,
+                                    servicing_max_s if radius is not None else None)
+    overruns = []
+    for e in sorted((e for e in ep_rows if e["cause"] == "station_overrun"), key=lambda e: e["start"]):
+        end = e["end"] if e["end"] is not None else t_end
+        overruns.append(dict(
+            start=iso(e["start"]), duration_s=e["duration_s"], station_cell=e["cell"],
+            overlaps_timeout_operation=any(o["finish_time"] is not None and o["start_time"] is not None
+                                           and e["start"] * 1_000_000 <= o["finish_time"] and o["start_time"] < end * 1_000_000
+                                           for o in timeouts)))
     to_out = []
     for o in sorted(timeouts, key=lambda o: o["start_time"]):
         s_us, f_us = o["start_time"], o["finish_time"]
@@ -503,6 +525,7 @@ def label_comparison(native_rows, kept, buckets, operations, stations, tb, radiu
         episodes_ge_30s=dict(count=len(long_), hits=hits, misses=len(long_) - hits, list=long_out),
         stuck_runs=len(sruns), false_alarms=dict(count=len(false_alarms), list=false_alarms),
         timeout_operations=dict(count=len(to_out), detected=sum(t["detected"] for t in to_out), list=to_out),
+        causes=causes_block(ep_rows, sec_bucket_all.get("stuck", 0)), overruns=overruns, _episodes=ep_rows,
         windows="hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs "
                 "[run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]")
 
@@ -550,10 +573,12 @@ def _check(name, expected, observed, kind, tol=0.05, gating=None):
 
 
 def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, stations_path=DEFAULT_STATIONS,
-            results=DEFAULT_RESULTS, cell_m=DEFAULT_CELL_M, station_radius=None, suffix=None):
+            results=DEFAULT_RESULTS, cell_m=DEFAULT_CELL_M, station_radius=None, suffix=None, servicing_spec=None):
     tb = _tb()
+    from fleet_analyser import servicing as sv_mod
     from fleet_analyser.detector import DEFAULT_STUCK_AFTER
     from fleet_analyser.parse import parse_line
+    from fleet_analyser.causes import causes_block
 
     if DEFAULT_STUCK_AFTER != STUCK_AFTER_S:
         raise SystemExit(f"moroop: DEFAULT_STUCK_AFTER changed to {DEFAULT_STUCK_AFTER}")
@@ -566,7 +591,8 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     shifts, pooled_sec = {}, collections.Counter()
     pooled = dict(span_s=0, jobs=0, messages=0, rejects=0, label=collections.Counter(), no_data=collections.Counter(),
                   charge=collections.Counter(), episodes=collections.Counter())
-    pooled_lists = dict(false_alarms=[], misses=[], timeouts=[])
+    pooled_lists = dict(false_alarms=[], misses=[], timeouts=[], overruns=[], servicing=[])
+    pooled_eps = []
     exact_fail = False
     for k, name in enumerate(SHIFTS):
         d = data[name]
@@ -586,20 +612,40 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
             raise SystemExit(f"moroop: shift {k} jsonl differs from the regenerated messages or has parse rejects "
                              f"({rejects} rejects)")
         kept = tb.kept_messages(parsed)
-        brec = json.loads((Path(budget) / f"zone{k}.json").read_text())["zones"][""]["robots"][SERIAL]
-        inproc, _ = tb.robot_budget(kept, stations, near, 3600)
+        bdoc = json.loads((Path(budget) / f"zone{k}.json").read_text())
+        brec = bdoc["zones"][""]["robots"][SERIAL]
+        # the on-disk budget is the station-unaware S13A one unless it was written with --station-aware (S14A: the
+        # per-shift calls that carry --servicing-max-s must); then the in-process check follows the rule it recorded
+        bsrc = bdoc.get("src", {})
+        sv_stats = sv_t = None
+        if servicing_spec is not None:
+            if station_radius is None:
+                raise SystemExit("moroop: --servicing-max-s needs --station-radius")
+            sv_stats = sv_mod.resolve(servicing_spec, parsed, stations, station_radius)
+            sv_t = sv_stats["servicing_max_s"]
+        if bsrc.get("station_aware"):
+            disk_t = bdoc.get("servicing_max_s")
+            if disk_t != sv_t:
+                raise SystemExit(f"moroop: shift {k} budget file was written with servicing_max_s {disk_t}, this run uses {sv_t}")
+            inproc, _ = tb.robot_budget(kept, stations, near, 3600, rule_radius=bsrc["station_radius"], servicing_max_s=disk_t)
+        else:
+            inproc, _ = tb.robot_budget(kept, stations, near, 3600)
         if inproc["seconds"] != brec["seconds"] or inproc["jobs"] != brec["jobs"] or inproc["span_s"] != brec["span_s"]:
             raise SystemExit(f"moroop: shift {k} budget file differs from an in-process robot_budget run")
-        if station_radius is not None:  # the on-disk budget is the station-unaware S13A one; the rule here is aware
-            brec = tb.robot_budget(kept, stations, near, 3600, rule_radius=station_radius)[0]
-        buckets = second_buckets(kept, stations, near, tb, radius=station_radius)
+        if station_radius is not None:  # the rule here is aware
+            brec = tb.robot_budget(kept, stations, near, 3600, rule_radius=station_radius, servicing_max_s=sv_t)[0]
+        buckets = second_buckets(kept, stations, near, tb, radius=station_radius, servicing_max_s=sv_t)
         counts = collections.Counter(buckets)
         per_bucket = {b: counts.get(b, 0) for b in tb.BUCKETS}
         if per_bucket != brec["seconds"]:
             raise ValueError(f"moroop: shift {k} per-second bucket counts {per_bucket} != timebudget {brec['seconds']}")
-        buckets_nogap = second_buckets(kept, stations, near, tb, max_gap_s=float("inf"), radius=station_radius)
+        buckets_nogap = second_buckets(kept, stations, near, tb, max_gap_s=float("inf"), radius=station_radius,
+                                       servicing_max_s=sv_t)
         span = kept[-1].ts - kept[0].ts
-        lab = label_comparison(d["robot_state_cleaned"], kept, buckets, d["operations"], stations, tb, station_radius)
+        lab = label_comparison(d["robot_state_cleaned"], kept, buckets, d["operations"], stations, tb, station_radius, sv_t)
+        shift_eps = lab.pop("_episodes")
+        if sv_stats is not None:
+            lab.update(sv_stats)
         nd = no_data_stats(kept, buckets_nogap, tb)
         chg = charging_seconds(aux, kept, buckets, tb)
         jph = brec["jobs"] / (span / 3600)
@@ -630,6 +676,9 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
                                    "misses": lab["episodes_ge_30s"]["misses"], "stuck_runs": lab["stuck_runs"],
                                    "false_alarms": lab["false_alarms"]["count"], "timeouts": lab["timeout_operations"]["count"],
                                    "timeouts_detected": lab["timeout_operations"]["detected"]})
+        pooled_eps += shift_eps
+        pooled_lists["overruns"] += [dict(shift=k, **o) for o in lab["overruns"]]
+        pooled_lists["servicing"].append(dict(shift=k, **(sv_stats or {})))
         pooled_lists["false_alarms"] += [dict(shift=k, **f) for f in lab["false_alarms"]["list"]]
         pooled_lists["misses"] += [dict(shift=k, **e) for e in lab["episodes_ge_30s"]["list"] if not e["detected"]]
         pooled_lists["timeouts"] += [dict(shift=k, **t) for t in lab["timeout_operations"]["list"]]
@@ -664,15 +713,25 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     if station_radius is not None:
         src["station_rule"] = dict(radius=station_radius, cells="the --stations file", predicate="detector.at_station",
                                    run_cell="cell of the run's first stopped message")
+    if servicing_spec is not None:
+        src["servicing_max_s_spec"] = servicing_spec
     out_pooled = dict(
         shifts=len(SHIFTS), span_s=span_s, seconds=secs_out, share=share_out, jobs=pooled["jobs"], jobs_per_robot_hour=jph,
         messages=pooled["messages"], parse_rejects=pooled["rejects"], charging=dict(pooled["charge"]),
         no_data=dict(pooled["no_data"], max_gap_inside_stopped_run_s=pooled["max_gap_in_run"]), stations=st_stats,
         label=dict(seconds_per_bucket=dict(pooled["label"]), counts=dict(pooled["episodes"]),
                    false_alarms=pooled_lists["false_alarms"], missed_episodes_ge_30s=pooled_lists["misses"],
-                   timeout_operations=pooled_lists["timeouts"]),
+                   timeout_operations=pooled_lists["timeouts"],
+                   causes=causes_block(pooled_eps, pooled_sec.get("stuck", 0)), overruns=pooled_lists["overruns"]),
         waiting_shelf="n/a", faulted="not computed", sanity=pooled_sanity, mapping=MAPPING, deviations=DEVIATIONS, src=src)
     out_shifts = dict(shifts=shifts, waiting_shelf="n/a", faulted="not computed", src=src)
+    sv_doc = {}
+    if servicing_spec is not None:  # S14A: one bound per shift (each shift is one run); pooled files carry lists in shift order
+        sv_doc = {key: [row[key] for row in pooled_lists["servicing"]] for key in sv_mod.KEYS}
+        sv_doc["servicing_pooling"] = ("one bound per shift (a shift is one run: one robot, its own sample); the four "
+                                       "servicing_* keys here are lists in shift order, each shift record has its own")
+        out_pooled.update(sv_doc)
+        out_shifts.update(sv_doc)
     results = Path(results)
     results.mkdir(parents=True, exist_ok=True)
     tag = f"-{suffix}" if suffix else ""
@@ -680,7 +739,7 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     (results / f"timebudget_moroop_shifts{tag}.json").write_text(json.dumps(out_shifts, sort_keys=True, indent=1) + "\n")
     if suffix:
         label_doc = dict(shifts={k: v["label"] for k, v in shifts.items()}, pooled=out_pooled["label"],
-                         station_radius=station_radius, src=src)
+                         station_radius=station_radius, src=src, **sv_doc)
         (results / f"moroop_label{tag}.json").write_text(json.dumps(label_doc, sort_keys=True, indent=1) + "\n")
     print(f"{'check':45s} {'kind':6s} {'expected':>24s} {'observed':>24s} ok")
     for k, s in shifts.items():
@@ -695,6 +754,12 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
 
 
 # ------------------------------------------------------------------------------------------------ cli
+def _spec(text):
+    _tb()  # puts fleet/ on sys.path
+    from fleet_analyser.servicing import parse_spec
+    return parse_spec(text)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="MoRoOp adapter (S13A)")
     ap.add_argument("--analyse", action="store_true")
@@ -711,13 +776,18 @@ def main(argv=None):
     ap.add_argument("--station-radius", type=int, default=None,
                     help="--analyse: stuck rule ignores runs starting within this Manhattan radius of a --stations cell "
                          "(default: stations not applied)")
+    ap.add_argument("--servicing-max-s", type=_spec, default=None, metavar="S|auto",
+                    help="--analyse, S14A, needs --station-radius: a station stop longer than this many seconds is stuck "
+                         "again (station_overrun); auto = one bound per shift from that shift's dwell times at stations")
     ap.add_argument("--suffix", default=None, help="--analyse: write timebudget_moroop-S.json etc. instead of the S13A files")
     args = ap.parse_args(argv)
     if args.station_radius is not None and args.station_radius < 0:
         ap.error("--station-radius must be >= 0")
+    if args.servicing_max_s is not None and not (args.analyse and args.station_radius is not None):
+        ap.error("--servicing-max-s needs --analyse and --station-radius")
     if args.analyse:
         return analyse(args.raw, args.jsonl, args.budget, args.stations, args.results, args.cell_m, args.station_radius,
-                       args.suffix)
+                       args.suffix, args.servicing_max_s)
     if args.out is None:
         ap.error("--out is required unless --analyse")
     if args.shift is not None and not 0 <= args.shift < len(SHIFTS):

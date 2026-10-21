@@ -2,6 +2,7 @@
 the fleet state stream alone.
 
 Usage: python fleet/deadlock.py --glob 'DIR/*.jsonl.gz' --run NAME --out PATH [--min-s 30] [--store jsonl:COPY]
+       [--stations auto|PATH [--station-radius 0] [--servicing-max-s S|auto]]
 Stdout: "blocking RUN: blocking_clusters N blocking_chains M blocked_s_per_robot_hour R -> PATH".
 Why: congestion and deadlock are the second most named operator theme (docs/scouting/operator-problems.md). The stream
 carries every robot's cell at every step, so who waits for whom can be read off it. This tool does not change what a stall
@@ -69,7 +70,7 @@ if str(FLEET) not in sys.path:
 
 import fastmap  # noqa: E402  (check_copy, the store-copy guard)
 import costmap  # noqa: E402
-from fleet_analyser import decisions, hotspot, store as store_mod  # noqa: E402
+from fleet_analyser import decisions, hotspot, servicing, store as store_mod  # noqa: E402
 from fleet_analyser.detector import DEFAULT_STUCK_AFTER, FAULTED, STUCK, Detector, _near  # noqa: E402
 from fleet_analyser.parse import iso  # noqa: E402
 
@@ -199,7 +200,8 @@ class _Tap(Detector):
         return events
 
 
-def run_batches(messages, stuck_after=DEFAULT_STUCK_AFTER, observer=None, stations=None, station_radius=0):
+def run_batches(messages, stuck_after=DEFAULT_STUCK_AFTER, observer=None, stations=None, station_radius=0,
+                servicing_max_s=None):
     """Drive the detector over `messages` (in stream order) and call observer(zone, ts, batch, states, edges, events, since) per
     processed batch, where edges = batch_edges(batch, states) and since = {serial: stopped-run start} of the robots in a run. Returns {zone: sorted list of batch ts}."""
     seen = {}
@@ -209,7 +211,8 @@ def run_batches(messages, stuck_after=DEFAULT_STUCK_AFTER, observer=None, statio
         if observer is not None:
             observer(zone, ts, batch, states, batch_edges(batch, states), events, since)
 
-    det = _Tap(tap, stuck_after=stuck_after, stations=stations, station_radius=station_radius)
+    det = _Tap(tap, stuck_after=stuck_after, stations=stations, station_radius=station_radius,
+               servicing_max_s=servicing_max_s)
     for m in messages:
         det.feed(m)
     det.end_all()
@@ -248,7 +251,8 @@ def _row(item):
     return row
 
 
-def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stations=None, station_radius=0):
+def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stations=None, station_radius=0,
+            servicing_max_s=None):
     """{zone: dict(blocking_clusters, blocking_chains, n_robots, first_ts, last_ts)}: the clusters / chains kept by min_s, as rows."""
     trackers, spans = {}, {}
 
@@ -270,7 +274,7 @@ def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stat
         tr[1].step(ts, chains, lambda k, order: dict(robots=k, order=order, cells=cells(k),
                                                       start=max(since[s] for s in k if s in since)))
 
-    run_batches(messages, stuck_after, observe, stations, station_radius)
+    run_batches(messages, stuck_after, observe, stations, station_radius, servicing_max_s)
     out = {}
     for zone in sorted(trackers):
         sp = spans[zone]
@@ -282,8 +286,9 @@ def analyse(messages, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stat
     return out
 
 
-def build_document(messages, run, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stations=None, station_radius=0):
-    per = analyse(messages, min_s, stuck_after, stations, station_radius)
+def build_document(messages, run, min_s=DEFAULT_MIN_S, stuck_after=DEFAULT_STUCK_AFTER, stations=None, station_radius=0,
+                   servicing_max_s=None):
+    per = analyse(messages, min_s, stuck_after, stations, station_radius, servicing_max_s)
     zones, rows = {}, []
     num = hours = 0.0
     n_dl = n_kn = 0
@@ -345,6 +350,10 @@ def build_parser():
                    help="S13B: station goal cells (auto = from <glob dir>/emit_ledger.json and the env, or a PATH file); "
                         "a stopped run starting within --station-radius of one is SERVICING, not STUCK")
     p.add_argument("--station-radius", type=int, default=0, help="Manhattan radius around a station cell (default 0)")
+    p.add_argument("--servicing-max-s", type=servicing.parse_spec, default=None, metavar="S|auto",
+                   help="S14A, needs --stations: a station stop longer than this many seconds is STUCK again (cause "
+                        "station_overrun) and takes part in the blocking graph; auto = one bound for the whole glob from "
+                        "the dwell times of the stops that start at a station")
     return p
 
 
@@ -368,14 +377,22 @@ def main(argv=None):
         p.error(f"no messages under {a.glob}")
     if a.station_radius < 0:
         p.error("--station-radius must be >= 0")
+    if a.servicing_max_s is not None and a.stations is None:
+        p.error("--servicing-max-s needs --stations")
     stations = None
     if a.stations is not None:
         from fleet_analyser.stations import load_stations
 
         stations = load_stations(a.stations, os.path.dirname(os.path.abspath(a.glob)))
-    doc = build_document(messages, a.run, a.min_s, DEFAULT_STUCK_AFTER, stations, a.station_radius)
+    bound = sv_stats = None
+    if a.servicing_max_s is not None:
+        sv_stats = servicing.resolve(a.servicing_max_s, messages, stations, a.station_radius)
+        bound = sv_stats["servicing_max_s"]
+    doc = build_document(messages, a.run, a.min_s, DEFAULT_STUCK_AFTER, stations, a.station_radius, bound)
     if stations is not None:
         doc["station_rule"] = dict(stations=a.stations, radius=a.station_radius)
+    if sv_stats is not None:  # S14A: one bound for the whole glob (all zones and robots pooled)
+        doc.update(sv_stats, servicing_pooling="all robots of all zones of the glob (one run)")
     if copy is not None:
         doc["store_duplicates"] = write_store(copy, a.glob, a.run, doc["decisions"])
     costmap.write_json(a.out, doc)
