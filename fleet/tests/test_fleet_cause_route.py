@@ -99,6 +99,36 @@ class TestBlockerChoice(unittest.TestCase):
             self.assertEqual((op["cause"], op["blocker"], op["blocker_on_route"]), ("traffic", None, want_route))
             self.assertEqual(cause_label(op["cause"], op["blocker_on_route"]), want_label)
 
+    def test_e2_traffic_on_route_neighbour_need_not_be_the_lowest_serial(self):
+        # inject: test only the first (lowest-serial) adjacent robot for the traffic route flag
+        msgs = []
+        for k in range(6):
+            msgs.append(msg(k, A, 4, 4, nxt=(5, 4)))
+            msgs.append(msg(k, "Z0-01", 4, 5, order=""))  # idle, adjacent, off route, lowest serial
+            msgs.append(msg(k, "Z0-09", 5, 4, order=""))  # idle, on the next node
+        det = Detector()
+        ev = []
+        for m in sorted(msgs, key=lambda m: (m.ts, m.serial)):
+            ev.extend(det.feed(m))
+        (op,) = [e for e in ev if e["kind"] == "episode_open"]
+        self.assertEqual((op["cause"], op["blocker"], op["blocker_on_route"]), ("traffic", None, True))
+
+    def test_e3_station_overrun_has_no_route_flag_even_with_a_robot_on_the_next_node(self):
+        # inject: give the converted station stop False (or run _cause on it)
+        msgs = []
+        for k in range(10):
+            msgs.append(msg(k, A, 4, 4, nxt=(5, 4)))
+            msgs.append(msg(k, "Z0-09", 5, 4, order="o2", faulted=True))
+        det = Detector(stations={(4, 4)}, station_radius=0, servicing_max_s=60)
+        ev = []
+        for m in sorted(msgs, key=lambda m: (m.ts, m.serial)):
+            ev.extend(det.feed(m))
+        ev.extend(det.end_all())
+        eps = [e for e in ev if e["kind"].startswith("episode") and e["robot"] == A]
+        self.assertTrue(eps)
+        self.assertEqual({(e["cause"], e["blocker"], e["blocker_on_route"]) for e in eps}, {("station_overrun", None, None)})
+        self.assertEqual(cause_label("station_overrun", eps[0]["blocker_on_route"]), "Station stop over time limit")
+
     def test_f_precedence_an_on_route_stuck_robot_never_beats_an_off_route_broken_one(self):
         # Z0-09 on route, stopped with an order (becomes STUCK); Z0-01 off route, faulted
         op, _ = episode([("Z0-09", 5, 4, False), ("Z0-01", 4, 5, True)])
