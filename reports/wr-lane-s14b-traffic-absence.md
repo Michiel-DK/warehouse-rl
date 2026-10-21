@@ -5,6 +5,14 @@ Branch `worktree-wf_ed9acb38-88a-2`, base master (7f916b4). Declared files only:
 `fleet/tests/test_fleet_hotspot.py` (isolation set only), this report. README.md, docs/SCOPE.md, vendor/, fleet/data/,
 results/ and the laptop-scheduler repo are untouched.
 
+## Read this before releasing wr-s14b-amoc-run
+
+At the default alpha 1e-3 (and at 1e-4) the detector flags NOTHING on either run, so `results/fleet/amoc_absence.json`
+will be a stub document, not an AMOC: `time_to_detect` refuses a measured store with zero forecast rows, and the queue
+command writes `{"detector": "absence", "measured_forecast_rows": 0, "amoc": null}` instead of dying. At alpha 1e-2 it flags
+129 vs 126 flag-publishes on blind vs undisturbed, and a smoke AMOC detects 0/50 windows at K=20. The operator should see
+this before spending the slot; the command is cheap (11 s wall in the smoke).
+
 ## What was built
 
 `fleet/absencemap.py`: a second fast detector next to the CUSUM. A blind blockage produces silence, not stalls; this
@@ -97,12 +105,12 @@ tracked file holds):
 `fleet/tests/test_fleet_absencemap.py`: T1 (exact first flag bin by independent per-bin-end stepping, (4,4) the only
 flagged cell, frozen rate, release at the first bin end after the re-crossing), T2 (9 passes never flag, 10 do), T3
 (standing still = one pass), T4 (real-data smoke), T5 (copy guard: original store, `store`-named dir, glob dir, inside the
-store, a parent, non-jsonl; nothing deleted), T6 (determinism: `--out` bytes equal; decision rows equal except the store's
-wall-clock `recorded_at` stamp, the same exception test_fleet_fastmap makes), T7 (exact claim keys, detector `absence`),
+store, a parent, non-jsonl; nothing deleted), T6 (determinism: `--out` bytes equal and the raw `decisions.jsonl` bytes equal,
+nothing excluded, because `recorded_at` is written as the publish time instead of the wall clock), T7 (exact claim keys, detector `absence`),
 plus flag validation and a no-`truth` / no-redefinition scan. `fleet/tests/test_time_to_detect.py`: T8
 (`TestPrebuiltDetector.test_t8...`: absence store accepted and recorded, cusum output has no `detector` key and its key
-order is unchanged), T9 (mixed or unknown detectors raise) and a reference-agreement test.
-Mutation spot checks run by hand: `>=` to `>` on the eligibility count fails T2; an unfrozen observed time fails T1 and T2.
+order is unchanged), T9 (mixed or unknown detectors raise), a reference-agreement test and an absence-against-rerun-reference test.
+Mutation spot checks run by hand: `>=` to `>` on the eligibility count fails T2; an unfrozen observed time (run alone) fails T1.
 `absencemap.py` is in the required-names set of `test_no_ground_truth_in_analyst_code` and in no exemption tuple;
 `grep -n truth fleet/absencemap.py` is empty.
 
@@ -129,7 +137,7 @@ build() {
 }
 amoc() {
   # time_to_detect refuses a measured store with zero forecast rows; an alpha that flags nothing gets a stub document
-  if grep -q absence "fleet/data/s10c-blind/store-$1/decisions.jsonl"; then
+  if grep -q 'detector\\":\\"absence' "fleet/data/s10c-blind/store-$1/decisions.jsonl"; then
     $P fleet/time_to_detect.py --phase-a fleet/data/s10c-blind --truth-kind blocked --publish-every 60 --top-k 20 --sweep-k 5,10,20,40 --reference fleet/data/s10-none --store-suffix "$1" --out "$2"
   else
     echo "wr-s14b-amoc-run: store-$1 flagged nothing on s10c-blind; no AMOC, stub document"

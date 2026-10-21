@@ -1302,6 +1302,19 @@ class TestPrebuiltDetector(unittest.TestCase):
                 with self.assertRaises(ValueError, msg=detectors):
                     run_main(d, FakeRerun(WROWS), extra=("--truth-kind", "blocked", "--store-suffix", "x"), **self.args())
 
+    def test_absence_against_a_rerun_reference_raises(self):
+        # inject: drop the prebuilt-on-both-sides check in resolve_detector (a rerun reference is a costmap, not a detector)
+        z = ({"0": WF, "1": WF}, WF, WF + 300)
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "m").mkdir()
+            (Path(t) / "r").mkdir()
+            m = self.prebuilt(Path(t) / "m", self.rows("absence"))
+            r = Path(t) / "r"
+            make_window_phase_a(r, wtruth({"0": [], "1": []}), runs=(REF,))  # no store-x: goes through FakeRerun
+            argv = ("--truth-kind", "blocked", "--store-suffix", "x", "--sweep-k", "2", "--reference", str(r))
+            with self.assertRaisesRegex(ValueError, "prebuilt store on both sides"):
+                run_main(m, FakeRerun(WROWS), extra=argv, sp=dspan({m: z, r: z}))
+
     def test_reference_detector_must_match_and_empty_reference_adopts(self):
         # inject: skip the measured/reference comparison, or let an empty reference reset the detector to cusum
         z = ({"0": WF, "1": WF}, WF, WF + 300)

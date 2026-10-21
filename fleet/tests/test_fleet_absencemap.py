@@ -144,16 +144,14 @@ class TestGridStream(unittest.TestCase):
         self.assertAlmostEqual(scores[0], r_flag * (t_flag - max(p for p in passes if p <= t_flag)), places=9)
 
     def test_t6_determinism(self):
-        # inject: iterate a set / dict in hash order, or stamp wall-clock time into a decision or the --out document
+        # inject: iterate a set / dict in hash order, or stamp wall-clock time (recorded_at) into a decision or --out
         outs, rows = [], []
         for n in ("a", "b"):
             copy = Path(self.tmp.name) / f"copy-{n}"
             out = Path(self.tmp.name) / f"out-{n}.json"
             absencemap.run_absencemap(str(self.run_dir / "*.jsonl.gz"), "grid", copy, out)
             outs.append(out.read_bytes())
-            # recorded_at is the store's wall-clock stamp (decisions.record_decision), the one field that may differ
-            rows.append([{k: v for k, v in json.loads(ln).items() if k != "recorded_at"}
-                         for ln in (copy / "decisions.jsonl").read_text().splitlines()])
+            rows.append((copy / "decisions.jsonl").read_bytes())  # nothing excluded: recorded_at is the publish time
         self.assertEqual(outs[0], outs[1])
         self.assertEqual(rows[0], rows[1])
         self.assertTrue(rows[0])

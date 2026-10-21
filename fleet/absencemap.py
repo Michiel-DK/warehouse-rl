@@ -36,7 +36,8 @@ planned route (nodeStates holds only the first route node).
 Publish on the costmap.publish_times grid (same as the map and the CUSUM). At publish t the state is the one after the last
 complete bin with bin_end <= t (none: nothing flagged). One hotspot_forecast decision per flagged cell, claim {detector
 "absence", score, rank, top_k, horizon_s, bin_s, alpha, min_expected, rate, gap_s, expected_passes, window_hours None,
-half_life_h None}; time_to_detect.select_forecasts reads the last two, both None is uniform and accepted.
+half_life_h None}; time_to_detect.select_forecasts reads the last two, both None is uniform and accepted. recorded_at is the
+publish time (not the wall clock), so two runs write byte-identical decision rows.
 Store: the decisions go to a jsonl COPY of <glob dir>/store after costmap.reset_forecasts(copy, run), exactly as fastmap.py
 (check_copy, sha256_file and n_bins_of are imported from it). The original store is never written and its decisions.jsonl is
 hashed before and after (a change aborts with RuntimeError, no --out). A --store that is not jsonl: is refused (exit 2).
@@ -175,7 +176,7 @@ def run_absencemap(glob, run, copy, out, publish_every=DEFAULT_PUBLISH_S, bin_s=
                                    gap_s=float(gap), expected_passes=float(score), window_hours=None, half_life_h=None),
                         rationale=(f"no pass at {cell} in zone {zone} for {gap:.0f} s, expected {score:.1f} at rate "
                                    f"{rate:.4f}/s (alpha {alpha})"),
-                        expected=float(score), grade_after=t + publish_every)
+                        expected=float(score), grade_after=t + publish_every, recorded_at=float(t))
             publishes.append(dict(published_at=t, t_s=t - first_ts, flagged=doc_flagged))
     finally:
         st.close()
