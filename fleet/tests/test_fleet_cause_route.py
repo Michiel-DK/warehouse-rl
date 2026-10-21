@@ -59,6 +59,12 @@ class TestBlockerChoice(unittest.TestCase):
         self.assertEqual(cause_label(op["cause"], op["blocker_on_route"]), "Stopped next to a broken robot")
         self.assertIs(cl["blocker_on_route"], False)
 
+    def test_b2_same_x_other_y_is_not_on_route(self):
+        # inject: compare only x with the next node
+        op, _ = episode([("Z0-09", 5, 5, True)], a_at=(5, 4), nxt=(5, 3))
+        self.assertEqual((op["cause"], op["blocker"], op["blocker_on_route"]), ("blocked_by_faulted", "Z0-09", False))
+        self.assertEqual(cause_label(op["cause"], op["blocker_on_route"]), "Stopped next to a broken robot")
+
     def test_c_no_nodestates_key_is_none_and_stopped_next_to(self):
         op, (cl,) = episode([("Z0-09", 5, 4, True)], nxt=None, reported=False)
         self.assertEqual((op["cause"], op["blocker_on_route"]), ("blocked_by_faulted", None))
@@ -138,6 +144,8 @@ class TestBlockerChoice(unittest.TestCase):
         op, _ = episode([("Z0-09", 5, 4, False), ("Z0-01", 4, 3, False)])
         self.assertEqual((op["cause"], op["blocker"], op["blocker_on_route"]), ("blocked_by_stuck", "Z0-09", True))
         self.assertEqual(cause_label(op["cause"], True), "Blocked by a stuck robot")
+        op, _ = episode([("Z0-09", 5, 4, False)], nxt=None, reported=False)  # inject: bool() the stuck flag
+        self.assertEqual((op["cause"], op["blocker"], op["blocker_on_route"]), ("blocked_by_stuck", "Z0-09", None))
         self.assertEqual(cause_label(op["cause"], False), "Stopped next to a stuck robot")
 
     def test_h_faulted_self_and_unknown_have_no_route_flag(self):
@@ -157,8 +165,9 @@ class TestBlockerChoice(unittest.TestCase):
 
 class TestTables(unittest.TestCase):
     def test_i_causes_table_splits_one_key_into_two_rows_by_route(self):
-        eps = [dict(cause="blocked_by_stuck", duration_s=100, blocker_on_route=True),
-               dict(cause="blocked_by_stuck", duration_s=60, blocker_on_route=False),
+        # the False row comes first and ties on seconds: only the label tie-break puts "Blocked by" first
+        eps = [dict(cause="blocked_by_stuck", duration_s=60, blocker_on_route=False),
+               dict(cause="blocked_by_stuck", duration_s=100, blocker_on_route=True),
                dict(cause="blocked_by_stuck", duration_s=40, blocker_on_route=None),
                dict(cause="traffic", duration_s=10)]
         rows = causes.causes_table(eps)
