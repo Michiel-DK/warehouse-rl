@@ -81,6 +81,8 @@ def event_stream_sha(path):
     for m in read_messages(str(path)):
         evs.extend(det.feed(m))
     evs.extend(det.end_all())
+    for e in evs:  # S14D: blocker_on_route is a new key; the pins are the master stream without it (all other keys equal)
+        e.pop("blocker_on_route", None)
     return hashlib.sha256("\n".join(json.dumps(e, sort_keys=True) for e in evs).encode()).hexdigest()
 
 

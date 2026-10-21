@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS stuck_episodes
     avoidable_s Nullable(Float64),
     left_censored Bool,
     cause_label Nullable(String),
+    blocker_on_route Nullable(Bool),
     schema_version UInt8 DEFAULT 1,
     _ver UInt64,
     _first UInt64
@@ -145,6 +146,8 @@ ORDER BY (run, episode_id);
 -- created before this column gets it here. (servicing_s, written only on station_overrun episodes of a --servicing-max-s
 -- run, is not in the DDL: that flag needs --stations, which has no ClickHouse columns either, see servicing_runs.)
 ALTER TABLE stuck_episodes ADD COLUMN IF NOT EXISTS cause_label Nullable(String) AFTER left_censored;
+-- S14D: blocker_on_route (True = the neighbour stands on the robot's next route node, None = no route reported / no neighbour).
+ALTER TABLE stuck_episodes ADD COLUMN IF NOT EXISTS blocker_on_route Nullable(Bool) AFTER cause_label;
 
 CREATE TABLE IF NOT EXISTS ingest_checkpoints
 (
