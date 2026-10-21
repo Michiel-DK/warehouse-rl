@@ -1103,6 +1103,10 @@ Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicin
   that branch as no evidence; whether it counts is the operator's call (README Sprint 14C). The stall map and the stall
   CUSUM do not find it either. The "longer history" retest asked for above is done. The
   gurren page may not mention early warning of blocked cells.
+- **Applied by the operator, 2026-10-21 18:30: the hidden-blockage early-warning line is dropped.** No further
+  detector sprint on it; the gurren page and the CCO status page do not mention early warning. Detour counting from the
+  route node (`docs/LITERATURE.md` Part 4 section 3) stays listed as the only untried signal, to be retested only on a
+  client log that shows planner-blind blockages.
 - Open (operator):
   - Stop the hidden-blockage line here (S14C: drop recorded), or wait for a client log with more traffic per cell?
   - Causes table: keep the episode-seconds share against the stuck bucket (sums 2-4), or report shares of episode
