@@ -1,6 +1,6 @@
 # wr-lane-s14d-cause-route: cause labels split by the next route node
 
-Lane S14D, 21 Oct 2026. PR #54 (branch worktree-wf_17800c14-507-2). Build: sonnet via single-lane-build (tier full), head
+Lane S14D, 21 Oct 2026. PR #54 (branch worktree-wf_17800c14-507-2), squash-merged as e3d2b52; master fast-forwarded. Build: sonnet via single-lane-build (tier full), head
 eda9d75. Review round 1: correctness and test-honesty refuted, both on the missing report (the builder's harness blocked
 `.md` writes) and test-honesty on two surviving mutants. The main loop fixed both in 17a4664 and wrote this report. Three
 fresh refuters then re-checked (correctness, regression with nodeStates absent, test-honesty). Rules from
@@ -159,7 +159,9 @@ README number. The builder's "10 / 2 / 10 / 108" counted open and close rows; th
 
 ## Queue item
 
-The `wr-s14d-rerun` command, installed by the main loop in `laptop-scheduler/queues/warehouse-rl.json`. It is NOT run:
+The `wr-s14d-rerun` command, installed by the main loop in `laptop-scheduler/queues/warehouse-rl.json` (commit 4138e30
+holds only this item added to HEAD's file, via hash-object / update-index; the other uncommitted queue edits are
+untouched). It is NOT run:
 cores 4, est 8 min, max 30.
 
 How it is built:
