@@ -551,6 +551,8 @@ The analyser never sees `floor_cells`. From the stream alone it counts, per robo
 | 80 | 0.556 | 0.556 |
 | 120 | 0.371 | 0.556 |
 
+Restated with the station-aware rule in (r).
+
 ![hotspot precision recall](results/fleet/hotspot_precision_recall.png)
 
 Random flagging would give precision 80/380 = 0.21. Recall plateaus at 0.56 because 44% of the true bad cells never see a stall in 500 steps (no robot drives into them), which is a traffic ceiling, not a detector limit. Spearman between cost and true p over flagged cells: 0.37. Grading (before S8D): outcome 136 ok / 306 off (the stall-count forecasts are weak; since S8D this count grade is the `outcome_count` key, see below), truth 796 hits / 280 false alarms. Of 2028 stalls, 115 fell inside detector stuck episodes. One zone, cost map against the true cells:
@@ -773,6 +775,8 @@ Precision and recall at K, split by kind (only kinds with positives in the run; 
 | s10-breakdown | frozen cells | 283 | 19, 0.0950, 0.07 | 19, 0.0475, 0.07 | 10 / 10 |
 | s10-burst | none | 0 cells (the run has no truth cells) | n/a | n/a | 1 / 10 |
 
+Restated with the station-aware rule in (r) for s10-breakdown only; s10-blocked, s10-outage and s10-burst were not rerun.
+
 False flags (top-K cells that are not a truth cell of any kind, summed over 10 zones, on the final map) and the forecast truth grades:
 
 | run | K 20: false flags (per zone) | K 40: false flags (per zone) | hotspot_forecast truth grades: false_alarm / graded |
@@ -781,6 +785,8 @@ False flags (top-K cells that are not a truth cell of any kind, summed over 10 z
 | s10-outage | 199 (19.9) | 267 (26.7) | 1414 / 1417 |
 | s10-breakdown | 70 (7.0) | 70 (7.0) | 463 / 488 |
 | s10-burst | 195 (19.5) | 257 (25.7) | 1388 / 1388 |
+
+Restated with the station-aware rule in (r) for s10-breakdown only; s10-blocked, s10-outage and s10-burst were not rerun.
 
 lesson_persist and its chance rate:
 
@@ -839,6 +845,8 @@ Final map (run-level, as in (f)):
 | s10-blocked | yes | 50 | 4, 0.0200, 0.08 | 7, 0.0175, 0.14 | 195 (19.5) | 260 (26.0) | 23 / 1409 |
 | s10c-blind | no | 50 | 17, 0.0850, 0.34 | 20, 0.0500, 0.40 | 183 (18.3) | 241 (24.1) | 16 / 1363 |
 
+Restated with the station-aware rule in (r) for s10c-blind only; s10-blocked was not rerun.
+
 Over time (as in (g)), the same 50 windows on both runs:
 
 | K (per zone) | run | detected (share) | missed | preflag | first detect, s, median (p25-p75) | cleared | stale_at_end | open_at_end | false flags per publish, 10 zones summed (per zone) |
@@ -873,6 +881,8 @@ Final map (run-level; false flags = top-K cells that are not a truth cell of any
 | s10-burst | `{"burst": {"start": 100, "end": 300, "extra": 20}}` | 25.7 | 195 (19.5) | 257 (25.7) |
 | s10c-blind | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}` | 26.1 | 183 (18.3) | 241 (24.1) |
 
+Restated with the station-aware rule in (r) for s10-none, s10-breakdown and s10c-blind (final maps asserted equal); s10-blocked, s10-outage and s10-burst were not rerun.
+
 Per publish (9 publishes every 5 min, the last at stream end), false flags per zone per publish and false alarms per zone per simulated hour:
 
 | K (per zone) | s10-none (undisturbed, every flag is false): per publish, per hour | s10-blocked: per publish, per hour | s10-outage: per publish, per hour | s10c-blind: per publish, per hour |
@@ -880,6 +890,8 @@ Per publish (9 publishes every 5 min, the last at stream end), false flags per z
 | 10 | 8.41, 109.0 | 8.30, 107.6 | 8.50, 110.2 | 8.36, 108.3 |
 | 20 | 13.72, 177.8 | 13.58, 176.0 | 13.90, 180.1 | 13.51, 175.1 |
 | 40 | 15.46, 200.3 | 15.46, 200.3 | 15.71, 203.6 | 15.02, 194.7 |
+
+Restated with the station-aware rule in (r) for s10-none and s10c-blind; s10-blocked and s10-outage were not rerun.
 
 Reference = `fleet/data/s10-none` (10 zones x 500 steps, no disturbance, no truth), scored by `results/fleet/amoc_blind.json` (`amoc.k[].fa_per_hour_reference`; per publish = that x 0.6944 h / 9 publishes). The disturbed columns count only flags that match no truth window at that publish (the S10B rule), from `time_to_detect_{blocked,outage,blind}.json`, so they are flagged cells minus the flags on an open truth window (each such flag is a detection, so at most the detected windows of (g) and (h) per publish over all zones): per hour = false flags per publish summed over zones x publishes / (zones x steps x 5 s / 3600). The conversion is asserted equal to `amoc.k[].fa_per_hour_measured_outside_windows` for s10c-blind at K 10, 20, 40. The unit is flag-publishes per zone per simulated hour, not distinct cells. The burst and breakdown runs have no time-to-detect file, so they appear in the final-map table only. Sources: `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-blocked.json`, `results/fleet/hotspot_s10-outage.json`, `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-burst.json`, `results/fleet/hotspot_s10c-blind.json`, `results/fleet/time_to_detect_blocked.json`, `results/fleet/time_to_detect_outage.json`, `results/fleet/time_to_detect_blind.json`, `results/fleet/amoc_blind.json`.
 
@@ -898,6 +910,8 @@ Reference = `fleet/data/s10-none` (10 zones x 500 steps, no disturbance, no trut
 | s10-none | 10 | 20 | 0.000 / 0.000 | n/a / n/a | n/a / n/a | n/a | n/a, no truth positives | +0.000 (+0.000 to +0.000) | within noise |
 | s10-none | 10 | 40 | 0.000 / 0.000 | n/a / n/a | n/a / n/a | n/a | n/a, no truth positives | +0.000 (+0.000 to +0.000) | identical top-K sets |
 
+Restated with the station-aware rule in (r); s8e-long-w0.5 was not rerun.
+
 Chance lines and units per run:
 
 | run | disturbance | steps | chance_all | chance_ever | forecast units (truth / outcome) | rank forecasts graded (unranked) |
@@ -908,6 +922,8 @@ Chance lines and units per run:
 | s10c-blind | `{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}` | 500 | 0.008 | 0.047 | 90 / 40 | 300 (0) |
 | s10-none | `{}` | 500 | 0.000 | 0.000 | 90 / 40 | 297 (0) |
 
+Restated with the station-aware rule in (r); s8e-long-w0.5 was not rerun.
+
 lesson_persist (hot_cell lessons) against three pools:
 
 | run | hot_cell lessons graded | hot_robot excluded | observed rate | chance: window (S8S) / ever / all | lift: window / ever / all |
@@ -917,6 +933,8 @@ lesson_persist (hot_cell lessons) against three pools:
 | s8e-long-w0.5 | 25 | 0 | 0.720 | 0.241 / 0.221 / 0.0772 | 2.99 / 3.26 / 9.33 |
 | s10c-blind | 2 | 3 | 0.500 | 0.034 / 0.024 / 0.0013 | 14.50 / 21.00 / 380.00 |
 | s10-none | 3 | 3 | 0.333 | 0.061 / 0.102 / 0.0061 | 5.45 / 3.28 / 54.29 |
+
+Restated with the station-aware rule in (r) for s10-none and s10c-blind; the other runs were not rerun or have no lessons.
 
 Persistence = the same published rows ranked by their raw window stall count instead of the decayed cost: same window, same filter, same `min_stalls`, so decay is the only difference (`fleet/baselines.py` docstring). Truth precision here is per publish against the cells that are truth-positive over the next horizon [t, t + H], pooled over (zone, publish) units, so it is not the run-level `truth_kinds` of (f) and (h). PAI = (hits / positives) / (K / 380 candidate cells) and equals lift_all by definition (asserted). Paired = per-zone map minus persistence, mean over zones, 1,000-resample zone bootstrap (seed 0), 2.5 / 97.5 percentiles; the verdict rule is the one at the top of this script (asserted equal to the JSON's), but the CI is a bootstrap, not `evaluate.paired_delta`'s Student-t. "identical top-K sets" = every zone flags fewer than K cells on the final map and the map window covers the whole stream, so both lists hold the whole flagged set at every publish (asserted: equal blocks, CI 0 to 0): s10c-blind at K 40 (at most 36 flagged cells per zone); s10-none at K 40 (at most 32 flagged cells per zone). s10-none has no truth positives, so its truth columns are 0 or n/a by construction. s8e-long-w0.5 has 3 zones; a bootstrap over so few zones sits on the extreme resamples, so its verdicts are weak. The outcome grade re-ranks with the map's own decay at t + H, so it leans toward the map; closed-loop-sticky has one publish at stream end and 0 outcome units. The s8b re-score reads the store as it is on disk today, which grades 442 rank forecasts (0 unranked); the committed `results/fleet/hotspot_s8b-medium-80-p03-07.json` graded 200 (242 unranked). The `baselines` block is computed from the costmap rows, not from those grades. Sources: `results/fleet/baselines_s8b-medium-80-p03-07.json`, `results/fleet/baselines_closed-loop-sticky.json`, `results/fleet/baselines_s8e-long-w0.5.json`, `results/fleet/baselines_s10c-blind.json`, `results/fleet/baselines_s10-none.json` (`baselines`, `rank_grading`, `config`).
 
@@ -932,6 +950,8 @@ By K (flag = rank <= K in the zone's map at a publish):
 | 40 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 200.3 | 194.7 |
 | 80 | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 200.3 | 194.7 |
 
+Restated with the station-aware rule in (r).
+
 By cost threshold (flag = cost >= c at a publish):
 
 | cost >= | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, s10-none | false alarms per zone-hour, s10c-blind outside windows |
@@ -940,6 +960,8 @@ By cost threshold (flag = cost >= c at a publish):
 | 0.4 | 6 / 50 | 0.88 | 402.5 (277.5-568.75) | 0.04 | 143.1 | 140.5 |
 | 0.6 | 2 / 50 | 0.96 | 537.5 (506.25-568.75) | 0.00 | 50.3 | 45.2 |
 | 0.8 | 1 / 50 | 0.98 | 475 (475-475) | 0.00 | 37.7 | 35.7 |
+
+Restated with the station-aware rule in (r).
 
 Dial at which the miss share first drops below 0.5: K none at any K; cost none at any cost.
 
@@ -977,6 +999,8 @@ S10F (PR #44) added a false-alarm gate to `fleet/costmap.py`. `--gate baseline` 
 | closed-loop-sticky | baseline | 89 | 0.33, 3 | 88 / 1 | 0.989 | 85 / 2400 | 0.035 |
 | closed-loop-sticky | persistence | 176 | 0.65, 4 | 175 / 1 | 0.994 | 157 / 2400 | 0.065 |
 
+Restated with the station-aware rule in (r) for the ungated rows; the gated rows were not rerun.
+
 Forecasts = `hotspot_forecast` claims, each graded once against the truth over the next horizon (truth hit or false alarm); a gated run publishes only the forecasts that pass the gate, and the cost map itself is unchanged (asserted here: `zones` and every `truth_kinds` kind except `frozen`, whose S10G fields the ungated JSONs predate, are equal to the ungated JSON's). Per zone per publish, mean over all = forecasts / (zones x publishes), with 9 publishes every 300 s, the last at stream end, warm-up publishes included (baseline: publishes 1-3 pass nothing; persistence: publish 1); max = `gate_grading.flags_per_zone_publish.max`, after warm-up. The ungated JSONs carry no per-publish maximum and no truth cells hit, so those are n/a; truth cells = `truth_kinds.any.positives`. Truth cells hit = distinct (zone, cell) with at least one truth-hit forecast; recall = that / truth cells. The gate runs used `--publish-every 300 --horizon-s 1245` on copies of each store (`wr-s10f-gate-run`); s10-none and s10c-blind are the same publishes as their ungated runs, the sticky phase A was originally published once, so it has no ungated row on this schedule. On the sticky run the truth cells are its 80 floor cells per zone, present for the whole run. Gate parameters: windows 3, sigma 2.0, min excess 2, min count 2 (the S10F defaults). Sources: `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-none-gate-baseline.json`, `results/fleet/hotspot_s10-none-gate-persistence.json`, `results/fleet/hotspot_s10c-blind.json`, `results/fleet/hotspot_s10c-blind-gate-baseline.json`, `results/fleet/hotspot_s10c-blind-gate-persistence.json`, `results/fleet/hotspot_closed-loop-sticky-gate-baseline.json`, `results/fleet/hotspot_closed-loop-sticky-gate-persistence.json` (`gate_grading`, `grading_counts.truth`, `truth_kinds`).
 
 #### (m) Frozen truth cells on the breakdown run (S10G)
@@ -984,6 +1008,8 @@ Forecasts = `hotspot_forecast` claims, each graded once against the truth over t
 | run | frozen robots | frozen cells | flagged cells, final map (per zone, max) | K 20: hits, precision, recall | K 40: hits, precision, recall | zones flagging fewer than K cells (K 20 / K 40) | hotspot_forecast truth grades: hit / graded |
 |---|---|---|---|---|---|---|---|
 | s10-breakdown | 119 | 283 | 89 (8.9, 16) | 19, 0.0950, 0.067 | 19, 0.0475, 0.067 | 10 / 10 | 25 / 488 |
+
+Restated with the station-aware rule in (r).
 
 Frozen cells = per zone, the distinct cells a robot stood on at the start of a frozen window, summed over zones (`truth_kinds.frozen.cells`); a hit is a final-map top-K cell that is a frozen cell of its zone at any time in the run, so it does not mean the cell was flagged while the robot was frozen. Frozen cells are the only truth cells of this run (asserted: frozen hits = `any` hits), so 19 of the 89 flagged cells are frozen cells and the rest are false flags. Every zone flags fewer than 20 cells, so K 20 and K 40 score the same cells. The time-matched number is the forecast truth grade: a forecast is a hit when its cell is truth-positive (here: frozen) over the next horizon (1245 s). Before S10G the same run graded 0 hits of 488 (the committed (f) of 2026-10-18), because frozen windows carried no cell. No chance line is computed for frozen cells. Source: `results/fleet/hotspot_s10-breakdown.json` (`truth_kinds.frozen`, `zones.*.n_flagged`, `grading_counts.truth`), from `wr-s10g-breakdown-rerun` (bit-identical re-emit, lessons `--window-h 0.2`).
 
@@ -1022,6 +1048,8 @@ By K (map: flag = rank <= K in the zone's map at a publish; CUSUM: flag = a flag
 | CUSUM (S10I) | 60 (42) | 20 | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
 | CUSUM (S10I) | 60 (42) | 40 | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
 
+Restated with the station-aware rule in (r) for the decayed map rows; the CUSUM and the short-memory map were not rerun.
+
 Dominance over every row on disk (detected up, false alarms per zone-hour on the reference down, one strictly): the CUSUM row is dominated by no map row; it dominates decayed map (S10E): cost >= 0.6, cost >= 0.8; short-memory map: none. Map rows at the CUSUM's reference false-alarm rate (0): none. Lowest map false-alarm rate on disk 37.7; most windows any map row detects 6 / 50.
 
 Same measured run (`fleet/data/s10c-blind`, 50 planner-blind blocked windows) and reference (`fleet/data/s10-none`) for all three, store hashes equal before and after (asserted). Ks shown are the ones all three JSONs share (5, 10, 20, 40). CUSUM parameters (from `fleet/data/s10c-blind/fastmap.json`, gitignored, not committed): k 1, h 3, bin 60 s, baseline 30 bins, count `active`. The CUSUM rows are identical at every K (asserted). False alarms are flag-publishes per zone per simulated hour, so they scale with the publish rate: a detector publishing every 60 s has 5 times as many publishes per hour as one publishing every 300 s, and more chances to catch a window while it is open. The short-memory map is published at the CUSUM's 60 s and is the like-for-like cadence comparison for it. Column definitions are those of (k). Sources: decayed map (S10E): `results/fleet/amoc_blind.json`, window 1 h, half-life 1 h; short-memory map: `results/fleet/amoc_shortmap.json`, window 0.2 h, half-life 0.1 h; CUSUM (S10I): `results/fleet/amoc_fast.json`, store-fast (prebuilt) (`amoc`, `meta`).
@@ -1057,6 +1085,8 @@ Sprint 12 asks what the robots spend the shift on, using only the message stream
 | s8b-medium-80-p03-07 | floor, 80 cells, p 0.3-0.7 | 80 (10) | 35.6% | 1.9% | 31.0% | 22.6% | 5.6% | 0.0% | 3.2% | 0.0% | 0.0% | 19.26 | 9 / 21 | 7/657 (1.1%) | 625/657 (95.1%) | 116 |
 | closed-loop-sticky | sticky floor, 80 cells, p 0.9-0.99 (phase A, 30 zones) | 240 (30) | 12.1% | 1.6% | 51.7% | 32.0% | 1.6% | 0.0% | 1.0% | 0.0% | 0.0% | 7.02 | 16 / 0 | 47/2411 (1.9%) | 1839/2411 (76.3%) | 998 |
 
+Restated with the station-aware rule in (r).
+
 Shares are of AGV-seconds over the zone's span, summed over zones (`run.totals.share`; pickers are reported apart by the tool and are not in the shares, the AGV count or the jobs rate). Every second goes to one bucket, in the precedence no_data > faulted > paused > moving > waiting_station > waiting_shelf > stuck / stopped_short > idle, so a stop next to a shelf is `waiting_shelf` even when it lasts past the stuck threshold (30 s, the detector's own). The term in brackets is the standard class `docs/LITERATURE.md` Part 2 section 2 maps each bucket to (SEMI E10 classes, Standridge's blocked time, VDA 5050 fields); where the bucket does not measure that class, the reading below says so. Station cells: 10 per zone. Shelf-adjacent cells: 360 per zone (the 160 shelf slots plus every cell within Manhattan 1 of one, stations excluded). Throughput is jobs per AGV-hour, the MAPF word for goals reached per unit time. Same-minute stops: minutes in which at least 80% of a zone's AGVs stop, split into the zone-start minute (00:00) and later minutes. Stall list: the detector's stuck episodes from the run's store (pickers included, last column); a station or shelf episode is one whose first cell is a station or shelf-adjacent cell. Asserted per run: the time-budget stuck runs and the detector episodes have the same start sets (`stuck_runs_vs_detector`), and the bucket seconds sum to the span. `faulted` counts robots with an error of error level CRITICAL or FATAL (S12C; the emitter writes only FATAL errors). `paused` is a message with VDA 5050 `paused` true; `no_data` is the whole interval between two messages more than 60 s apart (`src.max_gap_s`). The simulator emitter never sets `paused` and sends every robot every step, so both shares are zero on these runs, as the JSONs show. Sources: `results/fleet/timebudget_s10-none.json`, `results/fleet/timebudget_s10c-blind.json`, `results/fleet/timebudget_s10-breakdown.json`, `results/fleet/timebudget_s8b-medium-80-p03-07.json`, `results/fleet/timebudget_closed-loop-sticky.json` (`run`, `zones.*.same_minute_stops`, `zones.*.cell_classes`, `src`), from `wr-s12a-budget-run`, re-run after S12C with the new buckets (every other value unchanged).
 
 #### (p) Blocking clusters and chains (S12B): a congestion measure, and message-loss cells
@@ -1067,6 +1097,8 @@ Shares are of AGV-seconds over the zone's span, summed over zones (`run.totals.s
 | s10c-blind | 56 | 53 / 3 | 0 | 75 (440) | 3 | 146.1 | 1.35x | zone 4, cell 7,4: 1330 s in 19 clusters (2) | 39 | zone 4, 1260 s, 16, open at stream end | 19.5% |
 | s10-breakdown | 28 | 28 / 0 | 5 | 187.5 (655) | 3 | 162.9 | 1.51x | zone 5, cell 7,14: 1105 s in 3 clusters (2) | 26 | zone 5, 655 s, 1, broke up | 14.5% |
 | closed-loop-sticky | 163 | 145 / 18 | 0 | 95 (1875) | 4 | 300.4 | 2.78x | zone 27, cell 6,9: 1985 s in 3 clusters (1) | 154 | zone 23, 1875 s, 1, open at stream end | 5.0% |
+
+Restated with the station-aware rule in (r).
 
 A blocking cluster is a strongly connected group of at least 2 robots in the per-batch wait-for graph (`fleet/deadlock.py`), kept when it lasts at least 30 s. The tool's own definition: "mutually blocked robots (strongly connected component, >= 2) that persist >= min_s; every one found so far resolves, so this is a congestion measure, not a circular wait". Adjacency is symmetric (Manhattan 1), so any two adjacent stuck robots with no faulted neighbour form a cluster: it is congestion that persists, not the circular wait that `docs/LITERATURE.md` Part 2 section 1 calls a deadlock (Coffman et al. 1971; a cycle in the wait-for graph). So the table is a congestion measure: no circular wait survives in TA-RWARE, because the vendor replans a robot once it has been stuck more than 5 steps (`_STUCK_THRESHOLD`, `vendor/tarware/tarware/warehouse.py:15` and `:494`), and every cluster that ends inside the stream broke up. The clusters still open at stream end (third column) are censored, not shown to clear. A blocking chain (JSON `blocking_chains`; S12B called it a knot) is a path of at least 2 edges among robots in no cluster; Part 2 renames it because a knot in deadlock theory is the closed set that is the deadlock. Still open at stream end = censored, its length is a lower bound. Broke up = the group was gone at the next batch, which can be a single step: the vendor planner replans a robot after more than 5 stuck steps, frees one cell, and the same robots can block each other again. A standoff merges clusters of the same zone and robot set that start at most one step (5 s) after the previous one ends; its span runs from the first start to the last end. Blocked robot-s per robot-hour = sum(length x robots) / robot-hours, where robot-hours include the pickers (12 robots per zone), unlike (o), which counts AGVs only. Top cell: each cluster adds its length to every cell it covers, so cells of one cluster tie; the tie rule is most seconds, then lowest zone, then cell string. Sources: `results/fleet/deadlock_s10-none.json`, `results/fleet/deadlock_s10c-blind.json`, `results/fleet/deadlock_s10-breakdown.json`, `results/fleet/deadlock_closed-loop-sticky.json` (`total`, `decisions`, `zones.*.top_cells`), from `wr-s12b-run`; no run of the s8b floor store.
 
@@ -1108,6 +1140,8 @@ Sprint 13 runs the Sprint 12 time budget on a real robot log for the first time.
 | 8: 2026_07_31_evening | 8.16 | 42.3% | 40.9% | n/a | 0.0% | 0.6% | not computed | 9.1% | 0.0% | 7.2% | 18.38 |
 | **pooled, 9 shifts** | 72.98 | 40.4% | 41.0% | n/a | 0.4% | 0.7% | not computed | 9.8% | 0.1% | 7.6% | 18.59 |
 
+Restated with the station-aware rule in (r).
+
 **Against the robot's own label.** The stuck bucket holds 1,113 s of the pooled 262,717 s; 1,107 of them are in shift 6 (2026_07_30_morning, a manual intervention per the S13A lane report). The robot's stuck label (`stuck_reason` not None) covers 765 s, of which 0 s fall in the stuck bucket. Of its 77 episodes, 75 are shorter than the 30 s threshold; the 2 longer ones are both detected (2 hits, 0 misses), too few for a rate. Of the detector's 567 stuck runs, 544 have no label within 30 s, and 542 of those 544 sit on a station cell (median 39 s, a dwell just over the threshold). Failed navigation: no label in the data. The closest is the operations that ended in TIMEOUT: 8, all 8 overlapped by a stuck run (the lane report finds only 2 of them overlap a run off a station cell, `laptop-scheduler/reports/wr-lane-s13a-moroop-budget.md` section 5 (d), not stored). Paused (joystick or non-autonomous rows): 161 s. `faulted` is "not computed" (the diagnostics levels are undocumented) and `waiting_shelf` is "n/a" (no shelves, no picker). `no_data` is mostly station dwell: the log stores a row only when a value changes, and the 60 s rule moved 19,970 s there, 13,470 of which would otherwise be waiting_station (`shifts.*.no_data.would_have_been_bucket_without_gap_rule`).
 
 **Data.** MoRoOp (Klein & Jeong, arXiv 2610.02428v1, licence CC BY 4.0), `Self-Organizing-Production-Logistics/MoRoOp` revision 1.0.1: one wheel.me AMR in a lab, 9 shifts, 132,838 messages, 0 parse rejects. Shares are of the shift's span (`timebudget_robot.share` per shift, `share` pooled; the pooled row sums the nine per-shift runs). The station share is set by the job generator's dwell and is not a finding. **Limit:** one robot, so no deadlock, congestion or hotspot result. Sources: `results/fleet/timebudget_moroop.json` (`seconds`, `share`, `label`, `no_data`, `src.hf`), `results/fleet/timebudget_moroop_shifts.json` (`shifts.*.timebudget_robot`, `shifts.*.jobs_per_robot_hour`), from the S13A lane (PR #49).
@@ -1124,3 +1158,76 @@ Sprint 13 runs the Sprint 12 time budget on a real robot log for the first time.
 - The log stores a row only when a value changes, so a long gap means "unchanged", not "lost", and `no_data` is mostly station dwell. A change-only source needs its own gap rule; S13A did not add one.
 - `faulted` is not computed: the diagnostics levels (Ok, Warning, Error, Stale) are undocumented and are not mapped to VDA 5050 error levels.
 - No chance baseline for the label comparison, and no CI.
+
+## Sprint 13B: the stuck rule knows where stations are (2026-10-21)
+
+S13B (PR #50) taught the stall detector where the stations are. A stopped run whose first stopped cell is a station goal cell, or within a set radius of one, is filed as SERVICING once it passes the 30 s threshold, and no stuck episode opens. Sprint 12 left open whether station waits should leave the stall list (`docs/SCOPE.md` Sprint 12), and S13A found that 542 of the 544 unlabelled stuck runs on the real MoRoOp log were station dwells. `waiting_station` in (o) maps to "productive: load/unload, or standby: queued" (`docs/LITERATURE.md` Part 2 section 2), not to blocked time, so it does not belong in a stall list. The queue item `wr-s13b-rerun` rebuilt the stores of the five simulator runs with the rule (radius 0) and recomputed every stall-list number on them. It re-ran the MoRoOp analysis with radius 1, and wrote everything to `-st` files next to the originals (results commit 2970c17). Shelf waits are not touched. Everything between this paragraph and "Reading the numbers" is the output of section (r) of `.venv/bin/python scripts/sprint8_tables.py`. Only its heading was demoted one level.
+
+#### (r) The stuck rule knows where stations are (S13B): old / station-aware
+
+| measure | run | old rule | station-aware | delta | files |
+|---|---|---|---|---|---|
+| top-20 truth precision | s10-none | 0.000 (no truth cells) | 0.000 (no truth cells) | +0.000 | `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-none-st.json` |
+| top-20 truth precision (hits / truth cells) | s10c-blind | 0.085 (17 / 50) | 0.085 (17 / 50) | +0.000 | `results/fleet/hotspot_s10c-blind.json`, `results/fleet/hotspot_s10c-blind-st.json` |
+| top-20 truth precision (hits / truth cells) | s10-breakdown | 0.095 (19 / 283) | 0.095 (19 / 283) | +0.000 | `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-breakdown-st.json` |
+| top-20 truth precision (hits / truth cells) | s8b-medium-80-p03-07 | 0.965 (193 / 800) | 0.965 (193 / 800) | +0.000 | `results/fleet/baselines_s8b-medium-80-p03-07.json`, `results/fleet/hotspot_s8b-medium-80-p03-07-st.json` |
+| top-20 truth precision (hits / truth cells) | closed-loop-sticky | 0.955 (573 / 2400) | 0.955 (573 / 2400) | +0.000 | `results/fleet/baselines_closed-loop-sticky.json`, `results/fleet/hotspot_closed-loop-sticky-st.json` |
+| frozen cells hit at K 20 / frozen cells (m) | s10-breakdown | 19 / 283 | 19 / 283 | +0 | `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-breakdown-st.json` |
+| ungated forecasts: truth hits / graded (l), (m) | s10-none | 0 / 1391 | 0 / 1391 | +0 hits | `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-none-st.json` |
+| ungated forecasts: truth hits / graded (l), (m) | s10c-blind | 16 / 1363 | 16 / 1363 | +0 hits | `results/fleet/hotspot_s10c-blind.json`, `results/fleet/hotspot_s10c-blind-st.json` |
+| ungated forecasts: truth hits / graded (l), (m) | s10-breakdown | 25 / 488 | 25 / 488 | +0 hits | `results/fleet/hotspot_s10-breakdown.json`, `results/fleet/hotspot_s10-breakdown-st.json` |
+| gated forecasts, baseline and persistence gate (l) | s10-none | see (l) | not rerun | n/a | `results/fleet/hotspot_s10-none-gate-baseline.json`, `results/fleet/hotspot_s10-none-gate-persistence.json` |
+| gated forecasts, baseline and persistence gate (l) | s10c-blind | see (l) | not rerun | n/a | `results/fleet/hotspot_s10c-blind-gate-baseline.json`, `results/fleet/hotspot_s10c-blind-gate-persistence.json` |
+| gated forecasts, baseline and persistence gate (l) | closed-loop-sticky | see (l) | not rerun | n/a | `results/fleet/hotspot_closed-loop-sticky-gate-baseline.json`, `results/fleet/hotspot_closed-loop-sticky-gate-persistence.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s10-none | K 20: n/a, n/a, no truth positives; K 40: n/a, n/a, no truth positives | K 20: n/a, n/a, no truth positives; K 40: n/a, n/a, no truth positives | unchanged (`k`, `paired`, `chance` blocks equal) | `results/fleet/baselines_s10-none.json`, `results/fleet/baselines_s10-none-st.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s10c-blind | K 20: -0.001 (-0.002 to +0.000), within noise; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | K 20: -0.001 (-0.002 to +0.000), within noise; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | unchanged (`k`, `paired`, `chance` blocks equal) | `results/fleet/baselines_s10c-blind.json`, `results/fleet/baselines_s10c-blind-st.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s10-breakdown | n/a (no station-unaware file) | K 20: +0.000 (+0.000 to +0.000), identical top-K sets; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | n/a | `results/fleet/baselines_s10-breakdown-st.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s8b-medium-80-p03-07 | K 20: -0.008 (-0.020 to +0.005), within noise; K 40: -0.023 (-0.034 to -0.011), worse | K 20: -0.008 (-0.020 to +0.005), within noise; K 40: -0.023 (-0.034 to -0.011), worse | unchanged (`k`, `paired`, `chance` blocks equal) | `results/fleet/baselines_s8b-medium-80-p03-07.json`, `results/fleet/baselines_s8b-medium-80-p03-07-st.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | closed-loop-sticky | K 20: +0.002 (-0.010 to +0.017), within noise; K 40: -0.018 (-0.029 to -0.008), worse | K 20: +0.002 (-0.010 to +0.017), within noise; K 40: -0.018 (-0.029 to -0.008), worse | unchanged (`k`, `paired`, `chance` blocks equal) | `results/fleet/baselines_closed-loop-sticky.json`, `results/fleet/baselines_closed-loop-sticky-st.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s8e-long-w0.5 | see (j) | not rerun | n/a | `results/fleet/baselines_s8e-long-w0.5.json` |
+| lesson_persist hot_cell: held / graded, lift over chance | s10-none | 4 / 6, lift 2.94 | 3 / 5, lift 5.14 | lift +2.20 | `results/fleet/hotspot_s10-none.json`, `results/fleet/hotspot_s10-none-st.json` |
+| lesson_persist hot_cell: held / graded, lift over chance | s10c-blind | 4 / 5, lift 3.21 | 3 / 4, lift 6.40 | lift +3.19 | `results/fleet/hotspot_s10c-blind.json`, `results/fleet/hotspot_s10c-blind-st.json` |
+| AMOC, decayed map K 20: detected while open / windows (k) | s10c-blind | 6 / 50 | 6 / 50 | +0 | `results/fleet/amoc_blind.json`, `results/fleet/amoc_blind-st.json` |
+| AMOC, decayed map K 20: false alarms per zone-hour, s10-none / s10c-blind outside windows (k) | s10c-blind | 177.8 / 175.1 | 177.8 / 175.1 | unchanged (`amoc` and `by_k` blocks equal) | `results/fleet/amoc_blind.json`, `results/fleet/amoc_blind-st.json` |
+| CUSUM and short-memory map (n) | s10c-blind | see (n) | not rerun | n/a | `results/fleet/amoc_fast.json`, `results/fleet/amoc_shortmap.json` |
+| time budget: stuck share of AGV time (o) | s10-none | 20.81% | 20.81% | +0.00 pts | `results/fleet/timebudget_s10-none.json`, `results/fleet/timebudget_s10-none-st.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s10-none | 10 / 677 | 0 / 667 | -10 episodes | `results/fleet/timebudget_s10-none.json`, `results/fleet/timebudget_s10-none-st.json` |
+| time budget: stuck share of AGV time (o) | s10c-blind | 25.90% | 25.90% | +0.00 pts | `results/fleet/timebudget_s10c-blind.json`, `results/fleet/timebudget_s10c-blind-st.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s10c-blind | 8 / 646 | 0 / 638 | -8 episodes | `results/fleet/timebudget_s10c-blind.json`, `results/fleet/timebudget_s10c-blind-st.json` |
+| time budget: stuck share of AGV time (o) | s10-breakdown | 18.64% | 18.64% | +0.00 pts | `results/fleet/timebudget_s10-breakdown.json`, `results/fleet/timebudget_s10-breakdown-st.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s10-breakdown | 9 / 526 | 5 / 522 | -4 episodes | `results/fleet/timebudget_s10-breakdown.json`, `results/fleet/timebudget_s10-breakdown-st.json` |
+| time budget: stuck share of AGV time (o) | s8b-medium-80-p03-07 | 22.57% | 22.57% | +0.00 pts | `results/fleet/timebudget_s8b-medium-80-p03-07.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-st.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s8b-medium-80-p03-07 | 7 / 657 | 0 / 650 | -7 episodes | `results/fleet/timebudget_s8b-medium-80-p03-07.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-st.json` |
+| time budget: stuck share of AGV time (o) | closed-loop-sticky | 32.05% | 32.05% | +0.00 pts | `results/fleet/timebudget_closed-loop-sticky.json`, `results/fleet/timebudget_closed-loop-sticky-st.json` |
+| stall list: episodes starting on a station cell / episodes (o) | closed-loop-sticky | 47 / 2411 | 0 / 2364 | -47 episodes | `results/fleet/timebudget_closed-loop-sticky.json`, `results/fleet/timebudget_closed-loop-sticky-st.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s10-none | 49; 108.2 (1.00x) | 41; 100.6 (1.00x) | -8; -7.6 | `results/fleet/deadlock_s10-none.json`, `results/fleet/deadlock_s10-none-st.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s10c-blind | 56; 146.1 (1.35x) | 49; 137.4 (1.37x) | -7; -8.7 | `results/fleet/deadlock_s10c-blind.json`, `results/fleet/deadlock_s10c-blind-st.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s10-breakdown | 28; 162.9 (1.51x) | 25; 160.0 (1.59x) | -3; -2.9 | `results/fleet/deadlock_s10-breakdown.json`, `results/fleet/deadlock_s10-breakdown-st.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s8b-medium-80-p03-07 | n/a (no station-unaware run) | 45; 135.1 (1.34x) | n/a | `results/fleet/deadlock_s8b-medium-80-p03-07-st.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | closed-loop-sticky | 163; 300.4 (2.78x) | 156; 297.0 (2.95x) | -7; -3.5 | `results/fleet/deadlock_closed-loop-sticky.json`, `results/fleet/deadlock_closed-loop-sticky-st.json` |
+| stuck share of the span; stuck s (q) | MoRoOp, 9 shifts (radius 1) | 0.42%; 1113 | 0.005%; 13 | -1100 s | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json` |
+| shift 6 (2026_07_30_morning, the manual intervention): stuck s (q) | MoRoOp, 9 shifts (radius 1) | 1107 | 7 | -1100 | `results/fleet/timebudget_moroop_shifts.json`, `results/fleet/timebudget_moroop_shifts-st.json` |
+| shift 6 (2026_07_30_morning, the manual intervention): stopped_short s (q) | MoRoOp, 9 shifts (radius 1) | 276 | 1376 | +1100 | `results/fleet/timebudget_moroop_shifts.json`, `results/fleet/timebudget_moroop_shifts-st.json` |
+| detector stuck runs (q) | MoRoOp, 9 shifts (radius 1) | 567 | 2 | -565 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json`, `results/fleet/moroop_label-st.json` |
+| stuck runs with no label within 30 s (q) | MoRoOp, 9 shifts (radius 1) | 544 | 1 | -543 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json`, `results/fleet/moroop_label-st.json` |
+| label episodes >= 30 s detected (q) | MoRoOp, 9 shifts (radius 1) | 2 / 2 | 2 / 2 | +0 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json`, `results/fleet/moroop_label-st.json` |
+| TIMEOUT operations overlapped by a stuck run (q) | MoRoOp, 9 shifts (radius 1) | 8 / 8 | 1 / 8 | -7 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json`, `results/fleet/moroop_label-st.json` |
+| unlabelled stuck runs on a station cell (q) | MoRoOp, 9 shifts (radius 1) | 542 | 0 | -542 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json` |
+
+Old rule = the station-unaware detector of Sprints 5 to 13A; station-aware = S13B (PR #50): a stopped run whose first stopped cell is within the station radius of a station goal cell becomes SERVICING after the 30 s threshold, not a stuck episode. Simulator runs: stations `auto` from the emit ledger, radius 0 (asserted: `src.station_radius`, `station_rule.radius`); MoRoOp: `fleet/data/moroop/stations.json`, radius 1 (asserted). The station-aware files come from queue item `wr-s13b-rerun`, which rebuilt each store as `store-st` with `ingest --stations auto` and re-ran costmap, lessons, grade, hotspot_score, baselines, timebudget and deadlock on it, with the original publish schedules and lesson windows, and checked that no original store or results file changed. Unchanged rows are asserted, not eyeballed: the final map (`zones`) is equal in every run, and the S10D `k`, `paired` and `chance` blocks and the AMOC `amoc` and `by_k` blocks are equal. Old top-20 precision for s8b-medium-80-p03-07 and closed-loop-sticky is read from the S10D baselines JSON, because their hotspot JSON on disk predates `truth_kinds` (s8b) or does not exist (sticky). The sticky baselines files differ in `params.horizon_s` (3600 old, 1245 new); the asserted blocks are equal anyway. s10-breakdown has no station-unaware S10D file and s8b no station-unaware blocking run, so those rows have no old value. The ratio in the blocking rows is the run's rate over the s10-none rate under the same rule. MoRoOp unlabelled runs on a station cell are counted from `label.false_alarms[].on_station_cell`.
+
+**Reading the numbers.**
+- **From this section on, the station-aware numbers are the headline; earlier tables keep the old rule and say so.**
+- **The simulator results do not move (r).** On all five runs the final map is the same cells at the same costs. Top-20 truth precision is unchanged (0.085 on the planner-blind blockage, 0.095 on breakdowns, 0.965 on the s8b floor, 0.955 on the sticky floor). So are the forecast truth grades (16 of 1,363 on the blind run), the frozen-cell hits (19 of 283), every S10D map-against-persistence verdict and the AMOC detection (6 of 50 at K 20, 177.8 false alarms per zone-hour on the undisturbed run). The reason: the map counts stall messages, and a robot waiting at a station sends none (S13B lane report, "Store readers"). The rule only removes stuck episodes, so it reaches the map only through which stalls count as inside an episode.
+- **What moved on the simulator is the stall list itself (r).** Station episodes leave it: 10, 8, 4, 7 and 47 on the undisturbed, blind, breakdown, s8b and sticky runs (677 to 667 episodes undisturbed, 2,411 to 2,364 on the sticky floor). The stuck share of AGV time is unchanged on every run (20.81% undisturbed, 32.05% sticky), because the time budget already put a stop on a station cell into `waiting_station`. On the breakdown run, 5 episodes that start on a station cell remain; why was not inspected.
+- **Blocking clusters fall by 3 to 8 per run (r)**, and the undisturbed rate falls by a larger share than the others (108.2 to 100.6 blocked robot-s per robot-hour, 7.0%, against 1.2% to 6.0%). So the ratios against it rise: 1.35x to 1.37x (planner-blind blockage), 1.51x to 1.59x (breakdowns), 2.78x to 2.95x (sticky floor). The s8b floor, run for the first time, is at 1.34x. The direction of every reading in (p) holds.
+- **The lesson_persist lift doubles on few lessons (r).** It goes from 2.94 to 5.14 undisturbed and from 3.21 to 6.40 on the blind run, The hot_cell lessons graded drop from 6 to 5 and from 5 to 4, and the mean chance rate of those left falls from 0.227 to 0.117 and from 0.249 to 0.117 (`lesson_persist_chance`); which lessons changed, and why, was not inspected. The observed counts are 3 of 5 and 3 of 4. That is too few lessons to read the lift as a change in the method.
+- **On the real log, the station rule removes the false alarms and the one real stop with them (r).** With radius 1, the detector's stuck runs fall from 567 to 2 and the unlabelled ones from 544 to 1 (the remaining one is off a station and overlaps a paused message). The robot's two labelled episodes of 30 s or more are still both detected. But the stuck share falls from 0.42% to 0.005% (1,113 s to 13 s). That is because the 1,107 s stop in shift 6, which (q) ties to a manual intervention, started within one cell of a station: it is now 1,100 s of `stopped_short`, a bucket whose definition is "< 30 s". TIMEOUT operations overlapped by a stuck run fall from 8 of 8 to 1 of 8. So on this log the rule trades 543 false alarms for the only long stop and 7 of 8 timeout overlaps. Whether those 7 were real stops or dwells was not inspected per operation (S13B lane report).
+- **The S12 question is answered for stations (r).** Station waits now leave the stall list. On the simulator that changes no map, precision or detection number. On the real log it removes nearly every false alarm. Shelf waits stay in the list.
+
+**Caveats.**
+- The gated forecasts of (l), the CUSUM and short-memory map of (n) and the s8e-long run of (j) were not rerun. Their rows in (r) say so. The final maps they would read are unchanged on the runs that were rerun, but that is not a rerun.
+- The simulator runs use radius 0 and MoRoOp radius 1, so the two halves of (r) apply different rules. No other radius was run on either.
+- A suppressed stop stays suppressed however long it lasts. The 1,107 s MoRoOp stop shows that this hides a long stop that starts next to a station.
+- `stopped_short` is defined as a stop under 30 s, yet on MoRoOp it now holds a 1,100 s stop. The bucket names in (o) and (q) have not been changed for the new rule.
+- One seed set (0-9) and one 500-step shift per simulator run, one robot on the real log; no CI on any count in (r). macOS arm64 only (pyastar2d tie-break).
