@@ -1098,7 +1098,7 @@ Scholar, dblp, Lens or CORE. The "kept" rows below were rerun on CORE in Part 7,
 - **Absence claims for the gurren page:** none may front it yet. Parts 1-3 require a Semantic Scholar rerun and it
   answered 9 of 64 queries (none for deadlock-from-logs); the 429 reply asks for an API key, an operator action.
   *(Superseded 2026-10-21, Part 7: the bar is now OpenAlex plus one more independent index; of the eleven kept rows
-  of §3, eight reach it on CORE and three do not; see Part 7 for the list.)*
+  of §3, eight reach it on CORE and three do not; seven claims may front the page; see Part 7.)*
   The code, README and pages keep the old labels until a lane renames them.
 
 ## Part 6: state of the art per deliverable (2026-10-22)
@@ -1255,7 +1255,8 @@ index (operator, 21 Oct: the second index does not have to be Semantic Scholar).
 `laptop-scheduler/reports/wr-dev-lit-index-rerun.md`. Ranks as in Part 2 (A read, A- abstract or record).
 **Services:** dblp: not run (Anubis bot wall on dblp.org and dblp.dagstuhl.de, uni-trier and SPARQL time out).
 Semantic Scholar: not run (API 429 "apply for a key"; web page 403). Lens: not run (HTTP 200 but a JavaScript shell,
-no result titles). CORE web page: not run (Cloudflare 403). **CORE API v3 without a key: ran**, 63 flat AND queries
+no result titles). CORE web page: not run (Cloudflare 403). **CORE API v3 without a key
+(https://api.core.ac.uk/v3/search/works/): ran**, 63 flat AND queries
 (title-or-abstract per term), all HTTP 200, plus 37 OR-grouped queries whose zeros are not counted, because CORE's OR
 is unreliable (an added OR alternative shrank 14 hits to 0; log). The OpenAlex reruns of Part 6's four 429 queries hit
 the daily budget again (429): not run.
@@ -1273,10 +1274,12 @@ its harvest.
   checked, verified@2026-10-21): a vignette survey "to measure the consistency of railway delay attribution", which
   railways "can use ... to estimate the accuracy of their delay attribution systems". Human attributors, no figure in
   the abstract. A measurement method exists for rail; still no accuracy number for automatic attribution.
-- **Contradiction, Part 1 papers table.** DOI 10.1177/02783649261470035 and arXiv 2609.10400 are titled "A traffic
-  management system for large and heterogeneous vehicles in narrow industrial environments" (Bonetti, Proia,
-  Guidetti, Sabattini, IJRR 2026; Crossref and arXiv API, A-, verified@2026-10-21), not "Deadlock detection and
-  resolution for AGV fleets". Row annotated; its content claim was not re-read here.
+- **Contradiction, Part 1 papers table.** https://doi.org/10.1177/02783649261470035 and
+  https://arxiv.org/abs/2609.10400 are titled "A traffic management system for large and heterogeneous vehicles in
+  narrow industrial environments" (Bonetti, Proia, Guidetti, Sabattini, IJRR 2026; Crossref and arXiv API, A-,
+  verified@2026-10-21), not "Deadlock detection and resolution for AGV fleets". Row annotated; its content claim was
+  not re-read here. CORE also returned "Efficient Deadlock Detection and Resolution Algorithm for AGV Fleet Management"
+  (2024, CORE record 166089625, title only), close to Part 1's title: the row may merge the 2024 and 2026 papers.
 - **Overturned:** none.
 
 ### Second index per claim
@@ -1305,10 +1308,10 @@ its harvest.
 - **May front the gurren page's "what we could not find" line**, worded "not found in OpenAlex or CORE", never "does
   not exist": deadlock detection from observed-state logs; a passive message-loss map; blocked-cell or blocked-edge
   early warning from fleet traces (Part 6 (5)); a real fleet evaluation of stuck detection; rebuilding "blocked by"
-  from telemetry; a time-in-state share for a real AMR. The two crime-forecasting absences (1 Q2, 1 Q3) also reach
-  the bar but were off-topic on both indexes, so they are weak.
+  from telemetry; a time-in-state share for a real AMR. Seven claims.
 - **May not yet:** a public multi-robot warehouse log and fleet forecast vs persistence (CORE missed the one known
   paper, DeepFleet), the k × median dwell rule, and a fleet congestion index (no known item to test CORE on; one
-  OpenAlex query). Part 6 (6) is weakened: say "no accuracy figure found for automatic attribution".
+  OpenAlex query). Also the two crime-forecasting absences (1 Q2, 1 Q3): they have two indexes, but both result sets
+  were off-topic, which Part 5 already called "uninformative rather than confirmed", as for 4 §1. Part 6 (6) is weakened: say "no accuracy figure found for automatic attribution".
 - The two-index bar is about search coverage. It does not make an absence a proof; CORE's blind spot is 2025-26
   preprints, where this field moves fastest.
