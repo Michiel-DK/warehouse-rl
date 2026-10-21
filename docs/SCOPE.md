@@ -1086,8 +1086,22 @@ Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicin
   density too few cells collect 10 passes in one run (lane report). A retest needs a denser fleet or a longer
   history, not another alpha. Detours (Pan et al. 2013) were not built: no planned route in the stream. The
   stall-count floor on the missed windows (Part 3 item 1, last part) was not counted.
+- [x] S14C eight-hour shift (queue item `wr-s14c-8h-run`; results `results/fleet/amoc_blind-8h.json`,
+      `results/fleet/amoc_fast-8h.json`, `results/fleet/amoc_absence-8h.json`, `results/fleet/hotspot_s10c-blind-8h.json`,
+      `results/fleet/hotspot_s10-none-8h.json`; table `scripts/sprint8_tables.py` (u); README "Sprint 14C"). 10 zones x
+      5,760 steps, seed base 100, 661 windows. Map K 20 31/661 at 199.4 FA/h on the reference; CUSUM flagged nothing;
+      absence 11/661 at 341.2 FA/h, no window shared with the map's 31.
+      `amoc_absence-8h.json` was recomputed in the docs job (69b0378): the queue's stub guard
+      `grep -q 'detector\":\"absence'` (same for `cusum`) cannot match the escaped quotes inside the claim string,
+      so it always writes a stub. It happened to be true for the CUSUM. Fix the queue template in laptop-scheduler
+      (operator).
+- **Part 3 Q1 after S14C: DROP, on three signals** (recorded by the S14C docs job; applying it is the operator's
+  call). With 8 hours of traffic the absence test flags, but it misses 98% of windows at more false alarms than the
+  map, and its rate outside windows (236.6) is below the undisturbed reference (341.2). Part 4's bar is not met. The
+  stall map and the stall CUSUM do not find it either. The "longer history" retest asked for above is done. The
+  gurren page may not mention early warning of blocked cells.
 - Open (operator):
-  - Stop the hidden-blockage line here, or wait for a client log with more traffic per cell?
+  - Stop the hidden-blockage line here (S14C: drop recorded), or wait for a client log with more traffic per cell?
   - Causes table: keep the episode-seconds share against the stuck bucket (sums 2-4), or report shares of episode
     seconds (sums to 1)?
   - 3 of 8 MoRoOp TIMEOUT operations still overlap no stuck run under the bound; inspect them?
