@@ -15,7 +15,13 @@ results/fleet/timebudget_moroop_shifts.json (sort_keys, indent 1, no wall clock,
 S13B: --station-radius N applies the --stations cells to the stuck rule (a run starting within Manhattan N of a station
 cell is not stuck; timebudget.run_is_stuck with stations, the same predicate as the Detector). --suffix S writes
 timebudget_moroop-S.json, timebudget_moroop_shifts-S.json and moroop_label-S.json (the per-shift and pooled `label`
-objects) and never the unsuffixed files. Both absent: the S13A files, byte for byte.
+objects) and never the unsuffixed files. Both absent: the S13A files, byte for byte (S14A adds a `causes` table and an
+`overruns` list to every label object).
+S14A: --servicing-max-s S|auto (with --station-radius) turns a station stop longer than the bound back into a stuck run
+(cause station_overrun, the detector's rule). auto computes one bound PER SHIFT (a shift is one run) from that shift's dwell
+times at stations; the four servicing_* keys are in each shift's label object and, as lists in shift order, in the pooled
+files. The per-shift budget files it reads must then be written with timebudget.py --station-aware --station-radius N
+--servicing-max-s (same spec), and the budget check follows the rule a budget file recorded.
 
 The pure functions work on plain lists of dicts (one dict per row, timestamps int epoch microseconds). pyarrow is imported
 lazily inside load_table only, so this module imports and the pure functions run on a venv without pyarrow.
@@ -777,14 +783,16 @@ def main(argv=None):
                     help="--analyse: stuck rule ignores runs starting within this Manhattan radius of a --stations cell "
                          "(default: stations not applied)")
     ap.add_argument("--servicing-max-s", type=_spec, default=None, metavar="S|auto",
-                    help="--analyse, S14A, needs --station-radius: a station stop longer than this many seconds is stuck "
+                    help="--analyse only (ignored when building), S14A, needs --station-radius: a station stop longer than this many seconds is stuck "
                          "again (station_overrun); auto = one bound per shift from that shift's dwell times at stations")
     ap.add_argument("--suffix", default=None, help="--analyse: write timebudget_moroop-S.json etc. instead of the S13A files")
     args = ap.parse_args(argv)
     if args.station_radius is not None and args.station_radius < 0:
         ap.error("--station-radius must be >= 0")
-    if args.servicing_max_s is not None and not (args.analyse and args.station_radius is not None):
-        ap.error("--servicing-max-s needs --analyse and --station-radius")
+    if args.servicing_max_s is not None and args.analyse and args.station_radius is None:
+        ap.error("--servicing-max-s needs --station-radius")
+    if args.servicing_max_s is not None and not args.analyse:
+        print("moroop: --servicing-max-s has no effect in build mode (it applies to --analyse)", file=sys.stderr)
     if args.analyse:
         return analyse(args.raw, args.jsonl, args.budget, args.stations, args.results, args.cell_m, args.station_radius,
                        args.suffix, args.servicing_max_s)

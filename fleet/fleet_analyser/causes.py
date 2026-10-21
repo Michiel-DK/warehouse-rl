@@ -7,11 +7,12 @@ its label.
 
 causes_block(episodes, stuck_bucket_s) -> dict(table=rows with `share` added, episode_seconds, stuck_bucket_s,
 share_total, denominator, uncounted_open_episodes). share = cause seconds / stuck_bucket_s, the time budget's stuck bucket
-of the same scope (robot, zone or run); None when the bucket is 0. Why the shares need not sum to 1: the bucket holds the
-seconds of stuck stopped runs that no higher bucket claims, the episodes hold whole-episode seconds. A faulted_self episode
-is mostly FAULTED seconds in the budget (the faulted bucket outranks stuck), an episode over a no_data gap or a paused
-message loses those seconds to those buckets, and a left-censored or unresolved-at-end episode is counted for its recorded
-length. share_total is the sum of the shares so the difference is visible, never forced to 1.
+of the same scope (robot, zone or run); None when the bucket is 0. Why the shares need not sum to 1 (and on the simulator runs
+sum to about 2): the bucket holds only the seconds of stuck stopped runs that no higher or earlier bucket claims. A stuck
+episode on a shelf-adjacent cell is waiting_shelf seconds in the budget (57,570 s of s10-none against 41,545 stuck), a
+faulted_self episode is mostly FAULTED seconds (the faulted bucket outranks stuck), an episode over a no_data gap or a
+paused message loses those seconds, and a left-censored or unresolved-at-end episode is counted for its recorded length.
+share_total is the sum of the shares so the difference is visible, never forced to 1.
 """
 from .detector import CAUSE_LABELS
 

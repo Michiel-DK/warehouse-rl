@@ -41,6 +41,14 @@ source (never the shelf-adjacent set) go to the Detector of recompute_episodes a
 fleet_analyser.detector.at_station. A run whose first stopped message is within Manhattan N (default 0) of a goal cell is
 not stuck: its seconds fall to stopped_short, the detector's SERVICING. Without --station-aware nothing changes.
 
+Station time bound (S14A, --servicing-max-s S|auto, needs --station-aware): a station stop longer than the bound is stuck
+again, the detector's station_overrun (Detector(servicing_max_s=)). The overrun stop puts all of its seconds in stuck (whatever
+cell; faulted, paused and no_data intervals inside it still outrank stuck, so on a stop with gaps the bucket holds less than
+the episode's duration), any other station stop of >= stuck_after in waiting_station whatever cell it stopped on; the partition
+is unchanged. auto = one bound for the whole glob (all robots and zones pooled): fleet_analyser/servicing.py. The result file
+then has servicing_max_s, servicing_sample_n, servicing_q1_s, servicing_q3_s at top level. Every robot, zone and the run also
+carry `causes` (fleet_analyser/causes.py): per cause episodes, episode seconds and the share of that scope's stuck bucket.
+
 Layouts (--stations auto): every (env_id, seed) layout is computed by its own freshly spawned process (a new
 ProcessPoolExecutor(max_workers=1) per call), because Agent.counter / Shelf.counter are class attributes. The station
 cells are the env goals and the shelf slots the env shelf positions right after reset.
