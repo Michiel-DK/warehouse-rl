@@ -1,0 +1,6 @@
+{
+ "detector": "cusum",
+ "store_suffix": "fast",
+ "measured_forecast_rows": 0,
+ "amoc": null
+}
