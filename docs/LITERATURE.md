@@ -1113,7 +1113,7 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
   (https://doi.org/10.1371/journal.pone.0182058, A\*, verified@2026-10-21): 20 simulated e-pucks in ARGoS, no planner,
   injected faults; faulty robot flagged a mean 0.89 ± 0.14 of the time for five fault types incl. both wheels dead,
   normal robots tolerated 0.97-0.99 of the time. (c) Azzalini et al. 2020 (https://doi.org/10.5555/3398761.3398779,
-  A-, verified@2026-10-21): HMM on real single-robot routine logs, "+6%" ROC AUC over standard online detectors.
+  A-, verified@2026-10-21): HMM on real single-robot routine logs; it "improves by 6% the area under the ROC curve" of standard online methods.
 - **Ours:** README Sprint 5: recall 0.698, strict precision 0.216 against the simulator's stuck flag (8 zones × 12
   robots, breakdown-heavy preset, **old rule**, not re-measured under (s), no CI). Real log (s): MoRoOp's 2 labelled
   episodes ≥ 30 s both detected, 5 unlabelled stuck runs; too few for a rate. **Not comparable:** time share on
@@ -1129,19 +1129,23 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
   "1.4–2.2 times as much crime" as **crime analysts**, not as a decayed count. (b) Fitzpatrick, Gorr & Neill 2020 SI
   (https://arxiv.org/abs/2011.06019, A, Part 3, verified@2026-10-21): Pittsburgh, the moving average (MAVG) best up to
   3 % of area, pAUC 1.31 vs 1.23 for the best of nine incl. two self-exciting point processes, no CI. Grading:
-  hit rate and PAI (Chainey et al. 2008, Part 1), the ETS chance term (Part 1 §3).
+  hit rate and PAI (Chainey et al. 2008, https://doi.org/10.1057/palgrave.sj.8350066, A, Part 1, verified@2026-10-18),
+  the ETS chance term (Part 1 §3).
 - **Ours:** (j), unchanged under (s): map minus persistence, truth precision at K 20, s8b −0.008 (CI −0.020 to
   +0.005), sticky +0.002 (−0.010 to +0.017); K 40 worse on both. K 20 of 380 cells is 5.3 % of the zone, against
   0.2-0.5 % in the NIJ challenge and ≤ 3 % in (b). **Not comparable:** planted floor cells vs crime events, and a
   different area share. The grading half (PAI form, ETS-form lift, persistence reference) is the standard.
-- **Gap and cost:** behind on method: ETAS (background rate μ per cell plus a fitted decay) was never built. The size
-  of the gap is unknown and may be zero: in the one head-to-head with self-exciting models found, a moving average won
-  (b), and our map already ties a raw count. Closing it: one lane, ETAS fitted on seeds 0-9 and scored paired against
+- **Gap and cost:** behind on method: ETAS (background rate μ per cell plus a fitted decay) was never built. The
+  precedent is mixed, so the size is unknown: Mohler et al. 2011 (https://doi.org/10.1198/jasa.2011.ap09546, A, Part 1,
+  verified@2026-10-18) found ETAS beats the prospective-hotspot family ours belongs to, while in (b) a moving average
+  beat two self-exciting models. Closing it: one lane, ETAS fitted on seeds 0-9 and scored paired against
   persistence on held-out seeds 10-29, as (j).
 
 ### (3) Per-robot time budget
-- **Best published:** SEMI E10's six equipment states (store record, A-, Part 2, verified@2026-10-20) and Standridge's
-  AGV utilisation buckets, travel / blocked / load-unload / idle (A\*, Part 2, verified@2026-10-20). One number in a
+- **Best published:** SEMI E10's six equipment states (https://store-us.semi.org/products/e01000-semi-e10-specification-for-definition-and-measurement-of-equipment-reliability-availability-and-maintainability-ram-and-utilization,
+  A-, Part 2, verified@2026-10-20) and Standridge's AGV utilisation buckets, travel / blocked / load-unload / idle
+  (ch. 17, https://eng.libretexts.org/Bookshelves/Industrial_and_Systems_Engineering/Beyond_Lean_-_Simulation_in_Practice_(Standridge)/17%3A_Automated_Guided_Vehicle_Systems,
+  A\*, Part 2, verified@2026-10-20). One number in a
   fleet setting: "blocking delays could account for 2%-20% of the transaction cycle times" (Roy, Krishnamurthy, Heragu
   & Malmborg 2016, https://ideas.repec.org/a/ids/eujine/v10y2016i1p51-80.html, A-, verified@2026-10-21), simulated
   autonomous-vehicle storage and retrieval.
@@ -1154,10 +1158,10 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
 
 ### (4) Congestion measure for a fleet
 - **Best published:** no fleet standard (Part 2 §3: no "wait ratio" or "congestion index" found; MAPF reports
-  throughput). Nearest: Standridge's "average number of AGV's waiting due to contention for control points" (A\*,
-  Part 2, verified@2026-10-20), a model output; road traffic's Travel Time Index, "a comparison between the travel
+  throughput). Nearest: Standridge's "average number of AGV's waiting due to contention for control points" (ch. 17
+  above, A\*, Part 2, verified@2026-10-20), a model output; road traffic's Travel Time Index, "a comparison between the travel
   conditions in the peak period to free-flow conditions" (FHWA, https://ops-dr.fhwa.dot.gov/congestion_report_04/appendix_C.htm,
-  A, verified@2026-10-21), real probe data, no planner.
+  A, verified@2026-10-21), no planner.
 - **Ours:** (p) under (s): blocked robot-seconds in mutual clusters (≥ 2 robots, symmetric adjacency, ≥ 30 s) per
   robot-hour: 100.6 undisturbed (2.8 % of robot time), 1.41× planner-blind, 1.59× breakdowns, 2.98× sticky floor
   (no CI). Same unit as Standridge's form, narrower count; no TTI computed. **Not comparable** with any number found.
@@ -1165,11 +1169,13 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
   standard: one small lane computing per-job TTI, job time over the free-flow A\* time on the empty map.
 
 ### (5) Early warning of a hidden blockage or slow cell
-- **Best published:** freeway automatic incident detection (TTI report 2917-1F, A, Part 3, verified@2026-10-21):
+- **Best published:** freeway automatic incident detection (TTI report 2917-1F, http://tti.tamu.edu/documents/2917-1F.pdf,
+  A, Part 3, verified@2026-10-21):
   California #7 / #8 67 % / 68 % detected, 2.91 / 3.04 min, 0.134 % / 0.177 % of incident-free intervals; McMaster
   68 %, 1.4 min, about 0.013 false alarms per hour (Part 3's arithmetic, 24 h assumed); real loop detectors, lane-scale incidents, no planner. Neill et
-  al. 2005 (Part 3, A): outbreaks under 5 cases are missed, "essentially no signal to detect". Road-closure patents
-  (HERE, TomTom, Part 4) publish no detection rate.
+  al. 2005 (https://cs.nyu.edu/~neill/papers/sss-kdd05.pdf, A, Part 3, verified@2026-10-21): outbreaks under 5 cases
+  are missed, "essentially no signal to detect". Road-closure patents (HERE https://patents.google.com/patent/US11270578B2/en,
+  TomTom https://patents.google.com/patent/US10767999B2/en, Part 4, verified@2026-10-21) publish no detection rate.
 - **Ours:** planner-blind blocked cell, 50 windows, 10 zones × 500 steps, no CI: map K 20 6 / 50, median 295 s,
   177.8 false alarms per zone-hour (k, unchanged under (s)); CUSUM 2 / 50 at 0.000 (n, old rule, not rerun); traffic
   absence 0 / 50 at every alpha (t). **Not comparable:** a lane-scale incident vs one cell of 380.
@@ -1181,24 +1187,31 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
 - **Best published:** attribution from the plan plus observed state. Rail: Daamen, Goverde & Hansen 2009 (Netw. Spat. Econ. 9(1)), conflicts
   and knock-on delays identified "automatically and without discrimination" from "standard train describer and
   infrastructure messages" (https://doi.org/10.1007/s11067-008-9087-2, A-, verified@2026-10-21), real Dutch network,
-  route data in hand. Robots: Open-RMF builds "Waiting for [robot:" from schedule `dependencies` (Part 5 §2, A); MAPF
-  defines a following conflict on planned paths (Stern et al. 2019, https://arxiv.org/abs/1906.08291, A, Part 5). No
+  route data in hand. Robots: Open-RMF builds "Waiting for [robot:" from schedule `dependencies` (`WaitForTraffic.cpp:199`,
+  https://github.com/open-rmf/rmf_ros2/blob/main/rmf_fleet_adapter/src/rmf_fleet_adapter/events/WaitForTraffic.cpp, A,
+  grepped, verified@2026-10-21); MAPF defines a following conflict on planned paths (Stern et al. 2019,
+  https://arxiv.org/abs/1906.08291, A, Part 5, verified@2026-10-21). No
   attribution accuracy figure was found for any of them.
 - **Ours:** six labels (s): "Stopped, cause not identified" is 440 of 588 episodes undisturbed and 1,180 of 1,391 on
-  the sticky floor; the three neighbour labels are co-location facts (Part 5 §2). The Sprint 5 "cause agreement 0.907"
+  the sticky floor (no CI); the three neighbour labels are co-location facts (Part 5 §2). The Sprint 5 "cause agreement 0.907"
   is against a proximity proxy built on the same geometry, so it is circular, not accuracy. **Not comparable:** no
   accuracy number on either side.
-- **Gap and cost:** behind: published attribution reads the planned path, ours reads adjacency. VDA 5050 state
-  already carries the path (`nodeStates`, `edgeStates`); our emitter truncates it to the first node
-  (`fleet/fleet_analyser/emitter.py:17-19`). Closing it: one lane that emits the released route and files "blocked by
-  B" when B occupies the next node of A's route (Stern's following conflict), graded against the simulator's blocker.
+- **Gap and cost:** behind: published attribution reads the plan or the controller's dependencies, ours reads
+  adjacency. The stream already carries the robot's next route node (`nodeStates` truncated to `agent.path[0]`,
+  `fleet/fleet_analyser/emitter.py:17-19, 202-209`; parsed as `next_x`, `fleet/fleet_analyser/parse.py:35`), but
+  `_cause` does not read it (`fleet/fleet_analyser/detector.py:258-271`). A detector-only lane, rerun on the existing
+  stores, could label a neighbour stop "robot X is on its next route node", a directional geometry fact, still not
+  Part 5 §2's "blocked by" (that needs the planner's log). It leaves `unknown` (no robot within one cell) unchanged;
+  (o) found 76-97 % of stall episodes start next to a shelf (old rule), so a shelf-wait label (E10 "no operator") may
+  be the larger lever on `unknown`; that overlap was not measured.
 
 ### (7) Message-loss / connectivity map from telemetry
 - **Best published:** 3GPP MDT, ETSI TS 137 320 V10.1.0 §5.2.1.2 (A, PDF grepped,
   https://www.etsi.org/deliver/etsi_ts/137300_137399/137320/10.01.00_60/ts_137320v100100p.pdf, verified@2026-10-21):
   "Upon Radio Link Failure detection in the UE, RLFreport ... also includes available location information on where
   RLF occurred"; Annex A lists coverage holes as the use. The device logs the failure; no detection rate is given.
-  Active probing maps (O'Brien et al. 2025, Simbe patent; Part 2 §4, verified@2026-10-20) measure loss directly.
+  Active probing maps measure loss directly (O'Brien et al. 2025, https://doi.org/10.3390/jsan14060110, A-; Simbe,
+  https://patents.google.com/patent/US11897148B2, A\*; Part 2 §4, verified@2026-10-20).
 - **Ours:** (p) gap map on `s12-deadzone`: precision@10 0.57 (ceiling 0.60), 57 of 60 planted dead cells found
   (recall 0.95); synthetic, every message in a dead cell dropped, no CI. **Not comparable:** no published number.
 - **Gap and cost:** no published equivalent in our setting (inference from headerId gaps with no device-side failure
@@ -1206,37 +1219,21 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
   is the one public log for it; an adapter lane plus an IEEE DataPort login.
 
 ### Where we stand (Part 6)
-- **At the standard:** (1) stuck rule and (3) time budget; the grading half of (2).
-- **Behind:** (2) ranking, ETAS not built, gap unquantified and possibly zero (a moving average beat self-exciting
-  models in (b)); (6) cause, published attribution uses the planned path, and 75 % (440 / 588) of our stops are unknown.
-- **No published equivalent in our setting:** (4), (5), (7), backed by the queries below and in Parts 2-5; Semantic
-  Scholar answered 1 of 3 here, so none of these absences may front a pitch (Part 5).
-- **The row that matters is (6):** the route is a field every VDA 5050 stream already carries, and reading it turns
-  "Stopped next to a robot" into "Blocked by robot X". Closing (2) at best ties persistence, and (5) is a data floor.
+- **At the standard:** (1) the stuck rule, (3) the time budget, and the grading half of (2).
+- **Behind:** (2) ranking (ETAS not built; precedent mixed, size unknown) and (6) cause (adjacency, not the plan).
+- **No published equivalent in our setting:** (4), (5), (7), on the queries below and in Parts 2-5; Semantic Scholar
+  answered 1 of 3 here, so none of these absences may front a pitch (Part 5).
+- **The row that matters is (6):** it is the label a client reads on every stop, and the next route node is already in
+  the stream, so a detector-only lane changes it; (2) has mixed precedent and (5) is a data floor.
 
-**Queries (Part 6)** (WebSearch unless stated; per-query status in the report):
+**Queries (Part 6)** (full strings and per-query status in the report; S2 = Semantic Scholar):
 
-| row | service | query | result |
-|---|---|---|---|
-| 1 | OpenAlex | "stuck robot detection fleet telemetry precision recall" | 12 hits, off-topic |
-| 1 | OpenAlex | "anomaly detection autonomous mobile robot fleet operational logs" | MoRoOp only on topic |
-| 1 | arXiv | `abs:"stuck detection" AND abs:robot` | 0 |
-| 1 | arXiv | `abs:warehouse AND abs:robots AND abs:anomaly` | 2, off-topic |
-| 1 | WebSearch (extended) | multi-robot warehouse fault detection ... real fleet data | Cline et al. 2026 (no numbers in abstract), Tarapore 2017 |
-| 1 | S2 | "stuck robot detection warehouse fleet" | HTTP 429 |
-| 2 | OpenAlex | "self-exciting point process hotspot forecasting field trial predictive policing" | Mohler 2015 |
-| 2 | S2 | "self-exciting point process crime forecasting comparison" | HTTP 429 |
-| 4 | OpenAlex | "multi-robot congestion metric delay per robot warehouse" | no congestion index |
-| 4 | arXiv | `abs:congestion AND abs:"multi-robot" AND abs:metric` | 1, flocking |
-| 4 | WebSearch | FHWA travel time index ...; Urban Mobility Report definitions | FHWA appendix C |
-| 5 | WebSearch | automatic incident detection benchmark detection rate false alarm ... | 1990s-2013 AID only |
-| 6 | OpenAlex | "railway delay attribution automatic train describer data" | Daamen et al. 2009 |
-| 6 | OpenAlex | "delay attribution multi-agent root cause robot fleet" | off-topic |
-| 6 | arXiv | `abs:"root cause" AND abs:"multi-robot" AND abs:delay` | 0 |
-| 6 | S2 | "delay attribution blocking robot fleet" | 200, off-topic |
-| 6 | OpenAlex | "automatic delay attribution railway machine learning accuracy incident cause" | HTTP 429 (daily budget) |
-| 7 | OpenAlex | "radio link failure report location coverage hole detection minimization of drive tests" | coverage-hole papers, none passive from gaps |
-| 7 | arXiv | `abs:"packet loss" AND abs:map AND abs:robot`; `abs:"coverage hole" AND abs:robot` | 1 and 3, off-topic |
-| 7 | WebSearch | 3GPP MDT radio link failure report location coverage hole ... | TS 37.320, patents; no accuracy figure |
-| 7 | OpenAlex | "coverage hole detection minimization of drive tests MDT measurements accuracy"; "passive coverage hole detection from packet loss logs mobile robots" | HTTP 429 (daily budget) |
-| 3 | OpenAlex | "Roy Krishnamurthy Heragu Malmborg blocking autonomous vehicle storage retrieval" | HTTP 429; read on IDEAS instead |
+| row | service: query (abridged) | result |
+|---|---|---|
+| 1 | OpenAlex: "stuck robot detection fleet telemetry precision recall", "anomaly detection autonomous mobile robot fleet operational logs"; arXiv: `abs:"stuck detection" AND abs:robot` (0), `abs:warehouse AND abs:robots AND abs:anomaly`; WebSearch (extended): multi-robot warehouse fault detection, real fleet data; S2: "stuck robot detection warehouse fleet" (429) | Tarapore 2017, Cline et al. 2026 (arXiv 2603.14622, no numbers in abstract); no real fleet evaluation |
+| 2 | OpenAlex: "self-exciting point process hotspot forecasting field trial predictive policing"; S2: "self-exciting point process crime forecasting comparison" (429) | Mohler 2015 |
+| 3 | OpenAlex: "Roy Krishnamurthy Heragu Malmborg blocking ..." (429, read on IDEAS) | Roy 2016 |
+| 4 | OpenAlex: "multi-robot congestion metric delay per robot warehouse"; arXiv: `abs:congestion AND abs:"multi-robot" AND abs:metric` (1, flocking); WebSearch: FHWA travel time index, Urban Mobility Report definitions | no fleet congestion index; FHWA TTI |
+| 5 | WebSearch: automatic incident detection benchmark, detection rate, false alarm rate, mean time to detect | AID studies 1996-2013 only |
+| 6 | OpenAlex: "railway delay attribution automatic train describer data", "delay attribution multi-agent root cause robot fleet", "automatic delay attribution railway machine learning accuracy" (429); arXiv: `abs:"root cause" AND abs:"multi-robot" AND abs:delay` (0); S2: "delay attribution blocking robot fleet" (200, off-topic) | Daamen et al. 2009; no attribution accuracy figure |
+| 7 | OpenAlex: "radio link failure report location coverage hole detection minimization of drive tests", two more (429); arXiv: `abs:"packet loss" AND abs:map AND abs:robot`, `abs:"coverage hole" AND abs:robot` (off-topic); WebSearch: 3GPP MDT RLF report coverage hole | TS 37.320; no passive gap inference, no accuracy figure |
