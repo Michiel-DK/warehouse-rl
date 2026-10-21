@@ -716,6 +716,8 @@ slow cells.**
    avoid. Add a per-cell *traffic-absence* test: time since the last pass against the expected inter-arrival time,
    the HERE / TomTom form. Add a detour count too (Pan et al. 2013). Then count stall events on the 44-48 missed
    windows to test the Neill-type signal floor. Keep the in-sample 17/50 out of any text until a held-out run exists.
+   *Done 2026-10-21 (S14B): the absence test detects 0 of 50 windows at every alpha swept (README (t)); recorded as
+   drop in `docs/SCOPE.md` Sprint 14. Detours and the stall-count floor were not done.*
 2. **Map vs persistence: keep the negative, reword it.** It matches Pittsburgh and Hu et al. 2018. Drop "decay"
    as a claimed improvement. If it is ever retested, use the literature's baselines: previous-window top-K, a window
    tuned on calibration seeds (MAVG), and empirical-Bayes shrinkage to the zone mean as the challenger.
