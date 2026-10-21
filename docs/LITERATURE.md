@@ -789,18 +789,17 @@ fronts a pitch.
 Scope: the check before S14A and S14B (laptop-scheduler `jobs/wr-lane-s14a-servicing-bound.md`,
 `jobs/wr-lane-s14b-traffic-absence.md`). Three research passes on 2026-10-21 (WebSearch, WebFetch, curl); the main
 session re-fetched the quoted pages and grepped the patent texts for every number used. Query log:
-`laptop-scheduler/reports/wr-dev-lit-s14.md`. Read depth as in Part 2, patents a class of their own; all
-verified@2026-10-21. **Coverage:** SEMI E10/E58/E116, ISO 22400-2, ISO 3691-4, ISO 14224 and VDI 4486 are paywalled
-(records and secondary mappings read). A station/dock timeout was searched for MiR, OTTO, Kollmorgen NDC, BlueBotics
-ANT, openTCS and Open-RMF, not Geek+ or Locus; none found, but on search results, not doc trees, so that vendor absence
-is rank F.
+`laptop-scheduler/reports/wr-dev-lit-s14.md`. Ranks as in Part 2, patents their own class; all verified@2026-10-21.
+**Coverage:** SEMI E10/E58/E116, ISO 22400-2, ISO 3691-4, ISO 14224 and VDI 4486 are paywalled (records and secondary
+mappings read). A station/dock timeout was searched for MiR, OTTO, Kollmorgen NDC, BlueBotics ANT, openTCS and Open-RMF,
+not Geek+ or Locus; none found, but on search results, not doc trees, so that vendor absence is rank F.
 
 ### 1. Upper bound on a station stop
 | rule (source, read) | standard name | default | state the overrun moves to |
 |---|---|---|---|
 | VDA 5050 main (3.0), https://raw.githubusercontent.com/VDA5050/VDA5050/main/VDA5050_EN.md (A) | none: actions "can run as long as they need to run and should be self-terminating"; "The handling of timeouts and retries shall be defined during integration" | none stated | fleet control's call (cancel the order; action FAILED / an error) |
 | OEE six big losses, https://www.oee.com/oee-six-big-losses/ (A, vendor docs) | small stop vs breakdown threshold | small stops "typically a minute or two", "well under five minutes"; threshold "based on your policy for tracking reasons", e.g. "any downtime longer than two minutes should have a reason" | below: small stop (performance loss); above: breakdown (availability loss, needs a reason) |
-| MoRoOp dispatcher (Part 2b, HF viewer, A-) | operation TIMEOUT | `timeout_seconds: 300` in a failure's meta_data | operation FAILURE, termination_reason TIMEOUT |
+| MoRoOp dispatcher, https://huggingface.co/datasets/Self-Organizing-Production-Logistics/MoRoOp (Part 2b, A-) | operation TIMEOUT | `timeout_seconds: 300` in a failure's meta_data | operation FAILURE, termination_reason TIMEOUT |
 | NIST/SEMATECH e-Handbook 7.1.6, https://www.itl.nist.gov/div898/handbook/prc/section1/prc16.htm (A) | outer fence | Q3 + 3·IQ: "beyond an outer fence is considered an extreme outlier" (inner fence 1.5·IQ, mild) | n/a (statistics) |
 | JMP probability limits, https://www.jmp.com/en/statistics-knowledge-portal/quality-and-reliability-methods/control-charts/probability-limits-on-control-charts (A) | probability limits | fit a distribution, "Find the quantiles of the model for 0.005, 0.5, 0.995"; for skewed data the 3σ lower limit "does not seem appropriate" | n/a |
 | SEMI E10 via OPC 40001-1 C.3, https://reference.opcfoundation.org/specs/OPC-40001-1/c-3 (A) | six states | none | no rule found that a process-time overrun is unscheduled downtime |
@@ -808,8 +807,7 @@ is rank F.
 
 Not found (queries below): a k × median dwell rule with a published k, a planned cycle time for a robot's station stop
 in VDA 5050 or ISO 22400 (catalogue only), a vendor dock or station timeout default. **A non-robust limit fails here:**
-a mean + kσ estimated with the outlier in the sample lets the outlier mask itself (on stops of 20, 30, 40, 50, 600 s,
-log-scale mean + 3σ is 2,150 to 3,300 s, population or sample σ).
+with the outlier in the sample it masks itself (stops 20, 30, 40, 50, 600 s: log-scale mean + 3σ is 2,150 to 3,300 s).
 
 **Verdict 1.** S14A bound: **T = min(300 s, exp(Q3 + 3·IQR of ln dwell))** = min(300, Q3·(Q3/Q1)^3), the NIST outer
 fence on the log scale, capped at the OEE five-minute small-stop edge and the MoRoOp dispatcher's own 300 s timeout.
@@ -817,8 +815,8 @@ Sample: every stopped run with an order that starts within `station_radius` of a
 only exists past 30 s, so a sample of SERVICING runs is left-truncated and pushes Q1 up; if S14A uses it, the report
 says so). Pooled per run; fewer than 5 stops in the sample → T = 300 s (the minimum is set here, no source). On the S14A
 fixture (20, 30, 40, 50, 600 s, linear-interpolated quartiles) T = 50·(50/30)^3 ≈ 231.5 s, only the 600 s stop converts.
-State STUCK; cause key `station_overrun`; standard reading: above the small-stop threshold, so an availability loss that
-needs a reason (OEE).
+State STUCK; cause key `station_overrun`; above the OEE small-stop threshold, so an availability loss that needs a
+reason.
 
 ### 2. Cause taxonomy for a stuck log a client reads
 **VDA 5050 error record** (A, both branches read). 3.0 (`main`): `errors[]` with `errorType`, `errorReferences[]`
@@ -832,12 +830,13 @@ which read URGENT and CRITICAL into 2.1.0: they exist only from 3.0, so `faulted
 2.x stream. Neither version has a "blocked by obstacle" field. **PackML**, OPC 30050 §6.3.8,
 https://reference.opcfoundation.org/specs/OPC-30050/6.3.8 (A): Suspending when "conditions external to the unit/machine
 require a pause" ("the unit/machine is 'blocked'" downstream, "'starved'" upstream); Held for "internal process
-conditions". **SEMI E10/E79** substates (Cimetrix deck reproducing the E79 figure, B): unscheduled downtime "Maintenance
-delay, Repair time, Change of consumables, Out of spec input, Facilities related"; standby "No operator, No product, No
-support tool". **PIADE**, https://zenodo.org/records/7071746 (A): rows carry `interval_start`, `equipment_ID`, `alarm`
-("alarm code of the active stop reason"), `type` in {idle, production, downtime, performance_loss, scheduled_downtime},
-`start`, `end`, `elapsed`; the 133 alarm codes are not grouped into classes, `type` is the only class. ISO 3691-4 stop
-categories: not obtained, do not cite one.
+conditions". **SEMI E10/E79** substates
+(https://www.cimetrix.com/hubfs/Blog_Files/Cimetrix-Productivity-infrastructure-Smart-Manufacturing.pdf, E79 figure
+reproduced, B): unscheduled downtime "Maintenance delay, Repair time, Change of consumables, Out of spec input,
+Facilities related"; standby "No operator, No product, No support tool". **PIADE**, https://zenodo.org/records/7071746
+(A): rows carry `interval_start`, `equipment_ID`, `alarm` ("alarm code of the active stop reason"), `type` in {idle,
+production, downtime, performance_loss, scheduled_downtime}, `start`, `end`, `elapsed`; the 133 alarm codes are not
+grouped into classes, `type` is the only class. ISO 3691-4 stop categories: not obtained.
 
 | cause key | `cause_label` (verbatim) | standard anchor | computable from a VDA 5050 state stream |
 |---|---|---|---|
@@ -854,8 +853,8 @@ intervened mode (`operatingMode`), operator pause (`paused`, emitted but not a c
 computable from any VDA 5050 stream:** E10 standby no operator / no product at the station (needs WMS or station data)
 and maintenance delay, consumables, facilities (needs a maintenance log).
 
-**Verdict 2.** S14A exports the six `cause_label` strings of the table exactly; `cause` stays the machine key. A
-client-facing row also carries the stop interval and the robot id (the PIADE and PackML record shape).
+**Verdict 2.** S14A exports the six `cause_label` strings of the table exactly; `cause` stays the machine key. Rows
+carry stop interval and robot id (PIADE shape).
 
 ### 3. Traffic-absence detection
 **HERE US 11270578 B2**, https://patents.google.com/patent/US11270578B2/en (patent): a "historical model of expected
@@ -863,56 +862,57 @@ probe activity" per segment and "per time epoch", from "a designated time span (
 (Gaussian for ">1000 data points"); worked example λ = 8.83 from 12 observations, "the likelihood of 0 vehicles is
 0.015%"; closed when the probability is below a threshold "determined based on ground truth data comprising labeled
 closure status data"; release "with the role of the historical baseline model and the closure model flipped". Its
-threshold examples contradict each other (a 7 % threshold read as both open and closed); no evaluation. **HERE US
-10847029 B2**, https://patents.google.com/patent/US10847029B2/en (patent): monitor only when the "total expected
-(historic) vehicle volume ... in the window is greater than EXPECTED_THRESH, which is 10 in this example"; links that
-cannot reach it are dropped offline. **TomTom US 10767999 B2**, https://patents.google.com/patent/US10767999B2/en
+threshold examples contradict each other; no evaluation. **HERE US 10847029 B2**,
+https://patents.google.com/patent/US10847029B2/en (patent): the monitoring window must hold "total expected (historic)
+vehicle volume ... greater than EXPECTED_THRESH, which is 10 in this example"; links that cannot reach it within
+MAX_WINDOW_SIZE are never monitored. **TomTom US 10767999 B2**, https://patents.google.com/patent/US10767999B2/en
 (patent): passability decays as e^(−βt) with β inversely proportional to the "expected visit interval" (monthly
-average), a fixed jump on each traversal; release with hysteresis ("the first value might be 0.14 and the second value
-0.23"); "a closure of less than 15 minutes" may not be detected. Google, INRIX: nothing documented found (rank F). **Pan
-et al. 2013** (https://doi.org/10.1145/2525314.2525343, A, MSR PDF): no planned route needed. A routing pattern is the
-historical share of traffic on each path between an origin and a destination region; anomalous when its Mahalanobis
-distance from the median pattern is ≥ 3σ; runs every 30 min; recall 86.7 % vs 46.7 %. It needs full trajectories between
-regions, which the position stream has; **the planned route is not in the stream** (`nodeStates` holds the first route
-node only, `fleet/fleet_analyser/emitter.py:17-19`). **SPC time-between-events chart** (t / exponential / TBE / CQC
-chart, Chan, Xie & Goh 2000), via Hinestroza & González 2019, https://doi.org/10.15446/rev.fac.cienc.v8n2.69524 (A): T ~
-exp(λ0), UCL = −(1/λ0)·ln(α/2), standard α = 0.0027, ARL0 ≈ 370. **Neill expectation-based Poisson** (Part 1; decrease
-form, arXiv https://arxiv.org/abs/2012.07574, A): at an observed count of 0 the log-likelihood ratio equals the expected
-count B (algebra done here): the same test. **AMOC** (arXiv https://arxiv.org/abs/2101.12246, A): ROC with the detection
-rate replaced by delay, a missed event's delay = its length; origin Fawcett & Provost, KDD 1999 (not read). No
-absence-test source reports false alarms per hour; the only per-hour false-alarm figures remain the loop-detector ones
-of Part 3 (0.013 to 3.5 per hour, on lane-scale incidents). Absence-based blocked-cell detection in robot fleets: not
-found (queries below and Part 3 Q1).
+average), a fixed jump on each traversal; release with hysteresis; "a closure of less than 15 minutes" may not be
+detected. Google, INRIX: nothing documented found (rank F). **Pan et al. 2013**
+(https://doi.org/10.1145/2525314.2525343, A, MSR PDF): no planned route needed. A routing pattern is the historical
+share of traffic on each path between an origin and a destination region; anomalous when its Mahalanobis distance from
+the median pattern is ≥ 3σ; runs every 30 min; recall 86.7 % vs 46.7 %. It needs positions only, but scores 30-min slots
+against historical patterns, and one 2,495 s run gives one slot and no history; the planned route is not in the stream
+either (`nodeStates` holds the first route node only, `fleet/fleet_analyser/emitter.py:17-19`). **SPC
+time-between-events chart** (t / TBE chart, Chan, Xie & Goh 2000) via Hinestroza & González 2019,
+https://doi.org/10.15446/rev.fac.cienc.v8n2.69524 (A): T ~ exp(λ0), UCL = −(1/λ0)·ln(α/2), standard α = 0.0027, ARL0 ≈
+370. **Neill expectation-based Poisson** (Part 1; decrease form, arXiv https://arxiv.org/abs/2012.07574, A): at an
+observed count of 0 the log-likelihood ratio equals the expected count B (algebra done here): the same test. **AMOC**
+(arXiv https://arxiv.org/abs/2101.12246, A): ROC with the detection rate replaced by delay, a missed event's delay = its
+length; origin Fawcett & Provost, KDD 1999 (not read). No absence-test source reports false alarms per hour; the only
+per-hour false-alarm figures remain the loop-detector ones of Part 3 (0.013 to 3.5 per hour, on lane-scale incidents).
+Absence-based blocked-cell detection in robot fleets: not found (queries below and Part 3 Q1).
 
 **Verdict 3.** S14B test: the **time-between-events upper probability limit on the open gap** (the HERE zero-count
 rule). Per (zone, cell): rate r = passes / unflagged observed seconds, from the stream's own past (causal, expanding
-from the first message, frozen while the cell is flagged); eligible when r·(seconds observed) ≥ 10 expected passes (HERE
-EXPECTED_THRESH); flag at bin end when e^(−r·gap) < α, i.e. gap > ln(1/α)/r, so a cell is flagged ⌈ln(1/α)/(r·bin_s)⌉
-bins after its last pass; release at the next pass. α default 1e-3, sweep {1e-2, 1e-3, 1e-4} (set here; the SPC 0.0027
-is per chart, and under a Poisson null the false flags per zone-hour are about α × eligible passes per hour). Deviations
-from HERE (state them): one 2,495 s run, not a year of epochs; no time-of-day model; no labelled threshold.
+from the first message, frozen while the cell is flagged); eligible when r·(seconds observed) ≥ 10 expected passes (a
+deviation: HERE's 10 is the expected count inside the tested window, i.e. r·gap ≥ 10); flag at bin end when e^(−r·gap) <
+α, i.e. gap > ln(1/α)/r, so a cell is flagged ⌈ln(1/α)/(r·bin_s)⌉ bins after its last pass; release at the next pass. α
+default 1e-3, sweep {1e-2, 1e-3, 1e-4} (set here; the SPC 0.0027 is per chart; under a Poisson null, flag events per
+zone-hour ≈ α × eligible passes per hour, and the harness counts flag-publishes, a multiple of that since a flag stays
+up about 1/r). Deviations from HERE (state them): one 2,495 s run, not a year of epochs; no time-of-day model or
+labelled threshold.
 
 ### 4. What this means for S14
 **Scale (sizing on undisturbed `s10-none` zones 0/3/7, counted this session, not a result):** a zone's busiest cell sees
 14 to 19 robot passes in 2,495 s (≤ 0.008 passes/s), the tenth-busiest 12 to 15. Blockages last 300 to 1,200 s (60-240
 steps × 5 s, `src/warehouse_rl/disturb.py:20`). On the busiest cells the flag needs a gap of about 600 / 900 / 1,200 s
 at α 1e-2 / 1e-3 / 1e-4, and eligibility (10 expected passes) is reached only 1,300 to 1,800 s into the run. So only
-long blockages, late in a run, on the busiest cells can be flagged while open: the Neill signal floor of Part 3 at this
-traffic.
+long, late blockages on the busiest cells can be flagged while open (the Neill floor of Part 3). Under HERE's own window
+rule (r·gap ≥ 10, about 1,300 s or more) no cell is testable while a blockage is open.
 
 - **S14A rule:** min(300 s, log-scale outer fence) on all station stops with an order; parameter: the 300 s cap, the
   3·IQR fence, the minimum of 5 stops. **Positive:** on MoRoOp the 1,107 s stop is a `station_overrun` episode again,
   TIMEOUT overlaps rise above 1 of 8, and unlabelled station-cell stuck runs stay ≤ 54 (10 % of README (q)'s 542, bar
   set here). **Negative:** more than 54 of them come back, or the 1,107 s stop stays hidden. Simulator: the stall list
-  grows by fewer episodes than the 4-47 per run that (r) removed (or the report says why).
-- **S14A causes:** the six labels of §2, verbatim. Positive: every closed episode carries one. Negative: a higher
-  `unknown` share than before is a regression.
+  grows by fewer episodes than the 4-47 per run that (r) removed (or the report says why). Causes: the six labels of §2,
+  verbatim; positive: every closed episode carries one. Negative: a higher `unknown` share than before is a regression.
 - **S14B rule:** zero-count absence test above at α 1e-3, eligibility 10 expected passes, release at the next pass.
-  **Positive:** on `s10c-blind` more than 2 of 50 windows detected while open at ≤ 1 false alarm per zone-hour on
-  `s10-none` (beats the CUSUM row of README (n)), or more than 6 of 50 at < 177.8 (beats the map row of (k))
-  (`results/fleet/amoc_absence*.json`, same harness). **Negative:** ≤ 2 of 50 at every α of the sweep. The sizing makes
-  the negative likely; it would close the hidden-blockage warning at this density. The CUSUM's in-sample 17/50 is not a
-  comparison row.
+  **Positive:** on the same 50 `s10c-blind` windows, at least 5 detected while open that the reference misses and none
+  the other way (one-sided exact sign test, p < 0.05), against the CUSUM of README (n) at ≤ 1 false alarm per zone-hour
+  on `s10-none`, or against the map of (k) at < 177.8. **Negative:** no α of the sweep reaches that bar. The sizing
+  makes it likely; it would close the hidden-blockage warning at this density. The in-sample tuned CUSUM is not a
+  comparison.
 
 **Absence queries (Part 4)** (WebSearch; full log in the report): "VDA 5050 action timeout blockingType actionParameters
 specification", "MiR robot mission "wait for" action timeout docking", "Open-RMF dispenser ingestor timeout task phase
