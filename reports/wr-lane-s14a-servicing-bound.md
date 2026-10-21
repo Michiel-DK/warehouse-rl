@@ -89,3 +89,15 @@ Other totals do not move. `start_sets_equal` (timebudget stuck runs vs detector 
 
 `.venv/bin/python -m unittest discover -s fleet/tests -p 'test_fleet_*.py'`: Ran 686, OK (skipped=7; the same 7 as on master, 661 tests there, +25 here, none skipped in the new file).
 `.venv/bin/python -m unittest discover -s tests`: Ran 1114, OK (skipped=7) (run in this worktree with the main checkout's venv; the worktree has no .venv of its own).
+
+## Merge (main loop, 21 Oct 2026)
+
+Criterion pre-review halted 3 times (cause_label vs hash layer; flag-gating and partition; log-space quartiles); the 4th
+criterion passed. Review round: python-reviewer pass; refuters correctness, regression, test-honesty, scope-adherence,
+invariants all non-refuting. Builder set criterion_met false only for the two deviations stated above (overrun seconds
+keep no_data/paused/faulted precedence; T = 80 s moves 265 s on s10c-blind and 5,365 s on closed_loop). Gate re-run by
+the main loop on PR head 7013404: fleet/tests Ran 686 OK (skipped=7), tests Ran 1114 OK (skipped=7). Squash-merged as
+PR #51 -> 95feaaf, master fast-forwarded. Operator questions: the 1,107 s stop is now a 3,245 s episode (2,091 s no_data
+inside it); causes shares sum to 2.0-4.1 against the stuck bucket.
+
+SCHED_RESULT: OK wr-lane-s14a PR #51 merged 95feaaf; gate 686+1114 OK; MoRoOp TIMEOUT overlaps 5/8 (was 1), unlabelled station-cell stuck 3 (bar 54); wr-s14a-rerun written (5d703f7), not run
