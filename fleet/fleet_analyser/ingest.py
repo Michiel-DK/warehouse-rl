@@ -31,7 +31,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from . import decisions
-from .detector import DEFAULT_STUCK_AFTER, Detector
+from .detector import CAUSE_LABELS, DEFAULT_STUCK_AFTER, Detector
 from .ledger import IngestLedger, SequenceTracker, coverage, lag_enabled
 from .parse import epoch_of, parse_line
 
@@ -74,7 +74,11 @@ class Pipeline:
     row per consumed chunk and calls `_maybe_ledger`; everything else is shared, so both sources produce the same rows."""
 
     def __init__(self, run, store, source, label, emit_path=None, stuck_after=DEFAULT_STUCK_AFTER,
-                 ledger_interval=10.0, clock=time.time, log=None, stations=None, station_radius=0):
+                 ledger_interval=10.0, clock=time.time, log=None, stations=None, station_radius=0,
+                 servicing_max_s=None, servicing_stats=None):
+        """servicing_max_s (S14A, default None = off): the station time bound handed to the Detector (needs stations).
+        servicing_stats: the dict servicing.resolve returned (servicing_max_s, servicing_sample_n, servicing_q1_s,
+        servicing_q3_s); with a bound its four keys and station_overruns go into the ingest_runs row, otherwise none."""
         self.run, self.store, self.source, self.glob = run, store, source, label
         self.stuck_after, self.ledger_interval, self.clock = stuck_after, ledger_interval, clock
         self._stop = threading.Event()
@@ -84,8 +88,11 @@ class Pipeline:
         self._checkpoints = {}
         self._cp_seq = 0
         resuming = bool(store.select("ingest_checkpoints", {"run": run}))
-        self.det = Detector(stuck_after, resumed=resuming, stations=stations, station_radius=station_radius)
+        self.det = Detector(stuck_after, resumed=resuming, stations=stations, station_radius=station_radius,
+                            servicing_max_s=servicing_max_s)
         self.station_aware = stations is not None
+        self.servicing_max_s = servicing_max_s
+        self.servicing_stats = dict(servicing_stats or {})
         self.ledger = IngestLedger(run, source, clock)
         self.seq = SequenceTracker()
         self.exit_code = 0
@@ -217,14 +224,16 @@ class Pipeline:
                 continue
             row = {k: v for k, v in ev.items() if k not in ("kind", "decided_by")}
             row["run"] = self.run
+            row["cause_label"] = CAUSE_LABELS.get(row.get("cause"))  # S14A: the client-readable text; cause stays the key
             self.store.upsert("stuck_episodes", ("run", "episode_id"), [row])
             if ev.get("left_censored"):
                 continue  # start unknown after a resume: no decision (its dedup_key would be a second key)
             if kind == "episode_open":
+                stopped_for = ev["servicing_s"] if "servicing_s" in ev else self.stuck_after
                 self._decide("stuck_cause", ev, ev["t_entry"], dict(
                     episode_id=ev["episode_id"], cause=ev["cause"], blocker=ev["blocker"],
                     blocker_faulted_s=ev["blocker_faulted_s"], cell=ev["cell"]), None, ev["t_entry"],
-                    f"{ev['robot']} stopped with order {ev['order_id']} at {ev['cell']} for {self.stuck_after}s; "
+                    f"{ev['robot']} stopped with order {ev['order_id']} at {ev['cell']} for {stopped_for:g}s; "
                     f"cause {ev['cause']}")
             elif ev["avoidable"]:
                 self._decide("avoidable_reset", ev, ev["end"], dict(
@@ -312,6 +321,11 @@ class Pipeline:
             expected_messages=expected, updated_at=self.clock())
         if self.station_aware:  # S13B: stopped runs the detector filed as SERVICING (no episode), key only with stations
             row["servicing_runs"] = self.det.servicing_runs
+        if self.servicing_max_s is not None:  # S14A: the bound, its sample and the conversions; keys only with the bound
+            row.update(servicing_max_s=self.servicing_max_s, servicing_sample_n=self.servicing_stats.get("servicing_sample_n"),
+                       servicing_q1_s=self.servicing_stats.get("servicing_q1_s"),
+                       servicing_q3_s=self.servicing_stats.get("servicing_q3_s"),
+                       station_overruns=self.det.station_overruns)
         self.store.upsert("ingest_runs", ("run",), [row])
         self._after_ledger()
 
@@ -337,12 +351,13 @@ class Pipeline:
 class Ingester(Pipeline):
     def __init__(self, glob, run, store, stuck_after=DEFAULT_STUCK_AFTER, poll=2.0, ledger_interval=10.0, once=False,
                  clock=time.time, sleep=None, truncate_after=TRUNCATE_AFTER_S, log=None, stations=None,
-                 station_radius=0):
+                 station_radius=0, servicing_max_s=None, servicing_stats=None):
         self.poll, self.once, self.truncate_after = poll, once, truncate_after
         self._sleep = sleep or self._stop_wait
         self.files = {}
         super().__init__(run, store, "file", glob, os.path.join(os.path.dirname(glob) or ".", "emit_ledger.json"),
-                         stuck_after, ledger_interval, clock, log, stations, station_radius)
+                         stuck_after, ledger_interval, clock, log, stations, station_radius, servicing_max_s,
+                         servicing_stats)
 
     def _stop_wait(self, timeout):
         return self._stop.wait(timeout)

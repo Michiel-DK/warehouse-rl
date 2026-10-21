@@ -1,7 +1,7 @@
 """Ingest fleet state into the stuck-detector store.
 
 Usage: python fleet/ingest.py --source file --glob 'fleet/data/<run>/*.jsonl.gz' [--run NAME]
-       [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB] [--stuck-after 30] [--stations auto|PATH [--station-radius 0]] [--poll 2] [--ledger-interval 10] [--once]
+       [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB] [--stuck-after 30] [--stations auto|PATH [--station-radius 0] [--servicing-max-s S|auto]] [--poll 2] [--ledger-interval 10] [--once]
        python fleet/ingest.py --source kafka --bootstrap localhost:19092 [--topic fleet.state] [--group stuck-analyser]
        [--run NAME] [--emit-ledger PATH] [--until-idle S] [--store ...]
 The file source reads growing gzip JSONL files (zone files in nnn order) and cross-checks <glob dir>/emit_ledger.json
@@ -21,7 +21,7 @@ FLEET = Path(__file__).resolve().parent
 if str(FLEET) not in sys.path:
     sys.path.insert(0, str(FLEET))
 
-from fleet_analyser import ingest, kafka_source, store as store_mod  # noqa: E402
+from fleet_analyser import ingest, kafka_source, servicing, store as store_mod  # noqa: E402
 
 
 def build_parser():
@@ -37,6 +37,12 @@ def build_parser():
                         "{\"stations\": [[x, y]...]} file); a stopped run starting within --station-radius of one is "
                         "SERVICING, not stuck: no episode, counted as servicing_runs in the ingest_runs row")
     p.add_argument("--station-radius", type=int, default=0, help="Manhattan radius around a station cell (default 0)")
+    p.add_argument("--servicing-max-s", type=servicing.parse_spec, default=None, metavar="S|auto",
+                   help="file source, S14A, needs --stations: a station stop (SERVICING) longer than this many seconds "
+                        "opens one stuck episode, cause station_overrun, start = the stop time. auto = one bound per run "
+                        "from the dwell times of the stops that start at a station (all zones pooled): min(300, "
+                        "exp(Q3L + 3 (Q3L - Q1L))), Q1L / Q3L the quartiles of ln(dwell). Needs the whole run on disk "
+                        "(a first pass reads every zone file). Absent = today's rule")
     p.add_argument("--poll", type=float, default=2.0)
     p.add_argument("--ledger-interval", type=float, default=10.0)
     p.add_argument("--once", action="store_true", help="process what is on disk now, end input, exit")
@@ -88,9 +94,11 @@ def main(argv=None):
         p.error("--stuck-after must be >= 1, --poll and --ledger-interval > 0")
     if a.station_radius < 0:
         p.error("--station-radius must be >= 0")
+    if a.servicing_max_s is not None and a.stations is None:
+        p.error("--servicing-max-s needs --stations")
     if a.source == "kafka":
-        if a.stations is not None:
-            p.error("--stations is for the file source only")
+        if a.stations is not None or a.servicing_max_s is not None:
+            p.error("--stations and --servicing-max-s are for the file source only")
         return run_kafka(p, a)
     if not a.glob:
         p.error("--glob is required for --source file")
@@ -104,9 +112,17 @@ def main(argv=None):
         from fleet_analyser.stations import load_stations
 
         stations = load_stations(a.stations, os.path.dirname(os.path.abspath(a.glob)))
+    bound = stats = None
+    if a.servicing_max_s is not None:
+        from fleet_analyser.hotspot import read_messages
+
+        stats = servicing.resolve(a.servicing_max_s, read_messages(a.glob), stations, a.station_radius)
+        bound = stats["servicing_max_s"]
+        print(f"servicing bound {bound:.2f} s (sample {stats['servicing_sample_n']} stops, q1 {stats['servicing_q1_s']}, "
+              f"q3 {stats['servicing_q3_s']}; all zones of the run pooled)", file=sys.stderr)
     ing = ingest.Ingester(a.glob, run, st, stuck_after=a.stuck_after, poll=a.poll, ledger_interval=a.ledger_interval,
                           once=a.once, log=lambda s: print(s, file=sys.stderr), stations=stations,
-                          station_radius=a.station_radius)
+                          station_radius=a.station_radius, servicing_max_s=bound, servicing_stats=stats)
     ingest.install_signal_handlers(ing)
     t0 = time.monotonic()
     code = ing.run_loop()

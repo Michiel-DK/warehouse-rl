@@ -151,8 +151,9 @@ def score_run(lines_by_zone, store, run, stuck_after=30):
             klass = "frozen_neighbour"
         else:
             klass = "other"
-        confusion[d["cause"]][klass] += 1
-        agree += klass in _AGREES[d["cause"]]
+        # S14A: station_overrun (only with a --servicing-max-s store) is not in _AGREES; its row appears when one matched
+        confusion.setdefault(d["cause"], {t: 0 for t in TRUTH_CLASSES})[klass] += 1
+        agree += klass in _AGREES.get(d["cause"], ("other",))
         abandon = any(r.action == "abandon" for r in window)
         res_table["order_dropped" if d["resolution"] == "order_dropped" else "not_order_dropped"][
             "abandon" if abandon else "no_abandon"] += 1

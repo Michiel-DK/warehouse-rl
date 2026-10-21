@@ -41,6 +41,14 @@ source (never the shelf-adjacent set) go to the Detector of recompute_episodes a
 fleet_analyser.detector.at_station. A run whose first stopped message is within Manhattan N (default 0) of a goal cell is
 not stuck: its seconds fall to stopped_short, the detector's SERVICING. Without --station-aware nothing changes.
 
+Station time bound (S14A, --servicing-max-s S|auto, needs --station-aware): a station stop longer than the bound is stuck
+again, the detector's station_overrun (Detector(servicing_max_s=)). The overrun stop puts all of its seconds in stuck (whatever
+cell; faulted, paused and no_data intervals inside it still outrank stuck, so on a stop with gaps the bucket holds less than
+the episode's duration), any other station stop of >= stuck_after in waiting_station whatever cell it stopped on; the partition
+is unchanged. auto = one bound for the whole glob (all robots and zones pooled): fleet_analyser/servicing.py. The result file
+then has servicing_max_s, servicing_sample_n, servicing_q1_s, servicing_q3_s at top level. Every robot, zone and the run also
+carry `causes` (fleet_analyser/causes.py): per cause episodes, episode seconds and the share of that scope's stuck bucket.
+
 Layouts (--stations auto): every (env_id, seed) layout is computed by its own freshly spawned process (a new
 ProcessPoolExecutor(max_workers=1) per call), because Agent.counter / Shelf.counter are class attributes. The station
 cells are the env goals and the shelf slots the env shelf positions right after reset.
@@ -63,6 +71,8 @@ for _p in (FLEET, REPO / "src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from fleet_analyser import servicing  # noqa: E402
+from fleet_analyser.causes import causes_block  # noqa: E402
 from fleet_analyser.detector import DEFAULT_STUCK_AFTER, Detector, at_station  # noqa: E402
 from fleet_analyser.hotspot import read_messages  # noqa: E402
 from fleet_analyser.parse import iso  # noqa: E402
@@ -129,12 +139,39 @@ def stopped_runs(kept):
     return runs, run_of
 
 
-def run_is_stuck(kept, run, stations=None, radius=0):
-    """Long enough to be stuck and (with stations) not a station dwell: the run's cell is that of its first message."""
+def run_is_station_stop(kept, run, stations=None, radius=0):
+    """Long enough to be stuck and starting at a station: the detector's SERVICING (cell of the first message)."""
     if kept[run[1]].ts - kept[run[0]].ts < DEFAULT_STUCK_AFTER:
         return False
     first = kept[run[0]]
-    return not at_station(first.x, first.y, stations, radius)
+    return at_station(first.x, first.y, stations, radius)
+
+
+def run_overruns(kept, run, servicing_max_s):
+    """S14A: a station stop the Detector converts to a station_overrun episode. Walk the run's messages like the
+    detector: from stuck_after on a faulted message opens a faulted_self episode (no conversion); the first non-faulted
+    message with ts - start >= servicing_max_s converts."""
+    since = kept[run[0]].ts
+    for i in range(run[0], run[1] + 1):
+        d = kept[i].ts - since
+        if d < DEFAULT_STUCK_AFTER:
+            continue
+        if kept[i].faulted:
+            return False
+        if d >= servicing_max_s:
+            return True
+    return False
+
+
+def run_is_stuck(kept, run, stations=None, radius=0, servicing_max_s=None):
+    """Long enough to be stuck and (with stations) not a station dwell: the run's cell is that of its first message.
+    With servicing_max_s a station dwell that run_overruns converts is stuck again (the detector's station_overrun)."""
+    if kept[run[1]].ts - kept[run[0]].ts < DEFAULT_STUCK_AFTER:
+        return False
+    first = kept[run[0]]
+    if not at_station(first.x, first.y, stations, radius):
+        return True
+    return servicing_max_s is not None and run_overruns(kept, run, servicing_max_s)
 
 
 def check_bucket_sum(serial, seconds, span):
@@ -144,13 +181,22 @@ def check_bucket_sum(serial, seconds, span):
         raise ValueError(f"timebudget: robot {serial}: bucket sum {total} != span {span} ({seconds})")
 
 
-def robot_budget(kept, stations, near_shelf, shift_s, max_gap_s=DEFAULT_MAX_GAP_S, rule_radius=None):
+def robot_budget(kept, stations, near_shelf, shift_s, max_gap_s=DEFAULT_MAX_GAP_S, rule_radius=None,
+                 servicing_max_s=None):
     """(record, runs) for one robot. record = dict(seconds, share, span_s, per_shift_s, jobs). rule_radius not None: the
-    stuck rule is station-aware (the `stations` cells, that radius); None: the rule ignores stations (the S12A rule)."""
+    stuck rule is station-aware (the `stations` cells, that radius); None: the rule ignores stations (the S12A rule).
+    servicing_max_s (S14A, needs rule_radius): a station stop the detector converts to a station_overrun episode puts all
+    of its seconds in stuck (whatever cell, none in waiting_station; faulted / paused / no_data still outrank it); any other
+    station stop of >= 30 s puts its seconds in waiting_station whatever cell it stopped on."""
     seconds = {b: 0 for b in BUCKETS}
     runs, run_of = stopped_runs(kept)
-    stuck_flags = [run_is_stuck(kept, r) if rule_radius is None else run_is_stuck(kept, r, stations, rule_radius)
-                   for r in runs]
+    stuck_flags = [run_is_stuck(kept, r) if rule_radius is None else
+                   run_is_stuck(kept, r, stations, rule_radius, servicing_max_s) for r in runs]
+    station_run = [False] * len(runs)
+    if servicing_max_s is not None and rule_radius is not None:
+        station_run = [run_is_station_stop(kept, r, stations, rule_radius) and not f for r, f in zip(runs, stuck_flags)]
+    overrun_run = [servicing_max_s is not None and rule_radius is not None and f
+                   and run_is_station_stop(kept, r, stations, rule_radius) for r, f in zip(runs, stuck_flags)]
     for i in range(len(kept) - 1):
         m = kept[i]
         dt = kept[i + 1].ts - m.ts
@@ -164,6 +210,10 @@ def robot_budget(kept, stations, near_shelf, shift_s, max_gap_s=DEFAULT_MAX_GAP_
             b = "moving"
         elif m.order_id == "":
             b = "idle"
+        elif overrun_run[run_of[i]]:
+            b = "stuck"
+        elif station_run[run_of[i]]:
+            b = "waiting_station"
         elif (m.x, m.y) in stations:
             b = "waiting_station"
         elif (m.x, m.y) in near_shelf and not m.loaded:
@@ -207,9 +257,9 @@ def stop_minutes(agv_kept):
 
 
 # ------------------------------------------------------------------------------------------------ episodes
-def recompute_episodes(messages, stations=None, station_radius=0):
+def recompute_episodes(messages, stations=None, station_radius=0, servicing_max_s=None):
     """Detector() fed every kept message in (ts, serial) order, then end_all(); last open/close event per episode_id."""
-    det = Detector(stations=stations, station_radius=station_radius)
+    det = Detector(stations=stations, station_radius=station_radius, servicing_max_s=servicing_max_s)
     rows = {}
     events = []
     for m in sorted(messages, key=lambda m: (m.ts, m.serial)):
@@ -265,7 +315,8 @@ def _pool_waits(parts, source):
 
 
 # ------------------------------------------------------------------------------------------------ main computation
-def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT_MAX_GAP_S, station_radius=None):
+def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT_MAX_GAP_S, station_radius=None,
+            servicing_max_s=None):
     by_zone = {}
     for m in messages:
         by_zone.setdefault(m.zone, {}).setdefault(m.serial, []).append(m)
@@ -274,14 +325,17 @@ def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT
         ep_by_zone.setdefault(str(e["zone"]), []).append(e)
     zones, all_agv, run_waits, run_cmp = {}, [], [], []
     run_jobs = run_span = run_same = 0
+    run_agv_eps = []
     for z in sorted(by_zone, key=lambda s: (len(s), s)):
         lay = layouts[z]
         stations, near, classes = cell_sets(lay["goals"], lay["shelves"])
         pickers = lay["pickers"]
         robots, pick, agv_kept, starts = {}, {}, {}, set()
+        eps = ep_by_zone.get(z, [])
         for serial in sorted(by_zone[z]):
             kept = kept_messages(by_zone[z][serial])
-            rec, s = robot_budget(kept, stations, near, shift_s, max_gap_s, station_radius)
+            rec, s = robot_budget(kept, stations, near, shift_s, max_gap_s, station_radius, servicing_max_s)
+            rec["causes"] = causes_block([e for e in eps if e["robot"] == serial], rec["seconds"]["stuck"])
             starts |= s
             if serial in pickers:
                 pick[serial] = rec
@@ -289,9 +343,11 @@ def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT
                 robots[serial] = rec
                 agv_kept[serial] = kept
         ztot = totals_of(list(robots.values()))
+        agv_eps = [e for e in eps if e["robot"] in robots]
+        ztot["causes"] = causes_block(agv_eps, ztot["seconds"]["stuck"])
+        run_agv_eps += agv_eps
         jobs = sum(r["jobs"] for r in robots.values())
         jph = jobs / (ztot["span_s"] / 3600) if ztot["span_s"] else None
-        eps = ep_by_zone.get(z, [])
         waits = dict(station_waits(eps, stations, near, pickers), source=source)
         det_starts = {(e["robot"], e["start"]) for e in eps}
         cmp_ = dict(timebudget_stuck_runs=len(starts), detector_episodes=len(eps), start_sets_equal=starts == det_starts)
@@ -306,6 +362,7 @@ def compute(messages, run, layouts, episodes, source, shift_s, max_gap_s=DEFAULT
         run_waits.append(waits)
         run_cmp.append(cmp_)
     rtot = totals_of(all_agv)
+    rtot["causes"] = causes_block(run_agv_eps, rtot["seconds"]["stuck"])
     run_out = dict(totals=rtot, jobs_per_robot_hour=run_jobs / (run_span / 3600) if run_span else None,
                    same_minute_stops_count=run_same, station_waits_in_stall_list=_pool_waits(run_waits, source),
                    stuck_runs_vs_detector=dict(timebudget_stuck_runs=sum(c["timebudget_stuck_runs"] for c in run_cmp),
@@ -343,9 +400,15 @@ def main(argv=None):
     ap.add_argument("--station-aware", action="store_true",
                     help="S13B: a stopped run starting at/near a station goal cell is not stuck (detector SERVICING)")
     ap.add_argument("--station-radius", type=int, default=0, help="with --station-aware: Manhattan radius (default 0)")
+    ap.add_argument("--servicing-max-s", type=servicing.parse_spec, default=None, metavar="S|auto",
+                    help="S14A, needs --station-aware: a station stop longer than this many seconds is stuck again "
+                         "(station_overrun); auto = one bound for the whole glob from the dwell times of the stops that "
+                         "start at a station. Its seconds go to stuck, any other station stop's to waiting_station")
     args = ap.parse_args(argv)
     if args.station_radius < 0:
         ap.error("--station-radius must be >= 0")
+    if args.servicing_max_s is not None and not args.station_aware:
+        ap.error("--servicing-max-s needs --station-aware")
     t_start = time.time()
     out_path = Path(args.out)
     if not out_path.parent.is_dir():
@@ -370,11 +433,16 @@ def main(argv=None):
         det_stations, rule_radius = goal_cells(layouts), args.station_radius
     else:
         det_stations, rule_radius = None, None
+    bound = sv_stats = None
+    if args.servicing_max_s is not None:
+        sv_stats = servicing.resolve(args.servicing_max_s, messages, det_stations, args.station_radius)
+        bound = sv_stats["servicing_max_s"]
     if present:
         episodes, source = store_episodes(store_dir, args.run), "store"
     else:
-        episodes, source = recompute_episodes(messages, det_stations, args.station_radius), "recomputed"
-    zones, run_out = compute(messages, args.run, layouts, episodes, source, args.shift_s, args.max_gap_s, rule_radius)
+        episodes, source = recompute_episodes(messages, det_stations, args.station_radius, bound), "recomputed"
+    zones, run_out = compute(messages, args.run, layouts, episodes, source, args.shift_s, args.max_gap_s, rule_radius,
+                             bound)
     hash_after = store_hash(store_dir) if present else None
     if hash_after != hash_before:
         print(f"timebudget: store {store_dir} changed during the run", file=sys.stderr)
@@ -386,7 +454,10 @@ def main(argv=None):
                shift_s=args.shift_s, max_gap_s=args.max_gap_s, script="timebudget.py")
     if args.station_aware:
         src.update(station_aware=True, station_radius=args.station_radius)
-    out_path.write_text(json.dumps(dict(zones=zones, run=run_out, src=src), sort_keys=True, indent=1) + "\n")
+    doc = dict(zones=zones, run=run_out, src=src)
+    if sv_stats is not None:  # S14A: one bound for the whole run (all zones and robots pooled)
+        doc.update(sv_stats, servicing_pooling="all robots of all zones of the glob (one run)")
+    out_path.write_text(json.dumps(doc, sort_keys=True, indent=1) + "\n")
 
     for z, d in zones.items():
         sh = d["totals"]["share"]
