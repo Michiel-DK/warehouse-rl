@@ -1439,3 +1439,72 @@ Against the CUSUM, which detects none: 11 windows to 0, one-sided exact sign tes
 - Zones 0 and 1 run far slower than the other eight (pick-rate in the `wr-s14c-8h-run` log, not in a results file). Both detectors behave differently there: the map raises a quarter of its usual false alarms and the absence test about four times as many.
 - False alarms count flag-publishes per zone per simulated hour. The map publishes every 300 s and the CUSUM and absence test every 60 s, as in (t).
 - macOS arm64 only (pyastar2d tie-break).
+
+## Sprint 14D: "blocked by" only when the neighbour is on the route (2026-10-21)
+
+S14A gave every neighbour stop a label that names the neighbour as the cause, for example "Blocked by a stuck robot", whenever a stuck or broken robot stood on any adjacent cell. `docs/LITERATURE.md` Part 5 section 2 said that adjacency does not show blocking, and Part 6 row 6 named the cheapest directional fact the stream carries: the robot's next route node. S14D (PR #54) keeps the cause keys and their precedence. Within the chosen cause, the robot standing on the stopped robot's next node is the blocker, and only then is the label "Blocked by ..." (or "Traffic wait"). Otherwise, or when the message reports no route, it is "Stopped next to ...". The labels are the operator's strings from the S14D brief, not Part 5's draft (lane report `reports/wr-lane-s14d-cause-route.md`, "Deviation from Part 5"). The queue item `wr-s14d-rerun` re-ingested the five simulator runs and MoRoOp into `-sd` files (results commit 2c9cd68). Everything between this paragraph and "Reading the numbers" is the output of section (v) of `.venv/bin/python scripts/sprint8_tables.py`. Only its heading was demoted one level.
+
+#### (v) Stop causes split by the next route node (S14D): S14A label / S14D label
+
+| run | cause | S14A label (`-sb`) | episodes | seconds | S14D label (`-sd`) | episodes | seconds | on route | files |
+|---|---|---|---|---|---|---|---|---|---|
+| s10-none | `unknown` | Stopped, cause not identified | 440 | 77,200 | Stopped, cause not identified | 440 | 77,200 | n/a | `results/fleet/timebudget_s10-none-sb.json`, `results/fleet/timebudget_s10-none-sd.json` |
+| s10-none | `traffic` | Traffic wait | 93 | 8,305 | Stopped next to another robot | 81 | 7,445 | no or unknown | `results/fleet/timebudget_s10-none-sb.json`, `results/fleet/timebudget_s10-none-sd.json` |
+| s10-none | | | | | Traffic wait | 12 | 860 | yes | `results/fleet/timebudget_s10-none-sb.json`, `results/fleet/timebudget_s10-none-sd.json` |
+| s10-none | `blocked_by_stuck` | Blocked by a stuck robot | 55 | 6,440 | Stopped next to a stuck robot | 22 | 3,990 | no or unknown | `results/fleet/timebudget_s10-none-sb.json`, `results/fleet/timebudget_s10-none-sd.json` |
+| s10-none | | | | | Blocked by a stuck robot | 33 | 2,450 | yes | `results/fleet/timebudget_s10-none-sb.json`, `results/fleet/timebudget_s10-none-sd.json` |
+| s10c-blind | `unknown` | Stopped, cause not identified | 404 | 88,115 | Stopped, cause not identified | 404 | 88,115 | n/a | `results/fleet/timebudget_s10c-blind-sb.json`, `results/fleet/timebudget_s10c-blind-sd.json` |
+| s10c-blind | `blocked_by_stuck` | Blocked by a stuck robot | 63 | 9,750 | Stopped next to a stuck robot | 28 | 7,180 | no or unknown | `results/fleet/timebudget_s10c-blind-sb.json`, `results/fleet/timebudget_s10c-blind-sd.json` |
+| s10c-blind | | | | | Blocked by a stuck robot | 35 | 2,570 | yes | `results/fleet/timebudget_s10c-blind-sb.json`, `results/fleet/timebudget_s10c-blind-sd.json` |
+| s10c-blind | `traffic` | Traffic wait | 79 | 7,310 | Stopped next to another robot | 70 | 6,665 | no or unknown | `results/fleet/timebudget_s10c-blind-sb.json`, `results/fleet/timebudget_s10c-blind-sd.json` |
+| s10c-blind | | | | | Traffic wait | 9 | 645 | yes | `results/fleet/timebudget_s10c-blind-sb.json`, `results/fleet/timebudget_s10c-blind-sd.json` |
+| s10c-blind | `station_overrun` | Station stop over time limit | 1 | 265 | Station stop over time limit | 1 | 265 | n/a | `results/fleet/timebudget_s10c-blind-sb.json`, `results/fleet/timebudget_s10c-blind-sd.json` |
+| s10-breakdown | `unknown` | Stopped, cause not identified | 225 | 104,410 | Stopped, cause not identified | 225 | 104,410 | n/a | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s10-breakdown | `faulted_self` | Robot fault | 107 | 26,875 | Robot error, cannot continue order | 107 | 26,875 | n/a | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s10-breakdown | `blocked_by_faulted` | Blocked by a faulted robot | 20 | 7,970 | Stopped next to a broken robot | 19 | 7,895 | no or unknown | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s10-breakdown | | | | | Blocked by a broken robot | 1 | 75 | yes | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s10-breakdown | `blocked_by_stuck` | Blocked by a stuck robot | 8 | 7,105 | Stopped next to a stuck robot | 8 | 7,105 | no or unknown | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s10-breakdown | `traffic` | Traffic wait | 21 | 4,315 | Stopped next to another robot | 18 | 4,090 | no or unknown | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s10-breakdown | | | | | Traffic wait | 3 | 225 | yes | `results/fleet/timebudget_s10-breakdown-sb.json`, `results/fleet/timebudget_s10-breakdown-sd.json` |
+| s8b-medium-80-p03-07 | `unknown` | Stopped, cause not identified | 424 | 84,955 | Stopped, cause not identified | 424 | 84,955 | n/a | `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sd.json` |
+| s8b-medium-80-p03-07 | `blocked_by_stuck` | Blocked by a stuck robot | 41 | 7,165 | Stopped next to a stuck robot | 39 | 7,040 | no or unknown | `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sd.json` |
+| s8b-medium-80-p03-07 | | | | | Blocked by a stuck robot | 2 | 125 | yes | `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sd.json` |
+| s8b-medium-80-p03-07 | `traffic` | Traffic wait | 69 | 7,100 | Stopped next to another robot | 62 | 6,565 | no or unknown | `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sd.json` |
+| s8b-medium-80-p03-07 | | | | | Traffic wait | 7 | 535 | yes | `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sd.json` |
+| closed-loop-sticky | `unknown` | Stopped, cause not identified | 1180 | 430,625 | Stopped, cause not identified | 1180 | 430,625 | n/a | `results/fleet/timebudget_closed-loop-sticky-sb.json`, `results/fleet/timebudget_closed-loop-sticky-sd.json` |
+| closed-loop-sticky | `blocked_by_stuck` | Blocked by a stuck robot | 121 | 46,115 | Stopped next to a stuck robot | 113 | 45,560 | no or unknown | `results/fleet/timebudget_closed-loop-sticky-sb.json`, `results/fleet/timebudget_closed-loop-sticky-sd.json` |
+| closed-loop-sticky | | | | | Blocked by a stuck robot | 8 | 555 | yes | `results/fleet/timebudget_closed-loop-sticky-sb.json`, `results/fleet/timebudget_closed-loop-sticky-sd.json` |
+| closed-loop-sticky | `traffic` | Traffic wait | 65 | 18,000 | Stopped next to another robot | 56 | 16,370 | no or unknown | `results/fleet/timebudget_closed-loop-sticky-sb.json`, `results/fleet/timebudget_closed-loop-sticky-sd.json` |
+| closed-loop-sticky | | | | | Traffic wait | 9 | 1,630 | yes | `results/fleet/timebudget_closed-loop-sticky-sb.json`, `results/fleet/timebudget_closed-loop-sticky-sd.json` |
+| closed-loop-sticky | `station_overrun` | Station stop over time limit | 25 | 5,365 | Station stop over time limit | 25 | 5,365 | n/a | `results/fleet/timebudget_closed-loop-sticky-sb.json`, `results/fleet/timebudget_closed-loop-sticky-sd.json` |
+| MoRoOp, pooled (radius 1) | `station_overrun`, `unknown` | no route nodes in the log, every blocker_on_route null (asserted by the `wr-s14d-rerun` queue item over every episode); no neighbour cause in the table, and the causes block equals the S14A one (asserted) | | | | | n/a | `results/fleet/moroop_label-sb.json`, `results/fleet/moroop_label-sd.json` |
+
+**On-route share per run** (neighbour causes = `blocked_by_faulted`, `blocked_by_stuck`, `traffic`; on route = the S14D label is the route label of `ROUTE_LABELS` in `fleet/fleet_analyser/detector.py`):
+
+| run | on-route / all neighbour episodes | share | on-route / all neighbour seconds | share | "Blocked by" / old "Blocked by" episodes (blocked_by_* only) |
+|---|---|---|---|---|---|
+| s10-none | 45 / 148 | 30.4% | 3,310 / 14,745 | 22.4% | 33 / 55 |
+| s10c-blind | 44 / 142 | 31.0% | 3,215 / 17,060 | 18.8% | 35 / 63 |
+| s10-breakdown | 4 / 49 | 8.2% | 300 / 19,390 | 1.5% | 1 / 28 |
+| s8b-medium-80-p03-07 | 9 / 110 | 8.2% | 660 / 14,265 | 4.6% | 2 / 41 |
+| closed-loop-sticky | 17 / 186 | 9.1% | 2,185 / 64,115 | 3.4% | 8 / 121 |
+
+S14A = the bounded rule of (s), files `-sb`; S14D (PR #54) = the same rule with each neighbour cause split by the robot's next route node, files `-sd` from queue item `wr-s14d-rerun`, which re-ingested every store as `store-sd`. A neighbour cause takes its route label ("Blocked by a broken robot", "Blocked by a stuck robot", "Traffic wait") only when the chosen blocker stands on the node the stopped robot reports next; otherwise, or when the message reports no route, it takes the "Stopped next to" label. The rerun moves labels only: per run the causes header (`episode_seconds`, `stuck_bucket_s`, `share_total`), every time budget bucket, and each cause key's episode and second sums equal the S14A file (asserted). "Traffic wait" is the S14A label of every traffic stop and the S14D label of on-route traffic only.
+
+**Reading the numbers.**
+- **Most old neighbour causes do not survive the route test (v).** Counting all three neighbour causes, the on-route label holds for 45 of 148 episodes undisturbed (30.4%), 44 of 142 on the planner-blind run (31.0%), 4 of 49 on the breakdown run (8.2%), 9 of 110 on the s8b floor run (8.2%) and 17 of 186 on the sticky floor (9.1%). By seconds the share is lower on every run (1.5% to 22.4%): on-route stops are shorter on average.
+- **"Blocked by" itself (v).** Of the S14A "Blocked by a stuck / faulted robot" episodes, 33 of 55 keep a "Blocked by" label undisturbed, 35 of 63 on the planner-blind run, 1 of 28 on the breakdown run, 2 of 41 on the s8b run and 8 of 121 on the sticky floor. On the breakdown run, 1 of 20 "Blocked by a faulted robot" stops has the broken robot on its next node (75 s of 7,970).
+- **Nothing else moved (v).** The rerun changes labels only. Per run, the stuck bucket, every time-budget bucket, the causes header and each cause key's episode and second sums equal the S14A files (asserted). `unknown` is still most of every simulator stall list, as in (s).
+- **MoRoOp: no change (v).** The log has no route nodes, so every `blocker_on_route` is null (the queue item's assertion: True 0, False 0). The pooled table has no neighbour cause at all, only `station_overrun` and `unknown`, so the split could not show there for two reasons.
+
+**Caveats.**
+- **"Stopped next to" mixes two cases, and the results files cannot separate them.** It is the label both when the neighbour is off the route and when the stopped robot reports no route (`nodeStates` absent or `[]`). The lane report's check on s10-none zone 0 found 5 of its 11 traffic stops with `nodeStates []`. So the on-route shares are a floor on how often the neighbour stands on the route. They are not evidence that the rest stood beside it.
+- **On route is geometry, not proof of blocking.** Part 6 row 6 calls the next-node test "a directional geometry fact, still not Part 5 §2's 'blocked by'". A planner log would prove it. The operator chose "Blocked by" for this case, and the client text overstates it by that much (lane report).
+- **"Traffic wait" changed meaning.** In (s) it labels every traffic stop; in (v) only the on-route ones. Compare (s) and (v) by cause key, not by label.
+- The README text and the pages before this section still carry the S14A strings ("Robot fault", "Blocked by a faulted robot"); renaming them is not done here.
+- The on-route choice can change which robot is named as the blocker on routed streams. Its effect on grades and lessons was not measured (lane report, review).
+- One seed set (0-9) and one 500-step shift per simulator run; no count in (v) has a CI. macOS arm64 only (pyastar2d tie-break).
+
+## Sprint 14E: grading time (2026-10-21)
+
+S14E (PR #53) made the in-memory store keep its indices current on update (a per-row sequence number and bisect re-insertion) instead of dropping them. Grading had become the slow step on long runs. Lane report `reports/wr-lane-s14e-store-index.md`, measured on this laptop: `grade --once --truth` on the stripped 500-step planner-blind store went from 1.73-1.86 s with the old store to 0.17 s, with `decisions.jsonl` and `forecast_grades.jsonl` byte-identical to the old store's. On the 8-hour planner-blind store (`fleet/data/s10c-blind-8h`, 10 zones x 5,760 steps) the new code grades in 4.4 s and 4.7 s (two runs). The old code was not run on that store. The only "before" is about 50 minutes read off file mtimes, and it covers lessons and grade together, so it is not a like-for-like speedup. Loading the graded 8-hour `decisions.jsonl` takes 0.5 s; the old load was stopped unfinished at 15 minutes. The tests that pin it are in `fleet/tests/test_fleet_store_index.py`: `TestGradeOnData.test_grade_byte_identity_500step` (byte identity) and `TestGradeOnData.test_grade_8h_timing` (the 8-hour grade under a 120 s limit). Both skip when that store is absent under `WR_S10_DATA`; the S14E gate ran them (ok, not skipped).

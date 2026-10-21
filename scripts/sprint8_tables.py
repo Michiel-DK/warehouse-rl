@@ -1819,6 +1819,87 @@ def eight_hour():
                   f"{0.5 ** n:.5f}.")
 
 
+def _route_labels():
+    """ROUTE_LABELS from the detector itself (fleet/fleet_analyser/detector.py), so (v) cannot drift from the code."""
+    sys.path.insert(0, str(REPO / "fleet"))
+    try:
+        from fleet_analyser.detector import CAUSE_LABELS, ROUTE_LABELS
+    finally:
+        sys.path.pop(0)
+    return CAUSE_LABELS, ROUTE_LABELS
+
+
+def cause_route():
+    cause_labels, route_labels = _route_labels()
+    neighbour = tuple(route_labels)  # blocked_by_faulted, blocked_by_stuck, traffic: the causes the route test splits
+    tags = [t for t, _ in S12_RUNS]
+    print("| run | cause | S14A label (`-sb`) | episodes | seconds | S14D label (`-sd`) | episodes | seconds | "
+          "on route | files |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    summary = []
+    for t in tags:
+        brel, drel = f"results/fleet/timebudget_{t}-sb.json", f"results/fleet/timebudget_{t}-sd.json"
+        b, d = load(brel), load(drel)
+        bc, dc = b["run"]["totals"]["causes"], d["run"]["totals"]["causes"]
+        # S14D moves labels only: the causes header, every bucket and the per-key sums are equal (asserted)
+        assert {k: v for k, v in bc.items() if k != "table"} == {k: v for k, v in dc.items() if k != "table"}, t
+        assert b["run"]["totals"]["seconds"] == d["run"]["totals"]["seconds"], t
+        keys = sorted({r["cause"] for r in bc["table"]} | {r["cause"] for r in dc["table"]},
+                      key=lambda k: -sum(r["seconds"] for r in bc["table"] if r["cause"] == k))
+        on = {"ep": 0, "s": 0, "all_ep": 0, "all_s": 0, "blk_ep": 0, "blk_all": 0}
+        for k in keys:
+            brows = [r for r in bc["table"] if r["cause"] == k]
+            drows = [r for r in dc["table"] if r["cause"] == k]
+            assert len(brows) == 1, (t, k)
+            assert sum(r["episodes"] for r in drows) == brows[0]["episodes"], (t, k)
+            assert sum(r["seconds"] for r in drows) == brows[0]["seconds"], (t, k)
+            assert all(r["cause_label"] in (cause_labels[k], route_labels.get(k)) for r in drows), (t, k)
+            for i, r in enumerate(drows):
+                routed = k in neighbour and r["cause_label"] == route_labels[k]
+                left = (f"`{k}` | {brows[0]['cause_label']} | {brows[0]['episodes']} | {brows[0]['seconds']:,}"
+                        if i == 0 else "| | |")
+                print(f"| {t} | {left} | {r['cause_label']} | {r['episodes']} | {r['seconds']:,} | "
+                      f"{'yes' if routed else ('no or unknown' if k in neighbour else 'n/a')} | "
+                      f"`{brel}`, `{drel}` |")
+                if k in neighbour:
+                    on["all_ep"] += r["episodes"]
+                    on["all_s"] += r["seconds"]
+                    if k != "traffic":
+                        on["blk_all"] += r["episodes"]
+                    if routed:
+                        on["ep"] += r["episodes"]
+                        on["s"] += r["seconds"]
+                        if k != "traffic":
+                            on["blk_ep"] += r["episodes"]
+        summary.append((t, on))
+    lrel, lsb = "results/fleet/moroop_label-sd.json", "results/fleet/moroop_label-sb.json"
+    lab, lb = load(lrel), load(lsb)
+    assert lab["pooled"]["causes"] == lb["pooled"]["causes"]
+    mk = [r["cause"] for r in lab["pooled"]["causes"]["table"]]
+    assert not set(mk) & set(neighbour), mk
+    print(f"| MoRoOp, pooled (radius {lab['station_radius']}) | " + ", ".join(f"`{k}`" for k in mk)
+          + " | no route nodes in the log, every blocker_on_route null (asserted by the `wr-s14d-rerun` queue item over every episode); no neighbour cause in the table, and the "
+          f"causes block equals the S14A one (asserted) | | | | | n/a | `{lsb}`, `{lrel}` |")
+    print()
+    print("**On-route share per run** (neighbour causes = `blocked_by_faulted`, `blocked_by_stuck`, `traffic`; on route "
+          "= the S14D label is the route label of `ROUTE_LABELS` in `fleet/fleet_analyser/detector.py`):\n")
+    print("| run | on-route / all neighbour episodes | share | on-route / all neighbour seconds | share | "
+          "\"Blocked by\" / old \"Blocked by\" episodes (blocked_by_* only) |")
+    print("|---|---|---|---|---|---|")
+    for t, on in summary:
+        print(f"| {t} | {on['ep']} / {on['all_ep']} | {on['ep'] / on['all_ep']:.1%} | {on['s']:,} / {on['all_s']:,} | "
+              f"{on['s'] / on['all_s']:.1%} | {on['blk_ep']} / {on['blk_all']} |")
+    print()
+    print("S14A = the bounded rule of (s), files `-sb`; S14D (PR #54) = the same rule with each neighbour cause split by the "
+          "robot's next route node, files `-sd` from queue item `wr-s14d-rerun`, which re-ingested every store as "
+          "`store-sd`. A neighbour cause takes its route label (\"Blocked by a broken robot\", \"Blocked by a stuck "
+          "robot\", \"Traffic wait\") only when the chosen blocker stands on the node the stopped robot reports next; "
+          "otherwise, or when the message reports no route, it takes the \"Stopped next to\" label. The rerun moves "
+          "labels only: per run the causes header (`episode_seconds`, `stuck_bucket_s`, `share_total`), every time "
+          "budget bucket, and each cause key's episode and second sums equal the S14A file (asserted). \"Traffic "
+          "wait\" is the S14A label of every traffic stop and the S14D label of on-route traffic only.")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -1868,6 +1949,8 @@ def main():
     absence_vs_map()
     print("\n### (u) Eight-hour shift: map, CUSUM and absence on the blind blockage (S14C)\n")
     eight_hour()
+    print("\n### (v) Stop causes split by the next route node (S14D): S14A label / S14D label\n")
+    cause_route()
 
 
 if __name__ == "__main__":
