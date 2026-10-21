@@ -1400,3 +1400,37 @@ Same measured run (`fleet/data/s10c-blind`, 50 planner-blind blocked windows) an
 - The decayed map publishes every 300 s, the CUSUM and the absence test every 60 s. False alarms per zone-hour count flag-publishes, and an absence flag stays up until the next pass, so one flag can count at many publishes.
 - Built without HERE's time-of-day model, labelled threshold and hysteresis, and without Pan et al.'s detour count (no planned route in the stream, and no history in one run). The lane report lists the deviations.
 - macOS arm64 only (pyastar2d tie-break).
+
+## Sprint 14C: an eight-hour shift (2026-10-21)
+
+Every analyser run so far was a 500-step shift, about 42 minutes. A real shift is 8 hours, and `docs/LITERATURE.md` Part 4 section 3 said the absence test needs traffic history that one short run cannot give. The queue item `wr-s14c-8h-run` emitted the planner-blind blockage run and the undisturbed reference at 10 zones x 5,760 steps (8 simulated hours per zone), seed base 100. The S10I tuning used seeds 0-9 and these seeds are not among them. It then ran the map, the CUSUM and the absence test (alpha 1e-3) with the settings of (t). Everything between this paragraph and "Reading the numbers" is the output of section (u) of `.venv/bin/python scripts/sprint8_tables.py`. Only its heading was demoted one level.
+
+#### (u) Eight-hour shift: map, CUSUM and absence on the blind blockage (S14C)
+
+| detector | shift | publish every, s (publishes) | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, undisturbed reference | false alarms per zone-hour, blind run outside windows | file |
+|---|---|---|---|---|---|---|---|---|---|
+| decayed map K 20 (S10E) | 500 steps (S14B) | 300 (9) | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 177.8 | 175.1 | `results/fleet/amoc_blind.json` |
+| decayed map K 20 (S10E) | 8 hours (S14C) | 300 (96) | 31 / 661 | 0.95 | 170 (107.5-260) | 0.00 | 199.4 | 216.5 | `results/fleet/amoc_blind-8h.json` |
+| CUSUM (S10I) | 500 steps (S14B) | 60 (42) | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 | `results/fleet/amoc_fast.json` |
+| CUSUM (S10I) | 8 hours (S14C) | n/a | flagged nothing: 0 forecast rows on s10c-blind-8h, 0 / 661 | 1.00 | none | n/a | not in the file | not in the file | `results/fleet/amoc_fast-8h.json` |
+| traffic absence, alpha 1e-3 (S14B) | 500 steps (S14B) | n/a | flagged nothing: 0 forecast rows on s10c-blind, 0 / 50 | 1.00 | none | n/a | not in the file | not in the file | `results/fleet/amoc_absence.json` |
+| traffic absence, alpha 1e-3 (S14B) | 8 hours (S14C) | 60 (480) | 11 / 661 | 0.98 | 55 (30-485) | 0.00 | 341.2 | 236.6 | `results/fleet/amoc_absence-8h.json` |
+
+500-step rows: `fleet/data/s10c-blind` (50 planner-blind blocked windows, 0.69 simulated hours per zone) against `fleet/data/s10-none`, the same rows as (t). 8-hour rows: `fleet/data/s10c-blind-8h` (661 windows, median 152 steps, 8 simulated hours per zone, 10 zones x 5,760 steps) against `fleet/data/s10-none-8h`. Every live row of a shift has the same runs, windows and store hashes before and after as that shift's map row (asserted). The detectors, their defaults and the disturbance ({"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}) are those of (t); only the shift length and the seeds changed. K is 20 per zone for every live row. A stub (`amoc` null) means the detector wrote no forecast row on the blind run, so it detects 0 windows; it records the blind run only, so its reference false alarms are not in the file. Column definitions are those of (k). Reference false alarms per zone-hour at K 20 on the 8-hour run, by zone: decayed map: zone 0 61.8, zone 1 62.2, zone 2 232.4, zone 3 233.8, zone 4 233.0, zone 5 233.2, zone 6 235.6, zone 7 233.6, zone 8 233.6, zone 9 234.8; traffic absence: zone 0 881.2, zone 1 915.8, zone 2 235.0, zone 3 219.0, zone 4 97.8, zone 5 288.5, zone 6 106.6, zone 7 209.5, zone 8 208.5, zone 9 250.4.
+
+Window overlap on the 8-hour run at K 20 (`by_k.20.windows`): the absence test detects 11 windows the decayed map misses, the map 31 that the absence test misses, both 0. Absence hits by zone: zone 1 5, zone 2 1, zone 5 1, zone 6 2, zone 7 1, zone 9 1.
+
+**Reading the numbers.**
+- **Verdict (u): with 8 hours of history, none of the three finds the hidden blockage, so the hidden-blockage line is closed on three signals: stall map, stall CUSUM and traffic absence.** History changed one detector, the absence test, which now flags. It does not flag the blockage.
+- **Absence test (u): it went from flagging nothing to 11 of 661 windows, at more false alarms than the map.** It catches 1.7% of windows at K 20, with 341.2 false alarms per zone-hour on the undisturbed reference. The map catches 31 of 661 at 199.4. The absence test raises fewer false alarms on the blind run outside windows (236.6) than on the undisturbed run (341.2), so its flags do not follow the blockages. Zones 0 and 1 give 881.2 and 915.8 per zone-hour on the reference on their own, and 5 of the 11 hits are in zone 1.
+- **Part 4's bar is still not met.** The bar was at least 5 windows that the reference detector misses and none the other way. The absence test detects 11 windows the map misses, but the map detects 31 that the absence test misses, and they share none. The absence test's false-alarm rate is also above the map's 177.8 bar, and far above the CUSUM's limit of 1 per zone-hour.
+- **Map (u): 31 of 661 (4.7%) at K 20, against 6 of 50 (12%) on the 500-step run.** False alarms are 199.4 per zone-hour on the reference and 216.5 outside windows, against 177.8 and 175.1. The seeds differ (see caveats), so this is no evidence that longer history helps or hurts the map.
+- **CUSUM (u): it flagged nothing in 8 hours on seeds 100-109.** It wrote 0 forecast rows on the blind run, where the 500-step run on seeds 0-9 gave 2 of 50. Its defaults come from S10I, so this is held-out.
+
+**Caveats.**
+- Seed base 100 is a different seed set from every earlier table, so the 500-step and 8-hour rows are not paired. A change between them mixes shift length with seeds.
+- One map, one run per shift length; no count in (u) has a CI.
+- `results/fleet/amoc_absence-8h.json` was recomputed in the S14C docs job (commit 69b0378). The queue item wrote a stub for it, but its guard grep could not match the escaped quotes in `decisions.jsonl`, and `absencemap.py` had logged 86,524 flags on the blind run. The CUSUM stub is real: no `cusum` forecast row exists in either 8-hour store. The S14B stubs for 1e-3 and 1e-4 were checked the same way and hold (0 absence rows).
+- Zones 0 and 1 run far slower than the other eight (pick-rate in the `wr-s14c-8h-run` log, not in a results file). Both detectors behave differently there: the map raises a quarter of its usual false alarms and the absence test about four times as many.
+- False alarms count flag-publishes per zone per simulated hour. The map publishes every 300 s and the CUSUM and absence test every 60 s, as in (t).
+- macOS arm64 only (pyastar2d tie-break).
