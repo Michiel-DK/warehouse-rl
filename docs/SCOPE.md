@@ -1051,10 +1051,45 @@ Results are in README "Sprint 13", printed by `scripts/sprint8_tables.py` sectio
       started within one cell of a station. From README (r) on, the station-aware numbers are the headline.
 - Open (operator):
   - **Is a one-robot real log enough to show a client, or do we wait for a fleet log?**
-  - **Should a station stop that lasts far longer than a normal dwell count as stuck again?** On MoRoOp, radius 1
-    files the 1,107 s manual-intervention stop as SERVICING; it ends up in `stopped_short` (defined as < 30 s). An
-    upper bound on servicing time (e.g. a multiple of the 39 s median of the 542 station-cell false alarms in README (q)) would bring it back.
-    The bound is not built, and no other radius was run.
+  - ~~**Should a station stop that lasts far longer than a normal dwell count as stuck again?**~~ Answered by S14A
+    (2026-10-21): yes. A SERVICING run still stopped at T = min(300 s, exp(Q3 + 3 IQR of ln dwell)) becomes a stuck
+    episode with cause `station_overrun` (`docs/LITERATURE.md` Part 4 Verdict 1; T per run from its own station stops).
+    Value as the files record it: T = 300 s in all nine MoRoOp shifts (the cap binds) and T = 80 s on all five
+    simulator runs (Q1 5 s, Q3 10 s). The 1,107 s stop is back in the stuck bucket (shift 6: 7 s to 1,107 s), as a
+    3,245 s `station_overrun` episode. README (s). No other radius was run.
+
+### Sprint 14: station stop bound and traffic absence (2026-10-21)
+
+Results are in README "Sprint 14A" and "Sprint 14B", printed by `scripts/sprint8_tables.py` sections (s) and (t).
+Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicing-bound.md`,
+`reports/wr-lane-s14b-traffic-absence.md`.
+
+- [x] S14A station stop bound and `cause_label` (PR #51, 95feaaf). `fleet/fleet_analyser/servicing.py`,
+      `fleet/fleet_analyser/causes.py`, `Detector(servicing_max_s=...)`, `--servicing-max-s auto` on ingest,
+      timebudget, deadlock and the MoRoOp adapter.
+- [x] Rerun (queue item `wr-s14a-rerun`; results `results/fleet/*-sb.json`, commit d5b777a; README (s)). Simulator,
+      radius 0, T = 80 s: map, precision, grades, S10D and AMOC equal to the `-st` files (asserted). One overrun on
+      s10c-blind (265 s) and 25 on the sticky floor (5,365 s, stuck share 32.05% to 32.95%), none on the other
+      three. MoRoOp, radius 1, T = 300 s: shift-6 stuck 7 s to 1,107 s (a 3,245 s `station_overrun` episode),
+      TIMEOUT overlaps 1/8 to 5/8, unlabelled station-cell stuck runs 0 to 3 (Part 4 bar <= 54), label hits 2/2.
+      Causes shares sum to 2.03-4.05 (simulator) and 2.50 (MoRoOp: 4,430 episode s against a 1,773 s stuck bucket);
+      stated, not rescaled.
+- [x] S14B traffic-absence detector (PR #52, 53fd44f). `fleet/absencemap.py`, `time_to_detect.py` prebuilt detector
+      `absence`.
+- [x] Run (queue item `wr-s14b-amoc-run`; results `results/fleet/amoc_absence.json`,
+      `results/fleet/amoc_absence_a1e-{2,3,4}.json`, `results/fleet/amoc_absence_sweep.json`, commit d5b777a; README
+      (t)). Alpha 1e-3 (default) and 1e-4: 0 forecast rows, no AMOC. Alpha 1e-2: 0/50 windows at every K, 18.1 false
+      alarms per zone-hour on s10-none at K 20. Map K 20 6/50, CUSUM 2/50 on the same windows.
+- **Part 3 Q1 (hidden blockage, `docs/LITERATURE.md` Part 3 "What this means" item 1): absence signal DROP.** Part 4's
+  negative bar is met: no alpha of the sweep detects a window, and the CUSUM and map rows of (n) stand. At this fleet
+  density too few cells collect 10 passes in one run (lane report). A retest needs a denser fleet or a longer
+  history, not another alpha. Detours (Pan et al. 2013) were not built: no planned route in the stream. The
+  stall-count floor on the missed windows (Part 3 item 1, last part) was not counted.
+- Open (operator):
+  - Stop the hidden-blockage line here, or wait for a client log with more traffic per cell?
+  - Causes table: keep the episode-seconds share against the stuck bucket (sums 2-4), or report shares of episode
+    seconds (sums to 1)?
+  - 3 of 8 MoRoOp TIMEOUT operations still overlap no stuck run under the bound; inspect them?
 
 ## Compute and timing
 
