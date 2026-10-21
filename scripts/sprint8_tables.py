@@ -1795,6 +1795,28 @@ def eight_hour():
               f"zone {z} {v:.1f}" for z, v in next(x for x in docs[a, '-8h']['amoc']['k'] if x['K'] == 20)
               ['fa_per_hour_reference_by_zone'].items())
               for name, a, _ in arms if docs[a, "-8h"]["amoc"] is not None) + ".")
+    hits = {a: {(z, w["cell"], w["start_step"]) for z, ws in docs[a, "-8h"]["by_k"]["20"]["windows"].items()
+                for w in ws if w["detected"]}
+            for _, a, _ in arms if docs[a, "-8h"]["amoc"] is not None}
+    if "absence" in hits:
+        ab, mp = hits["absence"], hits["blind"]
+        by_zone = {}
+        for z, _, _ in ab:
+            by_zone[z] = by_zone.get(z, 0) + 1
+        print(f"\nWindow overlap on the 8-hour run at K 20 (`by_k.20.windows`): the absence test detects {len(ab - mp)} "
+              f"windows the decayed map misses, the map {len(mp - ab)} that the absence test misses, both {len(ab & mp)}. "
+              "Absence hits by zone: " + ", ".join(f"zone {z} {n}" for z, n in sorted(by_zone.items())) + ".")
+        a20 = next(x for x in docs["absence", "-8h"]["amoc"]["k"] if x["K"] == 20)
+        dom = [x for x in docs["blind", "-8h"]["amoc"]["k"]
+               if x["n_detected"] >= a20["n_detected"] and x["fa_per_hour_reference"] <= a20["fa_per_hour_reference"]]
+        print("Map rows of the K sweep that detect at least as many windows as the absence test at K 20 "
+              f"({a20['n_detected']}) at no more reference false alarms ({a20['fa_per_hour_reference']:.1f}): "
+              + ("; ".join(f"K {x['K']} {x['n_detected']} / {x['n_windows']} at {x['fa_per_hour_reference']:.1f}"
+                           for x in dom) or "none") + f" (`{rels['blind', '-8h']}` `amoc.k`).")
+        if docs["fast", "-8h"]["amoc"] is None:
+            n = len(ab)
+            print(f"Against the CUSUM, which detects none: {n} windows to 0, one-sided exact sign test p = 0.5^{n} = "
+                  f"{0.5 ** n:.5f}.")
 
 
 def main():

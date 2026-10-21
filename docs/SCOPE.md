@@ -1097,8 +1097,11 @@ Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicin
       (operator).
 - **Part 3 Q1 after S14C: DROP, on three signals** (recorded by the S14C docs job; applying it is the operator's
   call). With 8 hours of traffic the absence test flags, but it misses 98% of windows at more false alarms than the
-  map, and its rate outside windows (236.6) is below the undisturbed reference (341.2). Part 4's bar is not met. The
-  stall map and the stall CUSUM do not find it either. The "longer history" retest asked for above is done. The
+  map, and its rate outside windows (236.6) is below the undisturbed reference (341.2). The map at K 10 detects 17 at
+  102.2. Part 4's bar to the letter fails against the map (31 windows the other way) and passes against the CUSUM
+  (11 to 0, p 0.00049). The CUSUM flagged nothing and the bar caps only the reference's false alarms, so the job reads
+  that branch as no evidence; whether it counts is the operator's call (README Sprint 14C). The stall map and the stall
+  CUSUM do not find it either. The "longer history" retest asked for above is done. The
   gurren page may not mention early warning of blocked cells.
 - Open (operator):
   - Stop the hidden-blockage line here (S14C: drop recorded), or wait for a client log with more traffic per cell?
