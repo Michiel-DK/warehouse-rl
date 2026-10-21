@@ -9,6 +9,7 @@ Interface (all rows are plain dicts of JSON-able values):
 Nothing in detector / ingest / ledger may depend on which store is behind this interface.
 """
 import json
+from bisect import bisect_left
 from pathlib import Path
 
 
@@ -44,7 +45,9 @@ class MemoryStore(Store):
 
     def __init__(self):
         self._rows = {}  # table -> list of row dicts (upserts replace in place)
-        self._idx = {}  # (table, cols) -> {value tuple -> [rows]}
+        self._idx = {}  # (table, cols) -> {value tuple -> [rows]}, every bucket sorted by row seq (= table order)
+        self._seq = {}  # id(row) -> position of first insert (monotone, never changes; rows are never deleted)
+        self._next_seq = 0
 
     def _table(self, table):
         return self._rows.setdefault(table, [])
@@ -64,9 +67,34 @@ class MemoryStore(Store):
             if t == table:
                 idx.setdefault(tuple(_hk(row.get(c)) for c in cols), []).append(row)
 
-    def _drop_indices(self, table, keep=None):
-        for k in [k for k in self._idx if k[0] == table and k != keep]:
-            del self._idx[k]
+    def _append_row(self, table, row):
+        self._seq[id(row)] = self._next_seq
+        self._next_seq += 1
+        self._table(table).append(row)
+        self._add_to_indices(table, row)
+
+    def _keys_of(self, table, row, only=None):
+        """{cols: key tuple} of `row` for every index of `table` (only those whose cols meet `only`, when given)."""
+        return {cols: tuple(_hk(row.get(c)) for c in cols) for (t, cols) in self._idx
+                if t == table and (only is None or only.intersection(cols))}
+
+    def _move(self, table, row, old_keys):
+        """Re-file `row` in every index whose key changed, by identity, keeping each bucket seq-sorted."""
+        s = self._seq[id(row)]
+        seq_of = lambda r: self._seq[id(r)]  # noqa: E731
+        for cols, old in old_keys.items():
+            new = tuple(_hk(row.get(c)) for c in cols)
+            if new == old:
+                continue
+            idx = self._idx[(table, cols)]
+            bucket = idx[old]
+            pos = bisect_left(bucket, s, key=seq_of)
+            assert bucket[pos] is row
+            del bucket[pos]
+            if not bucket:
+                del idx[old]
+            bucket = idx.setdefault(new, [])
+            bucket.insert(bisect_left(bucket, s, key=seq_of), row)
 
     def _lookup(self, table, eq):
         if not eq:
@@ -75,27 +103,23 @@ class MemoryStore(Store):
         return list(self._index(table, cols).get(tuple(_hk(eq[c]) for c in cols), []))
 
     def insert(self, table, rows):
-        t = self._table(table)
         for r in rows:
-            r = dict(r)
-            t.append(r)
-            self._add_to_indices(table, r)
+            self._append_row(table, dict(r))
 
     def upsert(self, table, key_cols, rows):
         cols = tuple(key_cols)
-        t = self._table(table)
         for r in rows:
             r = dict(r)
             idx = self._index(table, cols)
             hit = idx.get(tuple(_hk(r.get(c)) for c in cols))
             if hit:
                 old = hit[0]
+                before = self._keys_of(table, old)
                 old.clear()
-                old.update(r)  # the same dict object stays in the key index (key columns unchanged)
-                self._drop_indices(table, keep=(table, cols))
+                old.update(r)
+                self._move(table, old, before)
             else:
-                t.append(r)
-                self._add_to_indices(table, r)
+                self._append_row(table, r)
 
     def select(self, table, where=None):
         return [dict(r) for r in self._lookup(table, where)]
@@ -107,9 +131,10 @@ class MemoryStore(Store):
         hit = self._lookup(table, eq)
         if not hit:
             return 0
-        self._drop_indices(table)
         for r in hit:
+            before = self._keys_of(table, r, set(values))
             r.update(values)
+            self._move(table, r, before)
         return len(hit)
 
 
