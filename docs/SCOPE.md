@@ -1060,9 +1060,9 @@ Results are in README "Sprint 13", printed by `scripts/sprint8_tables.py` sectio
 
 ### Sprint 14: station stop bound and traffic absence (2026-10-21)
 
-Results are in README "Sprint 14A" and "Sprint 14B", printed by `scripts/sprint8_tables.py` sections (s) and (t).
-Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicing-bound.md`,
-`reports/wr-lane-s14b-traffic-absence.md`.
+Results are in README "Sprint 14A" to "Sprint 14E", printed by `scripts/sprint8_tables.py` sections (s) to (v).
+Literature: `docs/LITERATURE.md` Parts 4 to 6. Reports: `reports/wr-lane-s14a-servicing-bound.md`,
+`reports/wr-lane-s14b-traffic-absence.md`, `reports/wr-lane-s14d-cause-route.md`, `reports/wr-lane-s14e-store-index.md`.
 
 - [x] S14A station stop bound and `cause_label` (PR #51, 95feaaf). `fleet/fleet_analyser/servicing.py`,
       `fleet/fleet_analyser/causes.py`, `Detector(servicing_max_s=...)`, `--servicing-max-s auto` on ingest,
@@ -1107,6 +1107,30 @@ Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicin
   detector sprint on it; the gurren page and the CCO status page do not mention early warning. Detour counting from the
   route node (`docs/LITERATURE.md` Part 4 section 3) stays listed as the only untried signal, to be retested only on a
   client log that shows planner-blind blockages.
+- [x] S14E store index (PR #53, c5ef842). `fleet/fleet_analyser/store.py` (`MemoryStore` keeps its indices current:
+      per-row seq plus bisect re-insertion; `_drop_indices` removed); tests `fleet/tests/test_fleet_store_index.py`.
+- **Grading time is a measured number now, not a risk** (README "Sprint 14E"). `grade --once --truth`: 500-step
+  store 1.73-1.86 s to 0.17 s, byte-identical; 8-hour, 10-zone store 4.4 s and 4.7 s on the new code (old code not
+  run there; the ~50 min "before" is mtime-derived and covers lessons plus grade). Pinned by
+  `TestGradeOnData.test_grade_8h_timing` (limit 120 s). A client week (about 21 such shifts per zone) was not run;
+  that is extrapolation, not measured.
+- [x] S14D cause split by the next route node (PR #54, e3d2b52). `fleet/fleet_analyser/detector.py` (`_cause` returns
+      `blocker_on_route`, `cause_label`, `ROUTE_LABELS`), `fleet/fleet_analyser/causes.py` (groups by key and label),
+      `fleet/fleet_analyser/ingest.py`, `fleet/sql/schema.sql` (`blocker_on_route Nullable(Bool)`); tests
+      `fleet/tests/test_fleet_cause_route.py`.
+- [x] Rerun (queue item `wr-s14d-rerun`; results `results/fleet/timebudget_*-sd.json`,
+      `results/fleet/moroop_label-sd.json`, `results/fleet/timebudget_moroop*-sd.json`, commit 2c9cd68; table
+      `scripts/sprint8_tables.py` (v); README "Sprint 14D"). Labels only: buckets, causes header and per-key sums
+      equal the `-sb` files (asserted). On-route share of neighbour-cause episodes: 45/148 undisturbed, 44/142
+      planner-blind, 4/49 breakdown, 9/110 s8b, 17/186 sticky floor; S14A "Blocked by" episodes keeping "Blocked by":
+      33/55, 35/63, 1/28, 2/41, 8/121. MoRoOp: no route nodes in the log, every `blocker_on_route` null, no
+      neighbour cause in its table.
+- **Cause rule (`docs/LITERATURE.md` Part 5 section 2, Verdict 2): CLOSED by S14D.** The keys are kept, faulted_self
+  reads "Robot error, cannot continue order", and the three neighbour causes read "Stopped next to ..." unless the
+  blocker stands on the stopped robot's next route node, where they read "Blocked by a broken / stuck robot" or
+  "Traffic wait" (operator's strings, not Part 5's "a robot in error"). The on-route case is still geometry, not the
+  planner's log (Part 6 row 6), and "Stopped next to" also covers stops that report no route, so the on-route shares
+  are a floor. README text before Sprint 14D and the pages still carry the S14A strings.
 - Open (operator):
   - Stop the hidden-blockage line here (S14C: drop recorded), or wait for a client log with more traffic per cell?
   - Causes table: keep the episode-seconds share against the stuck bucket (sums 2-4), or report shares of episode
