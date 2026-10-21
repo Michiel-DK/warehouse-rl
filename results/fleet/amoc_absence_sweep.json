@@ -1,0 +1,1215 @@
+{
+ "1e-2": {
+  "schema_version": "fleet-time-to-detect/1",
+  "detector": "absence",
+  "meta": {
+   "publish_every_s": 60,
+   "top_k": [
+    20
+   ],
+   "window_hours": null,
+   "half_life_h": null,
+   "steps": 500,
+   "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
+   "disturb": {
+    "blocked_cell": {
+     "rate_per_hour": 8.0,
+     "duration": [
+      60,
+      240
+     ],
+     "known": false
+    }
+   },
+   "zones": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+   ],
+   "n_publishes": 42,
+   "publish_times_s": [
+    60,
+    120,
+    180,
+    240,
+    300,
+    360,
+    420,
+    480,
+    540,
+    600,
+    660,
+    720,
+    780,
+    840,
+    900,
+    960,
+    1020,
+    1080,
+    1140,
+    1200,
+    1260,
+    1320,
+    1380,
+    1440,
+    1500,
+    1560,
+    1620,
+    1680,
+    1740,
+    1800,
+    1860,
+    1920,
+    1980,
+    2040,
+    2100,
+    2160,
+    2220,
+    2280,
+    2340,
+    2400,
+    2460,
+    2495
+   ],
+   "first_ts_global": 1767225600,
+   "t0": {
+    "0": 1767225600,
+    "1": 1767225600,
+    "2": 1767225600,
+    "3": 1767225600,
+    "4": 1767225600,
+    "5": 1767225600,
+    "6": 1767225600,
+    "7": 1767225600,
+    "8": 1767225600,
+    "9": 1767225600
+   },
+   "t0_offsets": {},
+   "quantile_method": "statistics.quantiles(n=4, method='inclusive')",
+   "caveat": "Windows have a start and an end; detection is measured from the start, clearing from the end.",
+   "phase_a_dir": "fleet/data/s10c-blind",
+   "store_hash_before": "3c663adbcccc1049baa7ef7512e61a4ac6139252dee4351c1aea1d3a1ad9ef40",
+   "store_hash_after": "3c663adbcccc1049baa7ef7512e61a4ac6139252dee4351c1aea1d3a1ad9ef40",
+   "truth_kind": "blocked",
+   "run": "s10c-blind",
+   "n_windows": 50,
+   "window_len_steps_median": 132.0,
+   "store_suffix": "absence-a1e-2",
+   "store_mode": {
+    "fleet/data/s10c-blind": "prebuilt",
+    "fleet/data/s10-none": "prebuilt"
+   },
+   "reference_dir": "fleet/data/s10-none",
+   "reference_run": "s10-none",
+   "reference_store_hash_before": "a885ee6e1ee02930ca235f1f37c2d3484d0545086d23bacb2aafaf7c591c10ab",
+   "reference_store_hash_after": "a885ee6e1ee02930ca235f1f37c2d3484d0545086d23bacb2aafaf7c591c10ab",
+   "sim_hours": 0.6944444444444444,
+   "sim_hours_reference": 0.6944444444444444,
+   "n_publishes_reference": 42,
+   "sweep_k": [
+    5,
+    10,
+    20,
+    40
+   ],
+   "sweep_cost": null,
+   "amoc_definitions": {
+    "sim_hours": "steps * step_seconds / 3600 from each run's truth.json (not the span)",
+    "fa_per_hour_reference": "flags over all reference publishes and zones (flagged: rank <= K, or cost >= c) / (n_zones_reference * sim_hours_reference); every flag on the reference is false",
+    "fa_per_hour_reference_by_zone": "{zone: zone flags / sim_hours_reference}",
+    "fa_per_hour_measured_outside_windows": "sum over measured publishes of analyse_windows_k's false flags (flagged cells with no truth_positive of any kind) / (n_zones_measured * sim_hours_measured)",
+    "miss_share": "summary.missed / n_windows (null for 0 windows)",
+    "stale_at_end_share": "summary.stale_at_end / n_windows (null for 0 windows)",
+    "median_delay_s": "summary.first_detect_s median over detected windows; p25 / p75 likewise",
+    "k_at_miss_below_half": "first K entry (K ascending) with miss_share < 0.5, else null",
+    "cost_at_miss_below_half": "first cost entry (cost descending) with miss_share < 0.5, else null"
+   }
+  },
+  "by_k": {
+   "20": {
+    "summary": {
+     "n_windows": 50,
+     "n_detected": 0,
+     "share_detected": 0.0,
+     "first_detect_s": {
+      "p25": null,
+      "median": null,
+      "p75": null
+     },
+     "cleared_s": {
+      "p25": null,
+      "median": null,
+      "p75": null
+     },
+     "missed": 50,
+     "preflag": 0,
+     "stale_at_end": 0,
+     "open_at_end": 0,
+     "false_flags_per_publish_mean": 3.0714285714285716
+    },
+    "windows": {
+     "0": [
+      {
+       "cell": "19,23",
+       "start_step": 142,
+       "end_step": 262,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "8,22",
+       "start_step": 197,
+       "end_step": 392,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "13,13",
+       "start_step": 326,
+       "end_step": 491,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "1": [
+      {
+       "cell": "12,7",
+       "start_step": 41,
+       "end_step": 189,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "21,1",
+       "start_step": 209,
+       "end_step": 320,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "3,22",
+       "start_step": 225,
+       "end_step": 401,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "5,21",
+       "start_step": 271,
+       "end_step": 401,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "17,22",
+       "start_step": 283,
+       "end_step": 352,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "4,10",
+       "start_step": 304,
+       "end_step": 413,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "16,22",
+       "start_step": 325,
+       "end_step": 467,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "13,2",
+       "start_step": 433,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "17,6",
+       "start_step": 491,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "2": [
+      {
+       "cell": "21,22",
+       "start_step": 43,
+       "end_step": 185,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "2,22",
+       "start_step": 282,
+       "end_step": 417,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "21,10",
+       "start_step": 418,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "3": [
+      {
+       "cell": "10,20",
+       "start_step": 95,
+       "end_step": 222,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "4,6",
+       "start_step": 188,
+       "end_step": 329,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "17,5",
+       "start_step": 379,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "12,21",
+       "start_step": 478,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "4": [
+      {
+       "cell": "0,24",
+       "start_step": 190,
+       "end_step": 307,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "21,20",
+       "start_step": 228,
+       "end_step": 292,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "3,0",
+       "start_step": 244,
+       "end_step": 380,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "5": [
+      {
+       "cell": "20,11",
+       "start_step": 3,
+       "end_step": 163,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "14,23",
+       "start_step": 99,
+       "end_step": 226,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "10,20",
+       "start_step": 106,
+       "end_step": 268,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "19,20",
+       "start_step": 216,
+       "end_step": 422,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "16,18",
+       "start_step": 290,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "2,23",
+       "start_step": 404,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "6": [
+      {
+       "cell": "8,23",
+       "start_step": 14,
+       "end_step": 148,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "12,12",
+       "start_step": 33,
+       "end_step": 213,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "7,11",
+       "start_step": 297,
+       "end_step": 388,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "15,22",
+       "start_step": 307,
+       "end_step": 406,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "12,16",
+       "start_step": 392,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "13,6",
+       "start_step": 497,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "7": [
+      {
+       "cell": "14,22",
+       "start_step": 8,
+       "end_step": 157,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "0,13",
+       "start_step": 150,
+       "end_step": 378,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "16,24",
+       "start_step": 277,
+       "end_step": 489,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "7,21",
+       "start_step": 292,
+       "end_step": 495,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "16,22",
+       "start_step": 309,
+       "end_step": 492,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "8": [
+      {
+       "cell": "9,7",
+       "start_step": 282,
+       "end_step": 359,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "4,18",
+       "start_step": 286,
+       "end_step": 499,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "4,8",
+       "start_step": 323,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "1,14",
+       "start_step": 377,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ],
+     "9": [
+      {
+       "cell": "1,0",
+       "start_step": 49,
+       "end_step": 287,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "7,11",
+       "start_step": 69,
+       "end_step": 273,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "9,21",
+       "start_step": 200,
+       "end_step": 436,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "21,17",
+       "start_step": 364,
+       "end_step": 453,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "18,0",
+       "start_step": 419,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "21,20",
+       "start_step": 477,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      },
+      {
+       "cell": "13,20",
+       "start_step": 494,
+       "end_step": 500,
+       "detected": false,
+       "first_detect_s": null,
+       "rank_at_detect": null,
+       "preflag": false,
+       "cleared_s": null,
+       "stale_at_end": false,
+       "open_at_end": false,
+       "missed": true
+      }
+     ]
+    },
+    "false_flag_cells": {
+     "60": {},
+     "120": {},
+     "180": {},
+     "240": {},
+     "300": {},
+     "360": {},
+     "420": {},
+     "480": {},
+     "540": {},
+     "600": {},
+     "660": {},
+     "720": {},
+     "780": {},
+     "840": {},
+     "900": {},
+     "960": {},
+     "1020": {},
+     "1080": {},
+     "1140": {},
+     "1200": {},
+     "1260": {},
+     "1320": {},
+     "1380": {},
+     "1440": {},
+     "1500": {},
+     "1560": {
+      "9": [
+       "19,10"
+      ]
+     },
+     "1620": {
+      "4": [
+       "15,11"
+      ],
+      "9": [
+       "19,10"
+      ]
+     },
+     "1680": {
+      "4": [
+       "15,11"
+      ],
+      "9": [
+       "19,10"
+      ]
+     },
+     "1740": {
+      "4": [
+       "15,11"
+      ],
+      "9": [
+       "19,10"
+      ]
+     },
+     "1800": {
+      "4": [
+       "15,11"
+      ],
+      "6": [
+       "7,15"
+      ],
+      "9": [
+       "19,10",
+       "19,9"
+      ]
+     },
+     "1860": {
+      "4": [
+       "15,11"
+      ],
+      "6": [
+       "7,15"
+      ],
+      "9": [
+       "19,9"
+      ]
+     },
+     "1920": {
+      "4": [
+       "15,11"
+      ],
+      "6": [
+       "7,15"
+      ],
+      "7": [
+       "5,15"
+      ]
+     },
+     "1980": {
+      "4": [
+       "15,11"
+      ],
+      "7": [
+       "5,15"
+      ]
+     },
+     "2040": {
+      "3": [
+       "18,10"
+      ],
+      "4": [
+       "13,14",
+       "13,8",
+       "15,11"
+      ],
+      "7": [
+       "5,15"
+      ]
+     },
+     "2100": {
+      "4": [
+       "13,11",
+       "13,14",
+       "13,8",
+       "15,11"
+      ],
+      "7": [
+       "5,15"
+      ]
+     },
+     "2160": {
+      "4": [
+       "13,10",
+       "13,11",
+       "13,14",
+       "13,15",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,11",
+       "15,11"
+      ],
+      "7": [
+       "5,15"
+      ]
+     },
+     "2220": {
+      "2": [
+       "14,10"
+      ],
+      "4": [
+       "13,10",
+       "13,11",
+       "13,12",
+       "13,14",
+       "13,15",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,11",
+       "15,11"
+      ]
+     },
+     "2280": {
+      "2": [
+       "14,10",
+       "14,17"
+      ],
+      "4": [
+       "13,10",
+       "13,11",
+       "13,12",
+       "13,14",
+       "13,15",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,10",
+       "14,11",
+       "15,11"
+      ]
+     },
+     "2340": {
+      "2": [
+       "14,10",
+       "14,13",
+       "14,14",
+       "14,15",
+       "14,17"
+      ],
+      "4": [
+       "13,14",
+       "13,15",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,11",
+       "15,11"
+      ]
+     },
+     "2400": {
+      "2": [
+       "14,10",
+       "14,11",
+       "14,13",
+       "14,14",
+       "14,15",
+       "14,17"
+      ],
+      "4": [
+       "13,14",
+       "13,15",
+       "13,4",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,11",
+       "14,7",
+       "15,11"
+      ],
+      "8": [
+       "2,11"
+      ]
+     },
+     "2460": {
+      "2": [
+       "14,10",
+       "14,11",
+       "14,13",
+       "14,14",
+       "14,15",
+       "14,17"
+      ],
+      "4": [
+       "13,14",
+       "13,15",
+       "13,4",
+       "13,5",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,11",
+       "14,7",
+       "14,8",
+       "15,11"
+      ],
+      "8": [
+       "2,10",
+       "2,11"
+      ]
+     },
+     "2495": {
+      "2": [
+       "14,10",
+       "14,11",
+       "14,13",
+       "14,14",
+       "14,15",
+       "14,17"
+      ],
+      "4": [
+       "13,14",
+       "13,15",
+       "13,4",
+       "13,5",
+       "13,7",
+       "13,8",
+       "13,9",
+       "14,11",
+       "14,7",
+       "14,8",
+       "15,11"
+      ],
+      "8": [
+       "2,10",
+       "2,11"
+      ]
+     }
+    }
+   }
+  },
+  "amoc": {
+   "k": [
+    {
+     "K": 5,
+     "median_delay_s": null,
+     "p25": null,
+     "p75": null,
+     "miss_share": 1.0,
+     "stale_at_end_share": 0.0,
+     "n_windows": 50,
+     "n_detected": 0,
+     "fa_per_hour_reference": 13.392,
+     "fa_per_hour_reference_by_zone": {
+      "0": 0.0,
+      "1": 12.96,
+      "2": 0.0,
+      "3": 20.16,
+      "4": 70.56,
+      "5": 0.0,
+      "6": 0.0,
+      "7": 15.84,
+      "8": 0.0,
+      "9": 14.4
+     },
+     "fa_per_hour_measured_outside_windows": 13.392
+    },
+    {
+     "K": 10,
+     "median_delay_s": null,
+     "p25": null,
+     "p75": null,
+     "miss_share": 1.0,
+     "stale_at_end_share": 0.0,
+     "n_windows": 50,
+     "n_detected": 0,
+     "fa_per_hour_reference": 17.712,
+     "fa_per_hour_reference_by_zone": {
+      "0": 0.0,
+      "1": 12.96,
+      "2": 0.0,
+      "3": 20.16,
+      "4": 113.76,
+      "5": 0.0,
+      "6": 0.0,
+      "7": 15.84,
+      "8": 0.0,
+      "9": 14.4
+     },
+     "fa_per_hour_measured_outside_windows": 18.144
+    },
+    {
+     "K": 20,
+     "median_delay_s": null,
+     "p25": null,
+     "p75": null,
+     "miss_share": 1.0,
+     "stale_at_end_share": 0.0,
+     "n_windows": 50,
+     "n_detected": 0,
+     "fa_per_hour_reference": 18.144,
+     "fa_per_hour_reference_by_zone": {
+      "0": 0.0,
+      "1": 12.96,
+      "2": 0.0,
+      "3": 20.16,
+      "4": 118.08,
+      "5": 0.0,
+      "6": 0.0,
+      "7": 15.84,
+      "8": 0.0,
+      "9": 14.4
+     },
+     "fa_per_hour_measured_outside_windows": 18.576
+    },
+    {
+     "K": 40,
+     "median_delay_s": null,
+     "p25": null,
+     "p75": null,
+     "miss_share": 1.0,
+     "stale_at_end_share": 0.0,
+     "n_windows": 50,
+     "n_detected": 0,
+     "fa_per_hour_reference": 18.144,
+     "fa_per_hour_reference_by_zone": {
+      "0": 0.0,
+      "1": 12.96,
+      "2": 0.0,
+      "3": 20.16,
+      "4": 118.08,
+      "5": 0.0,
+      "6": 0.0,
+      "7": 15.84,
+      "8": 0.0,
+      "9": 14.4
+     },
+     "fa_per_hour_measured_outside_windows": 18.576
+    }
+   ],
+   "k_at_miss_below_half": null
+  }
+ },
+ "1e-3": {
+  "detector": "absence",
+  "store_suffix": "absence-a1e-3",
+  "measured_forecast_rows": 0,
+  "amoc": null
+ },
+ "1e-4": {
+  "detector": "absence",
+  "store_suffix": "absence-a1e-4",
+  "measured_forecast_rows": 0,
+  "amoc": null
+ }
+}

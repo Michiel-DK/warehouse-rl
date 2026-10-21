@@ -1,0 +1,792 @@
+{
+ "zones": {
+  "0": {
+   "n_flagged": 8,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "1": {
+   "n_flagged": 9,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "2": {
+   "n_flagged": 8,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "3": {
+   "n_flagged": 12,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "4": {
+   "n_flagged": 7,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "5": {
+   "n_flagged": 5,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "6": {
+   "n_flagged": 10,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "7": {
+   "n_flagged": 9,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "8": {
+   "n_flagged": 5,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "9": {
+   "n_flagged": 16,
+   "n_floor": 0,
+   "spearman": null,
+   "zero_stall_share": null,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  }
+ },
+ "mean": {
+  "n_flagged": 8.9,
+  "spearman": null,
+  "zero_stall_share": null,
+  "k": {
+   "20": {
+    "precision": 0.0,
+    "recall": null
+   },
+   "40": {
+    "precision": 0.0,
+    "recall": null
+   },
+   "80": {
+    "precision": 0.0,
+    "recall": null
+   },
+   "120": {
+    "precision": 0.0,
+    "recall": null
+   }
+  }
+ },
+ "grading_counts": {
+  "outcome_count": {
+   "off": 97,
+   "ok": 4
+  },
+  "outcome": {
+   "ok": 101
+  },
+  "lesson": {
+   "off": 5,
+   "ok": 2
+  },
+  "lesson_persist": {
+   "off": 2
+  },
+  "truth": {
+   "false_alarm": 463,
+   "hit": 25
+  },
+  "lesson_truth": {
+   "hit": 1,
+   "false_alarm": 1
+  }
+ },
+ "rank_grading": {
+  "top_k": [
+   20
+  ],
+  "rank_graded": 101,
+  "unranked": 0
+ },
+ "stall_in_episode": {
+  "total_stalls": 349,
+  "in_episode": 50,
+  "by_cause": {
+   "blocked_by_faulted": 9,
+   "faulted_self": 19,
+   "traffic": 6,
+   "unknown": 16
+  }
+ },
+ "lesson_grading": {
+  "lesson": {
+   "cause_mix": {
+    "off": 3,
+    "ok": 2
+   },
+   "hot_robot": {
+    "off": 2
+   }
+  },
+  "lesson_persist": {
+   "hot_robot": {
+    "off": 2
+   }
+  },
+  "lesson_truth": {
+   "hot_robot": {
+    "hit": 1,
+    "false_alarm": 1
+   }
+  }
+ },
+ "tag": "s10-breakdown-sb",
+ "run": "s10-breakdown",
+ "config": {
+  "env_id": "tarware-medium-8agvs-4pickers-globalobs-v1",
+  "disturb_tag": "breakdown-heavy",
+  "disturb": {
+   "breakdown": {
+    "rate_per_hour": 8.0,
+    "duration": [
+     20,
+     60
+    ]
+   }
+  },
+  "steps": 500,
+  "seed_base": 0,
+  "zones": 10,
+  "emit_status": "complete",
+  "emit_schema": "fleet-state/2"
+ },
+ "costmap": {
+  "generated_at": "2026-01-01T00:41:35Z",
+  "window_hours": 1.0,
+  "half_life_h": 1.0,
+  "min_stalls": 1,
+  "exclude_occupied": true
+ },
+ "platform": {
+  "platform": "macOS-14.3.1-arm64-arm-64bit",
+  "python": "3.10.6"
+ },
+ "lesson_persist_chance": {
+  "n_lessons": 2,
+  "observed_ok": 0,
+  "observed_rate": 0.0,
+  "chance_mean": 0.5818181818181818,
+  "chance_median": 0.5818181818181818,
+  "lift": 0.0,
+  "per_lesson": [
+   {
+    "id": "808d25e4cd13ee976cfe0257603d1138d4243da5",
+    "subject": "Z1:Z1-10",
+    "window_start": 1767226320,
+    "pool_size": 10,
+    "pool_ok": 8,
+    "chance": 0.8,
+    "observed": false
+   },
+   {
+    "id": "fae90b6834a6c817bdca57be9408c3bf684a3741",
+    "subject": "Z9:Z9-12",
+    "window_start": 1767226320,
+    "pool_size": 11,
+    "pool_ok": 4,
+    "chance": 0.36363636363636365,
+    "observed": false
+   }
+  ]
+ },
+ "truth_kinds": {
+  "floor": {
+   "positives": 0,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "blocked": {
+   "positives": 0,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "outage": {
+   "positives": 0,
+   "k": {
+    "20": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "40": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "80": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    },
+    "120": {
+     "precision": 0.0,
+     "recall": null,
+     "hits": 0
+    }
+   }
+  },
+  "any": {
+   "positives": 283,
+   "k": {
+    "20": {
+     "precision": 0.095,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "40": {
+     "precision": 0.0475,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "80": {
+     "precision": 0.02375,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "120": {
+     "precision": 0.015833333333333335,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    }
+   }
+  },
+  "frozen": {
+   "positives": 119,
+   "cells": 283,
+   "k": {
+    "20": {
+     "precision": 0.095,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "40": {
+     "precision": 0.0475,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "80": {
+     "precision": 0.02375,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    },
+    "120": {
+     "precision": 0.015833333333333335,
+     "recall": 0.06713780918727916,
+     "hits": 19
+    }
+   }
+  }
+ },
+ "baselines": {
+  "params": {
+   "window_hours": 1.0,
+   "half_life_h": 1.0,
+   "min_stalls": 1,
+   "exclude_occupied": true,
+   "horizon_s": 1245,
+   "n_cells_all": 380,
+   "ks": [
+    20,
+    40,
+    80,
+    120
+   ],
+   "bootstrap_seed": 0,
+   "n_resamples": 1000
+  },
+  "chance": {
+   "all": 0.009298245614035089,
+   "ever": 0.056179775280898875,
+   "per_zone": {
+    "0": {
+     "n_ever": 8,
+     "n_ever_outside_candidates": 1
+    },
+    "1": {
+     "n_ever": 9,
+     "n_ever_outside_candidates": 1
+    },
+    "2": {
+     "n_ever": 8,
+     "n_ever_outside_candidates": 3
+    },
+    "3": {
+     "n_ever": 12,
+     "n_ever_outside_candidates": 3
+    },
+    "4": {
+     "n_ever": 7,
+     "n_ever_outside_candidates": 2
+    },
+    "5": {
+     "n_ever": 5,
+     "n_ever_outside_candidates": 1
+    },
+    "6": {
+     "n_ever": 10,
+     "n_ever_outside_candidates": 2
+    },
+    "7": {
+     "n_ever": 9,
+     "n_ever_outside_candidates": 1
+    },
+    "8": {
+     "n_ever": 5,
+     "n_ever_outside_candidates": 0
+    },
+    "9": {
+     "n_ever": 16,
+     "n_ever_outside_candidates": 2
+    }
+   }
+  },
+  "k": {
+   "20": {
+    "map": {
+     "outcome_precision": 0.12625,
+     "truth_precision": 0.0044444444444444444,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.47798742138364786,
+     "lift_all": 0.47798742138364775,
+     "lift_ever": 0.07911111111111112,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    },
+    "persistence": {
+     "outcome_precision": 0.12625,
+     "truth_precision": 0.0044444444444444444,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.47798742138364786,
+     "lift_all": 0.47798742138364775,
+     "lift_ever": 0.07911111111111112,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    }
+   },
+   "40": {
+    "map": {
+     "outcome_precision": 0.063125,
+     "truth_precision": 0.0022222222222222222,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.23899371069182393,
+     "lift_all": 0.23899371069182387,
+     "lift_ever": 0.03955555555555556,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    },
+    "persistence": {
+     "outcome_precision": 0.063125,
+     "truth_precision": 0.0022222222222222222,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.23899371069182393,
+     "lift_all": 0.23899371069182387,
+     "lift_ever": 0.03955555555555556,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    }
+   },
+   "80": {
+    "map": {
+     "outcome_precision": 0.0315625,
+     "truth_precision": 0.0011111111111111111,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.11949685534591196,
+     "lift_all": 0.11949685534591194,
+     "lift_ever": 0.01977777777777778,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    },
+    "persistence": {
+     "outcome_precision": 0.0315625,
+     "truth_precision": 0.0011111111111111111,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.11949685534591196,
+     "lift_all": 0.11949685534591194,
+     "lift_ever": 0.01977777777777778,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    }
+   },
+   "120": {
+    "map": {
+     "outcome_precision": 0.021041666666666667,
+     "truth_precision": 0.0007407407407407407,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.07966457023060798,
+     "lift_all": 0.07966457023060795,
+     "lift_ever": 0.013185185185185185,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    },
+    "persistence": {
+     "outcome_precision": 0.021041666666666667,
+     "truth_precision": 0.0007407407407407407,
+     "truth_recall": 0.025157232704402517,
+     "pai": 0.07966457023060798,
+     "lift_all": 0.07966457023060795,
+     "lift_ever": 0.013185185185185185,
+     "hits": {
+      "truth": 8,
+      "outcome": 101,
+      "positives": 318
+     }
+    }
+   }
+  },
+  "n_units_truth": 90,
+  "n_units_outcome": 40,
+  "paired": {
+   "20": {
+    "truth_precision": {
+     "mean": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "verdict": "within noise",
+     "n_zones": 10
+    },
+    "outcome_precision": {
+     "mean": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "verdict": "within noise",
+     "n_zones": 10
+    }
+   },
+   "40": {
+    "truth_precision": {
+     "mean": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "verdict": "within noise",
+     "n_zones": 10
+    },
+    "outcome_precision": {
+     "mean": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "verdict": "within noise",
+     "n_zones": 10
+    }
+   }
+  },
+  "lesson_persist": {
+   "chance_window": null,
+   "chance_ever": null,
+   "chance_all": null,
+   "lift_window": null,
+   "lift_ever": null,
+   "lift_all": null,
+   "s8s_pool_is_ever": null,
+   "n_lessons": 0,
+   "n_hot_robot_excluded": 2,
+   "observed_rate": null,
+   "pools_note": "chance_window = S8S per-window pool (cells with >= 1 stall in the lesson's own window); chance_ever = zone's ever-stalled cells clearing the persist bar over the next window; chance_all = the same count over all candidate cells"
+  }
+ }
+}
