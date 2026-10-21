@@ -1360,3 +1360,42 @@ Station-aware = S13B, the rows of (r); bounded = S14A (PR #51): a SERVICING run 
 - The gated forecasts of (l), the CUSUM and short-memory map of (n) and the s8e-long run of (j) were not rerun, as in (r).
 - `stopped_short` (defined as < 30 s) again holds only short stops on MoRoOp shift 6 (276 s). The bucket names are unchanged.
 - One seed set (0-9) and one 500-step shift per simulator run, one robot on the real log; no CI on any count in (s). macOS arm64 only (pyastar2d tie-break).
+
+## Sprint 14B: traffic absence against the map and the CUSUM (2026-10-21)
+
+A planner-blind blocked cell sends no stalls once robots route around it; it goes quiet. `docs/LITERATURE.md` Part 3 (What this means, item 1) therefore asked for a retest with a traffic-absence signal. S14B (PR #52) built the test Part 4 section 3 chose, the HERE zero-count rule. It counts robot passes per cell and flags a cell when the gap since its last pass is improbable under the cell's own pass rate (e^(-r gap) < alpha). A cell is eligible after 10 expected passes and is released at its next pass. Alpha defaults to 1e-3, with a sweep over 1e-2, 1e-3 and 1e-4. Part 4 set all of these before the run. The queue item `wr-s14b-amoc-run` ran it on the same 50 planner-blind windows as (k) and (n), against the same undisturbed reference. Everything between this paragraph and "Reading the numbers" is the output of section (t) of `.venv/bin/python scripts/sprint8_tables.py`. Only its heading was demoted one level.
+
+#### (t) Traffic absence against the map and the CUSUM (S14B)
+
+| detector | publish every, s (publishes) | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, s10-none | false alarms per zone-hour, s10c-blind outside windows |
+|---|---|---|---|---|---|---|---|
+| decayed map K 20 (S10E) | 300 (9) | 6 / 50 | 0.88 | 295 (218.75-438.75) | 0.04 | 177.8 | 175.1 |
+| CUSUM (S10I) | 60 (42) | 2 / 50 | 0.96 | 525 (482.5-567.5) | 0.02 | 0.000 | 0.144 |
+| traffic absence, alpha 1e-3 (S14B default) | n/a | no AMOC: 0 forecast rows on s10c-blind (store `store-absence`) | n/a | n/a | n/a | not in the file | not in the file |
+
+**Alpha sweep** (`results/fleet/amoc_absence_sweep.json`, one entry per alpha; the AMOC rows by K where the entry has one):
+
+| alpha | K (per zone) | publish every, s (publishes) | detected / windows | miss share | first detect, s, median (p25-p75) | stale_at_end share | false alarms per zone-hour, s10-none | false alarms per zone-hour, s10c-blind outside windows |
+|---|---|---|---|---|---|---|---|---|
+| 1e-2 | 5 | 60 (42) | 0 / 50 | 1.00 | none | 0.00 | 13.4 | 13.4 |
+| 1e-2 | 10 | 60 (42) | 0 / 50 | 1.00 | none | 0.00 | 17.7 | 18.1 |
+| 1e-2 | 20 | 60 (42) | 0 / 50 | 1.00 | none | 0.00 | 18.1 | 18.6 |
+| 1e-2 | 40 | 60 (42) | 0 / 50 | 1.00 | none | 0.00 | 18.1 | 18.6 |
+| 1e-3 | any | n/a | no AMOC: 0 forecast rows on s10c-blind (`store-absence-a1e-3`) | n/a | n/a | n/a | not in the file | not in the file |
+| 1e-4 | any | n/a | no AMOC: 0 forecast rows on s10c-blind (`store-absence-a1e-4`) | n/a | n/a | n/a | not in the file | not in the file |
+
+Same measured run (`fleet/data/s10c-blind`, 50 planner-blind blocked windows) and reference (`fleet/data/s10-none`, undisturbed) for every row with an AMOC, and the same store hashes before and after (asserted). The absence detector (`fleet/absencemap.py`, PR #52) publishes into its own store copy. `time_to_detect` refuses a measured store with no forecast rows, so for an alpha that flags nothing the queue item `wr-s14b-amoc-run` writes a stub (`detector`, `store_suffix`, `measured_forecast_rows`, `amoc` null). The stub records the measured run only, so the reference false-alarm count is not in the file. Cadence differs: the decayed map publishes every 300 s and the CUSUM and absence detectors every 60 s. False alarms are flag-publishes per zone per simulated hour, so they scale with the publish rate. Reference false alarms at K 20 by zone: alpha 1e-2: zone 4 118.1 per zone-hour, 5 of 10 zones at 0. Column definitions are those of (k). Sources: `results/fleet/amoc_blind.json`, `results/fleet/amoc_fast.json`, `results/fleet/amoc_absence.json`, `results/fleet/amoc_absence_sweep.json`.
+
+**Reading the numbers.**
+- **Verdict (t): the absence test detects no blockage while it is open, at any alpha of the sweep.** At the default alpha 1e-3, and at 1e-4, it flags nothing on the planner-blind run. There are 0 forecast rows, so there is no AMOC to draw. At alpha 1e-2 it detects 0 of 50 windows at every K. On the same windows the decayed map detects 6 of 50 at K 20 and the CUSUM 2 of 50.
+- **What it does flag at 1e-2 is not the blockage (t).** At K 20 it raises 18.1 false alarms per zone-hour on the undisturbed run and 18.6 on the planner-blind run outside the windows. The rate is the same with and without blockages. Zone 4 alone accounts for 118.1 per zone-hour on the reference, and 5 of the 10 zones raise none.
+- **Part 4's bar is not reached, so its negative holds.** The bar was at least 5 windows detected that the reference detector misses, and none the other way. The reference was the CUSUM at no more than 1 false alarm per zone-hour, or the map at less than 177.8. No alpha detects a single window.
+- **Why, in plain terms:** at this fleet density a cell sees too few passes in one 2,495 s run. Few cells collect the 10 passes the test needs before it may flag. A 300 to 1,200 s blockage then ends before the gap gets long enough to be improbable. `docs/LITERATURE.md` Part 4 section 4 predicted this from the pass counts before the build. The S14B lane report has the eligible-cell count (`reports/wr-lane-s14b-traffic-absence.md`).
+
+**Caveats.**
+- The same seed set (0-9), one 500-step shift and one map as (k) and (n); no count in (t) has a CI.
+- Alpha was not picked in-sample. The default (1e-3) and the sweep were set in `docs/LITERATURE.md` Part 4 before the run, and no alpha was chosen from these results.
+- The stub documents for 1e-3 and 1e-4 record the measured run only. That nothing was flagged on the undisturbed reference at those alphas is in the S14B lane report, not in a results file.
+- The decayed map publishes every 300 s, the CUSUM and the absence test every 60 s. False alarms per zone-hour count flag-publishes, and an absence flag stays up until the next pass, so one flag can count at many publishes.
+- Built without HERE's time-of-day model, labelled threshold and hysteresis, and without Pan et al.'s detour count (no planned route in the stream, and no history in one run). The lane report lists the deviations.
+- macOS arm64 only (pyastar2d tie-break).
