@@ -1080,7 +1080,8 @@ Literature: `docs/LITERATURE.md` Part 4. Reports: `reports/wr-lane-s14a-servicin
       `results/fleet/amoc_absence_a1e-{2,3,4}.json`, `results/fleet/amoc_absence_sweep.json`, commit d5b777a; README
       (t)). Alpha 1e-3 (default) and 1e-4: 0 forecast rows, no AMOC. Alpha 1e-2: 0/50 windows at every K, 18.1 false
       alarms per zone-hour on s10-none at K 20. Map K 20 6/50, CUSUM 2/50 on the same windows.
-- **Part 3 Q1 (hidden blockage, `docs/LITERATURE.md` Part 3 "What this means" item 1): absence signal DROP.** Part 4's
+- **Part 3 Q1 (hidden blockage, `docs/LITERATURE.md` Part 3 "What this means" item 1): absence signal DROP** (recorded
+  by the S14 docs job; applying it is the operator's call). Part 4's
   negative bar is met: no alpha of the sweep detects a window, and the CUSUM and map rows of (n) stand. At this fleet
   density too few cells collect 10 passes in one run (lane report). A retest needs a denser fleet or a longer
   history, not another alpha. Detours (Pan et al. 2013) were not built: no planned route in the stream. The
