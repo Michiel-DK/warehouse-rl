@@ -1212,6 +1212,10 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
   Part 5 §2's "blocked by" (that needs the planner's log). It leaves `unknown` (no robot within one cell) unchanged;
   (o) found 76-97 % of stall episodes start next to a shelf (old rule), so a shelf-wait label (E10 "no operator") may
   be the larger lever on `unknown`; that overlap was not measured.
+- **Built in S14D (2026-10-21, PR #54), label split by route node:** "Blocked by ..." / "Traffic wait" only when the
+  blocker is on the next route node, else "Stopped next to ..."; on-route share of neighbour-cause episodes 8.2-31.0 %
+  (45/148 undisturbed, 44/142 planner-blind, 4/49 breakdown, 9/110 s8b, 17/186 sticky floor; README (v)). Still a
+  geometry fact, as above.
 
 ### (7) Message-loss / connectivity map from telemetry
 - **Best published:** 3GPP MDT, ETSI TS 137 320 V10.1.0 §5.2.1.2 (A, PDF grepped,

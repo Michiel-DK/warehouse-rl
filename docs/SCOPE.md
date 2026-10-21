@@ -1112,7 +1112,7 @@ Literature: `docs/LITERATURE.md` Parts 4 to 6. Reports: `reports/wr-lane-s14a-se
 - **Grading time is a measured number now, not a risk** (README "Sprint 14E"). `grade --once --truth`: 500-step
   store 1.73-1.86 s to 0.17 s, byte-identical; 8-hour, 10-zone store 4.4 s and 4.7 s on the new code (old code not
   run there; the ~50 min "before" is mtime-derived and covers lessons plus grade). Pinned by
-  `TestGradeOnData.test_grade_8h_timing` (limit 120 s). A client week (about 21 such shifts per zone) was not run;
+  `TestGradeOnData.test_grade_8h_timing` (limit 120 s). A client week was not run;
   that is extrapolation, not measured.
 - [x] S14D cause split by the next route node (PR #54, e3d2b52). `fleet/fleet_analyser/detector.py` (`_cause` returns
       `blocker_on_route`, `cause_label`, `ROUTE_LABELS`), `fleet/fleet_analyser/causes.py` (groups by key and label),
