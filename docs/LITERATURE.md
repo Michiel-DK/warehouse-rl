@@ -10,7 +10,9 @@ absence claim are listed at the end of this page.
 all five passes, so **no Semantic Scholar search ran**. Google Scholar was not tried, because it blocks scripted access.
 DBLP was behind a bot wall. The searches that did run were Crossref, arXiv API, OpenAlex, WebSearch and publisher or
 author pages. This is a targeted check of about 60 papers, not a systematic review. Every absence below means "not
-found in the queries listed", never "does not exist".
+found in the queries listed", never "does not exist". *(Rule rewritten 2026-10-21, Part 7: an absence claim needs two
+independent scholarly indexes, OpenAlex plus one of Semantic Scholar, dblp, Lens or CORE, before it fronts a pitch.
+Semantic Scholar is no longer required. Which claims reach the bar: Part 7.)*
 
 **Provenance.** Every paper in the table was looked up this session (Crossref DOI record, arXiv record, publisher page
 or author page; verified@2026-10-18). The table marks which ones had their full text read and which only had their
@@ -154,7 +156,7 @@ record or a hosted summary page read; M = metadata only (authors, year and venue
 
 | Q | Authors, year | Title (short) | Venue | URL | Read depth | Used for |
 |---|---|---|---|---|---|---|
-| 1 | Bonetti, Proia, Guidetti, Sabattini 2026 | Deadlock detection and resolution for AGV fleets | Int. J. Robotics Research | https://doi.org/10.1177/02783649261470035 (arXiv 2609.10400) | A | graph cycle detection, self-scored |
+| 1 | Bonetti, Proia, Guidetti, Sabattini 2026 | Deadlock detection and resolution for AGV fleets *(2026-10-21, Part 7: Crossref and arXiv title this DOI "A traffic management system for large and heterogeneous vehicles in narrow industrial environments")* | Int. J. Robotics Research | https://doi.org/10.1177/02783649261470035 (arXiv 2609.10400) | A | graph cycle detection, self-scored |
 | 1 | Bonetti, Guidetti, Sabattini 2024 | Efficient deadlock detection and resolution for AGV fleet management | European Robotics Forum 2024 (Springer SPAR) | https://doi.org/10.1007/978-3-031-76428-8_50 | M | precursor |
 | 1 | Cho, Kumaran, Wysk 1995 | Graph-theoretic deadlock detection and resolution for FMS | IEEE Trans. Robotics & Automation | https://doi.org/10.1109/70.388784 | M | classic graph detection |
 | 1 | Wu, Zhou 2005 | Modeling and deadlock avoidance of AMS with multiple AGVs | IEEE Trans. SMC-B | https://doi.org/10.1109/tsmcb.2005.850141 | M | Petri-net avoidance |
@@ -247,6 +249,8 @@ question and returned HTTP 429 every time. Google Scholar was not attempted.
   Shofer ICAPS 2023, Malka IROS 2024.
 
 Rerun these on Semantic Scholar when it is not rate limited, before any of these absences fronts a pitch or a paper.
+*(Superseded 2026-10-21: the bar is now two independent scholarly indexes, OpenAlex plus one of Semantic Scholar, dblp,
+Lens or CORE; see Part 7.)*
 
 ## Part 2: fleet management, deadlock, utilisation, connectivity (2026-10-20)
 
@@ -1051,7 +1055,9 @@ is filed as an error; export `errorType` so the client can tell.
 ### 3. Scholarly rerun of the absence claims
 
 All listed queries plus 1-2 sharper ones per claim, on OpenAlex and Semantic Scholar (per-query status in the report;
-"S2" = a Semantic Scholar query of the claim answered). Every row of Part 5 is verified@2026-10-21.
+"S2" = a Semantic Scholar query of the claim answered). Every row of Part 5 is verified@2026-10-21. *(Coverage rule
+rewritten 2026-10-21: an absence claim needs two independent scholarly indexes, OpenAlex plus one of Semantic
+Scholar, dblp, Lens or CORE. The "kept" rows below were rerun on CORE in Part 7, which gives each row's status.)*
 
 | claim (part) | queries | hits that change the verdict | verdict |
 |---|---|---|---|
@@ -1091,6 +1097,8 @@ All listed queries plus 1-2 sharper ones per claim, on OpenAlex and Semantic Sch
   labels become "Stopped next to ..." because "blocked by" needs the planner's log.
 - **Absence claims for the gurren page:** none may front it yet. Parts 1-3 require a Semantic Scholar rerun and it
   answered 9 of 64 queries (none for deadlock-from-logs); the 429 reply asks for an API key, an operator action.
+  *(Superseded 2026-10-21, Part 7: the bar is now OpenAlex plus one more independent index; of the eleven kept rows
+  of §3, eight reach it on CORE and three do not; see Part 7 for the list.)*
   The code, README and pages keep the old labels until a lane renames them.
 
 ## Part 6: state of the art per deliverable (2026-10-22)
@@ -1222,7 +1230,8 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
 - **At the standard:** (1) the stuck rule, (3) the time budget, and the grading half of (2).
 - **Behind:** (2) ranking (ETAS not built; precedent mixed, size unknown) and (6) cause (adjacency, not the plan).
 - **No published equivalent in our setting:** (4), (5), (7), on the queries below and in Parts 2-5; Semantic Scholar
-  answered 1 of 3 here, so none of these absences may front a pitch (Part 5).
+  answered 1 of 3 here, so none of these absences may front a pitch (Part 5). *(2026-10-21, Part 7: (5) and (7) now
+  have two indexes, OpenAlex and CORE; (4) has one.)*
 - **The row that matters is (6):** it is the label a client reads on every stop, and the next route node is already in
   the stream, so a detector-only lane changes it; (2) has mixed precedent and (5) is a data floor.
 
@@ -1237,3 +1246,69 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
 | 5 | WebSearch: automatic incident detection benchmark, detection rate, false alarm rate, mean time to detect | AID studies 1996-2013 only |
 | 6 | OpenAlex: "railway delay attribution automatic train describer data", "delay attribution multi-agent root cause robot fleet", "automatic delay attribution railway machine learning accuracy" (429); arXiv: `abs:"root cause" AND abs:"multi-robot" AND abs:delay` (0); S2: "delay attribution blocking robot fleet" (200, off-topic) | Daamen et al. 2009; no attribution accuracy figure |
 | 7 | OpenAlex: "radio link failure report location coverage hole detection minimization of drive tests", two more (429); arXiv: `abs:"packet loss" AND abs:map AND abs:robot`, `abs:"coverage hole" AND abs:robot` (off-topic); WebSearch: 3GPP MDT RLF report coverage hole | TS 37.320; no passive gap inference, no accuracy figure |
+
+## Part 7: second index for the absence claims (2026-10-22)
+
+Scope: every absence claim marked "kept" in Part 5 §3 and the absence clauses of Part 6, rerun on a second scholarly
+index (operator, 21 Oct: the second index does not have to be Semantic Scholar). Scheduled for 2026-10-22, fetched
+2026-10-21, so `verified@2026-10-21`. Query log, per-query status and raw counts:
+`laptop-scheduler/reports/wr-dev-lit-index-rerun.md`. Ranks as in Part 2 (A read, A- abstract or record).
+**Services:** dblp: not run (Anubis bot wall on dblp.org and dblp.dagstuhl.de, uni-trier and SPARQL time out).
+Semantic Scholar: not run (API 429 "apply for a key"; web page 403). Lens: not run (HTTP 200 but a JavaScript shell,
+no result titles). CORE web page: not run (Cloudflare 403). **CORE API v3 without a key: ran**, 63 flat AND queries
+(title-or-abstract per term), all HTTP 200, plus 37 OR-grouped queries whose zeros are not counted, because CORE's OR
+is unreliable (an added OR alternative shrank 14 hits to 0; log). The OpenAlex reruns of Part 6's four 429 queries hit
+the daily budget again (429): not run.
+
+**Calibration.** CORE retrieved 10 of 16 papers OpenAlex had already found (Kita, Azzalini, Tarapore, Bonetti, Zarour,
+Daamen, Mohler, Neill, Gerling, Chainey). It missed DeepFleet, MoRoOp, Lee 2026, O'Brien 2025, Fitzpatrick 2020 and
+Kondaveeti 2011, mostly 2025-26 items. Rule used below: **a claim has two indexes when CORE's flat queries for it ran
+and CORE retrieved at least one known paper of that claim's field.** CORE results add nothing about papers newer than
+its harvest.
+
+### Changes first
+
+- **Weakened, Part 6 (6) "no attribution accuracy figure".** Nyström 2008, "A methodology for measuring the quality of
+  deviation reporting", Int. J. Quality & Reliability Mgmt (https://doi.org/10.1108/02656710810890863, A-, Crossref
+  checked, verified@2026-10-21): a vignette survey "to measure the consistency of railway delay attribution", which
+  railways "can use ... to estimate the accuracy of their delay attribution systems". Human attributors, no figure in
+  the abstract. A measurement method exists for rail; still no accuracy number for automatic attribution.
+- **Contradiction, Part 1 papers table.** DOI 10.1177/02783649261470035 and arXiv 2609.10400 are titled "A traffic
+  management system for large and heterogeneous vehicles in narrow industrial environments" (Bonetti, Proia,
+  Guidetti, Sabattini, IJRR 2026; Crossref and arXiv API, A-, verified@2026-10-21), not "Deadlock detection and
+  resolution for AGV fleets". Row annotated; its content claim was not re-read here.
+- **Overturned:** none.
+
+### Second index per claim
+
+| claim (part) | CORE flat queries | known item in CORE | indexes | status | verdict |
+|---|---|---|---|---|---|
+| rebuilding "blocked by" from telemetry (1 Q1) | 5 (0-1 hits each) | Bonetti, Tarapore | OpenAlex, CORE | two indexes | kept |
+| decayed per-cell counts as a named baseline (1 Q2) | 4, off-topic | Mohler, Chainey | OpenAlex, CORE | two indexes | kept (off-topic on both) |
+| per-lesson pool-conditioned chance rate (1 Q3) | 4, off-topic | Mohler, Chainey | OpenAlex, CORE | two indexes | kept (off-topic on both) |
+| deadlock detection from observed-state logs (2 §1) | 6 | Bonetti (unprompted, 2a.1) | OpenAlex, CORE | two indexes | kept: AGV deadlock hits all on controller or simulation models |
+| passive message-loss map (2 §4; Part 6 (7)) | 7 | Zarour (unprompted); O'Brien missed | OpenAlex, CORE | two indexes | kept |
+| public multi-robot warehouse log (2 §5) | 4 | DeepFleet, MoRoOp missed | OpenAlex | one index | kept (CORE: synthetic images, simulated logs only) |
+| time-in-state share of a real AMR (2b §3) | 5 | Gerling; Lee missed | OpenAlex, CORE | two indexes | kept |
+| blocked-edge inference with DR / delay / FA (3 Q1; Part 6 (5)) | 5 | Kita, Neill | OpenAlex, CORE | two indexes | kept; near hit Catal et al. 2020 (one AGV's camera, https://doi.org/10.1109/iros45743.2020.9341386, A-) |
+| fleet forecast vs persistence on real logs (3 Q2) | 4 (0-3 hits) | DeepFleet missed | OpenAlex | one index | kept |
+| k × median dwell rule (4 §1) | 4 | none tested in the field | OpenAlex | one index | kept, uninformative |
+| absence-based blocked-cell detection (4 §3) | 5 | Neill | OpenAlex, CORE | two indexes | kept (road-only, e.g. lane closure from connected-vehicle speeds, https://doi.org/10.1155/atr/9579025, A-) |
+| real fleet evaluation of stuck detection (Part 6 (1)) | 3 | Tarapore, Azzalini | OpenAlex, CORE | two indexes | kept |
+| fleet congestion index (Part 6 (4)) | 3 (0, 26 off-topic, 0) | none tested in the field | OpenAlex (1 query) | one index | kept |
+| automatic stop-attribution accuracy (Part 6 (6)) | 4 | Daamen (unprompted) | OpenAlex (2 of 3), CORE | two indexes | **weakened** (Nyström 2008) |
+
+### What this means for us (Part 7)
+
+- **Coverage rule, rewritten in Part 1 and Part 5 §3 (2026-10-21):** an absence claim needs two independent scholarly
+  indexes, OpenAlex plus one of Semantic Scholar, dblp, Lens or CORE. Semantic Scholar is no longer required.
+- **May front the gurren page's "what we could not find" line**, worded "not found in OpenAlex or CORE", never "does
+  not exist": deadlock detection from observed-state logs; a passive message-loss map; blocked-cell or blocked-edge
+  early warning from fleet traces (Part 6 (5)); a real fleet evaluation of stuck detection; rebuilding "blocked by"
+  from telemetry; a time-in-state share for a real AMR. The two crime-forecasting absences (1 Q2, 1 Q3) also reach
+  the bar but were off-topic on both indexes, so they are weak.
+- **May not yet:** a public multi-robot warehouse log and fleet forecast vs persistence (CORE missed the one known
+  paper, DeepFleet), the k × median dwell rule, and a fleet congestion index (no known item to test CORE on; one
+  OpenAlex query). Part 6 (6) is weakened: say "no accuracy figure found for automatic attribution".
+- The two-index bar is about search coverage. It does not make an absence a proof; CORE's blind spot is 2025-26
+  preprints, where this field moves fastest.
