@@ -167,6 +167,17 @@ Note: the hash-guard excludes `amoc_absence*.json` by the regexp `/amoc_absence`
 
 ## Gate
 
-GATE_PLACEHOLDER
+`.venv/bin/python -m unittest discover -s tests` on head 2c5b3f2 (the next commit changes only this report):
+
+```
+Ran 1127 tests in 703.858s
+OK (skipped=4)
+```
+
+The 4 skips are not this lane's (T4 printed its line in that run: `T4 absencemap smoke s10c-blind zone 0: 42 publishes, 0
+distinct flagged cells, 0 flag-publishes, 0.2s (subprocess wall 0.2s, 0 flagged cells)`). A first gate run failed
+`test_closed_loop.TestSmoke` only because this report was edited while the gate ran (that test compares the tracked-file
+state before and after); rerun on a clean tree it passes. `fleet.tests.test_fleet_absencemap` + `fleet.tests.test_time_to_detect`
+alone: `Ran 80 tests ... OK`.
 
 SCHED_RESULT: OK wr-lane-s14b-traffic-absence PR open against master, not merged
