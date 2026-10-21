@@ -39,6 +39,13 @@ Reads:
   every results/fleet/*-st.json of wr-s13b-rerun next to its station-unaware file
                                                -> (r) the station-aware stuck rule (S13B): old / station-aware / delta
                                                   for the headline numbers of (f), (h)-(q) that rest on the stall list
+  every results/fleet/*-sb.json of wr-s14a-rerun next to its -st twin
+                                               -> (s) the station stop bound (S14A): station-aware / bounded / delta for
+                                                  every row of (r), the bound per run, the causes tables, the MoRoOp
+                                                  overruns
+  results/fleet/amoc_{blind,fast,absence}.json, results/fleet/amoc_absence_sweep.json
+                                               -> (t) traffic absence (S14B) against the decayed map and the CUSUM, and
+                                                  its alpha sweep
 
 The paired tuned-vs-fixed-map and between-alpha deltas are not in the JSONs (they pair every arm against none only);
 they are computed here with scripts/evaluate.py's own paired_delta (Student-t 95% CI, paired by seed), the same
@@ -1446,6 +1453,290 @@ def station_aware():
           "counted from `label.false_alarms[].on_station_cell`.")
 
 
+def _sb(rel):
+    """The bounded twin of a station-aware results file: results/fleet/x-st.json -> results/fleet/x-sb.json."""
+    assert rel.endswith("-st.json"), rel
+    return rel[:-len("-st.json")] + "-sb.json"
+
+
+def _causes_rows(run, c, out):
+    for r in c["table"]:
+        out.append(f"| {run} | `{r['cause']}` | {r['cause_label']} | {r['episodes']} | {r['seconds']:,} | "
+                   f"{r['share']:.3f} |")
+    tot = "n/a" if c["share_total"] is None else f"{c['share_total']:.2f}"
+    out.append(f"| {run} | **all** | episode seconds {c['episode_seconds']:,} / stuck bucket {c['stuck_bucket_s']:,} s "
+               f"(open episodes not counted: {c['uncounted_open_episodes']}) | {sum(r['episodes'] for r in c['table'])} "
+               f"| {c['episode_seconds']:,} | {tot} |")
+
+
+def bounded():
+    tags = [t for t, _ in S12_RUNS]
+    rows = []
+
+    def row(measure, run, old, new, dl, files):
+        rows.append(f"| {measure} | {run} | {old} | {new} | {dl} | {', '.join(f'`{f}`' for f in files)} |")
+
+    def pair(rel_st):
+        return rel_st, _sb(rel_st), load(rel_st), load(_sb(rel_st))
+
+    # hotspot side: top-20 truth precision, frozen cells, forecast grades, lesson_persist (f), (h), (i), (l), (m)
+    for t in tags:
+        orel, nrel, o, n = pair(f"results/fleet/hotspot_{t}-st.json")
+        for key in ("zones", "truth_kinds", "grading_counts", "lesson_persist_chance"):
+            assert o.get(key) == n.get(key), (t, key)
+        oa, na = o["truth_kinds"]["any"], n["truth_kinds"]["any"]
+        ok, nk = oa["k"]["20"], na["k"]["20"]
+        if na["positives"] == 0:
+            row("top-20 truth precision", t, f"{ok['precision']:.3f} (no truth cells)",
+                f"{nk['precision']:.3f} (no truth cells)", f"{nk['precision'] - ok['precision']:+.3f}", [orel, nrel])
+            continue
+        row("top-20 truth precision (hits / truth cells)", t, f"{ok['precision']:.3f} ({ok['hits']} / {oa['positives']})",
+            f"{nk['precision']:.3f} ({nk['hits']} / {na['positives']})", f"{nk['precision'] - ok['precision']:+.3f}",
+            [orel, nrel])
+    orel, nrel, o, n = pair("results/fleet/hotspot_s10-breakdown-st.json")
+    of, nf = o["truth_kinds"]["frozen"], n["truth_kinds"]["frozen"]
+    row("frozen cells hit at K 20 / frozen cells (m)", "s10-breakdown", f"{of['k']['20']['hits']} / {of['cells']}",
+        f"{nf['k']['20']['hits']} / {nf['cells']}", f"{nf['k']['20']['hits'] - of['k']['20']['hits']:+d}", [orel, nrel])
+    for t in ("s10-none", "s10c-blind", "s10-breakdown"):
+        orel, nrel, o, n = pair(f"results/fleet/hotspot_{t}-st.json")
+        og, ng = o["grading_counts"]["truth"], n["grading_counts"]["truth"]
+        oh, nh = og.get("hit", 0), ng.get("hit", 0)
+        row("ungated forecasts: truth hits / graded (l), (m)", t, f"{oh} / {oh + og.get('false_alarm', 0)}",
+            f"{nh} / {nh + ng.get('false_alarm', 0)}", f"{nh - oh:+d} hits", [orel, nrel])
+    for t in ("s10-none", "s10c-blind", "closed-loop-sticky"):
+        row("gated forecasts, baseline and persistence gate (l)", t, "not rerun (see (l), (r))", "not rerun", "n/a",
+            [f"results/fleet/hotspot_{t}-gate-{g}.json" for g in GATES])
+    # S10D (j)
+    for t in tags:
+        orel, nrel, o, n = pair(f"results/fleet/baselines_{t}-st.json")
+        for key in ("k", "paired", "chance", "lesson_persist"):
+            assert o["baselines"][key] == n["baselines"][key], (t, key)
+        cells = []
+        for d in (o, n):
+            parts = []
+            for k in S10_KS:
+                dl, v = _paired(d["baselines"]["paired"][k]["truth_precision"], d, k, "truth_precision")
+                parts.append(f"K {k}: {dl}, {v}")
+            cells.append("; ".join(parts))
+        row("S10D map - persistence, truth precision, K 20 / K 40 (j)", t, cells[0], cells[1],
+            "unchanged (`k`, `paired`, `chance`, `lesson_persist` blocks equal)", [orel, nrel])
+    row("S10D map - persistence, truth precision, K 20 / K 40 (j)", "s8e-long-w0.5", "not rerun", "not rerun", "n/a",
+        ["results/fleet/baselines_s8e-long-w0.5.json"])
+    for t in ("s10-none", "s10c-blind"):
+        orel, nrel, o, n = pair(f"results/fleet/hotspot_{t}-st.json")
+        ol, nl = o["lesson_persist_chance"], n["lesson_persist_chance"]
+        row("lesson_persist, hot_cell and hot_robot lessons as in (f): held / graded, lift over chance", t,
+            f"{ol['observed_ok']} / {ol['n_lessons']}, lift {ol['lift']:.2f}",
+            f"{nl['observed_ok']} / {nl['n_lessons']}, lift {nl['lift']:.2f}", f"lift {nl['lift'] - ol['lift']:+.2f}",
+            [orel, nrel])
+    # AMOC (k)
+    orel, nrel, o, n = pair(_st(AMOC))
+    assert o["amoc"] == n["amoc"] and o["by_k"] == n["by_k"]
+    assert n["meta"]["phase_a_dir"].endswith("-sb") and n["meta"]["reference_dir"].endswith("-sb")
+    ok = next(r for r in o["amoc"]["k"] if r["K"] == 20)
+    nk = next(r for r in n["amoc"]["k"] if r["K"] == 20)
+    row("AMOC, decayed map K 20: detected while open / windows (k)", "s10c-blind", f"{ok['n_detected']} / {ok['n_windows']}",
+        f"{nk['n_detected']} / {nk['n_windows']}", f"{nk['n_detected'] - ok['n_detected']:+d}", [orel, nrel])
+    row("AMOC, decayed map K 20: false alarms per zone-hour, s10-none / s10c-blind outside windows (k)", "s10c-blind",
+        f"{ok['fa_per_hour_reference']:.1f} / {ok['fa_per_hour_measured_outside_windows']:.1f}",
+        f"{nk['fa_per_hour_reference']:.1f} / {nk['fa_per_hour_measured_outside_windows']:.1f}",
+        "unchanged (`amoc` and `by_k` blocks equal)", [orel, nrel])
+    row("CUSUM and short-memory map (n)", "s10c-blind", "not rerun (see (n), (r))", "not rerun", "n/a",
+        ["results/fleet/amoc_fast.json", "results/fleet/amoc_shortmap.json"])
+    # time budget (o), with the overrun bookkeeping asserted: what the bound moves is exactly its overrun episodes
+    bounds, causes, moved = [], [], {}
+    for t in tags:
+        orel, nrel, o, n = pair(f"results/fleet/timebudget_{t}-st.json")
+        assert n["src"]["station_aware"] is True and n["src"]["station_radius"] == 0, t
+        os_, ns = o["run"]["totals"]["share"]["stuck"], n["run"]["totals"]["share"]["stuck"]
+        row("time budget: stuck share of AGV time (o)", t, f"{100 * os_:.2f}%", f"{100 * ns:.2f}%",
+            f"{100 * (ns - os_):+.2f} pts", [orel, nrel])
+        ow, nw = o["run"]["station_waits_in_stall_list"], n["run"]["station_waits_in_stall_list"]
+        row("stall list: episodes starting on a station cell / episodes (o)", t,
+            f"{ow['at_station']} / {ow['episodes']}", f"{nw['at_station']} / {nw['episodes']}",
+            f"{nw['episodes'] - ow['episodes']:+d} episodes", [orel, nrel])
+        c = n["run"]["totals"]["causes"]
+        ov = next((r for r in c["table"] if r["cause"] == "station_overrun"), {"episodes": 0, "seconds": 0})
+        osec, nsec = o["run"]["totals"]["seconds"], n["run"]["totals"]["seconds"]
+        assert nsec["stuck"] - osec["stuck"] == ov["seconds"] == osec["waiting_station"] - nsec["waiting_station"], t
+        assert nw["episodes"] - ow["episodes"] == ov["episodes"], t
+        assert all(nsec[b] == osec[b] for b in nsec if b not in ("stuck", "waiting_station")), t
+        moved[t] = (ov["episodes"], ov["seconds"], osec["stuck"], nsec["stuck"])
+        bounds.append((t, n, nrel))
+        causes.append((t, c))
+    # blocking clusters (p)
+    ref = {}
+    for t in tags:
+        orel, nrel, o, n = pair(f"results/fleet/deadlock_{t}-st.json")
+        ot, nt = o["total"], n["total"]
+        if t == "s10-none":
+            ref = {"old": ot["blocked_s_per_robot_hour"], "new": nt["blocked_s_per_robot_hour"]}
+        orate, nrate = ot["blocked_s_per_robot_hour"], nt["blocked_s_per_robot_hour"]
+        row("blocking clusters; blocked robot-s per robot-hour (x s10-none) (p)", t,
+            f"{ot['blocking_clusters']}; {orate:.1f} ({orate / ref['old']:.2f}x)",
+            f"{nt['blocking_clusters']}; {nrate:.1f} ({nrate / ref['new']:.2f}x)",
+            f"{nt['blocking_clusters'] - ot['blocking_clusters']:+d}; {nrate - orate:+.1f}", [orel, nrel])
+    # MoRoOp (q)
+    orel, nrel, o, n = pair(_st(MOROOP))
+    lorel, lrel, lo, lab = pair("results/fleet/moroop_label-st.json")
+    shrel, nshrel, osh, nsh = pair(_st(MOROOP_SHIFTS))
+    r = lab["station_radius"]
+    assert r == lo["station_radius"] == n["src"]["station_rule"]["radius"]
+    assert lab["pooled"]["counts"] == n["label"]["counts"] and lab["pooled"]["causes"] == n["label"]["causes"]
+    run = f"MoRoOp, 9 shifts (radius {r})"
+    row("stuck share of the span; stuck s (q)", run, f"{100 * o['share']['stuck']:.3f}%; {o['seconds']['stuck']:.0f}",
+        f"{100 * n['share']['stuck']:.3f}%; {n['seconds']['stuck']:.0f}",
+        f"{n['seconds']['stuck'] - o['seconds']['stuck']:+.0f} s", [orel, nrel])
+    for b in ("stuck", "stopped_short"):
+        ov, nv = osh["shifts"]["6"]["timebudget_robot"]["seconds"][b], nsh["shifts"]["6"]["timebudget_robot"]["seconds"][b]
+        row(f"shift 6 (2026_07_30_morning, the manual intervention): {b} s (q)", run, f"{ov:.0f}", f"{nv:.0f}",
+            f"{nv - ov:+.0f}", [shrel, nshrel])
+    oc, nc = lo["pooled"]["counts"], lab["pooled"]["counts"]
+    for key, what in (("stuck_runs", "detector stuck runs"), ("false_alarms", "stuck runs with no label within 30 s"),
+                      ("hits", "label episodes >= 30 s detected"), ("timeouts_detected", "TIMEOUT operations overlapped "
+                                                                                          "by a stuck run")):
+        den = {"hits": "ge30", "timeouts_detected": "timeouts"}.get(key)
+        ov = f"{oc[key]}" + (f" / {oc[den]}" if den else "")
+        nv = f"{nc[key]}" + (f" / {nc[den]}" if den else "")
+        row(f"{what} (q)", run, ov, nv, f"{nc[key] - oc[key]:+d}", [lorel, lrel])
+    on_st = [sum(1 for f in d["pooled"]["false_alarms"] if f["on_station_cell"]) for d in (lo, lab)]
+    row("unlabelled stuck runs on a station cell (q)", run, f"{on_st[0]}", f"{on_st[1]}", f"{on_st[1] - on_st[0]:+d}",
+        [lorel, lrel])
+
+    print("| measure | run | station-aware (r) | bounded (S14A) | delta | files |")
+    print("|---|---|---|---|---|---|")
+    print("\n".join(rows))
+    print()
+    print("**The bound per run, as the files record it** (`servicing_max_s`, `servicing_sample_n`, `servicing_q1_s`, "
+          "`servicing_q3_s`, `servicing_pooling`):\n")
+    print("| run | bound T, s | stops in the sample | Q1, s | Q3, s | pooling | file |")
+    print("|---|---|---|---|---|---|---|")
+    for t, n, rel in bounds:
+        print(f"| {t} | {n['servicing_max_s']:.0f} | {n['servicing_sample_n']} | {n['servicing_q1_s']:.0f} | "
+              f"{n['servicing_q3_s']:.0f} | {n['servicing_pooling']} | `{rel}` |")
+    assert all(len(lab[k]) == 9 for k in ("servicing_max_s", "servicing_sample_n", "servicing_q1_s", "servicing_q3_s"))
+    print(f"| MoRoOp, shifts 0-8 | {', '.join(f'{x:.0f}' for x in lab['servicing_max_s'])} | "
+          f"{', '.join(str(x) for x in lab['servicing_sample_n'])} | {', '.join(f'{x:.1f}' for x in lab['servicing_q1_s'])} | "
+          f"{', '.join(f'{x:.1f}' for x in lab['servicing_q3_s'])} | {lab['servicing_pooling']} | `{lrel}` |")
+    print()
+    print("**Causes per run** (`causes` block; share = cause seconds / the time budget's stuck bucket, the file's "
+          "`denominator`; `share_total` is the sum of the shares):\n")
+    print("| run | cause | cause_label | episodes | episode seconds | share of the stuck bucket |")
+    print("|---|---|---|---|---|---|")
+    out = []
+    for t, c in causes:
+        _causes_rows(t, c, out)
+    _causes_rows(f"MoRoOp, pooled (radius {r})", lab["pooled"]["causes"], out)
+    print("\n".join(out))
+    print()
+    ovs = lab["pooled"]["overruns"]
+    assert [x for x in ovs] == [dict(x, shift=int(k)) for k, s in sorted(lab["shifts"].items(), key=lambda kv: int(kv[0]))
+                                for x in s["overruns"]]
+    fa = {f["start"]: f for f in lab["pooled"]["false_alarms"]}
+    print("**MoRoOp overruns** (`pooled.overruns`; the last two columns from `pooled.false_alarms` by start):\n")
+    print("| shift | start | duration, s | station cell | overlaps a TIMEOUT operation | label within 30 s | "
+          "first cell is a station cell |")
+    print("|---|---|---|---|---|---|---|")
+    for x in ovs:
+        f = fa.get(x["start"])
+        print(f"| {x['shift']} | {x['start']} | {x['duration_s']:,} | {x['station_cell']} | "
+              f"{'yes' if x['overlaps_timeout_operation'] else 'no'} | {'no (false alarm)' if f else 'yes'} | "
+              f"{'n/a' if f is None else ('yes' if f['on_station_cell'] else 'no, within radius')} |")
+    print()
+    s6 = nsh["shifts"]["6"]
+    would = s6["no_data"]["would_have_been_bucket_without_gap_rule"]
+    print(f"Station-aware = S13B, the rows of (r); bounded = S14A (PR #51): a SERVICING run still stopped at T after the "
+          f"stop began becomes a stuck episode with cause `station_overrun`. T is set per run from the run's own station "
+          f"stops (`--servicing-max-s auto`). The files come from queue item `wr-s14a-rerun`. It rebuilt each store as `store-sb` "
+          f"with the flag and re-ran costmap, lessons, grade, hotspot_score, baselines, timebudget, deadlock and "
+          f"the MoRoOp analysis on it. Same radius as (r): 0 on the simulator, {r} on MoRoOp (asserted). Unchanged "
+          "rows are asserted, not eyeballed: `zones`, `truth_kinds`, `grading_counts` and `lesson_persist_chance` of "
+          "every hotspot file, the S10D `k`, `paired`, `chance` and `lesson_persist` blocks, and the AMOC `amoc` and "
+          "`by_k` blocks are equal under both rules. In each time budget the bound moves exactly its overrun "
+          "episodes: stuck seconds rise and waiting_station seconds fall by the `station_overrun` seconds of the "
+          "`causes` block, the stall list grows by its episode count, and every other bucket is equal (asserted). "
+          f"Stuck seconds moved: " + "; ".join(f"{t} {m[2]:,} to {m[3]:,} s ({m[0]} overrun episodes, {m[1]:,} s)" for t, m in moved.items())
+          + ". The bucket split of an overrun episode keeps the time budget's precedence, so its gap and paused "
+          f"seconds stay in `no_data` and `paused`. In MoRoOp shift 6, {would['stuck']:,} s of `no_data` would "
+          f"be stuck without the {o['src']['params']['max_gap_s']} s gap rule "
+          "(`shifts.6.no_data.would_have_been_bucket_without_gap_rule`). The causes shares do not sum to 1, and "
+          "nothing rescales them. Episode seconds span each whole episode. The stuck bucket is the time budget's "
+          "per-second split, where shelf-adjacent stops are `waiting_shelf`, faulted seconds are `faulted` and "
+          "gaps are `no_data`.")
+
+
+def absence_vs_map():
+    arms = [("decayed map K 20 (S10E)", AMOC), ("CUSUM (S10I)", "results/fleet/amoc_fast.json"),
+            ("traffic absence, alpha 1e-3 (S14B default)", "results/fleet/amoc_absence.json")]
+    sweep_rel = "results/fleet/amoc_absence_sweep.json"
+    docs = [(name, rel, load(rel)) for name, rel in arms]
+    sweep = load(sweep_rel)
+    if any(d is None for _, _, d in docs) or sweep is None:
+        print("Absence vs map: a results file is MISSING")
+        return
+    # the one sweep entry with an AMOC carries the meta the stubs lack; check it against the map and the CUSUM
+    live = {a: d for a, d in sweep.items() if d.get("amoc") is not None}
+    stubs = {a: d for a, d in sweep.items() if d.get("amoc") is None}
+    m0 = docs[0][2]["meta"]
+    for rel, d in [(rel, d) for _, rel, d in docs if d.get("amoc") is not None] + [(sweep_rel, d) for d in live.values()]:
+        m = d["meta"]
+        for f in ("phase_a_dir", "reference_dir", "run", "reference_run", "truth_kind", "n_windows", "steps", "zones",
+                  "disturb", "sim_hours", "sim_hours_reference"):
+            assert m[f] == m0[f], (rel, f)
+        for f in ("store_hash", "reference_store_hash"):
+            assert m[f + "_before"] == m[f + "_after"] == m0[f + "_before"], (rel, f)
+    for a, d in live.items():
+        assert d["detector"] == "absence" and set(d["meta"]["store_mode"].values()) == {"prebuilt"}, a
+    for d in [docs[2][2]] + list(stubs.values()):
+        assert d["detector"] == "absence" and d["measured_forecast_rows"] == 0 and d["amoc"] is None
+    assert docs[2][2]["store_suffix"] == "absence"
+    print("| detector | publish every, s (publishes) " + _amoc_head(m0))
+    print("|---|---|---|---|---|---|---|---|")
+    for name, rel, d in docs:
+        if d["amoc"] is None:
+            print(f"| {name} | n/a | no AMOC: {d['measured_forecast_rows']} forecast rows on {m0['run']} (store "
+                  f"`store-{d['store_suffix']}`) | n/a | n/a | n/a | not in the file | not in the file |")
+            continue
+        m = d["meta"]
+        r = next(x for x in d["amoc"]["k"] if x["K"] == 20)
+        fmt = ".3f" if r["fa_per_hour_reference"] < 1 else ".1f"
+        print(f"| {name} | {m['publish_every_s']} ({m['n_publishes']}) " + _amoc_row(20, r, fmt)[len("| 20 "):])
+    print()
+    print(f"**Alpha sweep** (`{sweep_rel}`, one entry per alpha; the AMOC rows by K where the entry has one):\n")
+    print("| alpha | K (per zone) | publish every, s (publishes) " + _amoc_head(m0))
+    print("|---|---|---|---|---|---|---|---|---|")
+    for a in sorted(sweep, key=float, reverse=True):
+        d = sweep[a]
+        if d["amoc"] is None:
+            print(f"| {a} | any | n/a | no AMOC: {d['measured_forecast_rows']} forecast rows on {m0['run']} "
+                  f"(`store-{d['store_suffix']}`) | n/a | n/a | n/a | not in the file | not in the file |")
+            continue
+        m = d["meta"]
+        for r in d["amoc"]["k"]:
+            print(f"| {a} | {r['K']} | {m['publish_every_s']} ({m['n_publishes']}) " + _amoc_row(r["K"], r)[len(f"| {r['K']} "):])
+    print()
+    worst = {}
+    for a, d in live.items():
+        r = next(x for x in d["amoc"]["k"] if x["K"] == 20)
+        z = max(r["fa_per_hour_reference_by_zone"], key=r["fa_per_hour_reference_by_zone"].get)
+        worst[a] = (z, r["fa_per_hour_reference_by_zone"][z],
+                    sum(1 for v in r["fa_per_hour_reference_by_zone"].values() if v == 0))
+    pubs = sorted({d["meta"]["publish_every_s"] for _, _, d in docs if d["amoc"] is not None})
+    print(f"Same measured run (`{m0['phase_a_dir']}`, {m0['n_windows']} planner-blind blocked windows) and reference "
+          f"(`{m0['reference_dir']}`, undisturbed) for every row with an AMOC, and the same store hashes before and after "
+          "(asserted). The absence detector (`fleet/absencemap.py`, PR #52) publishes into its own store copy. "
+          "`time_to_detect` refuses a measured store with no forecast rows, so for an alpha that flags nothing "
+          "the queue item `wr-s14b-amoc-run` writes a stub (`detector`, `store_suffix`, `measured_forecast_rows`, "
+          "`amoc` null). The stub records the measured run only, so the reference false-alarm count is not in the "
+          "file. Cadence differs: the decayed map publishes every "
+          f"{pubs[-1]} s and the CUSUM and absence detectors every {pubs[0]} s. False alarms are flag-publishes per zone per "
+          "simulated hour, so they scale with the publish rate. Reference false alarms at K 20 by zone: "
+          + "; ".join(f"alpha {a}: zone {z} {v:.1f} per zone-hour, {nz} of {len(m0['zones'])} zones at 0"
+                      for a, (z, v, nz) in worst.items())
+          + ". Column definitions are those of (k). Sources: "
+          + ", ".join(f"`{rel}`" for _, rel, _ in docs) + f", `{sweep_rel}`.")
+
+
 def main():
     print("### (a) Dose-response: map benefit by floor stickiness (30 seeds x 500 steps)\n")
     dose_response()
@@ -1489,6 +1780,10 @@ def main():
     real_shift()
     print("\n### (r) The stuck rule knows where stations are (S13B): old / station-aware\n")
     station_aware()
+    print("\n### (s) The station stop has an upper bound (S14A): station-aware / bounded\n")
+    bounded()
+    print("\n### (t) Traffic absence against the map and the CUSUM (S14B)\n")
+    absence_vs_map()
 
 
 if __name__ == "__main__":

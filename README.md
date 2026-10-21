@@ -1214,6 +1214,8 @@ S13B (PR #50) taught the stall detector where the stations are. A stopped run wh
 | TIMEOUT operations overlapped by a stuck run (q) | MoRoOp, 9 shifts (radius 1) | 8 / 8 | 1 / 8 | -7 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json`, `results/fleet/moroop_label-st.json` |
 | unlabelled stuck runs on a station cell (q) | MoRoOp, 9 shifts (radius 1) | 542 | 0 | -542 | `results/fleet/timebudget_moroop.json`, `results/fleet/timebudget_moroop-st.json` |
 
+Restated with the bounded rule in (s).
+
 Old rule = the station-unaware detector of Sprints 5 to 13A; station-aware = S13B (PR #50): a stopped run whose first stopped cell is within the station radius of a station goal cell becomes SERVICING after the 30 s threshold, not a stuck episode. Simulator runs: stations `auto` from the emit ledger, radius 0 (asserted: `src.station_radius`, `station_rule.radius`); MoRoOp: `fleet/data/moroop/stations.json`, radius 1 (asserted). The station-aware files come from queue item `wr-s13b-rerun`, which rebuilt each store as `store-st` with `ingest --stations auto` and re-ran costmap, lessons, grade, hotspot_score, baselines, timebudget and deadlock on it, with the original publish schedules and lesson windows, and checked that no original store or results file changed. Unchanged rows are asserted, not eyeballed: the final map (`zones`) is equal in every run, and the S10D `k`, `paired` and `chance` blocks and the AMOC `amoc` and `by_k` blocks are equal. Old top-20 precision for s8b-medium-80-p03-07 and closed-loop-sticky is read from the S10D baselines JSON, because their hotspot JSON on disk predates `truth_kinds` (s8b) or does not exist (sticky). The sticky baselines files differ in `params.horizon_s` (3600 old, 1245 new); the asserted blocks are equal anyway. s10-breakdown has no station-unaware S10D file and s8b no station-unaware blocking run, so those rows have no old value. The ratio in the blocking rows is the run's rate over the s10-none rate under the same rule. The lesson_persist rows pool hot_cell and hot_robot lessons, as (f) does (`lesson_persist_chance`); the hot_cell-only block of (j) (`baselines.lesson_persist`) is equal under both rules except `n_hot_robot_excluded` (asserted). MoRoOp unlabelled runs on a station cell are counted from `label.false_alarms[].on_station_cell`.
 
 **Reading the numbers.**
@@ -1231,3 +1233,130 @@ Old rule = the station-unaware detector of Sprints 5 to 13A; station-aware = S13
 - A suppressed stop stays suppressed however long it lasts. The 1,107 s MoRoOp stop shows that this hides a long stop that starts next to a station.
 - `stopped_short` is defined as a stop under 30 s, yet on MoRoOp it now holds a 1,100 s stop. The bucket names in (o) and (q) have not been changed for the new rule.
 - One seed set (0-9) and one 500-step shift per simulator run, one robot on the real log; no CI on any count in (r). macOS arm64 only (pyastar2d tie-break).
+
+## Sprint 14A: the station stop has an upper bound (2026-10-21)
+
+S13B filed every stop at a station as SERVICING, however long it lasted, and so hid the 1,107 s manual-intervention stop on MoRoOp (r). S14A (PR #51) puts a bound T on a station stop: a SERVICING run still stopped T seconds after the stop began becomes a stuck episode with cause `station_overrun`. T comes from the run's own station stops, as `docs/LITERATURE.md` Part 4 section 1 set it: T = min(300 s, exp(Q3 + 3 IQR of ln dwell)). That is the NIST outer fence on the log scale, capped at the OEE five-minute small-stop edge, which is also the MoRoOp dispatcher's own 300 s timeout. Every stuck episode now also carries a `cause_label` from Part 4 section 2. The queue item `wr-s14a-rerun` rebuilt every `-st` store as `store-sb` with `--servicing-max-s auto`. The radius is the same as in (r): 0 on the simulator, 1 on MoRoOp. It wrote `-sb` files next to the `-st` ones (results commit d5b777a). Everything between this paragraph and "Reading the numbers" is the output of section (s) of `.venv/bin/python scripts/sprint8_tables.py`. Only its heading was demoted one level.
+
+#### (s) The station stop has an upper bound (S14A): station-aware / bounded
+
+| measure | run | station-aware (r) | bounded (S14A) | delta | files |
+|---|---|---|---|---|---|
+| top-20 truth precision | s10-none | 0.000 (no truth cells) | 0.000 (no truth cells) | +0.000 | `results/fleet/hotspot_s10-none-st.json`, `results/fleet/hotspot_s10-none-sb.json` |
+| top-20 truth precision (hits / truth cells) | s10c-blind | 0.085 (17 / 50) | 0.085 (17 / 50) | +0.000 | `results/fleet/hotspot_s10c-blind-st.json`, `results/fleet/hotspot_s10c-blind-sb.json` |
+| top-20 truth precision (hits / truth cells) | s10-breakdown | 0.095 (19 / 283) | 0.095 (19 / 283) | +0.000 | `results/fleet/hotspot_s10-breakdown-st.json`, `results/fleet/hotspot_s10-breakdown-sb.json` |
+| top-20 truth precision (hits / truth cells) | s8b-medium-80-p03-07 | 0.965 (193 / 800) | 0.965 (193 / 800) | +0.000 | `results/fleet/hotspot_s8b-medium-80-p03-07-st.json`, `results/fleet/hotspot_s8b-medium-80-p03-07-sb.json` |
+| top-20 truth precision (hits / truth cells) | closed-loop-sticky | 0.955 (573 / 2400) | 0.955 (573 / 2400) | +0.000 | `results/fleet/hotspot_closed-loop-sticky-st.json`, `results/fleet/hotspot_closed-loop-sticky-sb.json` |
+| frozen cells hit at K 20 / frozen cells (m) | s10-breakdown | 19 / 283 | 19 / 283 | +0 | `results/fleet/hotspot_s10-breakdown-st.json`, `results/fleet/hotspot_s10-breakdown-sb.json` |
+| ungated forecasts: truth hits / graded (l), (m) | s10-none | 0 / 1391 | 0 / 1391 | +0 hits | `results/fleet/hotspot_s10-none-st.json`, `results/fleet/hotspot_s10-none-sb.json` |
+| ungated forecasts: truth hits / graded (l), (m) | s10c-blind | 16 / 1363 | 16 / 1363 | +0 hits | `results/fleet/hotspot_s10c-blind-st.json`, `results/fleet/hotspot_s10c-blind-sb.json` |
+| ungated forecasts: truth hits / graded (l), (m) | s10-breakdown | 25 / 488 | 25 / 488 | +0 hits | `results/fleet/hotspot_s10-breakdown-st.json`, `results/fleet/hotspot_s10-breakdown-sb.json` |
+| gated forecasts, baseline and persistence gate (l) | s10-none | not rerun (see (l), (r)) | not rerun | n/a | `results/fleet/hotspot_s10-none-gate-baseline.json`, `results/fleet/hotspot_s10-none-gate-persistence.json` |
+| gated forecasts, baseline and persistence gate (l) | s10c-blind | not rerun (see (l), (r)) | not rerun | n/a | `results/fleet/hotspot_s10c-blind-gate-baseline.json`, `results/fleet/hotspot_s10c-blind-gate-persistence.json` |
+| gated forecasts, baseline and persistence gate (l) | closed-loop-sticky | not rerun (see (l), (r)) | not rerun | n/a | `results/fleet/hotspot_closed-loop-sticky-gate-baseline.json`, `results/fleet/hotspot_closed-loop-sticky-gate-persistence.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s10-none | K 20: n/a, n/a, no truth positives; K 40: n/a, n/a, no truth positives | K 20: n/a, n/a, no truth positives; K 40: n/a, n/a, no truth positives | unchanged (`k`, `paired`, `chance`, `lesson_persist` blocks equal) | `results/fleet/baselines_s10-none-st.json`, `results/fleet/baselines_s10-none-sb.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s10c-blind | K 20: -0.001 (-0.002 to +0.000), within noise; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | K 20: -0.001 (-0.002 to +0.000), within noise; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | unchanged (`k`, `paired`, `chance`, `lesson_persist` blocks equal) | `results/fleet/baselines_s10c-blind-st.json`, `results/fleet/baselines_s10c-blind-sb.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s10-breakdown | K 20: +0.000 (+0.000 to +0.000), identical top-K sets; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | K 20: +0.000 (+0.000 to +0.000), identical top-K sets; K 40: +0.000 (+0.000 to +0.000), identical top-K sets | unchanged (`k`, `paired`, `chance`, `lesson_persist` blocks equal) | `results/fleet/baselines_s10-breakdown-st.json`, `results/fleet/baselines_s10-breakdown-sb.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s8b-medium-80-p03-07 | K 20: -0.008 (-0.020 to +0.005), within noise; K 40: -0.023 (-0.034 to -0.011), worse | K 20: -0.008 (-0.020 to +0.005), within noise; K 40: -0.023 (-0.034 to -0.011), worse | unchanged (`k`, `paired`, `chance`, `lesson_persist` blocks equal) | `results/fleet/baselines_s8b-medium-80-p03-07-st.json`, `results/fleet/baselines_s8b-medium-80-p03-07-sb.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | closed-loop-sticky | K 20: +0.002 (-0.010 to +0.017), within noise; K 40: -0.018 (-0.029 to -0.008), worse | K 20: +0.002 (-0.010 to +0.017), within noise; K 40: -0.018 (-0.029 to -0.008), worse | unchanged (`k`, `paired`, `chance`, `lesson_persist` blocks equal) | `results/fleet/baselines_closed-loop-sticky-st.json`, `results/fleet/baselines_closed-loop-sticky-sb.json` |
+| S10D map - persistence, truth precision, K 20 / K 40 (j) | s8e-long-w0.5 | not rerun | not rerun | n/a | `results/fleet/baselines_s8e-long-w0.5.json` |
+| lesson_persist, hot_cell and hot_robot lessons as in (f): held / graded, lift over chance | s10-none | 3 / 5, lift 5.14 | 3 / 5, lift 5.14 | lift +0.00 | `results/fleet/hotspot_s10-none-st.json`, `results/fleet/hotspot_s10-none-sb.json` |
+| lesson_persist, hot_cell and hot_robot lessons as in (f): held / graded, lift over chance | s10c-blind | 3 / 4, lift 6.40 | 3 / 4, lift 6.40 | lift +0.00 | `results/fleet/hotspot_s10c-blind-st.json`, `results/fleet/hotspot_s10c-blind-sb.json` |
+| AMOC, decayed map K 20: detected while open / windows (k) | s10c-blind | 6 / 50 | 6 / 50 | +0 | `results/fleet/amoc_blind-st.json`, `results/fleet/amoc_blind-sb.json` |
+| AMOC, decayed map K 20: false alarms per zone-hour, s10-none / s10c-blind outside windows (k) | s10c-blind | 177.8 / 175.1 | 177.8 / 175.1 | unchanged (`amoc` and `by_k` blocks equal) | `results/fleet/amoc_blind-st.json`, `results/fleet/amoc_blind-sb.json` |
+| CUSUM and short-memory map (n) | s10c-blind | not rerun (see (n), (r)) | not rerun | n/a | `results/fleet/amoc_fast.json`, `results/fleet/amoc_shortmap.json` |
+| time budget: stuck share of AGV time (o) | s10-none | 20.81% | 20.81% | +0.00 pts | `results/fleet/timebudget_s10-none-st.json`, `results/fleet/timebudget_s10-none-sb.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s10-none | 0 / 667 | 0 / 667 | +0 episodes | `results/fleet/timebudget_s10-none-st.json`, `results/fleet/timebudget_s10-none-sb.json` |
+| time budget: stuck share of AGV time (o) | s10c-blind | 25.90% | 26.03% | +0.13 pts | `results/fleet/timebudget_s10c-blind-st.json`, `results/fleet/timebudget_s10c-blind-sb.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s10c-blind | 0 / 638 | 1 / 639 | +1 episodes | `results/fleet/timebudget_s10c-blind-st.json`, `results/fleet/timebudget_s10c-blind-sb.json` |
+| time budget: stuck share of AGV time (o) | s10-breakdown | 18.64% | 18.64% | +0.00 pts | `results/fleet/timebudget_s10-breakdown-st.json`, `results/fleet/timebudget_s10-breakdown-sb.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s10-breakdown | 5 / 522 | 5 / 522 | +0 episodes | `results/fleet/timebudget_s10-breakdown-st.json`, `results/fleet/timebudget_s10-breakdown-sb.json` |
+| time budget: stuck share of AGV time (o) | s8b-medium-80-p03-07 | 22.57% | 22.57% | +0.00 pts | `results/fleet/timebudget_s8b-medium-80-p03-07-st.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json` |
+| stall list: episodes starting on a station cell / episodes (o) | s8b-medium-80-p03-07 | 0 / 650 | 0 / 650 | +0 episodes | `results/fleet/timebudget_s8b-medium-80-p03-07-st.json`, `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json` |
+| time budget: stuck share of AGV time (o) | closed-loop-sticky | 32.05% | 32.95% | +0.90 pts | `results/fleet/timebudget_closed-loop-sticky-st.json`, `results/fleet/timebudget_closed-loop-sticky-sb.json` |
+| stall list: episodes starting on a station cell / episodes (o) | closed-loop-sticky | 0 / 2364 | 25 / 2389 | +25 episodes | `results/fleet/timebudget_closed-loop-sticky-st.json`, `results/fleet/timebudget_closed-loop-sticky-sb.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s10-none | 41; 100.6 (1.00x) | 41; 100.6 (1.00x) | +0; +0.0 | `results/fleet/deadlock_s10-none-st.json`, `results/fleet/deadlock_s10-none-sb.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s10c-blind | 49; 137.4 (1.37x) | 52; 142.4 (1.41x) | +3; +4.9 | `results/fleet/deadlock_s10c-blind-st.json`, `results/fleet/deadlock_s10c-blind-sb.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s10-breakdown | 25; 160.0 (1.59x) | 25; 160.0 (1.59x) | +0; +0.0 | `results/fleet/deadlock_s10-breakdown-st.json`, `results/fleet/deadlock_s10-breakdown-sb.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | s8b-medium-80-p03-07 | 45; 135.1 (1.34x) | 45; 135.1 (1.34x) | +0; +0.0 | `results/fleet/deadlock_s8b-medium-80-p03-07-st.json`, `results/fleet/deadlock_s8b-medium-80-p03-07-sb.json` |
+| blocking clusters; blocked robot-s per robot-hour (x s10-none) (p) | closed-loop-sticky | 156; 297.0 (2.95x) | 161; 299.7 (2.98x) | +5; +2.8 | `results/fleet/deadlock_closed-loop-sticky-st.json`, `results/fleet/deadlock_closed-loop-sticky-sb.json` |
+| stuck share of the span; stuck s (q) | MoRoOp, 9 shifts (radius 1) | 0.005%; 13 | 0.675%; 1773 | +1760 s | `results/fleet/timebudget_moroop-st.json`, `results/fleet/timebudget_moroop-sb.json` |
+| shift 6 (2026_07_30_morning, the manual intervention): stuck s (q) | MoRoOp, 9 shifts (radius 1) | 7 | 1107 | +1100 | `results/fleet/timebudget_moroop_shifts-st.json`, `results/fleet/timebudget_moroop_shifts-sb.json` |
+| shift 6 (2026_07_30_morning, the manual intervention): stopped_short s (q) | MoRoOp, 9 shifts (radius 1) | 1376 | 276 | -1100 | `results/fleet/timebudget_moroop_shifts-st.json`, `results/fleet/timebudget_moroop_shifts-sb.json` |
+| detector stuck runs (q) | MoRoOp, 9 shifts (radius 1) | 2 | 6 | +4 | `results/fleet/moroop_label-st.json`, `results/fleet/moroop_label-sb.json` |
+| stuck runs with no label within 30 s (q) | MoRoOp, 9 shifts (radius 1) | 1 | 5 | +4 | `results/fleet/moroop_label-st.json`, `results/fleet/moroop_label-sb.json` |
+| label episodes >= 30 s detected (q) | MoRoOp, 9 shifts (radius 1) | 2 / 2 | 2 / 2 | +0 | `results/fleet/moroop_label-st.json`, `results/fleet/moroop_label-sb.json` |
+| TIMEOUT operations overlapped by a stuck run (q) | MoRoOp, 9 shifts (radius 1) | 1 / 8 | 5 / 8 | +4 | `results/fleet/moroop_label-st.json`, `results/fleet/moroop_label-sb.json` |
+| unlabelled stuck runs on a station cell (q) | MoRoOp, 9 shifts (radius 1) | 0 | 3 | +3 | `results/fleet/moroop_label-st.json`, `results/fleet/moroop_label-sb.json` |
+
+**The bound per run, as the files record it** (`servicing_max_s`, `servicing_sample_n`, `servicing_q1_s`, `servicing_q3_s`, `servicing_pooling`):
+
+| run | bound T, s | stops in the sample | Q1, s | Q3, s | pooling | file |
+|---|---|---|---|---|---|---|
+| s10-none | 80 | 436 | 5 | 10 | all robots of all zones of the glob (one run) | `results/fleet/timebudget_s10-none-sb.json` |
+| s10c-blind | 80 | 387 | 5 | 10 | all robots of all zones of the glob (one run) | `results/fleet/timebudget_s10c-blind-sb.json` |
+| s10-breakdown | 80 | 196 | 5 | 10 | all robots of all zones of the glob (one run) | `results/fleet/timebudget_s10-breakdown-sb.json` |
+| s8b-medium-80-p03-07 | 80 | 392 | 5 | 10 | all robots of all zones of the glob (one run) | `results/fleet/timebudget_s8b-medium-80-p03-07-sb.json` |
+| closed-loop-sticky | 80 | 377 | 5 | 10 | all robots of all zones of the glob (one run) | `results/fleet/timebudget_closed-loop-sticky-sb.json` |
+| MoRoOp, shifts 0-8 | 300, 300, 300, 300, 300, 300, 300, 300, 300 | 823, 789, 820, 802, 814, 821, 780, 835, 778 | 3.0, 6.0, 4.0, 6.0, 6.0, 3.0, 3.7, 2.0, 6.0 | 21.0, 21.0, 20.0, 21.0, 22.0, 21.0, 19.0, 21.0, 21.7 | one bound per shift (a shift is one run: one robot, its own sample); the four servicing_* keys here are lists in shift order, each shift record has its own | `results/fleet/moroop_label-sb.json` |
+
+**Causes per run** (`causes` block; share = cause seconds / the time budget's stuck bucket, the file's `denominator`; `share_total` is the sum of the shares):
+
+| run | cause | cause_label | episodes | episode seconds | share of the stuck bucket |
+|---|---|---|---|---|---|
+| s10-none | `unknown` | Stopped, cause not identified | 440 | 77,200 | 1.858 |
+| s10-none | `traffic` | Traffic wait | 93 | 8,305 | 0.200 |
+| s10-none | `blocked_by_stuck` | Blocked by a stuck robot | 55 | 6,440 | 0.155 |
+| s10-none | **all** | episode seconds 91,945 / stuck bucket 41,545 s (open episodes not counted: 0) | 588 | 91,945 | 2.21 |
+| s10c-blind | `unknown` | Stopped, cause not identified | 404 | 88,115 | 1.696 |
+| s10c-blind | `blocked_by_stuck` | Blocked by a stuck robot | 63 | 9,750 | 0.188 |
+| s10c-blind | `traffic` | Traffic wait | 79 | 7,310 | 0.141 |
+| s10c-blind | `station_overrun` | Station stop over time limit | 1 | 265 | 0.005 |
+| s10c-blind | **all** | episode seconds 105,440 / stuck bucket 51,955 s (open episodes not counted: 0) | 547 | 105,440 | 2.03 |
+| s10-breakdown | `unknown` | Stopped, cause not identified | 225 | 104,410 | 2.807 |
+| s10-breakdown | `faulted_self` | Robot fault | 107 | 26,875 | 0.722 |
+| s10-breakdown | `blocked_by_faulted` | Blocked by a faulted robot | 20 | 7,970 | 0.214 |
+| s10-breakdown | `blocked_by_stuck` | Blocked by a stuck robot | 8 | 7,105 | 0.191 |
+| s10-breakdown | `traffic` | Traffic wait | 21 | 4,315 | 0.116 |
+| s10-breakdown | **all** | episode seconds 150,675 / stuck bucket 37,200 s (open episodes not counted: 0) | 381 | 150,675 | 4.05 |
+| s8b-medium-80-p03-07 | `unknown` | Stopped, cause not identified | 424 | 84,955 | 1.886 |
+| s8b-medium-80-p03-07 | `blocked_by_stuck` | Blocked by a stuck robot | 41 | 7,165 | 0.159 |
+| s8b-medium-80-p03-07 | `traffic` | Traffic wait | 69 | 7,100 | 0.158 |
+| s8b-medium-80-p03-07 | **all** | episode seconds 99,220 / stuck bucket 45,040 s (open episodes not counted: 0) | 534 | 99,220 | 2.20 |
+| closed-loop-sticky | `unknown` | Stopped, cause not identified | 1180 | 430,625 | 2.183 |
+| closed-loop-sticky | `blocked_by_stuck` | Blocked by a stuck robot | 121 | 46,115 | 0.234 |
+| closed-loop-sticky | `traffic` | Traffic wait | 65 | 18,000 | 0.091 |
+| closed-loop-sticky | `station_overrun` | Station stop over time limit | 25 | 5,365 | 0.027 |
+| closed-loop-sticky | **all** | episode seconds 500,105 / stuck bucket 197,275 s (open episodes not counted: 0) | 1391 | 500,105 | 2.54 |
+| MoRoOp, pooled (radius 1) | `station_overrun` | Station stop over time limit | 4 | 4,250 | 2.397 |
+| MoRoOp, pooled (radius 1) | `unknown` | Stopped, cause not identified | 2 | 180 | 0.102 |
+| MoRoOp, pooled (radius 1) | **all** | episode seconds 4,430 / stuck bucket 1,773 s (open episodes not counted: 0) | 6 | 4,430 | 2.50 |
+
+**MoRoOp overruns** (`pooled.overruns`; the last two columns from `pooled.false_alarms` by start):
+
+| shift | start | duration, s | station cell | overlaps a TIMEOUT operation | label within 30 s | first cell is a station cell |
+|---|---|---|---|---|---|---|
+| 1 | 2026-07-27T19:03:16Z | 318 | [9, -3] | yes | no (false alarm) | yes |
+| 6 | 2026-07-30T06:16:31Z | 3,245 | [15, -1] | yes | no (false alarm) | no, within radius |
+| 7 | 2026-07-31T10:00:24Z | 343 | [15, 0] | yes | no (false alarm) | yes |
+| 8 | 2026-07-31T17:43:15Z | 344 | [15, 0] | yes | no (false alarm) | yes |
+
+Station-aware = S13B, the rows of (r); bounded = S14A (PR #51): a SERVICING run still stopped at T after the stop began becomes a stuck episode with cause `station_overrun`. T is set per run from the run's own station stops (`--servicing-max-s auto`). The files come from queue item `wr-s14a-rerun`. It rebuilt each store as `store-sb` with the flag and re-ran costmap, lessons, grade, hotspot_score, baselines, timebudget, deadlock and the MoRoOp analysis on it. Same radius as (r): 0 on the simulator, 1 on MoRoOp (asserted). Unchanged rows are asserted, not eyeballed: `zones`, `truth_kinds`, `grading_counts` and `lesson_persist_chance` of every hotspot file, the S10D `k`, `paired`, `chance` and `lesson_persist` blocks, and the AMOC `amoc` and `by_k` blocks are equal under both rules. In each time budget the bound moves exactly its overrun episodes: stuck seconds rise and waiting_station seconds fall by the `station_overrun` seconds of the `causes` block, the stall list grows by its episode count, and every other bucket is equal (asserted). Stuck seconds moved: s10-none 41,545 to 41,545 s (0 overrun episodes, 0 s); s10c-blind 51,690 to 51,955 s (1 overrun episodes, 265 s); s10-breakdown 37,200 to 37,200 s (0 overrun episodes, 0 s); s8b-medium-80-p03-07 45,040 to 45,040 s (0 overrun episodes, 0 s); closed-loop-sticky 191,910 to 197,275 s (25 overrun episodes, 5,365 s). The bucket split of an overrun episode keeps the time budget's precedence, so its gap and paused seconds stay in `no_data` and `paused`. In MoRoOp shift 6, 2,091 s of `no_data` would be stuck without the 60 s gap rule (`shifts.6.no_data.would_have_been_bucket_without_gap_rule`). The causes shares do not sum to 1, and nothing rescales them. Episode seconds span each whole episode. The stuck bucket is the time budget's per-second split, where shelf-adjacent stops are `waiting_shelf`, faulted seconds are `faulted` and gaps are `no_data`.
+
+**Reading the numbers.**
+- **The 1,107 s stop is back (s).** In MoRoOp shift 6 (30 Jul morning), the stuck bucket goes from 7 s under the station-aware rule to 1,107 s under the bound, the old rule's value in (r). `stopped_short` falls from 1,376 s back to 276 s. The stop is now a `station_overrun` episode: "Station stop over time limit", starting 2026-07-30T06:16:31Z at cell [15, -1]. Its first cell is within radius 1 of a station but is not a station cell, it overlaps a TIMEOUT operation, and the robot's label does not cover it, so it counts as a false alarm against the label. The episode lasts 3,245 s. Only 1,100 of those seconds move into the stuck bucket. The rest of the stop stays in `no_data` and `paused` under the time budget's precedence: 2,091 s of shift 6's `no_data` would be stuck without the 60 s gap rule.
+- **TIMEOUT overlaps return in part: 1 of 8 under (r), 5 of 8 bounded (s).** All four overruns overlap a TIMEOUT operation. The old rule of (r) overlapped 8 of 8, so 3 are still not overlapped by any stuck run. Which of them were real stops was not inspected.
+- **The false alarms stay low (s).** At T = 300 s in all nine shifts, the detector's stuck runs go from 2 to 6 and the unlabelled ones from 1 to 5. Unlabelled stuck runs on a station cell go from 0 to 3, against the Part 4 bar of at most 54. The robot's two labelled episodes of 30 s or more are still both detected. The pooled stuck share goes from 0.005% to 0.675% (13 s to 1,773 s). The old rule of (q) gave 0.42%.
+- **The cap binds on MoRoOp, and the fence binds on the simulator (s).** MoRoOp's fence is above 300 s in every shift (Q1 2.0 to 6.0 s, Q3 19.0 to 22.0 s), so T = 300 s, the cap. On all five simulator runs T = 80 s: Q1 5 s and Q3 10 s give 10 x (10/5)^3. The files store it as 80.00000000000011, from the log-space computation. The simulator's 5 s step quantises the dwells, so the bound sits on the step grid.
+- **On the simulator only two runs move, and the map does not (s).** Final map, top-20 truth precision, forecast grades, frozen-cell hits, lessons, the S10D verdicts and the AMOC detection are all equal under both rules (asserted). One station stop on the planner-blind run passes 80 s: 1 episode, 265 s, stuck share 25.90% to 26.03%. On the undisturbed, breakdown and s8b runs no stop passes 80 s, and nothing moves.
+- **Why the sticky-floor stuck share moved, 32.05% to 32.95% (s).** At T = 80 s, 25 station stops on that run overrun: 5,365 s, which leave `waiting_station` for `stuck`. Stuck seconds go from 191,910 to 197,275 and the stall list from 2,364 to 2,389 episodes; both changes are exactly the 25 overruns (asserted). This is the only simulator run where the bound adds more than one episode. Why its station stops run past 80 s was not inspected.
+- **Blocking clusters rise on the same two runs (s):** 49 to 52 on the planner-blind run and 156 to 161 on the sticky floor. The other three runs are unchanged. Why was not inspected (an overrunning robot is now a stuck neighbour, which may close clusters).
+- **Causes: "Stopped, cause not identified" is most of every simulator stall list (s).** `unknown` is 440 of 588 counted episodes undisturbed and 1,180 of 1,391 on the sticky floor. On the breakdown run, `faulted_self` is 107 of 381. The labels are the six of Part 4 section 2, verbatim. There is no earlier causes table to compare the `unknown` share with.
+
+**Caveats.**
+- **The causes shares do not sum to 1, and nothing rescales them.** The denominator is the time budget's stuck bucket (`causes.denominator`). The numerator is each episode's whole duration, from the detector. On MoRoOp, `episode_seconds` is 4,430 and `stuck_bucket_s` is 1,773, so `share_total` is 2.50. The 3,245 s overrun alone is 1.83 times the stuck bucket, because most of it is `no_data` and `paused` seconds. On the simulator, `share_total` is 2.03 to 4.05, because a stall on a shelf-adjacent cell is `waiting_shelf` in the budget and a fault is `faulted`. Read the share column as "episode time against stuck time", not as a split of the stuck bucket.
+- Only the lane-chosen rule was run: one fence (3 IQR), one cap (300 s), one radius per data set. No other T was tried, and T was not tuned on the label.
+- The bound reads the whole run before it starts (a first pass over the files), so it is not a streaming rule. A live fleet would need T from earlier shifts.
+- The gated forecasts of (l), the CUSUM and short-memory map of (n) and the s8e-long run of (j) were not rerun, as in (r).
+- `stopped_short` (defined as < 30 s) again holds only short stops on MoRoOp shift 6 (276 s). The bucket names are unchanged.
+- One seed set (0-9) and one 500-step shift per simulator run, one robot on the real log; no CI on any count in (s). macOS arm64 only (pyastar2d tie-break).
