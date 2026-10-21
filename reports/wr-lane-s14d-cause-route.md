@@ -260,3 +260,21 @@ Re-verify on 17a4664, three fresh verify-gate refuters:
   `fleet/tests/test_fleet_cause_route.py`, and the main loop re-ran each mutant.
 
 The size of that last change follows from its scope: tests only, and all three mutants verified killed.
+
+## Gate tail
+
+`WR_S10_DATA=/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data .venv/bin/python -m unittest discover -s tests`
+
+- On 3cf86be, the final code and tests:
+
+  ```
+  Ran 1147 tests in 687.412s
+  OK (skipped=4)
+  ```
+
+- Also on 17a4664: Ran 1146, OK (skipped=4).
+- Also on eda9d75 (builder): Ran 1143, OK (skipped=4).
+
+The new tests ran ok, not skipped, on darwin-arm64 in a verbose targeted run (test_u, test_e2 and test_e3 shown "ok").
+
+SCHED_RESULT: OK wr-lane-s14d PR #54; blocker_on_route + "Blocked by" only on the next route node, else "Stopped next to"; nodeStates-absent stream identical to master except the new null field and the renames (episode rows minus 2 keys sha 0a0a920d…); gate 1147 OK; wr-s14d-rerun written, not run
