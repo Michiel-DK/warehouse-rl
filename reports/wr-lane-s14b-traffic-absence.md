@@ -180,4 +180,23 @@ distinct flagged cells, 0 flag-publishes, 0.2s (subprocess wall 0.2s, 0 flagged 
 state before and after); rerun on a clean tree it passes. `fleet.tests.test_fleet_absencemap` + `fleet.tests.test_time_to_detect`
 alone: `Ran 80 tests ... OK`.
 
-SCHED_RESULT: OK wr-lane-s14b-traffic-absence PR open against master, not merged
+(Superseded lane line: "SCHED_RESULT: OK wr-lane-s14b-traffic-absence PR open against master, not merged".)
+
+## Merge record (main loop, 21 Oct)
+
+- Review round: python-reviewer pass (minor findings only); refuters correctness, test-honesty, invariants all
+  non-refuting. Three refuters, not the brief's two: the harness adds the invariants lens because the repo's
+  invariants were passed as CLAUDE.md requires. declaredFiles was left out of the args, so no scope-adherence refuter ran.
+- Squash-merged PR #52 -> 53fd44f; master fast-forwarded. The merged tree is identical to the PR head e313d25.
+- Gate on master 53fd44f, main checkout: `.venv/bin/python -m unittest discover -s tests` -> `Ran 1127 tests in
+  726.408s` / `OK`. The gate lines above quote 2c5b3f2 (skipped=4); the reviewer's rerun on e313d25 printed skipped=7.
+- Queue item wr-s14b-amoc-run installed in laptop-scheduler/queues/warehouse-rl.json from the block above, verbatim:
+  command, cores 4, est_minutes 3, max_minutes 20, _note. No other item changed. Not run.
+- Before the run is read: at alpha 1e-3 (default) and 1e-4 the lane measured zero flags on both runs, so
+  amoc_absence.json and those sweep entries will be stub documents (amoc null), not AMOC curves. That is the
+  measurement, not a harness failure.
+- Open minor findings, not fixed: T1 does not check the rate after a release (a refuter's mutation survived); T4 reads
+  the data from a hardcoded main-checkout path; time_to_detect keys modes by an unnormalised str(reference), so a
+  trailing slash raises a loud ValueError.
+
+SCHED_RESULT: OK wr-lane-s14b-traffic-absence merged PR #52 -> 53fd44f, gate 1127 OK on master, wr-s14b-amoc-run command installed (not run); absence test flags nothing at alpha 1e-3/1e-4 in the lane's measurement
