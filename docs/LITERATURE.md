@@ -238,10 +238,11 @@ question and returned HTTP 429 every time. Google Scholar was not attempted.
 - **A per-lesson, pool-conditioned chance rate for persistence** (Q3). arXiv: `abs:"persistence baseline" AND
   abs:hotspot` (0 results), `hotspot AND crime AND baseline AND previous`. WebSearch: "hot spot persistence 'expected by
   chance' micro-place", "recapture rate index Levine hotspot stability next period".
-- **A standard name for "time to clear"** (Q4). Crossref: the surveillance-metric queries in the report (Fraker,
+- **A standard name for "time to clear"** (Q4). *(Weakened 2026-10-21, Part 5: alarm "Return To Normal".)* Crossref: the surveillance-metric queries in the report (Fraker,
   Kleinman, Frisén, Woodall). WebSearch: "activity monitoring operating characteristic AMOC false alarm time to
   detection".
-- **A paper with per-cell, unknown delay probabilities** (Q5). arXiv: `ti:"delay probabilities"`,
+- **A paper with per-cell, unknown delay probabilities** (Q5). *(Overturned 2026-10-21, Part 5: Kita et al. 2023,
+  per edge.)* arXiv: `ti:"delay probabilities"`,
   `ti:"multi-agent path finding" AND ti:uncertainty`, `ti:"robust multi-agent path finding"`. WebSearch: MAPF-OU
   Shofer ICAPS 2023, Malka IROS 2024.
 
@@ -864,7 +865,9 @@ computable from any VDA 5050 stream:** E10 standby no operator / no product at t
 and maintenance delay, consumables, facilities (needs a maintenance log).
 
 **Verdict 2.** S14A exports the six `cause_label` strings of the table exactly; `cause` stays the machine key. Rows
-carry stop interval and robot id (PIADE shape).
+carry stop interval and robot id (PIADE shape). *(Superseded 2026-10-21 by Part 5 §2 for four labels: "Robot fault" →
+"Robot error, cannot continue order" (VDA CRITICAL covers order and zone errors), the three neighbour labels → "Stopped
+next to ...".)*
 
 ### 3. Traffic-absence detection
 **HERE US 11270578 B2**, https://patents.google.com/patent/US11270578B2/en (patent): a "historical model of expected
@@ -951,41 +954,38 @@ data"; arXiv API ti:"road closure detection" (0 results).
 
 ## Part 5: the stuck threshold, the cause rule, and a sweep of Parts 1 to 4 (2026-10-22)
 
-Scope: the two rules the product rests on and were never checked, the 30 s stop-to-stall threshold
-(`DEFAULT_STUCK_AFTER = 30`, `fleet/fleet_analyser/detector.py:46`) and the neighbour cause rule (`_cause`,
-`detector.py:258-271`, Manhattan distance ≤ 1 via `_near`, `detector.py:81-82`), plus a scholarly rerun of the absence
-claims of Parts 1 to 4. Scheduled for 2026-10-22; every fetch ran on 2026-10-21, so claims carry
-`verified@2026-10-21`. Three research passes (WebSearch, WebFetch, curl to raw GitHub and the arXiv, OpenAlex and
-Semantic Scholar APIs); the main session re-fetched every number and quote used here. Query log:
-`laptop-scheduler/reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet). **Coverage:** Semantic Scholar answered 9 of 64 queries (170
-of 179 tries HTTP 429 with backoff; bulk endpoint 429; web UI 403); OpenAlex answered all 83. So this is still not a
-Semantic Scholar sweep. Google Scholar not tried. ISO, SEMI, VDI texts paywalled; iso.org 403; OTTO help centre login.
+Scope: the 30 s stop-to-stall threshold (`DEFAULT_STUCK_AFTER = 30`, `fleet/fleet_analyser/detector.py:46`), the
+neighbour cause rule (`_cause`, `detector.py:258-271`, Manhattan ≤ 1 via `_near`, `:81-82`) and a scholarly rerun of
+the absence claims of Parts 1 to 4. Scheduled for 2026-10-22, fetched 2026-10-21, so `verified@2026-10-21`. Three
+research passes (WebSearch, WebFetch, curl to raw GitHub, arXiv, OpenAlex, Semantic Scholar); the main session
+re-fetched every quote used; §3's DeepFleet, hospital and Petri-net rows rest on a subagent read. Query log:
+`laptop-scheduler/reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet).
+**Coverage:** Semantic Scholar answered 9 of 64 queries (170 of 179 tries 429 with backoff; bulk 429; web UI 403);
+OpenAlex all 83. Still not a Semantic Scholar sweep. Google Scholar not tried. ISO, SEMI, VDI paywalled.
 
 ### Overturned and weakened first (§3 detail below)
 
 - **Overturned, Part 1 §5 (per-cell unknown delays).** Kita, Suenari, Okada & Taniguchi 2023, "Online Re-Planning and
   Adaptive Parameter Update for MAPF with Stochastic Travel Times" (https://arxiv.org/abs/2302.01489, A, preprint;
   OpenAlex lists it as AAMAS): each edge's delay is "x ∼ Gamma(a(e), b(e))", the parameters "are unknown", and the
-  planner estimates them "from m observations of delay" as agents traverse. Delay owned by the place and unknown to
-  the planner is exactly what §5 said set our floor setting apart. Differences left: edge not cell, a continuous
-  delay not a failure probability, a given prior, 30-50-node graphs. Part 1 §5 and Part 3 Verdict 3 are annotated.
-- **Weakened:** Part 3 Q3 "No paper tests hidden slow cells" (the same paper hides per-edge delays and learns them
-  in execution; it scores conflicts and travel time, not throughput). Part 1 Q4, no name for "time to clear": alarm
-  management has "Return To Normal (RTN)" and the off-delay timer (Kondaveeti et al., MED, OpenAlex 2011,
-  https://doi.org/10.1109/med.2011.5983183, A-: "'Return To Normal' (RTN) information"), a name for a clearing event, not a map metric. Part 1 Q1, HMMs on
+  planner estimates them "from m observations of delay". That is what §5 said set our floor setting apart. Left:
+  edge not cell, continuous delay not a failure probability, a given prior, 30-50-node graphs.
+- **Weakened:** Part 3 Q3 "No paper tests hidden slow cells" (Kita: per edge; conflicts and travel time, not
+  throughput). Part 1 Q4, no name for "time to clear": alarm management's "'Return To Normal' (RTN)" and off-delay
+  timer (Kondaveeti et al., MED, OpenAlex 2011, https://doi.org/10.1109/med.2011.5983183, A-), a clearing event, not a
+  map metric. Part 1 Q1, HMMs on
   telemetry: Azzalini et al. 2020, AAMAS, https://doi.org/10.5555/3398761.3398779 (A-), "data collected during their
   routine operations", single robots, so the absence holds for fleets only. Part 2 §1, no name for an acyclic chain:
   Andersson & Veldhuis 2025, Chalmers MSc thesis with Kollmorgen
   (https://odr.chalmers.se/bitstreams/7d9faa35-7c28-4653-b856-5cc62f4e6653/download, A, not peer reviewed), "blocking
-  graphs" of "causal chains" (a DAG), built where "a blocking is an instance of a traffic rule being activated", i.e.
-  controller state, so the from-observed-state absence of Part 2 §1 stands.
+  graphs" of "causal chains", where "a blocking is an instance of a traffic rule being activated" (controller state).
 
 ### 1. The stop-to-stall threshold
 
 | source (rank) | what it defines | time | what happens at the time |
 |---|---|---|---|
-| VDA 5050 3.0.0, https://raw.githubusercontent.com/VDA5050/VDA5050/main/VDA5050_EN.md (A) | state "published when relevant events occur or at least every 30 seconds" (L1034); `driving`, `paused`, action WAITING, `newBaseRequest`, errors NODE_UNREACHABLE / NO_ROUTE_TO_TARGET: no duration on any | 30 s = message interval only | fleet control owns "Detection and resolution of blockages ("deadlocks")" (L282); traffic logic "not included" (L139) |
-| VDA 5050 2.1.0, release/2.1.0 (A) | "at the latest every 30s" (L936); `waitForTrigger`: "Master control is responsible to handle the timeout" | 30 s interval | integrator's call |
+| VDA 5050 3.0.0 (https://raw.githubusercontent.com/VDA5050/VDA5050/main/VDA5050_EN.md) and 2.1.0 (release/2.1.0) (A) | state "at least every 30 seconds" (3.0.0 L1034; 2.1.0 L936 "at the latest every 30s"); `driving`, `paused`, WAITING, `newBaseRequest`, NODE_UNREACHABLE: no duration; 2.1.0 `waitForTrigger`: "Master control is responsible to handle the timeout" | 30 s = message interval only | fleet control owns "Detection and resolution of blockages ("deadlocks")" (L282) |
+| OTTO tech docs, https://docs.ottomotors.com/en/127044-119570-recover-your-amr--blocked.html (A) | Blocked: "The AMR is blocked from proceeding on its planned path"; physical ("An obstacle blocking the AMR path") or logical ("An incorrect container state") | none stated | "stops all AMR movement until the blockage is cleared" |
 | MiR Fleet reference guide 1.2 (2020), https://www.hmi-mbs.fr/wp-content/uploads/2020/07/notice-mir_fleet_reference_guide_12_en.pdf (A, distributor mirror) | zone "Path timeout": "the amount of time the robot will wait for the path to clear before generating a new one"; "if the path is blocked. Default is 5 seconds." | 5 s | replan; "Retries (Blocked Path)" exhausted → mission error |
 | ROS 2 Nav2 `simple_progress_checker.cpp` L54-56 (A) | `movement_time_allowance` to move `required_movement_radius` | 10.0 s / 0.5 m | progress failure → recovery |
 | ROS move_base `MoveBase.cfg` (A) | `planner_patience`, `controller_patience` | 5.0 s each | "space-clearing operations" |
@@ -994,14 +994,16 @@ Semantic Scholar sweep. Google Scholar not tried. ISO, SEMI, VDI texts paywalled
 | MAPF: Ma et al. 2017 (arXiv 1612.05309), Atzmon et al. 2018 (SoCS), Hönig et al. 2019 (RA-L) (A) | a delay = a timestep the agent "remains delayed in its current vertex" / "did not perform the move action" | counted in steps, not seconds | k-robust plans tolerate "up to k" |
 | VDI 2510 Bl. 1-4, VDI 4451 Bl. 3/4/6/7 (S, titles only); ISO 3691-4:2023 (S, iso.org 403); SEMI E10/E58, ISO 22400-2 AUDT (S, secondary) | AGV infrastructure, safety, interfaces, compatibility; unscheduled downtime / unplanned stops | none found | n/a |
 
-Not found (queries in the report): a stop-to-stall rule at 30 s or any fixed time in any standard, spec, manual or
-paper; ISO 3691-4 stop-category durations (not obtained); a minimum downtime in SEMI E10 / ISO 22400 (secondary only).
-OTTO (help centre login), Seegrid, Locus, Geek+ (no doc tree found): UNTESTED, not absent.
+Not found: a stop-to-stall rule at 30 s or any fixed time in a standard, spec, manual or paper; ISO 3691-4 stop
+durations; a minimum downtime in SEMI E10 / ISO 22400 (secondary only). Decisive WebSearch queries (abridged …, full in the log): "AMR AGV
+"stationary for more than" OR "not moved for" seconds stuck detection warehouse robot", "AGV deadlock detection
+"waiting time exceeds" threshold seconds …", "SEMI E10 "SEMI E58" … short stop downtime … "minimum duration"", "MiR fleet
+"blocked" robot notification seconds path blocked timeout". Seegrid, Locus, Geek+, OTTO help centre: UNTESTED.
 
 **Verdict 1. 30 s is backed by nothing found; it is our parameter.** The sources split into two bands: replan or
-recovery triggers at 5-10 s inside the robot or fleet manager (MiR, move_base, Nav2, Open-RMF), and failure or
-breakdown labels at a minute or more (Lee, Gerling, OEE). 30 s sits between them, above the vendor's 5-step replan
-(25 s at `STEP_S = 5`, `docs/SCOPE.md:207`), which is the one reason it has. The 30 s coincidence with
+recovery triggers at 5-10 s inside the robot or fleet manager (MiR, move_base, Nav2, Open-RMF; OTTO states none), and failure or
+breakdown labels at a minute or more (Lee, Gerling, OEE). 30 s sits between them, above the simulator's (TA-RWARE)
+5-step replan (25 s at `STEP_S = 5`, `docs/SCOPE.md:207`), which is the one reason it has. The 30 s coincidence with
 VDA 5050 is a hazard, not support: a stopped robot that sends only the mandatory state may report once per 30 s, so
 on an event-driven stream the threshold can be decided by a single heartbeat and confirmed up to 30 s late. Name it
 the **stuck threshold** (`stuck_after_s`), say "set by us, no standard" wherever it is shown, and make it a **site
@@ -1024,10 +1026,13 @@ https://store-us.semi.org/products/e11600-semi-e116-specification-for-equipment-
 conflict is defined on plans: a following conflict "occurs iff one agent is planned to occupy a vertex that was occupied
 by another agent in the previous time step" (Stern et al. 2019, https://arxiv.org/abs/1906.08291, A); ADG "Type 2
 edges" come from the plan (Hönig et al. 2019, A); the Chalmers / Kollmorgen blocking names "blocker(s)" from
-traffic-rule activations and stores the blockee's "planned path" (A). **No source found attributes a robot's stop to
-another robot from adjacency alone** (queries in the report; a search absence, not proof).
+traffic-rule activations and stores the blockee's "planned path" (A); OTTO's Blocked is the robot's own state on its
+"planned path" (A, §1). **No source found attributes a robot's stop to another robot from adjacency alone** (a search
+absence, not proof; WebSearch: "multi-robot "blocked by" attribution requires planned path", "AGV log analysis waiting
+time attributed to blocking vehicle "wait-for graph"", ""blocking graph" AGV congestion", "Open-RMF rmf_fleet_adapter
+blockade negotiation "deadlock" traffic conflict obstacle event", "Network Rail Delay Attribution Principles reactionary").
 
-| cause key | label now | what the stream shows | claimable from the stream | label to use (source) |
+| cause key | label now | what the stream shows | claimable from the stream | label to use (neighbour rows: our plain wording, no standard term exists) |
 |---|---|---|---|---|
 | `faulted_self` | Robot fault | own `errorLevel` CRITICAL/FATAL | yes, a self-fact; but CRITICAL includes order and zone errors, not only faults | **Robot error, cannot continue order** (VDA 5050 L1125-1126); export `errorType` |
 | `blocked_by_faulted` | Blocked by a faulted robot | a CRITICAL/FATAL robot within one cell | the co-location is a fact; "blocked by" needs the route or reservation | **Stopped next to a robot in error** |
@@ -1045,8 +1050,8 @@ is filed as an error; export `errorType` so the client can tell.
 
 ### 3. Scholarly rerun of the absence claims
 
-Every listed query plus 1-2 sharper ones per claim ran on OpenAlex and was tried on Semantic Scholar (per-query status in
-the report; "S2" = at least one Semantic Scholar query of the claim answered). Every row of Part 5 is verified@2026-10-21.
+All listed queries plus 1-2 sharper ones per claim, on OpenAlex and Semantic Scholar (per-query status in the report;
+"S2" = a Semantic Scholar query of the claim answered). Every row of Part 5 is verified@2026-10-21.
 
 | claim (part) | queries | hits that change the verdict | verdict |
 |---|---|---|---|
@@ -1072,20 +1077,18 @@ the report; "S2" = at least one Semantic Scholar query of the claim answered). E
 |---|---|---|---|
 | VDA 5050 `errorLevel` on 2.1.0 | Part 2 §2 cites the 3.0.0 four levels under "(3.0.0 and 2.1.0)"; Part 4 §2: 2.1.0 has WARNING / FATAL only | Part 4 (both texts read; L1137 re-read here) | Part 2 §2 annotated |
 | MoRoOp contents | Part 2 §5 row lists "delays, failed navigation" as contents and 140,386 rows; Part 2b: phenomena, raw rows | Part 2b (paper + HF viewer) | Part 2 §5 row annotated |
-| per-cell unknown delays | Part 1 §5 says the setting differs from all found; Kita 2023 has it per edge | Kita (text read) | Part 1 §5 annotated |
+| per-cell unknown delays; time to clear | Part 1 §5 and its absence list (Q4, Q5) | Kita 2023 (text read); Kondaveeti (abstract) | Part 1 §5 and list annotated |
 | hidden slow cells | Part 3 Verdict 3 "No paper tests hidden slow cells" | Kita (per edge) | Part 3 annotated |
-| neighbour-cause anchors | Part 4 §2 anchors three neighbour labels to PackML Suspended (blocked) | PackML / E116 text: own report | Part 4 §2 annotated |
+| cause labels | Part 4 §2 anchors three neighbour labels to PackML Suspended (blocked), calls CRITICAL/FATAL "Robot fault", Verdict 2 fixes the six strings | PackML / E116 / OTTO: own report; VDA L1125 | Part 4 §2 annotated |
 | acyclic-chain name | Part 2 §1 "No formal name ... was found" | Chalmers 2025 "blocking graphs" (not peer reviewed) | Part 2 §1 annotated |
-| MiR doc surface | COMPETITION: support portal sign-in, "nothing public behind it" | a MiR Fleet 1.2 reference guide (2020) is public on a distributor site; capability cells stay UNTESTED | COMPETITION annotated |
+| MiR doc surface | COMPETITION: no public docs tree | a 2020 MiR Fleet 1.2 guide exists on a distributor mirror; says nothing about what is behind the sign-in | COMPETITION noted |
 | search coverage | the brief and Parts 1, 3 say Google Scholar never tried and no S2 search ran; Part 2b §2 ran Google Scholar "MoRoOp" and read one S2 record | Part 2b (its own log) | none; coverage lines are per part |
-
-Consistent (no action): Nav2 0.5 m / 10 s, SEMI E10 standby, ISO 22400 ADET, Bonetti 2026, the 1,107 s MoRoOp stop
-(Part 4 vs README (s)), COMPETITION's 14 vendors / 12 UNTESTED, scouting §2.
 
 ### 5. What this means for us (Part 5)
 
 - **Threshold:** keep 30 s as the default, make it a documented site setting, and label it "set by us, no standard".
 - **Cause labels:** keep the keys. Rename faulted_self to "Robot error, cannot continue order". The three neighbour
   labels become "Stopped next to ..." because "blocked by" needs the planner's log.
-- **Absence claims for the gurren page:** only these may front it: deadlock from logs, passive message-loss map,
-  blocked-edge inference. Each is worded "not found in OpenAlex and web searches". Never use the per-cell delay claim.
+- **Absence claims for the gurren page:** none may front it yet. Parts 1-3 require a Semantic Scholar rerun and it
+  answered 9 of 64 queries (none for deadlock-from-logs); the 429 reply asks for an API key, an operator action.
+  The code, README and pages keep the old labels until a lane renames them.
