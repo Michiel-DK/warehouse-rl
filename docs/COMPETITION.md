@@ -123,7 +123,10 @@ with nothing on the public pages are UNTESTED. 11 fetches.
 
 ### MiR (MiR Fleet / MiR Insights)
 Surfaces read: product page; support: https://supportportal.mobile-industrial-robots.com (sign-in form, nothing
-public behind it); footer docs tree, /docs and changelog: none public. Every absence is UNTESTED. 2 fetches.
+public behind it); footer docs tree, /docs and changelog: none public. Every absence is UNTESTED. 2 fetches. *(Note 2026-10-21, LITERATURE Part 5 §4: a MiR Fleet 1.2 reference guide (2020) is public on a distributor
+site, https://www.hmi-mbs.fr/wp-content/uploads/2020/07/notice-mir_fleet_reference_guide_12_en.pdf, so "nothing public"
+is too strong for MiR Fleet. It predates MiR Insights and was not searched for the nine capabilities; the cells stay
+UNTESTED.)*
 
 | capability | cell | source | evidence |
 |---|---|---|---|

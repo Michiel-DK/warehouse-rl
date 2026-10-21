@@ -115,7 +115,9 @@ delays without locating them (k-robust plans, Atzmon et al. 2020; action depende
 al. 2026, arXiv preprint, not peer reviewed), which pools robot observations into a shared passability belief and
 hands "detour-aware costs" to a standard MAPF planner, while guidance graphs (Zhang et al. 2024; Zang et al. 2025)
 are the precedent for planner edge weights but for congestion. A fitting name for our floor setting is "MAPF under
-the freespace assumption with unknown per-cell delay probabilities".
+the freespace assumption with unknown per-cell delay probabilities". *(Corrected 2026-10-21, Part 5: the "delay
+belongs to the place and is unknown" part is not new; Kita et al. 2023, https://arxiv.org/abs/2302.01489, give each
+edge an unknown Gamma delay that the planner learns from traversals. Cite it with the name.)*
 
 ## What this means for us
 
@@ -283,7 +285,8 @@ extreme traffic state where vehicle cannot move at all", formed by a "congestion
 "all outgoing edges from vertices in the knot have other vertices in knot as destinations" (U. Iowa notes; Misra &
 Chandy 1982 call it "a useful concept in deadlock detection"; Holt 1972 not read, ACM 403). In the S12B graph each
 robot has at most one blocker, so a knot is exactly a cycle, which the lane calls a *deadlock*. The lane's acyclic
-chain is the opposite of a knot. No formal name for an acyclic chain was found. Fanti et al. 1997's **second level
+chain is the opposite of a knot. No formal name for an acyclic chain was found. *(Corrected 2026-10-21, Part 5:
+Andersson & Veldhuis 2025, a Chalmers MSc thesis with Kollmorgen, call them "blocking graphs" of "causal chains".)* Fanti et al. 1997's **second level
 deadlocks** "inevitably evolve to circular waits" (snippet only), a forecast, not a chain; Bonetti et al. 2026's
 **nested acyclic deadlocks** are deadlocks. The plain term is **blocking chain**, with chain length as its depth.
 
@@ -310,7 +313,8 @@ status. `driving` means driving "(manual or automatic)"; "Other movements (e.g.,
 `paused` leaves the robot able to "resume the order". Idle is derived (line 1241): `nodeStates` and `edgeStates` empty
 and all actions "either 'FINISHED' or 'FAILED'". `operatingMode` (3.0) adds STARTUP and INTERVENED to AUTOMATIC,
 SEMIAUTOMATIC, MANUAL, SERVICE, TEACH_IN. `errorLevel` WARNING and URGENT are "able to continue active order",
-CRITICAL and FATAL are not (line 1899). **Fleet managers:** openTCS has UNKNOWN, UNAVAILABLE, ERROR, IDLE, EXECUTING,
+CRITICAL and FATAL are not (line 1899). *(Corrected 2026-10-21, Part 5 §4: that line is 3.0.0 only; 2.1.0 has
+`errorLevel` "Enum {'WARNING', 'FATAL'}" (line 1137), as Part 4 §2 found.)* **Fleet managers:** openTCS has UNKNOWN, UNAVAILABLE, ERROR, IDLE, EXECUTING,
 CHARGING (plus AWAITING_ORDER / PROCESSING_ORDER); Open-RMF `RobotMode` has IDLE, CHARGING, MOVING, PAUSED, WAITING,
 EMERGENCY, DOCKING, ADAPTER_ERROR and others; no vendor definitions were found (MiR, ANT, NDC8, Locus).
 
@@ -372,7 +376,7 @@ and sequence numbers was found.** What exists:
 
 | dataset | fleet | contents | size | available |
 |---|---|---|---|---|
-| MoRoOp, Klein & Jeong 2026 | 1 AMR, laboratory kit supply | jobs, dispatch events, robot state (pose, velocity, battery), delays, failed navigation | 9 × 8 h shifts, 1,382 jobs, 140,386 state rows | CC BY 4.0, Hugging Face parquet |
+| MoRoOp, Klein & Jeong 2026 | 1 AMR, laboratory kit supply | jobs, dispatch events, robot state (pose, velocity, battery), delays, failed navigation *(corrected 2026-10-21, Part 5 §4: "delays" and "failed navigation" are phenomena, not tables, per Part 2b)* | 9 × 8 h shifts, 1,382 jobs, 140,386 state rows *(raw; 137,427 cleaned, Part 2b §1)* | CC BY 4.0, Hugging Face parquet |
 | Sharma 2026, Zenodo | 1 real AGV + simulated traffic | OPC UA telemetry | 13 sessions, 25,976 1-s records | CC BY 4.0 |
 | AI4Mobile, Hernangómez et al. 2024 | 3 AGVs (10 h); 1 cleaning robot (16 h) | radio quality, delay, throughput, positions | as stated | IEEE DataPort, login, licence not stated |
 
@@ -708,7 +712,8 @@ and Part 2 read Chen 2024 at A\*. Both are now read at A (PDF tables), and nothi
 **Verdict 3: someone got the same. Congestion-aware costs add about nothing below a few hundred agents in the
 same-planner ablations found. A +2-3 % gain at 12 agents is consistent with them. Our CI upper ends (+5.6 % and
 +6.6 %) still contain Yu & Wolf's +4.4 %, so the result is underpowered rather than negative. No paper tests hidden
-slow cells.**
+slow cells.** *(Corrected 2026-10-21, Part 5: Kita et al. 2023 hide per-edge delays from the planner and learn them
+in execution; they score conflicts and travel time, not throughput.)*
 
 ### What this means for us (Part 3)
 
@@ -849,6 +854,9 @@ grouped into classes, `type` is the only class. ISO 3691-4 stop categories: not 
 | `unknown` | Stopped, cause not identified | none (residual) | yes, as the residual |
 | `station_overrun` | Station stop over time limit | OEE breakdown side of the small-stop threshold (§1) | partly: needs a station map, which VDA 5050 does not carry |
 
+*(Corrected 2026-10-21, Part 5 §2: PackML "blocked" and SEMI E116 blocked reasons are the unit's own report, so they
+anchor no neighbour row; from a state stream those three rows are co-location facts, relabelled "Stopped next to ...".)*
+
 **Not computable from the fields read today** (field needed): e-stop vs protective-field stop (`safetyState`), manual or
 intervened mode (`operatingMode`), operator pause (`paused`, emitted but not a cause), charging
 (`powerSupply.charging`), connection loss (`connectionState`), localisation lost and no route (`errorType`). **Not
@@ -940,3 +948,144 @@ category 0 1 personnel detection driverless trucks", ""E116" "BlockedReason" OR 
 performance tracking SEMI", "detect blocked edge warehouse robot fleet absence of traffic MAPF", ""negative information"
 OR "absence of observations" multi-robot blocked aisle", "Google patent detecting road closures absence of location
 data"; arXiv API ti:"road closure detection" (0 results).
+
+## Part 5: the stuck threshold, the cause rule, and a sweep of Parts 1 to 4 (2026-10-22)
+
+Scope: the two rules the product rests on and were never checked, the 30 s stop-to-stall threshold
+(`DEFAULT_STUCK_AFTER = 30`, `fleet/fleet_analyser/detector.py:46`) and the neighbour cause rule (`_cause`,
+`detector.py:258-271`, Manhattan distance ≤ 1 via `_near`, `detector.py:81-82`), plus a scholarly rerun of the absence
+claims of Parts 1 to 4. Scheduled for 2026-10-22; every fetch ran on 2026-10-21, so claims carry
+`verified@2026-10-21`. Three research passes (WebSearch, WebFetch, curl to raw GitHub and the arXiv, OpenAlex and
+Semantic Scholar APIs); the main session re-fetched every number and quote used here. Query log:
+`laptop-scheduler/reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet). **Coverage:** Semantic Scholar answered 9 of 64 queries (170
+of 179 tries HTTP 429 with backoff; bulk endpoint 429; web UI 403); OpenAlex answered all 83. So this is still not a
+Semantic Scholar sweep. Google Scholar not tried. ISO, SEMI, VDI texts paywalled; iso.org 403; OTTO help centre login.
+
+### Overturned and weakened first (§3 detail below)
+
+- **Overturned, Part 1 §5 (per-cell unknown delays).** Kita, Suenari, Okada & Taniguchi 2023, "Online Re-Planning and
+  Adaptive Parameter Update for MAPF with Stochastic Travel Times" (https://arxiv.org/abs/2302.01489, A, preprint;
+  OpenAlex lists it as AAMAS): each edge's delay is "x ∼ Gamma(a(e), b(e))", the parameters "are unknown", and the
+  planner estimates them "from m observations of delay" as agents traverse. Delay owned by the place and unknown to
+  the planner is exactly what §5 said set our floor setting apart. Differences left: edge not cell, a continuous
+  delay not a failure probability, a given prior, 30-50-node graphs. Part 1 §5 and Part 3 Verdict 3 are annotated.
+- **Weakened:** Part 3 Q3 "No paper tests hidden slow cells" (the same paper hides per-edge delays and learns them
+  in execution; it scores conflicts and travel time, not throughput). Part 1 Q4, no name for "time to clear": alarm
+  management has "Return To Normal (RTN)" and the off-delay timer (Kondaveeti et al., MED, OpenAlex 2011,
+  https://doi.org/10.1109/med.2011.5983183, A-: "'Return To Normal' (RTN) information"), a name for a clearing event, not a map metric. Part 1 Q1, HMMs on
+  telemetry: Azzalini et al. 2020, AAMAS, https://doi.org/10.5555/3398761.3398779 (A-), "data collected during their
+  routine operations", single robots, so the absence holds for fleets only. Part 2 §1, no name for an acyclic chain:
+  Andersson & Veldhuis 2025, Chalmers MSc thesis with Kollmorgen
+  (https://odr.chalmers.se/bitstreams/7d9faa35-7c28-4653-b856-5cc62f4e6653/download, A, not peer reviewed), "blocking
+  graphs" of "causal chains" (a DAG), built where "a blocking is an instance of a traffic rule being activated", i.e.
+  controller state, so the from-observed-state absence of Part 2 §1 stands.
+
+### 1. The stop-to-stall threshold
+
+| source (rank) | what it defines | time | what happens at the time |
+|---|---|---|---|
+| VDA 5050 3.0.0, https://raw.githubusercontent.com/VDA5050/VDA5050/main/VDA5050_EN.md (A) | state "published when relevant events occur or at least every 30 seconds" (L1034); `driving`, `paused`, action WAITING, `newBaseRequest`, errors NODE_UNREACHABLE / NO_ROUTE_TO_TARGET: no duration on any | 30 s = message interval only | fleet control owns "Detection and resolution of blockages ("deadlocks")" (L282); traffic logic "not included" (L139) |
+| VDA 5050 2.1.0, release/2.1.0 (A) | "at the latest every 30s" (L936); `waitForTrigger`: "Master control is responsible to handle the timeout" | 30 s interval | integrator's call |
+| MiR Fleet reference guide 1.2 (2020), https://www.hmi-mbs.fr/wp-content/uploads/2020/07/notice-mir_fleet_reference_guide_12_en.pdf (A, distributor mirror) | zone "Path timeout": "the amount of time the robot will wait for the path to clear before generating a new one"; "if the path is blocked. Default is 5 seconds." | 5 s | replan; "Retries (Blocked Path)" exhausted → mission error |
+| ROS 2 Nav2 `simple_progress_checker.cpp` L54-56 (A) | `movement_time_allowance` to move `required_movement_radius` | 10.0 s / 0.5 m | progress failure → recovery |
+| ROS move_base `MoveBase.cfg` (A) | `planner_patience`, `controller_patience` | 5.0 s each | "space-clearing operations" |
+| Open-RMF rmf_ros2 `EasyFullControl.hpp` L595, `RobotUpdateHandle.hpp` L133 (A, source) | `max_delay`: "how high the delay of the current itinerary can become before it gets interrupted and replanned" | 10 s | replan |
+| Lee et al. 2026; Gerling et al. 2016 (Part 2b §3, A); OEE six big losses (Part 4 §1, A vendor docs) | failure: "stationary for > 1 min"; stuck: "in the order of minutes"; small stop: "a minute or two" | 60 s to minutes | failure label; breakdown needs a reason |
+| MAPF: Ma et al. 2017 (arXiv 1612.05309), Atzmon et al. 2018 (SoCS), Hönig et al. 2019 (RA-L) (A) | a delay = a timestep the agent "remains delayed in its current vertex" / "did not perform the move action" | counted in steps, not seconds | k-robust plans tolerate "up to k" |
+| VDI 2510 Bl. 1-4, VDI 4451 Bl. 3/4/6/7 (S, titles only); ISO 3691-4:2023 (S, iso.org 403); SEMI E10/E58, ISO 22400-2 AUDT (S, secondary) | AGV infrastructure, safety, interfaces, compatibility; unscheduled downtime / unplanned stops | none found | n/a |
+
+Not found (queries in the report): a stop-to-stall rule at 30 s or any fixed time in any standard, spec, manual or
+paper; ISO 3691-4 stop-category durations (not obtained); a minimum downtime in SEMI E10 / ISO 22400 (secondary only).
+OTTO (help centre login), Seegrid, Locus, Geek+ (no doc tree found): UNTESTED, not absent.
+
+**Verdict 1. 30 s is backed by nothing found; it is our parameter.** The sources split into two bands: replan or
+recovery triggers at 5-10 s inside the robot or fleet manager (MiR, move_base, Nav2, Open-RMF), and failure or
+breakdown labels at a minute or more (Lee, Gerling, OEE). 30 s sits between them, above the vendor's 5-step replan
+(25 s at `STEP_S = 5`, `docs/SCOPE.md:207`), which is the one reason it has. The 30 s coincidence with
+VDA 5050 is a hazard, not support: a stopped robot that sends only the mandatory state may report once per 30 s, so
+on an event-driven stream the threshold can be decided by a single heartbeat and confirmed up to 30 s late. Name it
+the **stuck threshold** (`stuck_after_s`), say "set by us, no standard" wherever it is shown, and make it a **site
+setting with a documented default of 30 s**, chosen to sit above the site's fleet-manager replan timeout and below
+its failure or small-stop threshold; report the stream's maximum state interval next to it.
+
+### 2. The cause rule
+
+**What a stop record carries.** VDA 5050 3.0.0 (A): `errors[]` with `errorType`, `errorReferences` ("e.g., `nodeId`,
+`edgeId`, `orderId`, `actionId`"), `errorDescription`, `errorHint`, `errorLevel`; CRITICAL "shall not continue driving
+since it can not continue its current order" (L1125) and also covers order and zone errors (NODE_UNREACHABLE,
+BLOCKED_ZONE_VIOLATION L870); `actionStatus` has seven values incl. 'RETRIABLE' (L1877); `safetyState.fieldViolation`
+"Protective field violation (e.g., by laser or bumper)" (L1931) names no obstacle. **No field says "blocked by another
+vehicle"**; BLOCKED is a zone robots "shall not enter". VDA's own traffic stop is a self-fact, "shall stop at the
+decision point if no further nodes and edges are added to the base" (L353), visible only in `nodeStates`, which our
+emitter does not carry. SEMI E116 "reasons ... why equipment is blocked" (abstract read,
+https://store-us.semi.org/products/e11600-semi-e116-specification-for-equipment-performance-tracking) and PackML
+"blocked" / "starved" (Part 4 §2, A) are the unit's own report. Open-RMF builds "Waiting for [robot:" from its schedule
+`dependencies` (`rmf_ros2` `WaitForTraffic.cpp`, A); openTCS `Vehicle.State` has no blocked state (A). Every MAPF
+conflict is defined on plans: a following conflict "occurs iff one agent is planned to occupy a vertex that was occupied
+by another agent in the previous time step" (Stern et al. 2019, https://arxiv.org/abs/1906.08291, A); ADG "Type 2
+edges" come from the plan (Hönig et al. 2019, A); the Chalmers / Kollmorgen blocking names "blocker(s)" from
+traffic-rule activations and stores the blockee's "planned path" (A). **No source found attributes a robot's stop to
+another robot from adjacency alone** (queries in the report; a search absence, not proof).
+
+| cause key | label now | what the stream shows | claimable from the stream | label to use (source) |
+|---|---|---|---|---|
+| `faulted_self` | Robot fault | own `errorLevel` CRITICAL/FATAL | yes, a self-fact; but CRITICAL includes order and zone errors, not only faults | **Robot error, cannot continue order** (VDA 5050 L1125-1126); export `errorType` |
+| `blocked_by_faulted` | Blocked by a faulted robot | a CRITICAL/FATAL robot within one cell | the co-location is a fact; "blocked by" needs the route or reservation | **Stopped next to a robot in error** |
+| `blocked_by_stuck` | Blocked by a stuck robot | a stuck robot within one cell | same; a wait-for edge needs plans (ADG) or the fleet manager's dependency log | **Stopped next to a stuck robot** |
+| `traffic` | Traffic wait | any robot within one cell | same; VDA's traffic stop is visible only from `nodeStates` | **Stopped next to another robot** |
+| `unknown` | Stopped, cause not identified | no robot within one cell, no error | yes, the residual | keep; it means "no robot nearby, no error reported"; most episodes on every simulator run (README (s)) |
+| `station_overrun` | Station stop over time limit | own stop at a station cell past T | yes, a self-fact plus site configuration | keep |
+
+**Verdict 2.** Three causes are self-facts a stream-only observer can claim: `faulted_self`, `unknown`,
+`station_overrun`. The three neighbour causes are co-location facts; "blocked by" for them needs the planner's
+conflict or dependency log (Open-RMF `dependencies`, an ADG, the Kollmorgen traffic-rule trace), which a VDA 5050
+state stream does not carry. Rename them as in the table; keep the keys (Part 4 §2's PackML anchors for them are
+annotated). `faulted_self` is checked first, so a robot reporting NODE_UNREACHABLE because another robot is in the way
+is filed as an error; export `errorType` so the client can tell.
+
+### 3. Scholarly rerun of the absence claims
+
+Every listed query plus 1-2 sharper ones per claim ran on OpenAlex and was tried on Semantic Scholar (per-query status in
+the report; "S2" = at least one Semantic Scholar query of the claim answered). Every row of Part 5 is verified@2026-10-21.
+
+| claim (part) | queries | hits that change the verdict | verdict |
+|---|---|---|---|
+| per-cell unknown delay probabilities (1 Q5) | 4, S2 | Kita et al. 2023 (above) | **overturned** |
+| hidden slow cells as a routing disturbance (3 Q3) | 4 | Kita et al. 2023 | weakened |
+| standard name for time to clear (1 Q4) | 4, S2 | Kondaveeti et al. 2011, RTN | weakened |
+| HMM / isolation forest / autoencoder on fleet telemetry (1 Q1) | 8, S2 | Azzalini et al. 2020, single robots | weakened (fleets only) |
+| rebuilding "blocked by a faulted robot" from telemetry (1 Q1) | 5 | none; Petri-net detection on the controller model only | kept |
+| decayed per-cell counts as a named baseline (1 Q2) | 2, S2 | none | kept (results off-topic) |
+| per-lesson pool-conditioned chance rate (1 Q3) | 6, S2 | none | kept (results off-topic) |
+| deadlock detection from observed-state logs (2 §1) | 8 | none; on-board or planned-trajectory methods; Chalmers 2025 reads controller state | kept |
+| passive message-loss map (2 §4) | 7, S2 | none new (Zarour 2023, O'Brien 2025 already cited) | kept |
+| public multi-robot warehouse log (2 §5) | 4 | DeepFleet (arXiv 2508.08574, A-) trains on real Amazon fleet data, no release stated | kept (private logs exist) |
+| time-in-state share of a real AMR (2b §3) | 7 | none; a 10-AMR hospital study (Sci. Rep. 2026) gives none | kept |
+| blocked-edge inference with DR / delay / FA (3 Q1) | 8 (3 OpenAlex repeats), S2 | none | kept |
+| fleet forecast vs persistence on real logs (3 Q2) | 4, S2 | DeepFleet forecasts on held-out real data with no persistence row | kept |
+| k × median dwell rule, station-stop timeout (4 §1) | 6 | none (4 near-empty result sets) | kept, uninformative |
+| absence-based blocked-cell detection in fleets (4 §3) | 6 (1 OpenAlex repeat) | none new (road-only) | kept |
+
+### 4. Contradiction sweep (Parts 1-4, COMPETITION.md, docs/scouting/README.md)
+
+| subject | disagreement | better-sourced | action |
+|---|---|---|---|
+| VDA 5050 `errorLevel` on 2.1.0 | Part 2 §2 cites the 3.0.0 four levels under "(3.0.0 and 2.1.0)"; Part 4 §2: 2.1.0 has WARNING / FATAL only | Part 4 (both texts read; L1137 re-read here) | Part 2 §2 annotated |
+| MoRoOp contents | Part 2 §5 row lists "delays, failed navigation" as contents and 140,386 rows; Part 2b: phenomena, raw rows | Part 2b (paper + HF viewer) | Part 2 §5 row annotated |
+| per-cell unknown delays | Part 1 §5 says the setting differs from all found; Kita 2023 has it per edge | Kita (text read) | Part 1 §5 annotated |
+| hidden slow cells | Part 3 Verdict 3 "No paper tests hidden slow cells" | Kita (per edge) | Part 3 annotated |
+| neighbour-cause anchors | Part 4 §2 anchors three neighbour labels to PackML Suspended (blocked) | PackML / E116 text: own report | Part 4 §2 annotated |
+| acyclic-chain name | Part 2 §1 "No formal name ... was found" | Chalmers 2025 "blocking graphs" (not peer reviewed) | Part 2 §1 annotated |
+| MiR doc surface | COMPETITION: support portal sign-in, "nothing public behind it" | a MiR Fleet 1.2 reference guide (2020) is public on a distributor site; capability cells stay UNTESTED | COMPETITION annotated |
+| search coverage | the brief and Parts 1, 3 say Google Scholar never tried and no S2 search ran; Part 2b §2 ran Google Scholar "MoRoOp" and read one S2 record | Part 2b (its own log) | none; coverage lines are per part |
+
+Consistent (no action): Nav2 0.5 m / 10 s, SEMI E10 standby, ISO 22400 ADET, Bonetti 2026, the 1,107 s MoRoOp stop
+(Part 4 vs README (s)), COMPETITION's 14 vendors / 12 UNTESTED, scouting §2.
+
+### 5. What this means for us (Part 5)
+
+- **Threshold:** keep 30 s as the default, make it a documented site setting, and label it "set by us, no standard".
+- **Cause labels:** keep the keys. Rename faulted_self to "Robot error, cannot continue order". The three neighbour
+  labels become "Stopped next to ..." because "blocked by" needs the planner's log.
+- **Absence claims for the gurren page:** only these may front it: deadlock from logs, passive message-loss map,
+  blocked-edge inference. Each is worded "not found in OpenAlex and web searches". Never use the per-cell delay claim.
