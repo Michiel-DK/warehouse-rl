@@ -38,9 +38,13 @@ meta.store_suffix; neither key is there without the flag):
             (removed at the end unless --keep-store).
   prebuilt  DIR/store-X exists (built beforehand by fleet/fastmap.py): no copy, no strip, no rerun, never removed; the
             hash check of DIR/store/decisions.jsonl is kept; ValueError unless every hotspot_forecast row has
-            claim.detector == "cusum" (a leftover costmap copy is stale, not a detector). Zero rows: the measured run
-            raises ValueError (it measures nothing); a --reference with zero rows is accepted (the CUSUM flags nothing on
-            an undisturbed run: a valid zero-false-alarm reference, fa_per_hour_reference 0).
+            claim.detector == "cusum" (fleet/fastmap.py) or every row has "absence" (fleet/absencemap.py, S14B): one
+            detector per store, a mix raises ValueError (a leftover costmap copy is stale, not a detector). The output
+            document gets a top-level "detector" key only when it is not "cusum" (CUSUM outputs keep their bytes). The
+            measured run and the reference must agree (ValueError); a zero-row reference adopts the measured run's
+            detector, and an "absence" run against a reference that was not prebuilt raises ValueError. Zero rows: the
+            measured run raises ValueError (it measures nothing); a --reference with zero rows is accepted (a detector
+            flags nothing on an undisturbed run: a valid zero-false-alarm reference, fa_per_hour_reference 0).
             --window-hours, --half-life-h and --sweep-cost are rejected there (fastmap writes no costmap rows).
 
 --sweep-k / --sweep-cost / --reference (S10E, blocked|outage only) add an AMOC view: detection delay against false alarms
@@ -336,24 +340,50 @@ def strip_costmap(copy, run):
     return dropped
 
 
+PREBUILT_DETECTORS = ("cusum", "absence")
+
+
 def check_prebuilt_rows(rows, copy, allow_empty=False):
     """ValueError unless there is at least one row (allow_empty: the undisturbed reference may legitimately hold none, a
-    detector with no false flag) and every row's claim has detector == 'cusum'."""
+    detector with no false flag), every row's claim has detector in PREBUILT_DETECTORS and all rows carry the same one.
+    Returns that detector (None for zero rows)."""
     if not rows and not allow_empty:
         raise ValueError(f"prebuilt store {copy} holds no hotspot_forecast rows of the run")
+    found = None
     for r in rows:
         claim = json.loads(r["claim"]) if isinstance(r["claim"], str) else r["claim"]
-        if claim.get("detector") != "cusum":
+        d = claim.get("detector")
+        if d not in PREBUILT_DETECTORS:
             raise ValueError(f"prebuilt store {copy}: forecast {r.get('subject')} at {r.get('decided_at')} has "
-                             f"detector {claim.get('detector')!r}, not 'cusum' (a leftover costmap copy is stale)")
+                             f"detector {d!r}, not one of {PREBUILT_DETECTORS} (a leftover costmap copy is stale)")
+        if found is not None and d != found:
+            raise ValueError(f"prebuilt store {copy}: mixed detectors {found!r} and {d!r} (one detector per store)")
+        found = d
+    return found
+
+
+def resolve_detector(detectors, modes, phase_a, reference):
+    """The run's detector from the prebuilt stores read ({dir: detector}): None when there was none. ValueError when the
+    measured run and the reference disagree, or a non-cusum detector meets a side that was not prebuilt."""
+    mine = detectors.get(str(phase_a))
+    theirs = detectors.get(str(reference)) if reference is not None else None
+    if mine and theirs and mine != theirs:
+        raise ValueError(f"measured run detector {mine!r} differs from the reference's {theirs!r}")
+    d = mine or theirs
+    if d and d != "cusum":
+        for side in (phase_a, reference):
+            if side is not None and modes.get(str(side)) != "prebuilt":
+                raise ValueError(f"detector {d!r} needs a prebuilt store on both sides; {side} was not prebuilt")
+    return d
 
 
 def rerun_on_copy(src, every, run_name, floor, rerun, keep_store, with_costmap=False, store_suffix=None,
-                  window_hours=None, half_life_h=None, modes=None, allow_empty=False):
+                  window_hours=None, half_life_h=None, modes=None, allow_empty=False, detectors=None):
     """The one copy / strip / rerun / hash-check / select / remove sequence, for the measured run and the reference.
     Returns (decision rows of run_name, costmap rows of run_name or None, hash before, hash after).
     store_suffix: copy dir DIR/store-<suffix>; when it already exists the prebuilt mode (module docstring) reads it as it
-    is. `modes`, when given, receives {str(src): "rerun"|"prebuilt"} when a suffix is used."""
+    is. `modes`, when given, receives {str(src): "rerun"|"prebuilt"} when a suffix is used.
+    `detectors`, when given, receives {str(src): detector} for a prebuilt store with rows."""
     src = Path(src)
     orig = src / "store" / "decisions.jsonl"
     hash_before = sha256_file(orig)
@@ -369,7 +399,9 @@ def rerun_on_copy(src, every, run_name, floor, rerun, keep_store, with_costmap=F
             rows = st.select("decisions", {"kind": "hotspot_forecast", "run": run_name})
         finally:
             st.close()
-        check_prebuilt_rows(rows, copy, allow_empty)
+        found = check_prebuilt_rows(rows, copy, allow_empty)
+        if detectors is not None and found:
+            detectors[str(src)] = found
         hash_after = sha256_file(orig)
         if hash_after != hash_before:
             raise RuntimeError(f"{orig} changed ({hash_before} -> {hash_after}); no output written")
@@ -572,13 +604,16 @@ def run(phase_a, every, ks, out, keep_store=False, rerun=rerun_costmap, span=rea
     pub = costmap.publish_times(first_ts, end_ts, every)
     ref = check_reference(reference, truth_doc, pub, span, every) if reference is not None else None
     modes = {} if store_suffix else None
-    sfx = dict(store_suffix=store_suffix, window_hours=window_hours, half_life_h=half_life_h, modes=modes)
+    detectors = {}
+    sfx = dict(store_suffix=store_suffix, window_hours=window_hours, half_life_h=half_life_h, modes=modes,
+               detectors=detectors)
     rows, cm_rows, hash_before, hash_after = rerun_on_copy(phase_a, every, run_name, not windows, rerun, keep_store,
                                                            with_costmap=bool(sweep_cost), **sfx)
     ref_res = None
     if ref is not None:
         ref_res = ref + rerun_on_copy(reference, every, ref[1], False, rerun, keep_store, with_costmap=bool(sweep_cost),
                                          allow_empty=True, **sfx)
+    detector = resolve_detector(detectors, modes, phase_a, reference) if modes else None
     t0z = {z: t0[z] for z in sorted(t0, key=lambda z: (len(z), z))}
     if windows:
         by_k, window_h, half_h = analyse_windows(rows, truth_doc, truth_kind, first_ts, pub, ks, run_name)
@@ -600,6 +635,8 @@ def run(phase_a, every, ks, out, keep_store=False, rerun=rerun_costmap, span=rea
     if store_suffix:
         meta.update(store_suffix=store_suffix, store_mode=modes)
     doc = dict(schema_version=SCHEMA_VERSION, meta=meta, by_k=by_k)
+    if detector and detector != "cusum":
+        doc = dict(schema_version=SCHEMA_VERSION, detector=detector, meta=meta, by_k=by_k)
     if sweep:
         doc["amoc"] = amoc_sweep(truth_doc, truth_kind, rows, cm_rows, pub, first_ts, sweep_k, sweep_cost, run_name, ref_res,
                                 ref_empty_ok=bool(modes) and modes.get(str(reference)) == "prebuilt")

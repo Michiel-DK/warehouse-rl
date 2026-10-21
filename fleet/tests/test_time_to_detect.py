@@ -1253,6 +1253,95 @@ class TestStoreSuffixAndWindowFlags(unittest.TestCase):
                 self.assertEqual(cm.exception.code, 2, argv)
 
 
+class TestPrebuiltDetector(unittest.TestCase):
+    """S14B: prebuilt mode accepts detector 'cusum' or 'absence' (one per store); T8-T9."""
+
+    @staticmethod
+    def rows(*detectors):
+        out = []
+        for i, r in enumerate(WROWS):
+            claim = dict(json.loads(r["claim"]), detector=detectors[i % len(detectors)])
+            out.append(dict(r, claim=json.dumps(claim)))
+        return out
+
+    @staticmethod
+    def prebuilt(t, rows):
+        d = make_window_phase_a(Path(t), wtruth(WWIN))
+        st = JsonlStore(d / "store-x")
+        st.insert("decisions", rows)
+        st.close()
+        (d / "store-x" / "decisions.jsonl").touch()
+        return d
+
+    @staticmethod
+    def args():
+        return dict(sp=span(t0={"0": WF, "1": WF}, first=WF, end=WF + 300))
+
+    def run_doc(self, d, extra=()):
+        code, _, out = run_main(d, FakeRerun(WROWS), extra=("--truth-kind", "blocked", "--store-suffix", "x", *extra),
+                                **self.args())
+        self.assertEqual(code, 0)
+        return json.loads(Path(out).read_text())
+
+    def test_t8_absence_store_accepted_and_recorded_cusum_unchanged(self):
+        # inject: leave 'cusum' as the only accepted detector, drop the top-level key, or write it for cusum too
+        with tempfile.TemporaryDirectory() as t:
+            doc = self.run_doc(self.prebuilt(t, self.rows("absence")))
+            self.assertEqual(doc["detector"], "absence")
+            self.assertEqual(doc["meta"]["store_mode"], {str(Path(t)): "prebuilt"})
+        with tempfile.TemporaryDirectory() as t:
+            doc = self.run_doc(self.prebuilt(t, self.rows("cusum")))
+            self.assertNotIn("detector", doc)  # CUSUM outputs keep their bytes
+            self.assertEqual(list(doc), ["schema_version", "meta", "by_k"])
+
+    def test_t9_mixed_or_unknown_detectors_raise(self):
+        # inject: check only the first row, or accept any detector string
+        for detectors in (("cusum", "absence"), ("absence", "cusum"), ("absence", "map")):
+            with tempfile.TemporaryDirectory() as t:
+                d = self.prebuilt(t, self.rows(*detectors))
+                with self.assertRaises(ValueError, msg=detectors):
+                    run_main(d, FakeRerun(WROWS), extra=("--truth-kind", "blocked", "--store-suffix", "x"), **self.args())
+
+    def test_absence_against_a_rerun_reference_raises(self):
+        # inject: drop the prebuilt-on-both-sides check in resolve_detector (a rerun reference is a costmap, not a detector)
+        z = ({"0": WF, "1": WF}, WF, WF + 300)
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "m").mkdir()
+            (Path(t) / "r").mkdir()
+            m = self.prebuilt(Path(t) / "m", self.rows("absence"))
+            r = Path(t) / "r"
+            make_window_phase_a(r, wtruth({"0": [], "1": []}), runs=(REF,))  # no store-x: goes through FakeRerun
+            argv = ("--truth-kind", "blocked", "--store-suffix", "x", "--sweep-k", "2", "--reference", str(r))
+            with self.assertRaisesRegex(ValueError, "prebuilt store on both sides"):
+                run_main(m, FakeRerun(WROWS), extra=argv, sp=dspan({m: z, r: z}))
+
+    def test_reference_detector_must_match_and_empty_reference_adopts(self):
+        # inject: skip the measured/reference comparison, or let an empty reference reset the detector to cusum
+        z = ({"0": WF, "1": WF}, WF, WF + 300)
+        for ref_detector, expect in (("cusum", ValueError), ("absence", None), (None, None)):
+            with tempfile.TemporaryDirectory() as t:
+                (Path(t) / "m").mkdir()
+                (Path(t) / "r").mkdir()
+                m = self.prebuilt(Path(t) / "m", self.rows("absence"))
+                r = Path(t) / "r"
+                make_window_phase_a(r, wtruth({"0": [], "1": []}), runs=(REF,))
+                st = JsonlStore(r / "store-x")
+                if ref_detector:
+                    row = refrow("0", "a", 20, 1)
+                    row = dict(row, claim=json.dumps(dict(json.loads(row["claim"]), detector=ref_detector)))
+                    st.insert("decisions", [row])
+                st.close()
+                (r / "store-x" / "decisions.jsonl").touch()
+                argv = ("--truth-kind", "blocked", "--store-suffix", "x", "--sweep-k", "2", "--reference", str(r))
+                sp = dict(sp=dspan({m: z, r: z}))
+                if expect:
+                    with self.assertRaises(expect, msg=ref_detector):
+                        run_main(m, FakeRerun(WROWS), extra=argv, **sp)
+                else:
+                    code, _, out = run_main(m, FakeRerun(WROWS), extra=argv, **sp)
+                    self.assertEqual(json.loads(Path(out).read_text())["detector"], "absence")
+
+
 class TestIsolation(unittest.TestCase):
     def hotspot_tests(self):
         return importlib.import_module("fleet.tests.test_fleet_hotspot")
