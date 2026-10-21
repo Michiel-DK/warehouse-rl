@@ -1336,7 +1336,11 @@ def station_aware():
     for t in ("s10-none", "s10c-blind"):
         orel, nrel = f"results/fleet/hotspot_{t}.json", f"results/fleet/hotspot_{t}-st.json"
         ol, nl = load(orel)["lesson_persist_chance"], load(nrel)["lesson_persist_chance"]
-        row("lesson_persist hot_cell: held / graded, lift over chance", t,
+        assert load(_st(f"results/fleet/baselines_{t}.json"))["baselines"]["lesson_persist"] == dict(
+            load(f"results/fleet/baselines_{t}.json")["baselines"]["lesson_persist"],
+            n_hot_robot_excluded=load(_st(f"results/fleet/baselines_{t}.json"))["baselines"]["lesson_persist"][
+                "n_hot_robot_excluded"]), t  # the hot_cell lessons of (j) are unchanged
+        row("lesson_persist, hot_cell and hot_robot lessons as in (f): held / graded, lift over chance", t,
             f"{ol['observed_ok']} / {ol['n_lessons']}, lift {ol['lift']:.2f}",
             f"{nl['observed_ok']} / {nl['n_lessons']}, lift {nl['lift']:.2f}", f"lift {nl['lift'] - ol['lift']:+.2f}",
             [orel, nrel])
@@ -1436,8 +1440,10 @@ def station_aware():
           "does not exist (sticky). The sticky baselines files differ in `params.horizon_s` (3600 old, 1245 new); "
           "the asserted blocks are equal anyway. s10-breakdown has no station-unaware S10D file and s8b no "
           "station-unaware blocking run, so those rows have no old value. The ratio in the blocking rows is the run's "
-          "rate over the s10-none rate under the same rule. MoRoOp unlabelled runs on a station cell are counted from "
-          "`label.false_alarms[].on_station_cell`.")
+          "rate over the s10-none rate under the same rule. The lesson_persist rows pool hot_cell and hot_robot lessons, as "
+          "(f) does (`lesson_persist_chance`); the hot_cell-only block of (j) (`baselines.lesson_persist`) is equal "
+          "under both rules except `n_hot_robot_excluded` (asserted). MoRoOp unlabelled runs on a station cell are "
+          "counted from `label.false_alarms[].on_station_cell`.")
 
 
 def main():
