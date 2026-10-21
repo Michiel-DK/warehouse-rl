@@ -23,6 +23,21 @@ run's cell is the cell of the run's FIRST stopped message (the same definition i
 moves off the station and stops again starts a new run, judged on its own cell. `at_station(x, y, stations, radius)` is
 the one predicate (Manhattan distance <= radius to any station goal cell; False when stations is None). With
 stations=None nothing here changes: every output is byte-identical to the detector without this option.
+
+SERVICING BOUND (S14A, only with `stations` AND `servicing_max_s=T`; default None = everything above, byte-identical): a
+station stop that lasts far longer than a normal dwell is a stop, not service. The first still-stopped, non-faulted
+observation of a SERVICING run with ts - run start >= T converts the run: ONE stuck episode opens at that observation
+(episode_open, t_entry = that ts), start = the run's stop time, cause "station_overrun", blocker None, servicing_s = T,
+and the state is STUCK for the rest of the run. The episode duration is the whole stop (end message ts - stop time), as
+for every episode. "The stop lasted more than T" and "episode_open at the first observation >= stop + T" agree because the
+observation at stop + T is itself still stopped: a stop whose ending message (the robot driving again, or another order)
+is at exactly stop + T opens nothing. If T < stuck_after the conversion happens at the first SERVICING observation
+(stuck_after). servicing_runs still counts the run; station_overruns counts the conversions. A faulted message before T
+opens faulted_self as above, that episode stays the run's only one (no conversion; when the fault clears the run is
+SERVICING again). A faulted message after the conversion makes the state FAULTED and leaves the open station_overrun
+episode as it is (the cause is decided once, as for every open episode); when the fault clears the state is STUCK again.
+With the bound None no key is added to any event: servicing_s exists only on overrun episodes. CAUSE_LABELS maps each
+cause key to the client-facing text; the ingest and export layers attach it, never this module's events.
 Every event also has "zone", "robot", and a "decided_by" = (serial, ts) naming the message that triggered it.
 """
 from .parse import iso
@@ -32,7 +47,15 @@ DEFAULT_STUCK_AFTER = 30
 
 FAULTED, IDLE, MOVING, STUCK, STOPPED_WITH_ORDER, RECOVERED, SERVICING = (
     "FAULTED", "IDLE", "MOVING", "STUCK", "STOPPED_WITH_ORDER", "RECOVERED", "SERVICING")
-CAUSES = ("faulted_self", "blocked_by_faulted", "blocked_by_stuck", "traffic", "unknown")
+CAUSES = ("faulted_self", "blocked_by_faulted", "blocked_by_stuck", "traffic", "unknown", "station_overrun")
+CAUSE_LABELS = {
+    "faulted_self": "Robot fault",
+    "blocked_by_faulted": "Blocked by a faulted robot",
+    "blocked_by_stuck": "Blocked by a stuck robot",
+    "traffic": "Traffic wait",
+    "unknown": "Stopped, cause not identified",
+    "station_overrun": "Station stop over time limit",
+}
 RESOLUTIONS = ("moved", "order_dropped", "fault_cleared", "unresolved")
 
 
@@ -59,6 +82,15 @@ def _near(a, b):
     return abs(a.x - b.x) + abs(a.y - b.y) <= 1
 
 
+def stations_of(stations, zone):
+    """The station goal cells of one zone: `stations` is a set (every zone), a mapping zone -> set (key "*" = every
+    other zone) or None."""
+    if stations is None or not hasattr(stations, "get"):
+        return stations
+    got = stations.get(zone)
+    return got if got is not None else stations.get("*")
+
+
 def at_station(x, y, stations, radius=0):
     """True iff (x, y) is within Manhattan distance <= radius of a station goal cell. False when stations is None/empty."""
     if not stations:
@@ -67,7 +99,8 @@ def at_station(x, y, stations, radius=0):
 
 
 class Detector:
-    def __init__(self, stuck_after=DEFAULT_STUCK_AFTER, resumed=False, stations=None, station_radius=0):
+    def __init__(self, stuck_after=DEFAULT_STUCK_AFTER, resumed=False, stations=None, station_radius=0,
+                 servicing_max_s=None):
         """resumed=True: this detector starts mid-stream at a checkpoint. A stopped run that begins at a robot's first
         message seen here may have started before the checkpoint; episodes from such a run carry left_censored=True
         (their start and duration are lower bounds).
@@ -78,20 +111,19 @@ class Detector:
         (cause faulted_self, start = run start) at the first faulted message once the run is >= stuck_after old, as with
         stations=None. A run that was servicing and then faulted stays counted in servicing_runs (it was counted when it
         became SERVICING); if the fault clears while still stopped on the station the state returns to SERVICING and the
-        open episode stays open until the run ends."""
+        open episode stays open until the run ends.
+        servicing_max_s: S14A, see the module docstring (None = no bound; has an effect only with stations)."""
         self.stuck_after = stuck_after
         self.resumed = resumed
         self.stations = stations
         self.station_radius = station_radius
+        self.servicing_max_s = servicing_max_s
         self.servicing_runs = 0
+        self.station_overruns = 0
         self._zones = {}
 
     def _stations_of(self, zone):
-        st = self.stations
-        if st is None or not hasattr(st, "get"):
-            return st
-        got = st.get(zone)
-        return got if got is not None else st.get("*")
+        return stations_of(self.stations, zone)
 
     # ------------------------------------------------------------------ input
     def feed(self, msg):
@@ -152,7 +184,10 @@ class Detector:
             if opened is not None:
                 entering.append((r, m, opened))
         for r, m, ep in entering:
-            cause, blocker, blocker_faulted_s = self._cause(z, m, batch, states)
+            if "servicing_s" in ep:  # S14A: a converted station stop, its cause is fixed
+                cause, blocker, blocker_faulted_s = "station_overrun", None, None
+            else:
+                cause, blocker, blocker_faulted_s = self._cause(z, m, batch, states)
             ep.update(cause=cause, blocker=blocker, blocker_faulted_s=blocker_faulted_s)
             events.append(self._row("episode_open", zone, m.serial, ep, (m.serial, m.ts)))
         return events
@@ -187,6 +222,13 @@ class Detector:
         if servicing and not run.get("counted"):
             run["counted"] = True
             self.servicing_runs += 1
+        overrun = False
+        if servicing and self.servicing_max_s is not None and not run.get("overrun") and r.episode is None \
+                and m.ts - run["since"] >= self.servicing_max_s:
+            run["overrun"] = overrun = True
+            self.station_overruns += 1
+        if run is not None and run.get("overrun"):
+            servicing = False  # converted: STUCK for the rest of the run (a fault in between shows as FAULTED)
         if recovered:
             state = RECOVERED
         elif m.faulted:
@@ -209,6 +251,8 @@ class Detector:
                                       cell=list(run["cell"]), cause=None, blocker=None, blocker_faulted_s=None,
                                       end=None, duration_s=None, resolution="open", avoidable=False,
                                       avoidable_s=None, left_censored=run["censored"])
+            if overrun:
+                opened["servicing_s"] = self.servicing_max_s
         return state, closed, opened
 
     def _cause(self, z, m, batch, states):

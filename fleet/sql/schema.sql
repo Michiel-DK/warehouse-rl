@@ -133,12 +133,18 @@ CREATE TABLE IF NOT EXISTS stuck_episodes
     avoidable Bool,
     avoidable_s Nullable(Float64),
     left_censored Bool,
+    cause_label Nullable(String),
     schema_version UInt8 DEFAULT 1,
     _ver UInt64,
     _first UInt64
 )
 ENGINE = ReplacingMergeTree(_ver)
 ORDER BY (run, episode_id);
+
+-- S14A: cause_label (client text of cause) is on every episode row. ensure_schema runs every statement, so a stack
+-- created before this column gets it here. (servicing_s, written only on station_overrun episodes of a --servicing-max-s
+-- run, is not in the DDL: that flag needs --stations, which has no ClickHouse columns either, see servicing_runs.)
+ALTER TABLE stuck_episodes ADD COLUMN IF NOT EXISTS cause_label Nullable(String) AFTER left_censored;
 
 CREATE TABLE IF NOT EXISTS ingest_checkpoints
 (
