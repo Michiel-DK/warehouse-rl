@@ -2,10 +2,12 @@
 
 Scope: nineteen vendors, nine capabilities each, in three passes: two on 2026-10-18 (eight vendors, then AutoStore,
 Symbotic, Körber/Infios, Zebra/Fetch, 6 River Systems and GreyOrange) and one on 2026-10-22 (Amazon Robotics, Hai
-Robotics, Brightpick, Vecna Robotics, Seegrid). WebFetch/WebSearch only (no browser, no
+Robotics, Brightpick, Vecna Robotics, Seegrid). A fourth pass on 2026-10-22 scored three more capabilities
+(per-robot time budget, station-aware stall filter, blocking metric per shift) on the three readable doc trees only
+(Formant, InOrbit, OTTO). WebFetch/WebSearch only (no browser, no
 logins), at most 12 fetches per vendor. The search logs (every URL fetched, with its result, and the count per vendor)
 are in `laptop-scheduler/reports/wr-dev-competition-sweep.md`, `wr-dev-competition-sweep-2.md` and
-`wr-dev-competition-sweep-3.md`, not here. Rules:
+`wr-dev-competition-sweep-3.md` (pass 3) and `wr-dev-competition-sweep-4.md` (pass 4), not here. Rules:
 `~/.claude/skills/outward-claim-discipline`.
 
 ## How to read a cell
@@ -66,7 +68,32 @@ docs (A), `?` = UNTESTED. Cells verified@2026-10-18 (first fourteen rows) or ver
 | Vecna Robotics (Pivotal) | portal + partner login | B | ? | ? | ? | ? | ? | ? | B | ? |
 | Seegrid (Fleet Central, Supervisor) | help centre unreachable; LMS login | ? | ? | ? | ? | ? | ? | ? | ? | ? |
 
-## Per vendor
+## The three page capabilities (pass 4, 2026-10-22)
+
+The nine above were written on 18 Oct around the analyser. The gurren page now leads with three other figures, so
+they got their own columns, on the three vendors whose doc trees can be read:
+
+10. **Per-robot time budget**: each robot's shift split into states by time share (driving, service at a station,
+    waiting or blocked, idle, no data), per robot and per shift or hour. A fleet-level utilisation figure is a weaker
+    form and is recorded as such.
+11. **Station-aware stall filter**: a stuck report or alert that excludes stops at stations, pick points, charging or
+    loading positions, by zone, location type or a configurable rule. A generic "stopped for N seconds" alert does not
+    count.
+12. **Blocking metric per shift**: a reported number for how much robots blocked or waited behind each other per
+    period. Live traffic views and intersection managers do not count.
+
+| vendor | 10 time budget | 11 station-aware stall filter | 12 blocking metric |
+|---|---|---|---|
+| Formant | n, weaker form: "uptime by fleet location" | n, closest: heatmap "repeatedly stop, get stuck, or dwell" | n |
+| InOrbit | n, weaker forms: per-robot state timeline (A), "fleet utilization" (B) | **A as a configurable rule**: a stall status gated on mission state, and zone, rectangle and dock predicates in the same expression language; no documented "exclude stations" example | n, live `isZoneBlocked` only |
+| OTTO Motors | n, weaker form: an unnamed utilisation hint in Fleet Analytics | n, exceptions feed with no stuck alert at all | n, congestion inferred from task-duration variation |
+
+`n` = not found in docs (A), verified@2026-10-22. Every borderline call went toward presence. What this says: the
+per-robot time split and the blocking number are not documented by any readable vendor, and the only utilisation on
+offer is fleet level. The station-aware filter is buildable in InOrbit by a customer who writes the expression, which
+is scored as present; nobody ships it as a default. The sixteen walled vendors are UNTESTED on all three.
+
+## Per vendor (nine capabilities, passes 1 to 3)
 
 ### Formant
 Surfaces read: footer-linked docs tree https://docs.formant.io, searched by title through its full index
@@ -480,6 +507,87 @@ Direction test: two borderline calls, both leaning toward presence (against us):
 first-party press release describes hand-drawn "Caution Tape" route blocks, and log upload, where VDA 5050 mixed-vendor
 orchestration implies other vendors' vehicle data enters Fleet Central live. The live "Map and status views" is a
 position map, not a stall heatmap, kept UNTESTED rather than scored down.
+
+## Per vendor, pass 4 (three page capabilities)
+
+### Formant (pass 4)
+Surfaces read: the index https://docs.formant.io/llms.txt (about 389 entries, 24 sections) in full, searched by title
+for utilization, time budget, dwell, idle, stall, stuck, stopped, blocked, congestion, wait, zone, station, charging,
+dock, KPI: no title matches; matches only for state/status, analytics, report, heatmap, event, incident. Eleven doc
+pages fetched in full (WebFetch returned excerpts and keyword checks; quotes are the fragments it returned verbatim):
+Analytics overview, Custom SQL queries, Heatmap overlay for the Map module, Heatmap module, Incident management,
+Fleet observability, Events and notifications, Create an event and configure notifications, Device states FAQ, Pull
+reports FAQ. https://docs.formant.io/changelog returned 404 and no changelog title exists in the index, so the
+changelog was not read. 12 fetches (one 404), 2 searches.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Per-robot time budget | not found in docs (A), weaker form present: fleet-level uptime, verified@2026-10-22 | https://docs.formant.io/docs/incident-management.md, https://docs.formant.io/docs/analytics.md, https://docs.formant.io/docs/custom-sql-queries-for-analytics.md | Incident management: Analytics can calculate "uptime by fleet location" and "track time to resolution of incidents". Analytics overview lists "Line graph," "Bar graph," "Table," "Pie chart," "Data summary," "Scatter plot," and "JSON", data "binned by your date granularity, and then aggregating functions applied to each bin"; utilization, state, time spent, idle, per robot, per shift, per hour: none on the page. Custom SQL exposes `query_numeric` (`time`, `value`, `device_id`, `name`) with per-day examples only. Device states FAQ lists lifecycle states (Created, Provisioned, Reprovisioning, Deleted), not activity. A search snippet of the fleet-management docs page says "generate high-level reports of fleet uptime, incident rate": fleet-level uptime, the weaker form |
+| Station-aware stall filter | not found in docs (A) verified@2026-10-22 | https://docs.formant.io/docs/getting-started-map-heatmap-overlay.md, https://docs.formant.io/docs/getting-started-create-an-event-and-configure-notifications.md, https://docs.formant.io/docs/heatmap-module.md | the heatmap overlay is the only stuck-related surface: spots where robots "repeatedly stop, get stuck, or dwell across a site", a "stop/dwell indicator" from location density; stalled, idle, zone, station, charging, dock, exclusion, filter: not mentioned. Event trigger types are Datapoint (Data presence, Threshold, Regular expression, Bit matching, Numeric set, Battery, JSON/jq stateful), Device-online, Device-offline, Custom; no zone, location, station, dock, stuck, stopped, duration or geofence trigger. Not even a generic "stopped for N seconds" alert is documented; a stall alert would be a customer-built trigger on the customer's own stream, with no location-type exclusion |
+| Blocking / congestion metric per shift | not found in docs (A) verified@2026-10-22 | https://docs.formant.io/docs/analytics.md, https://docs.formant.io/docs/fleet-observability.md, https://docs.formant.io/docs/faq-pull-reports-from-formant.md | blocked, wait, congestion: none on the analytics page; fleet observability names no utilization, idle, stuck, blocked, wait or congestion; the pull-reports FAQ offers only event export to Google Sheets or `query_events` via the Cloud SDK. A formant.io search for "blocked" hit only network ports |
+
+Direction test: time budget leans toward presence only in the weaker fleet-level form ("uptime by fleet location"),
+recorded as such; the Custom SQL surface could compute a time budget from customer streams but no such query is
+documented. The stall filter is the borderline call: the heatmap overlay names "get stuck" as its use case, so an
+adversary could cite it as a stuck surface; it is a density proxy with no station or zone exclusion and no stall
+definition, so it stays not found with the heatmap recorded as the closest surface. The stateful JSON/jq trigger
+could encode "stuck and not at a station" if the robot publishes its own location state, but that is a customer-built
+rule, not a documented capability. Congestion has no borderline surface.
+
+### InOrbit (pass 4)
+Surfaces read: https://www.inorbit.ai/docs (136,065 characters) in full, the first window three times with
+different prompts (general; status, incident, zone and analytics keywords; headings) and the second once;
+https://developer.inorbit.ai/docs (198,317 characters) in full, each window three times (general; StatusDefinition,
+IncidentDefinition, KPIDefinition, stateTransitions; Advanced Incidents verbatim; Expressions Language, Traffic Zone
+Types, KPI fields; operators, charging-zone example, incident KPI fields). Two first-party marketing pages (/product,
+/intralogistics) for rank-B checks. 11 fetches, 2 searches (inorbit.ai domains). Caveat: WebFetch answers come from a
+summariser over the fetched text with a short quote cap, so quotes are fragments as returned, not raw page reads;
+three targeted passes per window were used to reduce dropped content.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Per-robot time budget | not found in docs (A) for a per-robot time-share split by state; weaker forms: yes (A) per-robot state timeline, no percentages; yes (B) marketing "fleet utilization", no metric defined. verified@2026-10-22 | https://developer.inorbit.ai/docs (Dashboards, robot widget `stateTransitions`; KPI Definitions), https://www.inorbit.ai/docs (Modes), https://www.inorbit.ai/product | timeline, not a split: `stateTransitions` "displays a timeline of several data sources; with colored bars representing how long each data source stays in a given value". Modes: "Mode has some defaults: idle, charging, on mission, and more"; "Each robot can be in one and only one mode at any given time." KPIs cannot aggregate time in state: `objectType` "The possible values are `mission` and `incident`", aggregations SUM, AVG, MIN, MAX, COUNT, COUNT_DISTINCT over `data.duration`, `startTime`, `endTime`. Mission KPIs: "Average mission duration (hours:minutes:seconds)", "Mission frequency (e.g., per day per robot)". "utilization", "idle time", "uptime", "availability", "time in": nothing in either doc page except "high CPU utilization" in a script example. Marketing: "Optimize robot fleet utilization and meet SLAs, monitor and resolve problems in real time." |
+| Station-aware stall filter | yes (A) as a configurable rule, borderline, scored toward presence. No out-of-the-box "exclude stations" toggle; the docs show a stall detector gated on mission state and the zone and dock primitives needed to exclude service stops, in the same expression language. verified@2026-10-22 | https://developer.inorbit.ai/docs (Status Definitions; Advanced Incidents "Navigation Problems" and "Faulty Dock"; Expressions Language; Traffic Zone Types), https://www.inorbit.ai/docs (Incident management, "for sec.") | documented stall detector `unableToNavigate`: expression "(getValue('dsMission') in ['DELIVERY','RETURN-DOCK']) ? visitedAreaDiagonal(60) : null", rule BELOW 2 "sustained for 600 seconds"; `visitedAreaDiagonal(<seconds>)`: "The diagonal length of the smallest bounding box containing all of the robot positions during the last N seconds." A status takes "an arbitrary expression, using multiple data sources or robot tags". Zone and dock predicates in the same language: `isRobotInZone(<zoneId>, [<locationId>])` "Determines if the _current_ robot ... is currently inside the zone `zoneId`."; `inRectangleArea(x0, y0, x1, y1, frameId)`; dock state "getValue('dsDockedStatus')==1 and not getValue('dsCharging')" (Faulty Dock example); operators "`not`, `and`, `or`". Zone types are user-defined, example id `charging` labelled "Charging Zone". Limits: incident definitions carry no robot, zone or location filter; zone rules "Currently, only `"nogo"` and `"soz"` (for Single-Occupancy Zone) rules are implemented out of the box." No documented example excludes a station or charger from a stall status; what is documented is the mission-state gate plus the primitives |
+| Blocking / congestion metric per shift | not found in docs (A) verified@2026-10-22 | https://developer.inorbit.ai/docs (Traffic Management, Traffic Zone Types, Traffic Management Functions, KPI Definitions), https://www.inorbit.ai/docs (Mission KPIs), https://www.inorbit.ai/intralogistics | live state and live traffic control only: "Robots in zones of this type count as stopped when they move less than 0.3m in 60s"; `isZoneBlocked(<zoneId>, [<locationId>])` "Tells if anything currently in a given zone has stopped moving, which usually means the way through it is not clear."; "The `soz` rule lets one robot at a time into the zone polygon. The robot inside is never paused."; "Robots that reach the zone's buffer area are paused there". No blocked-time, wait-behind-robot time or congestion index over time; the KPI section lists no time-in-state metric and both KPI examples use `objectType: mission`. Marketing: "minimizing congestion and improving throughput." |
+
+Direction test: the stall filter is the borderline call and leans toward presence: the docs never show "exclude
+charging or pick stations from the stuck alert", but they show a stuck status gated on mission state and the zone,
+rectangle and dock predicates with `not/and/or` in the same expression, which is a configurable rule under the
+brief's definition, so scored yes (A). The time budget leans against us only in the weak form: a per-robot state
+timeline is documented and a reader could eyeball idle, charging and mission spans per robot, but no time-share
+number, per-shift split or KPI over robot state exists. Congestion is scored absent; the one way to argue presence
+is a custom incident KPI (SUM of `data.duration` over a user-built "blocked" status) producing stuck time per day,
+but no such example is documented, incident objects have no documented cause field, and nothing attributes a stop to
+another robot.
+
+### OTTO Motors (pass 4)
+Surfaces read: public tech docs at docs.ottomotors.com only (help.ottomotors.com is a login, not counted). Each page
+returns about 212-222k characters of which about 200k is the navigation tree, so a body costs a fetch at offset
+200000. Read in full (body): "Reading OTTO Fleet Analytics", "Concepts: OTTO Fleet Analytics" (Work history monitor,
+Common uses, Custom analytics), "Viewing statistics in OTTO Fleet Manager", "New in this release" (2.36), "Concepts:
+Optimizing AMR fleet performance" (sections "Identify opportunities to optimize with Fleet Analytics" and "Reduce
+congestion with better traffic controls, intersection design"). Read in part: "Exceptions" (intro paragraphs; the
+fetcher found no further body). Searched by title: the full left-nav tree (Monitoring the system, Fleet Analytics,
+Exceptions and its five subpages, Zones, Traffic controls, Optimizing AMR fleet performance, Docking, Workstations,
+Robot statuses and states). Not read: "Robot statuses and states", "Viewing robot statistics in OTTO App", "Filtering
+exceptions - FM", "Assumed cost zone". 17 fetches (12 plus a 5-fetch extension), 3 searches; the two site: searches
+returned zero docs.ottomotors.com hits, the third only marketing.
+
+| capability | cell | source | evidence |
+|---|---|---|---|
+| Per-robot time budget | not found in docs (A); borderline weaker form present, an unnamed utilisation figure. verified@2026-10-22 | https://docs.ottomotors.com/en/30495-117801-concepts--fleet-analytics.html, https://docs.ottomotors.com/en/30495-31048-viewing-fm-statistics.html | named dashboards are mission and task level: "Mission Summary, Task Place Breakdown, Mission/Task State Summary, and FAILED Task Robot Breakdown"; "Task failures can be filtered by robot and root cause"; "the only available dashboard configurations are time period filters". Work history monitor: "aggregate missions (successful, aborted) and average run times in seconds". FM statistics: Total Jobs, Successful Jobs, Aborted Jobs, Average Run Time; "OTTO Fleet Manager tracks job history for the previous 30 days." The only utilisation wording is a diagnostic hint: "Utilization will appear low where missions remain queued due to external system delays". No idle, charging, waiting, time-in-state or per-shift wording on any page read. Release 2.36 names "AMR utilization rate" only as a goal of the localization feature. Absence covers public tech docs only |
+| Station-aware stall filter | not found in docs (A) verified@2026-10-22 | https://docs.ottomotors.com/en/30495-31050-exceptions.html, https://docs.ottomotors.com/en/30495-126736-concepts--optimizing-your-fleet.html | Exceptions: "The Exceptions menu displays relevant robot alerts, OTTO App, and OTTO Fleet Manager."; "Nuisance messages—or messages unhelpful to diagnosing exceptions and troubleshooting—are automatically excluded." No stuck, stalled, stopped or blocked exception named, no station, dock, charging or zone exclusion, no configurable rule; not even a generic "stopped for N seconds" alert. The optimizing page treats stops as patterns to find by hand in task durations, listing "Lengthy docking, undocking," "Waiting on endpoint readiness," and "Unnecessary stoppages" side by side, the opposite of a station-aware filter. No stuck or blocked title anywhere in the nav. "Filtering exceptions - FM" not read. Absence covers public tech docs only |
+| Blocking / congestion metric per shift | not found in docs (A); closest is a duration-variation proxy. verified@2026-10-22 | https://docs.ottomotors.com/en/30495-126736-concepts--optimizing-your-fleet.html, https://docs.ottomotors.com/en/30495-117801-concepts--fleet-analytics.html | congestion is inferred from task durations, not reported: "finding task or workflow durations with a lot of variation", with "Intermittent congestion" as a table entry; "blockages along robot paths may cause longer MOVE or TRANSPORT task durations."; "Identify external interactions that are creating slowdowns or failures (other traffic, signal delays, etc.)". The congestion section is traffic-control design: "Robots crowd areas when blocked", "all other robots must wait in FIFO order for access.", "Sub-optimal traffic design can result in intermittent congestion or delays every time robots". Neither section names a dashboard or metric for blocked time, waiting time or a congestion figure. Absence covers public tech docs only |
+
+Direction test: the time budget is the one borderline call: "Utilization will appear low where missions remain
+queued" implies some utilisation figure exists in Fleet Analytics, so it leans toward OTTO having a fleet- or
+mission-level utilisation number (weaker form, unnamed, scope unknown); nothing read shows a per-robot split by state.
+Congestion leans absence: the docs route congestion diagnosis through task-duration variation and the traffic-control
+design guide, not a reported metric; the one gap is that chart definitions live behind an info icon in the Grafana UI
+("To view a description of the chart") and are not in the docs, so a chart named for waiting could exist unseen. The
+stall filter is a clean absence on the pages read; the only unread Exceptions subpage, "Filtering exceptions - FM", is
+by title a UI filter, not a station rule. The 2022 press-release "snapshots" playback (marketing, from search) is
+diagnostics replay, none of the three.
 
 ## What changed against the README's 13 Oct note
 
