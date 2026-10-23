@@ -35,6 +35,13 @@ def _share(text):
     return v
 
 
+def min_accepted_for(source, once, flag):
+    """The --min-accepted share in force: the flag when passed, else 0.5 for the file source without --once, else off."""
+    if flag is not None:
+        return flag
+    return 0.5 if source == "file" and not once else None
+
+
 def finish_line(ing, run, code, wall, min_accepted):
     """Print the summary line (its exit is the final code), then the contract lines when the run did not match."""
     code, lines = ing.contract_check(min_accepted, code)
@@ -106,7 +113,7 @@ def run_kafka(p, a):
     finally:
         consumer.close()
         st.close()
-    return finish_line(ing, run, code, time.monotonic() - t0, a.min_accepted)
+    return finish_line(ing, run, code, time.monotonic() - t0, min_accepted_for("kafka", a.once, a.min_accepted))
 
 
 def main(argv=None):
@@ -148,8 +155,7 @@ def main(argv=None):
     ingest.install_signal_handlers(ing)
     t0 = time.monotonic()
     code = ing.run_loop()
-    min_accepted = a.min_accepted if a.min_accepted is not None else (None if a.once else 0.5)
-    code = finish_line(ing, run, code, time.monotonic() - t0, min_accepted)
+    code = finish_line(ing, run, code, time.monotonic() - t0, min_accepted_for("file", a.once, a.min_accepted))
     st.close()
     return code
 

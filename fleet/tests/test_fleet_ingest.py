@@ -535,6 +535,29 @@ class TestS17aMinAccepted(unittest.TestCase):
         self.assertEqual(ing.contract_check(0.51, 0)[0], 2)
 
 
+class TestS17aDefault(unittest.TestCase):
+    def test_default_share_per_source_and_once(self):
+        # inject: make the default apply with --once or on kafka, or drop it on the file source
+        from ingest import min_accepted_for
+        self.assertEqual(min_accepted_for("file", False, None), 0.5)
+        self.assertIsNone(min_accepted_for("file", True, None))
+        self.assertIsNone(min_accepted_for("kafka", False, None))
+        self.assertIsNone(min_accepted_for("kafka", True, None))
+        for source, once in (("file", False), ("file", True), ("kafka", False)):
+            self.assertEqual(min_accepted_for(source, once, 0.8), 0.8)
+            self.assertEqual(min_accepted_for(source, once, 0.0), 0.0)
+
+    def test_file_source_without_once_on_a_matching_log_ends_with_exit_0_and_the_same_store(self):
+        # the default 0.5 is in force here (no --once); the fixture's emit_ledger.json says complete, so the run ends
+        with tempfile.TemporaryDirectory() as tmp:
+            r = subprocess.run([sys.executable, INGEST, "--glob", str(S17A_FIXTURE / "*.jsonl.gz"), "--run",
+                                "s17a-emit50", "--store", f"jsonl:{tmp}", "--poll", "0.1"],
+                               capture_output=True, text=True, timeout=120)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(len(r.stdout.splitlines()), 1)
+            self.assertEqual(store_content_hash(tmp), S17A_FIXTURE_HASH)
+
+
 class TestS17aFixtureIngest(unittest.TestCase):
     def ingest_hash(self, *extra):
         with tempfile.TemporaryDirectory() as tmp:
