@@ -435,6 +435,73 @@ class TestTruthColumn(unittest.TestCase):
         self.assertAlmostEqual(rec["truth_stuck_s_per_robot_hour"], (long_s + edge_s) / 2.5, places=12)
 
 
+class TestDecisiveValues(unittest.TestCase):
+    """Direct values on the decisive paths (refuter 4's survivors)."""
+
+    def test_spread_stats_median_p95_and_ratio_values(self):
+        # inject: median at the 40th percentile, p95 over the mean instead of the median
+        vals = [1.0, 2.0, 3.0, 4.0, 10.0]
+        srt = sorted(vals)
+        median = srt[len(srt) // 2]  # odd n
+        pos = 0.95 * (len(srt) - 1)  # numpy's default linear rule
+        lo = int(pos)
+        p95 = srt[lo] + (pos - lo) * (srt[lo + 1] - srt[lo])
+        st = ds.spread_stats(vals)
+        self.assertEqual(st["median"], median)
+        self.assertAlmostEqual(st["p95"], p95, places=12)
+        self.assertAlmostEqual(st["p95_over_median"], p95 / median, places=12)
+        self.assertNotAlmostEqual(p95 / median, p95 / (sum(vals) / len(vals)), places=3)
+        rec = ds.zone_statistics(jobs_of([(v, 1) for v in vals]))
+        self.assertEqual(rec["raw"]["median_s"], median)
+        self.assertAlmostEqual(ds.stat_value(rec, "p95_over_median"), p95 / median, places=12)
+
+    def test_gap_jobs_stay_in_the_statistics(self):
+        # inject: drop jobs with a gap > 60 s from the statistics
+        jobs = [dict(duration=d, dist=1, ended_to="idle", gap=True, start=0, end=d) for d in (10.0, 20.0, 30.0, 40.0, 50.0)]
+        rec = ds.zone_statistics(jobs)
+        self.assertEqual((rec["raw"]["n"], rec["raw"]["mean_s"]), (5, 30.0))
+        kept = [msg("Z0-01", 0, ""), msg("Z0-01", 5, "o1"), msg("Z0-01", 5 + ds.DEFAULT_MAX_GAP_S + 40, "o1"),
+                msg("Z0-01", 200, "")]
+        got, _ = ds.robot_jobs(kept)
+        self.assertEqual([(j["duration"], j["gap"]) for j in got], [(195, True)])
+
+    def test_spearman_uses_ranks_not_raw_values(self):
+        # inject: Pearson on the raw values
+        x, y = [1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 1000.0]
+        self.assertAlmostEqual(ds.spearman(x, y), 1.0, places=12)
+        import numpy as np
+        self.assertLess(float(np.corrcoef(x, y)[0, 1]), 0.99)
+
+    def test_partial_top3_overlap_and_a_constant_second_column(self):
+        # inject: overlap of a column with itself, top_k of the wrong column, constant check on the first column only
+        a = {"0": 5.0, "1": 4.0, "2": 3.0, "3": 2.0, "4": 1.0}
+        b = {"0": 5.0, "1": 1.0, "2": 4.0, "3": 3.0, "4": 2.0}
+        with mock.patch.object(ds, "kendall_p", lambda x, y: None):
+            out = ds.pair_agreement(a, b)
+            self.assertEqual((out["top3_overlap"], out["top3_fraction"], out["top3_chance"]), (2, 2 / 3, 9 / 5))
+            const = ds.pair_agreement(a, {z: 7.0 for z in a})
+        self.assertEqual((const["decided"], const["rho"], const["reason"]), (False, None, "constant_column"))
+
+    def test_commodity_is_checked_before_supports(self):
+        # 7 runs where both rules hold: 3 runs with rho(S,truth) >= rho(blocking,truth) (commodity's truth branch) and
+        # 4 where blocking beats both strictly with low medians vs blocking (supports). inject: test supports first
+        def run(s, b):
+            return {"p95_over_median|blocking": pr(0.1, 0.0), "mean_s|blocking": pr(0.1, 0.0),
+                    "p95_over_median|truth": pr(s), "mean_s|truth": pr(s), "blocking|truth": pr(b)}
+        per = {f"r{i}": run(0.9, 0.1) if i < 3 else run(0.2, 0.8) for i in range(7)}
+        v = ds.verdict(per)
+        self.assertTrue(v["both_median_rho_vs_blocking_below_0_4"])
+        self.assertEqual(v["runs_blocking_beats_both_on_truth"], 4)
+        self.assertEqual(v["verdict"], "commodity")
+
+    def test_zero_robot_hours_gives_a_null_truth_rate(self):
+        # inject: divide by zero robot_hours
+        with tempfile.TemporaryDirectory() as d:
+            path, *_ = TestTruthColumn().write_stream(d)
+            _, _, rec = ds.zone_task(dict(run="r", zone="0", files=[str(path)], pickers=[], blocked=1.0, robot_hours=0))
+        self.assertIsNone(rec["truth_stuck_s_per_robot_hour"])
+
+
 class TestSmoke(unittest.TestCase):
     def setUp(self):
         self.data = find_file("fleet", "data", "s10-none")
