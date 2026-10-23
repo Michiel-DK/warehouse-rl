@@ -215,6 +215,40 @@ class TestAgreement(unittest.TestCase):
         self.assertAlmostEqual(med["median_rho"], 1.0, places=12)
 
 
+class TestColumnWiring(unittest.TestCase):
+    """Every statistic name reads its own field: distinct values per field, so a miswired name returns a wrong one."""
+    RAW = dict(n=5, median_s=3.0, p95_s=6.0, mean_s=2.0, p95_over_median=1.5, buffer_index=4.0, cv=5.0)
+    NORM = dict(n=5, median=13.0, p95=16.0, mean=12.0, p95_over_median=11.5, buffer_index=14.0, cv=15.0)
+
+    def test_stat_value_reads_each_named_field(self):
+        # inject: point RAW_KEYS["mean_s"] at median_s, RAW_KEYS["p95_over_median"] at cv, NORM_KEYS["mean_norm"] at p95
+        rec = dict(raw=dict(self.RAW), normalised=dict(self.NORM))
+        want = {"p95_over_median": 1.5, "mean_s": 2.0, "buffer_index": 4.0, "cv": 5.0, "p95_over_median_norm": 11.5,
+                "mean_norm": 12.0, "buffer_index_norm": 14.0, "cv_norm": 15.0}
+        self.assertEqual(set(want), set(ds.STATS))
+        self.assertEqual({s: ds.stat_value(rec, s) for s in ds.STATS}, want)
+        self.assertEqual(set(ds.DECISIVE), {"p95_over_median", "mean_s"})
+
+    def test_mean_s_column_is_the_mean_job_duration(self):
+        durations = [10.0, 20.0, 30.0, 40.0, 100.0]
+        rec = ds.zone_statistics(jobs_of([(d, 1) for d in durations]))
+        self.assertEqual(ds.stat_value(rec, "mean_s"), sum(durations) / len(durations))
+
+    def test_run_agreement_ranks_the_mean_s_column(self):
+        # four zones: mean_s rises with blocking and falls with truth; median_s and the other fields run the other way
+        zones = {}
+        for i, z in enumerate("0123"):
+            raw = dict(self.RAW, mean_s=10.0 + i, median_s=10.0 - i, p95_over_median=1.0 + i, cv=9.0 - i)
+            zones[z] = dict(raw=raw, normalised=dict(self.NORM), blocked_s_per_robot_hour=100.0 + 7 * i,
+                            truth_stuck_s_per_robot_hour=50.0 - 3 * i)
+        out = ds.run_agreement(zones)
+        self.assertAlmostEqual(out["mean_s|blocking"]["rho"], 1.0, places=12)
+        self.assertAlmostEqual(out["mean_s|truth"]["rho"], -1.0, places=12)
+        self.assertAlmostEqual(out["p95_over_median|blocking"]["rho"], 1.0, places=12)
+        self.assertAlmostEqual(out["cv|blocking"]["rho"], -1.0, places=12)
+        self.assertAlmostEqual(out["blocking|truth"]["rho"], -1.0, places=12)
+
+
 def pr(rho=None, top3=None):
     return dict(rho=rho, top3_fraction=top3)
 
@@ -258,6 +292,44 @@ class TestVerdict(unittest.TestCase):
         # the truth branch would need rho(S,truth) >= rho(blocking,truth) in 3 runs: only 1 run has it
         v = ds.verdict(per)
         self.assertEqual((v["verdict"], v["runs_blocking_beats_both_on_truth"]), ("supports", 4))
+
+    def supports_run(self, strict, s_mean=None, b=None):
+        s, bb = (0.2, 0.8) if strict else (0.9, 0.1)
+        return {"p95_over_median|blocking": pr(0.1, 0.0), "mean_s|blocking": pr(0.3, 0.0),
+                "p95_over_median|truth": pr(s), "mean_s|truth": pr(s if s_mean is None else s_mean),
+                "blocking|truth": pr(bb if b is None else b)}
+
+    def test_supports_needs_a_strict_beat(self):
+        # inject: rho(blocking,truth) >= rho(S,truth) instead of > in the supports count
+        per = {f"r{i}": self.supports_run(i < 4) for i in range(5)}
+        self.assertEqual(ds.verdict(per)["verdict"], "supports")
+        per["r3"] = self.supports_run(True, b=0.2)  # blocking ties both statistics in one of the four runs
+        v = ds.verdict(per)
+        self.assertEqual((v["verdict"], v["runs_blocking_beats_both_on_truth"]), ("mixed", 3))
+
+    def test_supports_needs_blocking_to_beat_both_statistics(self):
+        # inject: any(...) instead of all(...) over the decisive statistics in the supports count
+        per = {f"r{i}": self.supports_run(i < 4) for i in range(5)}
+        for i in range(4):  # mean_s has no truth rho in the four runs: blocking beats p95/median only
+            per[f"r{i}"]["mean_s|truth"] = pr(None)
+        v = ds.verdict(per)
+        self.assertEqual((v["verdict"], v["runs_blocking_beats_both_on_truth"]), ("mixed", 0))
+
+    def test_supports_needs_both_medians_below_0_4(self):
+        # inject: check only the first decisive statistic, or <= 0.4 instead of < 0.4
+        per = {f"r{i}": self.supports_run(i < 4) for i in range(5)}
+        for r in per.values():
+            r["mean_s|blocking"] = pr(0.4, 0.0)
+        v = ds.verdict(per)
+        self.assertFalse(v["both_median_rho_vs_blocking_below_0_4"])
+        self.assertEqual(v["verdict"], "mixed")
+
+    def test_a_run_without_a_blocking_truth_rho_never_counts_as_a_beat(self):
+        # inject: drop the rho(blocking,truth) is-not-None guard of the supports count (None > x raises)
+        per = {f"r{i}": self.supports_run(i < 4) for i in range(5)}
+        per["r0"]["blocking|truth"] = pr(None)
+        v = ds.verdict(per)
+        self.assertEqual((v["verdict"], v["runs_blocking_beats_both_on_truth"]), ("mixed", 3))
 
     def test_mixed_when_blocking_beats_in_only_three_runs(self):
         def run(strict):
