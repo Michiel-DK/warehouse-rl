@@ -411,6 +411,162 @@ class ParserRuleTests(unittest.TestCase):
         self.assertFalse(run(bad, bad))
 
 
+def raw_meta_ev(t, kind, op, meta_text):
+    e = ev(t, kind, op)
+    e["meta_data"] = meta_text
+    return e
+
+
+class Round3ClassTests(unittest.TestCase):
+    """Re-verify round 3: auto-pause guards, first operation_started, state row at ts, near vs inside, ties."""
+
+    def test_auto_pause_guards(self):
+        # inject: skip non-dispatch rows when finding the previous event; auto-pause a resume; >= instead of ==;
+        # accept bool or float retry fields; require retry_count on a denial; let a non-dict meta through
+        events = [ev(0, "operation_started", "o"),
+                  denied(10, "a", 5), ev(11, "operation_started", "x"), ev(12, "operation_dispatcher_paused"),
+                  denied(20, "b", 5), ev(21, "operation_dispatcher_resumed"),
+                  denied(30, "c", 6), ev(31, "operation_dispatcher_paused"),
+                  ev(40, "operation_start_denied", "d", dict(retry_count=True, max_retries=True)),
+                  ev(41, "operation_dispatcher_paused"),
+                  ev(45, "operation_start_denied", "d2", dict(retry_count=5.0, max_retries=5.0)),
+                  ev(46, "operation_dispatcher_paused"),
+                  ev(50, "operation_start_denied", "e"),
+                  raw_meta_ev(60, "operation_start_denied", "f", "[5, 5]"), ev(61, "operation_dispatcher_paused"),
+                  denied(70, "g", 5), ev(71, "operation_dispatcher_paused")]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [])
+        got = [(e["ts_us"] // 1_000_000 - BASE, e["kind"].replace("operation_", ""), e["cls"], e["auto_pause"])
+               for e in res["events"] if not e["kind"].endswith("start_denied")]
+        self.assertEqual(got, [(12, "dispatcher_paused", "external call", False),
+                               (21, "dispatcher_resumed", "external call", False),
+                               (31, "dispatcher_paused", "external call", False),
+                               (41, "dispatcher_paused", "external call", False),
+                               (46, "dispatcher_paused", "external call", False),
+                               (61, "dispatcher_paused", "external call", False),
+                               (71, "dispatcher_paused", "dispatcher refused", True)])
+        denials = {e["ts_us"] // 1_000_000 - BASE: e["cls"] for e in res["events"] if e["kind"].endswith("start_denied")}
+        self.assertEqual(set(denials.values()), {"dispatcher refused"})
+        self.assertEqual(len(denials), 8)
+
+    def test_first_started_is_the_earliest_and_tie_is_not_before(self):
+        # inject: first operation_started = max, or compare against first_started - 1
+        events = [ev(100, "operation_started", "late"), ev(50, "operation_started", "early"),
+                  ev(49, "operation_dispatcher_resumed"), ev(50, "operation_dispatcher_resumed")]
+        events.append(dict(ev(50, "operation_dispatcher_resumed"), created_at=us(50) - 1))  # 1 us before the start
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [])
+        self.assertEqual([(e["ts_us"] - us(0), e["cls"]) for e in res["events"]],
+                         [(49_000_000, "shift start"), (49_999_999, "shift start"), (50_000_000, "external call")])
+        self.assertEqual(res["first_operation_started"], iso(50))
+
+    def test_state_row_at_ts_and_no_row_before(self):
+        # inject: bisect_left (a row exactly at ts is not "at or before"), or drop the no_row_before count
+        events = [ev(0, "operation_started", "o"), ev(5, "operation_dispatcher_paused"),
+                  ev(30, "operation_dispatcher_paused")]
+        cleaned = [state_row(1, 10), state_row(2, 20), state_row(3, 30, state="Paused")]
+        res = md.analyse_shift("s", tables(events, cleaned), [])
+        self.assertEqual([e["in_paused_or_non_autonomous"] for e in res["events"]], [None, True])
+        self.assertEqual(res["per_kind"]["operation_dispatcher_paused"],
+                         dict(count=2, overlap_episode=0, near_episode=0, in_paused_or_non_autonomous=1,
+                              no_row_before=1))
+
+    def test_inside_one_episode_and_near_another_is_overlap_only(self):
+        # inject: count near_episode for an event that is also inside an episode
+        events = [ev(0, "operation_started", "o"), ev(1090, "operation_dispatcher_paused"),
+                  ev(1095, "operation_failed", "o")]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [episode(1000, 100), episode(1150, 50)])
+        self.assertIsNotNone(res["events"][0]["near_before"])
+        for k in ("operation_dispatcher_paused", "operation_failed"):
+            self.assertEqual((res["per_kind"][k]["overlap_episode"], res["per_kind"][k]["near_episode"]), (1, 0))
+
+    def test_equal_distance_tie_goes_to_earlier_start(self):
+        # inject: reverse the tie order, or keep list order instead of start order
+        events = [ev(0, "operation_started", "o"), ev(1130, "operation_dispatcher_paused")]
+        eps = [episode(1010, 90, lst="episodes_ge_30s"), episode(1000, 100)]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), eps)
+        self.assertEqual(res["events"][0]["near_after"], dict(list="false_alarms", start=iso(1000), duration_s=100,
+                                                              delta_s=30.0))
+
+
+def collapse_fixture():
+    """Ids 1-6 in three same-second pairs (1, 3, 5 are collapse drops). The authors removed 1; 3 has unparseable
+    diagnostics (ours_only); 5 is kept by both (no set). Id 2 is authors-removed too, with velocity_y True."""
+    raw = []
+    for i in range(1, 7):
+        r = raw_row(i, ((i + 1) // 2) * 10, pos_x=float(i))
+        r["created_at"] += (i % 2 == 0) * 100
+        raw.append(r)
+    raw[2]["diagnostics"] = "not json"
+    raw[1]["velocity_y"] = True
+    cleaned = [dict(r) for r in raw if r["id"] not in (1, 2)]
+    return raw, cleaned
+
+
+class Round3CleaningTests(unittest.TestCase):
+    def test_collapse_column_per_set_and_no_set(self):
+        # inject: drop collapse ids from authors_only, or count no-set collapses without the reasons / cleaned tests
+        raw, cleaned = collapse_fixture()
+        c = md.clean_shift(raw, cleaned)
+        self.assertEqual(c["collapse_drops"], 3)
+        self.assertEqual((c["authors_only"]["ids"], c["authors_only"]["collapse_drops"]), (2, 1))
+        self.assertEqual((c["ours_only"]["ids"], c["ours_only"]["collapse_drops"]), (1, 1))
+        self.assertEqual((c["both_drop"]["ids"], c["collapse_drops_in_no_set"]), (0, 1))
+        self.assertNotIn("ranges", c["both_drop"])
+        self.assertNotIn("ranges", c["ours_only"])
+        self.assertEqual(c["authors_only"]["ranges"]["velocity_y"], dict(min=0.0, max=0.0, none_or_nonfinite=1))
+
+    def test_diagnostics_level_order(self):
+        # inject: reorder Ok < Warning < Error < Stale < unknown, or mislabel empty / unparseable diagnostics
+        def row(statuses):
+            return dict(diagnostics=statuses if isinstance(statuses, str) else json.dumps(dict(statuses=[
+                dict(name="/n", level=lv) for lv in statuses])))
+        cases = [(["Ok", "Warning"], "Warning"), (["Error", "Warning"], "Error"), (["Stale", "Error"], "Stale"),
+                 (["Stale", "Weird"], "Weird"), (["Ok"], "Ok"), ([], "none"), ("x", "unparseable")]
+        self.assertEqual([md.diag_max_level(row(st)) for st, _ in cases], [want for _, want in cases])
+
+
+class Round3PoolingTests(unittest.TestCase):
+    def two_shift(self, shifts=(1, 6)):
+        t0 = md.epoch_of(md.INTERVENTION_START) - BASE
+
+        def load(_raw, name):
+            if name == md.INTERVENTION_SHIFT:
+                evs = [ev(t0 - 500, "operation_started", "o"), ev(t0 - 400, "operation_dispatcher_paused"),
+                       ev(t0 - 300, "operation_dispatcher_resumed")]
+                raw = [raw_row(1, 10, pos_x=10.0), raw_row(2, 20, pos_x=9.0, diagnostics="bad")]
+                return tables(evs, [state_row(100, 0), raw[1]], raw)
+            evs = [ev(0, "operation_started", "o"), ev(10, "operation_dispatcher_resumed"),
+                   ev(20, "operation_dispatcher_resumed")]
+            raw = [raw_row(1, 10, pos_x=4.0), raw_row(2, 20, pos_x=5.0), raw_row(3, 30, diagnostics="bad")]
+            return tables(evs, [state_row(100, 0), raw[2]], raw)
+        return md.analyse(synthetic_label(), "LABELSHA", "raw", list(shifts), load, label_path="l.json")
+
+    def test_pooled_tables_across_shifts(self):
+        # inject: add_tables keeps the first shift, swap the pause_precedes counts, do not pool rule_drop_reasons or
+        # the authors_only ranges
+        r = self.two_shift()
+        p = r["pooled"]
+        self.assertEqual(p["per_kind"]["operation_dispatcher_resumed"]["count"], 3)
+        self.assertEqual(p["per_kind"]["operation_dispatcher_paused"]["count"], 1)
+        self.assertEqual(p["resumes_vs_pauses"], dict(resumes=3, pauses=1, resumes_with_pause_precedes=1,
+                                                      resumes_without_pause_precedes=2))
+        self.assertEqual(p["cleaning"]["rule_drop_reasons"], {"diagnostics_unparseable": 2})
+        self.assertEqual(p["cleaning"]["authors_only"]["ranges"]["pos_x"], dict(min=4.0, max=10.0,
+                                                                               none_or_nonfinite=0))
+        self.assertEqual((p["cleaning"]["authors_only"]["ids"], p["cleaning"]["both_drop"]["ids"]), (3, 0))
+
+    def test_scope_sha_and_sorted_keys(self):
+        # inject: force intervention_episode_in_scope, drop the label sha, or dump without sorted keys
+        r = self.two_shift()
+        self.assertTrue(r["intervention_episode_in_scope"])
+        self.assertFalse(self.two_shift(shifts=(1,))["intervention_episode_in_scope"])
+        self.assertEqual(r["label"], dict(path="l.json", sha256="LABELSHA"))
+        text = md.dump(r)
+        top = list(json.loads(text))
+        self.assertEqual(top, sorted(top))
+        inner = list(json.loads(text)["pooled"])
+        self.assertEqual(inner, sorted(inner))
+
+
 @unittest.skipUnless(HAVE_PYARROW and RAW_DIR.is_dir(), "needs pyarrow and the MoRoOp raw parquet (WR_MOROOP_RAW)")
 class SmokeTest(unittest.TestCase):
     def test_smoke_shift_1(self):
