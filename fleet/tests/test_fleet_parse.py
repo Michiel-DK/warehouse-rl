@@ -64,25 +64,25 @@ class TestParse(unittest.TestCase):
             (b"\n", "json"),
             (b"", "json"),
             (b"\xff\xfe\n", "json"),
-            (b"[1, 2]\n", "type"),
-            (b'"text"\n', "type"),
+            (b"[1, 2]\n", "type:line"),
+            (b'"text"\n', "type:line"),
             (raw(headerId=MISSING), "missing:headerId"),
             (raw(serialNumber=MISSING), "missing:serialNumber"),
             (raw(agvPosition=MISSING), "missing:agvPosition"),
             (raw(agvPosition={"x": 1}), "missing:agvPosition.y"),
-            (raw(timestamp="2026-01-01 00:00:35"), "timestamp"),
-            (raw(timestamp="2026-13-45T00:00:35Z"), "timestamp"),
-            (raw(timestamp=12345), "type"),
-            (raw(headerId=-1), "type"),
-            (raw(headerId=True), "type"),
-            (raw(headerId="7"), "type"),
-            (raw(serialNumber=""), "type"),
-            (raw(orderId=None), "type"),
-            (raw(agvPosition={"x": 1.5, "y": 2}), "type"),
-            (raw(agvPosition={"x": True, "y": 2}), "type"),
-            (raw(driving="no"), "type"),
-            (raw(errors={}), "type"),
-            (raw(loads="x"), "type"),
+            (raw(timestamp="2026-01-01 00:00:35"), "timestamp:timestamp"),
+            (raw(timestamp="2026-13-45T00:00:35Z"), "timestamp:timestamp"),
+            (raw(timestamp=12345), "type:timestamp"),
+            (raw(headerId=-1), "type:headerId"),
+            (raw(headerId=True), "type:headerId"),
+            (raw(headerId="7"), "type:headerId"),
+            (raw(serialNumber=""), "type:serialNumber"),
+            (raw(orderId=None), "type:orderId"),
+            (raw(agvPosition={"x": 1.5, "y": 2}), "type:agvPosition.x"),
+            (raw(agvPosition={"x": True, "y": 2}), "type:agvPosition.x"),
+            (raw(driving="no"), "type:driving"),
+            (raw(errors={}), "type:errors"),
+            (raw(loads="x"), "type:loads"),
         ]
         for data, want in cases:
             with self.subTest(data=data[:60], want=want):
@@ -142,7 +142,7 @@ class TestFaultedLevel(unittest.TestCase):
     def test_errors_not_a_list_is_still_rejected_as_type(self):
         # the type check is unchanged: errors must be a list
         for bad in (None, {}, "FATAL"):
-            self.assertEqual(parse_line(raw(errors=bad)), (None, "type"))
+            self.assertEqual(parse_line(raw(errors=bad)), (None, "type:errors"))
         self.assertEqual(parse_line(raw(errors=MISSING)), (None, "missing:errors"))
 
 
@@ -161,6 +161,147 @@ class TestPaused(unittest.TestCase):
         fields = dataclasses.fields(Message)
         self.assertEqual(fields[-1].name, "paused")
         self.assertIs(fields[-1].default, False)
+
+
+
+# S17A: extended reasons. Frozen copy of the pre-S17A reject decision (reasons json / type / missing / timestamp only);
+# the new reason must be the old one, or old + ":" + key.
+def _old_reason(data):
+    import re
+    import time
+    try:
+        obj = json.loads(data)
+    except ValueError:
+        return "json"
+    if not isinstance(obj, dict):
+        return "type"
+    for key in ("headerId", "timestamp", "serialNumber", "orderId", "agvPosition", "driving", "errors", "loads"):
+        if key not in obj:
+            return f"missing:{key}"
+    pos = obj["agvPosition"]
+    if not isinstance(pos, dict):
+        return "type"
+    for key in ("x", "y"):
+        if key not in pos:
+            return f"missing:agvPosition.{key}"
+    isint = lambda v: isinstance(v, int) and not isinstance(v, bool)  # noqa: E731
+    if not isint(obj["headerId"]) or obj["headerId"] < 0:
+        return "type"
+    ts = obj["timestamp"]
+    if not isinstance(ts, str):
+        return "type"
+    if not re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", ts):
+        return "timestamp"
+    try:
+        time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return "timestamp"
+    if not isinstance(obj["serialNumber"], str) or not obj["serialNumber"] or not isinstance(obj["orderId"], str):
+        return "type"
+    if not isint(pos["x"]) or not isint(pos["y"]):
+        return "type"
+    if not isinstance(obj["driving"], bool) or not isinstance(obj["errors"], list) or not isinstance(obj["loads"], list):
+        return "type"
+    return None
+
+
+FIXTURE = Path(__file__).resolve().parent / "data" / "s17a_emit50" / "zone0-000.jsonl.gz"
+
+
+def _fixture_lines():
+    import gzip
+    with gzip.open(FIXTURE, "rb") as f:
+        return f.readlines()
+
+
+def _mutated(path, value):
+    obj = json.loads(_fixture_lines()[0])
+    target = obj
+    parts = path.split(".")
+    for part in parts[:-1]:
+        target = target[part]
+    if value is MISSING:
+        del target[parts[-1]]
+    else:
+        target[parts[-1]] = value
+    return json.dumps(obj).encode() + b"\n"
+
+
+class TestExtendedReasons(unittest.TestCase):
+    def test_required_spec_is_the_contract_parse_line_iterates(self):
+        from fleet_analyser.parse import OPTIONAL_FIELDS, REQUIRED_FIELDS
+        self.assertEqual([(f.path, f.expected) for f in REQUIRED_FIELDS], [
+            ("headerId", "int >= 0"), ("timestamp", "str YYYY-MM-DDTHH:MM:SSZ (UTC)"),
+            ("serialNumber", "non-empty str"), ("orderId", "str"), ("agvPosition", "object"), ("driving", "bool"),
+            ("errors", "list"), ("loads", "list"), ("agvPosition.x", "int"), ("agvPosition.y", "int")])
+        self.assertEqual([p for p, _ in OPTIONAL_FIELDS], ["agvPosition.theta", "nodeStates", "paused"])
+
+    def test_one_test_per_extended_reason(self):
+        # inject: return plain "type" at any site, or swap two of the keys
+        cases = [
+            (b"[1]\n", "type:line"),
+            (raw(agvPosition="here"), "type:agvPosition"),
+            (raw(headerId=-3), "type:headerId"),
+            (raw(timestamp=5), "type:timestamp"),
+            (raw(timestamp="2026-01-01 00:00:00"), "timestamp:timestamp"),
+            (raw(timestamp="2026-02-31T00:00:00Z"), "timestamp:timestamp"),
+            (raw(serialNumber=7), "type:serialNumber"),
+            (raw(orderId=7), "type:orderId"),
+            (raw(agvPosition={"x": "1", "y": 2}), "type:agvPosition.x"),
+            (raw(agvPosition={"x": 1, "y": None}), "type:agvPosition.y"),
+            (raw(driving=1), "type:driving"),
+            (raw(errors="e"), "type:errors"),
+            (raw(loads=None), "type:loads"),
+            (b"nope\n", "json"),
+            (raw(loads=MISSING), "missing:loads"),
+        ]
+        for data, want in cases:
+            with self.subTest(want=want):
+                self.assertEqual(parse_line(data), (None, want))
+
+    def test_combined_conditions_split_in_todays_order(self):
+        # inject: check orderId before serialNumber, or y before x
+        self.assertEqual(parse_line(raw(serialNumber="", orderId=3))[1], "type:serialNumber")
+        self.assertEqual(parse_line(raw(agvPosition={"x": 1.5, "y": "q"}))[1], "type:agvPosition.x")
+        self.assertEqual(parse_line(raw(driving="no", errors={}, loads=3))[1], "type:driving")
+        self.assertEqual(parse_line(raw(errors={}, loads=3))[1], "type:errors")
+
+    def test_every_mutation_keeps_accept_reject_and_old_reason(self):
+        # inject: let a changed predicate accept or reject one more mutation; the (old, new) pairs are literal
+        wrong = {"headerId": ("7", "type", "type:headerId"), "timestamp": (5, "type", "type:timestamp"),
+                 "serialNumber": ("", "type", "type:serialNumber"), "orderId": (None, "type", "type:orderId"),
+                 "agvPosition": ([], "type", "type:agvPosition"), "driving": ("no", "type", "type:driving"),
+                 "errors": ({}, "type", "type:errors"), "loads": ("x", "type", "type:loads"),
+                 "agvPosition.x": (1.5, "type", "type:agvPosition.x"),
+                 "agvPosition.y": (True, "type", "type:agvPosition.y")}
+        table = []
+        for path in list(wrong):
+            table.append((f"delete {path}", _mutated(path, MISSING), f"missing:{path}", f"missing:{path}"))
+        for path, (value, old, new) in wrong.items():
+            table.append((f"{path}={value!r}", _mutated(path, value), old, new))
+        for ts in ("2026-01-01 00:00:35", "yesterday", "2026-13-45T00:00:35Z", "2026-01-01T00:00:35"):
+            table.append((f"timestamp={ts}", _mutated("timestamp", ts), "timestamp", "timestamp:timestamp"))
+        for name, data, old, new in table:
+            with self.subTest(name):
+                self.assertEqual(_old_reason(data), old)
+                msg, reason = parse_line(data)
+                self.assertIsNone(msg)
+                self.assertEqual(reason, new)
+        for data in _fixture_lines():
+            self.assertIsNone(_old_reason(data))
+            msg, reason = parse_line(data)
+            self.assertIsNone(reason)
+            obj = json.loads(data)
+            self.assertEqual((msg.serial, msg.header_id, msg.order_id, msg.x, msg.y, msg.driving, msg.raw_len),
+                             (obj["serialNumber"], obj["headerId"], obj["orderId"], obj["agvPosition"]["x"],
+                              obj["agvPosition"]["y"], obj["driving"], len(data)))
+        first = parse_line(_fixture_lines()[0])[0]
+        self.assertEqual(first, Message(serial="Z0-01", zone="0", header_id=0, ts=1767225600, order_id="Z0-1-o1", x=19,
+                                        y=2, driving=True, faulted=False, loaded=False, raw_len=572, theta=3.1416,
+                                        next_x=18, next_y=2, nodes_reported=True, paused=False))
+
+    def test_local_format_timestamp_through_parse_line(self):
+        self.assertEqual(parse_line(_mutated("timestamp", "2026-01-01 00:00:00"))[1], "timestamp:timestamp")
 
 
 if __name__ == "__main__":

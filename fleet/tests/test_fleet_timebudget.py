@@ -701,5 +701,20 @@ class TestPausedAndNoData(unittest.TestCase):
             self.assertIn("max-gap-s", err.getvalue())
 
 
+
+class TestS17aStationsAutoWithoutLedger(unittest.TestCase):
+    def test_exit_2_and_the_message_when_no_emit_ledger(self):
+        # inject: fall through to auto_layouts (SystemExit string, exit 1) or drop the hint at the stations file format
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / "badlog"
+            d.mkdir()
+            write_gz(d / "zone0-000.jsonl.gz", [line("Z0-01", 0)])
+            res = run_cli("--glob", d / "*.jsonl.gz", "--run", "badlog", "--stations", "auto", "--out", Path(tmp) / "o.json")
+            self.assertEqual(res.returncode, 2, res.stdout + res.stderr)
+            self.assertEqual(res.stderr.strip(), f"stations: no emit_ledger.json in {d} (only the emitter writes one); "
+                                                 "pass --stations PATH, see fleet/data/moroop/stations.json for the format")
+            self.assertFalse((Path(tmp) / "o.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

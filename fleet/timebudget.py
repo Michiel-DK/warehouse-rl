@@ -417,6 +417,10 @@ def main(argv=None):
     if not files:
         raise SystemExit(f"timebudget: no files match {args.glob}")
     glob_dir = str(Path(args.glob).parent)
+    if args.stations == "auto" and not (Path(glob_dir) / "emit_ledger.json").is_file():
+        print(f"stations: no emit_ledger.json in {glob_dir} (only the emitter writes one); pass --stations PATH, "
+              "see fleet/data/moroop/stations.json for the format", file=sys.stderr)
+        return 2
     store_dir = parse_store_arg(args.store) or str(Path(glob_dir) / "store")
     present = store_present(store_dir)
     hash_before = store_hash(store_dir) if present else None
