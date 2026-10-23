@@ -564,7 +564,7 @@ Rows: `robot_state_cleaned`, one `zone<k>-000.jsonl.gz` per shift. Whole-second 
 | `agvPosition{x,y,theta}` | `pos_x`, `pos_y` quantised to `--cell-m` (default 0.5 at this map size; report the four station cells and assert they are distinct), `pos_theta` | A frame, B units |
 | `driving` | `hypot(velocity_x, velocity_y) > 0.05` m/s **or** `abs(velocity_omega) > 0.05` rad/s. VDA 5050 3.0 §3.3 has driving = "non zero translational and/or rotational velocity". Never `state == "Navigating"`, which stays on while the robot is blocked; report seconds where only omega counts | B |
 | `paused` | `state == "Paused"` or `operating_mode != "Autonomous"` (17 cleaned rows, 27 Jul evening and 30 Jul morning; Joystick / Nonautonomous is VDA manual mode, folded in for lack of a bucket); report per value | A values / B meaning |
-| `errors` | `[]` for S13A. Tabulate and report the diagnostics `level` values (only "Ok" in the first 81 rows; vocabulary undocumented). Any level → errorLevel mapping is F and not used; `stuck_reason`, TIMEOUTs and start_denied are never errors | F (mapping) |
+| `errors` | `[]` for S13A. Tabulate and report the diagnostics `level` values (only "Ok" in the first 81 rows; vocabulary undocumented). Any level → errorLevel mapping is F and not used; `stuck_reason`, TIMEOUTs and start_denied are never errors. *(Corrected 2026-10-23, Part 9 §1: the levels are the ROS diagnostic set, rank B; Error → faulted is our rule, rank B, not rank A.)* | F (mapping) |
 | `loads` | `[]`: no payload column in robot state (inferring it from operation goals would be a guess) | A (absence) |
 | stations file | per id 135..138 (paper's names), every cell holding ≥ 5 % of the `state == "Idle"` rows at that `current_position_id` (docking jitter: a 3-box kitting dwell averages ~30.7 s, so a missed cell turns it into stuck); report the share of those Idle rows outside the station set (target ≈ 0); `shelves: []`. `--stations auto` builds TA-RWARE layouts, **do not use** | A ids / B poses |
 
@@ -1430,3 +1430,115 @@ undecided for that run.
   thresholds are ours, set here before the run.
 
 **Briefs:** both S15 drafts rewritten in place from Verdicts 1-2; file names, tests and result paths kept; diff in the report.
+
+## Part 9: ROS diagnostics as the fault label, dispatcher events, the authors' cleaning (2026-10-23)
+
+Scope: the check before S16A and S16B (laptop-scheduler `jobs/wr-lane-s16a-moroop-faults.md`,
+`jobs/wr-lane-s16b-moroop-dispatch.md`). One pass on 2026-10-23 (curl of GitHub raw files and the API, ros.org, the arXiv
+HTML, wheel.me; OpenAlex; CORE API v3), so `verified@2026-10-23` throughout. Query log: `reports/wr-dev-lit-s16.md`.
+Ranks as in Part 2 (A read, B inferred from A, F guess); UNTESTED = the doc tree exists but is closed to us. The
+diagnostics counts below are the operator's one-off measurement from the raw parquet, 23 Oct. They are not in a results file, and the lanes re-measure them.
+
+### 1. The level vocabulary
+
+**ROS (A).** `diagnostic_msgs/DiagnosticStatus` has "byte OK=0 / WARN=1 / ERROR=2 / STALE=3" and the fields `level`, `name`,
+`message`, `hardware_id`, `values` (ROS 1 https://raw.githubusercontent.com/ros/common_msgs/noetic-devel/diagnostic_msgs/msg/DiagnosticStatus.msg;
+ROS 2 https://raw.githubusercontent.com/ros2/common_interfaces/rolling/diagnostic_msgs/msg/DiagnosticStatus.msg). REP 107
+(https://ros.org/reps/rep-0107.html, Final) defines the levels: OK "Everything is running as expected", Warn "unexpected
+behavior it should be resolved and may affect operation", Error "a problem which should be fixed, **the component** can not
+be relied upon to operate correctly". It also says what diagnostics are not: "This is not going to halt the system in any
+way. If there is an unsafe condition it must be dealt with independently." STALE is the aggregator's freshness level
+(diagnostic_aggregator README, https://github.com/ros/diagnostics/blob/ros2/diagnostic_aggregator/README.md, sha
+81b53fa: unmatched items "will go stale after 5 seconds"; analyzer names are "/"-prefixed paths).
+**MoRoOp is the ROS set (B, inferred, not documented).** The evidence: the JSON entries carry `{hardwareId, name, level, message, values}`, the
+five ROS fields with `hardware_id` camel-cased; there are exactly four level words; the 19 names are aggregator-style paths
+(`/Wheels/FL`, `/Navigation/Navigation`); and the message "Frequency too high." is byte-identical to the stock
+`diagnostic_updater` FrequencyStatus, which emits it at WARN (`_update_functions.py` L127, `update_functions.hpp` L197,
+ros/diagnostics ros2 sha 81b53fa). **wheel.me:** www.wheel.me has no sitemap, and its footer and /faqs carry no technical docs. Its
+"Product Documents" sit behind a login on https://partner.wheel.me/products/, so the vendor's own definition is
+**UNTESTED**, not absent. The MoRoOp paper (arXiv 2610.02428v1 HTML) only says "JSON-encoded robot diagnostic status
+messages".
+**Verdict 1.** The vocabulary moves from F to **B**. No level maps to faulted at rank A. ROS ERROR is a statement about
+one component, and REP 107 says diagnostics halt nothing. VDA 5050 CRITICAL is a statement about the robot ("shall not continue
+driving", Part 5 §2), and on a 2.x stream faulted means FATAL only (Part 4 §2). The S16A rule is **ours, rank B**:
+a status at level **Error** (2) that is not on the noise list counts as faulted. **Warning never counts. Stale never counts**: it means the
+aggregator heard nothing, which is unknown, not a fault. The public label for these seconds is "Robot reported a component error".
+"Robot error, cannot continue order" is not allowed for them. **Correction sentence** (Part 2b §4 annotated; README (r) on the next docs pass):
+"`faulted`: the diagnostics levels are the ROS diagnostic levels (OK, WARN, ERROR, STALE; REP 107), inferred from the
+field names and a stock ROS message, not documented by wheel.me. A component ERROR does not say the robot stopped, so
+S16A's faulted bucket is our rule and is reported with its seconds while driving."
+
+### 2. Noise vs fault per message family
+
+| family (name: message) | documented meaning | source | S16A class |
+|---|---|---|---|
+| `/Devices/Camera`: "Frequency too high." | publish rate above the configured bound; WARN; a rate check that halts nothing (REP 107) | diagnostic_updater FrequencyStatus (A) | **noise**, at level Warning only |
+| `/Localization/Perception`: "SSD usage above 80%. RGo will stop at 90%." | the robot's own text says it stops at 90 %, so this is a warning before a stop | message text only (vendor doc UNTESTED) | unclassified |
+| `/Wheels/<FL,FR,BL,BR>`: "Lidar: Waiting for scans", "Lidar: Calibrating" | none found | none | unclassified; S16A reports `robot_uptime` at onset (a start-up test, not a source) |
+| `/Wheels/*`: "Mecanum: RPM feedback mismatch" | none found | none | unclassified |
+| `/Navigation/Navigation`: "Next goal ignored, robot is initializing, in manual mode, in emergency" | the robot's own text says goals are refused while it is not autonomous | message text only | unclassified; cross-tab against the `paused` bucket |
+
+**Verdict 2.** The noise list is keyed on (name, message, level) and has **one** entry: camera "Frequency too high." at
+Warning. The same family at Error, for example FrequencyStatus "No events recorded.", which ROS emits at ERROR (`_update_functions.py` L120), stays
+unclassified. Unsourced families are never "noise". The navigation family describes manual mode or emergency. If its
+seconds fall in `paused` rows, faulted would count the 3,245 s intervention a second time. S16A reports that overlap and
+gives `paused` priority over `faulted` for those seconds in table (b) only, without changing the bucket order.
+
+### 3. Dispatcher events as labels
+
+Source: the OperationDispatcher code at **35dbb76** (2026-07-22, the last commit before the 27-31 Jul recording; HEAD
+0609fa7 differs only in README.md), https://github.com/JaFeKl/OperationDispatcher (A). The MoRoOp paper says nothing about
+pause, resume, denial or manual action (full text searched).
+- `operation_start_denied`: the **application's** approval callback (`on_request_callback`) refused a start, or raised
+  an error (`reasoning: "request_callback_exception"`). The meta_data carries `retry_count`, `max_retries`,
+  `cooldown_seconds` and the callback's `reasoning` (`request_handler.py`). This is a refusal by the authors' lab application, not by the robot.
+- `operation_dispatcher_paused` has three code paths: an API or app call (`pause_dispatcher_runtime`, the REST or MCP
+  runtime controller); an **automatic** pause when a request reaches `start_request_max_retries` (default 5,
+  `request_handler.py` `if max_retries_reached: self._pause()`); and `start_paused` at startup. The pause event has no
+  meta_data, so the path is told apart only by the event before it.
+- `operation_dispatcher_resumed`: an API or app call only, with no automatic path. The code cannot say whether a person or the
+  lab application made the call. The README adds: "Neither runtime pause nor a state change automatically stops a physical resource."
+- `operation_failed`: the application's `fail_operation` with a `termination_reason`. The dispatcher has no timeout of
+  its own (README: `planned_duration` and `due_date` "are not automatic completion or timeout triggers"), so TIMEOUT
+  (300 s, Part 2b) is the lab application's rule.
+
+**Verdict 3.** "Dispatcher refused": every `start_denied`, and every pause whose previous event is a `start_denied` of the same
+operation with `retry_count == max_retries` (an auto-pause). "**External call**": every other pause and every resume.
+S16B may call such an event "intervention" only if it falls inside or within ±120 s of a stuck episode and is not an auto-pause.
+"A human" is never claimed. Neither label: `started` and `stopped` (dispatcher lifecycle) and `operation_failed`
+(an application timeout, already the TIMEOUT label). The table has 11 resumes against 3 pauses. S16B reports each resume's offset from the
+shift start and whether a pause precedes it in the same table, and asserts no explanation for the mismatch.
+
+### 4. The authors' cleaning
+
+The paper (arXiv 2610.02428v1, A) is the only definition: removal of "records containing invalid localization states
+or physically implausible values"; "The screening criteria were restricted to technical validity and did not target
+unusual but valid operational behaviour"; no interpolation. The dataset card says IDs are kept, so gaps mark removals.
+The toolkit (`JaFeKl/moroop-dataset-toolkit`, sha 2529c9d) has no cleaning code; it only loads `robot_state_cleaned`. No
+thresholds are published. **Our path** reads `robot_state_cleaned` (`fleet/adapters/moroop.py` TABLES and DEFAULT_RAW),
+so the authors' 2,959 removals (2.1 % of 140,386) happen **before** our parser runs. Our reject rules (json, timestamp,
+type) are message-format checks. The adapter's collapse (last row per second) is resampling, not a quality rule.
+**Verdict 4.** S16B runs the adapter and parser on **`robot_state_raw`** and reports three sets of raw ids:
+both-drop, authors-only, ours-only. Rule drops (parse rejects, `rows_unparseable`) and collapse drops are counted
+separately, and only rule drops count as "our drops". For authors-only rows S16B adds the pose and velocity ranges, to
+test the paper's "localization / implausible" wording against the data. **Page wording now:** "No row of the authors'
+cleaned table was rejected by our parser; the authors had already removed 2,959 of 140,386 raw rows (2.1 %)". The
+form "no row rejected" alone is not allowed.
+
+### 5. What refutes each (thresholds set before the runs)
+
+- **S16A.** "The real log now carries a fault cause" if **both** "cause not identified" episodes of `-sb` (2, 180 s) overlap
+  a faulted status (Verdict 1-2) for ≥ 50 % of their seconds **and** ≤ 20 % of pooled faulted seconds are while
+  driving. "Start-up noise, unknown stays unknown" if **neither** overlaps a faulted status at all. Anything else is mixed.
+  With n = 2, the result is a description, not a rate. A faulted share while driving > 50 % refutes "ERROR = stopped" for that family,
+  whatever the episodes show.
+- **S16B dispatcher.** "Pause/resume marks the intervention" if a non-auto pause or resume falls in or within ±120 s of
+  the 3,245 s shift-6 episode (2026_07_30_morning). "Adds nothing" if no pause or resume is within ±120 s of any stuck
+  episode.
+- **S16B cleaning.** "Our drops match theirs" if ≥ 90 % of authors-removed raw ids are rule drops on our raw path.
+  "Our ingest keeps rows the authors removed" if > 10 % of them pass our rules. Report the count either way.
+
+**Scholarly absence:** no claim made. MoRoOp prior use: OpenAlex 0 citations (W7211872143, W7220748450). CORE holds no
+MoRoOp record, so by the Part 7 rule that is **one index**.
+
+**Briefs:** both S16 drafts were rewritten in place from Verdicts 1-4. File names, tests and result paths are kept; the diff is in the report.
