@@ -1151,9 +1151,11 @@ class TestAnalystIsolation(unittest.TestCase):
                   # kind, so the word truth is in its text on purpose; nothing in the analyser imports it
                   # truth.py (S10A): the one truth_positive rule, read by grade.py and hotspot_score.py only; it reads the
                   # window keys of truth.json on purpose (the import fence is test_fleet_truth_v2.TestImportFence)
+                  # duration_spread.py (S15B): an evaluation script like hotspot_score.py; it ranks zones against the
+                  # truth stuck episodes of fleet_analyser/score.py on purpose; nothing in the analyser imports it
                   if p.name not in ("emit.py", "grade.py", "hotspot_score.py", "__init__.py", "score.py", "report.py",
                                     "alert.py", "replay_export.py", "overview_build.py", "time_to_detect.py",
-                                    "truth.py", "blind_smoke.py", "fastmap_smoke.py")]
+                                    "truth.py", "blind_smoke.py", "fastmap_smoke.py", "duration_spread.py")]
         return files
 
     def test_no_analyser_module_imports_replay_export(self):
@@ -1173,7 +1175,7 @@ class TestAnalystIsolation(unittest.TestCase):
                          "forecast_grade.py", "grade.py", "fastmap.py", "deadlock.py", "gapmap.py",
                          "timebudget.py", "absencemap.py"} <= names)
         self.assertTrue({"emitter.py", "emit_ledger.py", "sinks.py", "hotspot_score.py", "time_to_detect.py",
-                          "fastmap_smoke.py"}.isdisjoint(names))
+                          "fastmap_smoke.py", "duration_spread.py"}.isdisjoint(names))
         hits = []
         for p in self.analyst_files():
             for n, line in enumerate(p.read_text().splitlines(), 1):
