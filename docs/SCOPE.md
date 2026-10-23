@@ -1164,16 +1164,15 @@ Literature: `docs/LITERATURE.md` Part 8 (refute lines in section 3, set before t
 - **S15B refute line: MIXED** (`verdict.verdict`). Not commodity (medians far below 0.7; stat ≥ blocking on truth in
   2 and 1 runs, not 3). Not supported (both medians < 0.4 holds, blocking beats both in 3 of 5, not 4).
 - **New finding: the blocking number does not rank zones by truth stuck time.** The median ρ(blocking, truth) is 0.04,
-  per run -0.01 to 0.48, and no run reaches the p < 0.05 line. Its "beats" are the statistics going negative against
-  truth. The page's blocking figure has no validation against truth on record.
+  per run -0.01 to 0.48, and no run reaches the p < 0.05 line. Two of its three "beats" are the statistics going
+  negative against truth; the third (planner-blind, 0.48) is a real one. The page's blocking figure has no validation against truth on record.
 - Open (operator):
   - Page wording for the stall filter now that S15A reads commodity. Drop "removes the false alarms a naive rule
     raises", or keep it against the 30 s rule only (567 to 6) and name the 60 s timer next to it?
   - The blocking number: keep it on the page as a congestion count without a truth claim, or hold it until a test
     against a direct blocking truth (robot blocked by robot, not every stuck second) exists?
   - Mean job duration ranks against truth on the undisturbed and s8b runs (ρ -0.87, -0.67). Inspect why, or leave it?
-  - Ours alerts 413 s into the first labelled MoRoOp stop (after the label ended), against 98 s for N0-60. Inspect
-    (station radius 1, the 300 s bound)?
+  - Ours alerts 413 s into the first labelled MoRoOp stop (after the label ended), against 98 s for N0-60. Inspect?
   - Add section (w) to `scripts/sprint8_tables.py` (a lane), so (w1)/(w2) are reprinted like (a)-(v)?
   - Both result files hold absolute local paths. Scrub them before the public push, which is still held with the 7
     prep commits.

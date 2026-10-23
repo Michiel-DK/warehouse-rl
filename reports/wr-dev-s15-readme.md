@@ -101,3 +101,15 @@ print("descr medians", {k: round(x["median_rho"],2) for k,x in s.items()})
   inspected (open question in SCOPE).
 - Both result files contain absolute `/Users/...` paths. Scrub them before any public push.
 - Nothing was pushed to origin.
+
+## Correction after self-review (follow-up commit)
+
+A review pass before closing found four wording errors in the first commit. All four are fixed in README and SCOPE:
+- **The (w) intro misstated a vendor claim.** It said pass 4 found no readable vendor documenting a station-aware
+  stall list. Pass 4 actually scored InOrbit column 11 present, as a rule a customer writes. The intro now says that.
+- **"Its three beats" became "two of its three".** On s10c-blind the blocking number's ρ with truth (0.48) beats the
+  statistics' (0.09 and -0.27). That is a real win, not one produced by a statistic going negative.
+- **The top-3 evidence for s10c-blind is dropped.** s10-none also has a blocking|truth top-3 of 2, at ρ 0.00.
+- **The "radius 1 / 300 s bound" guess for the 413 s alert is dropped.** The timestamps do not support it: a 300 s
+  bound from the stop start at 1785500305 would fire at about 605, but the alert is at 718, which is label 2's alert
+  time. That item now reads "not inspected".
