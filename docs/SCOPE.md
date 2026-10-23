@@ -1177,6 +1177,54 @@ Literature: `docs/LITERATURE.md` Part 8 (refute lines in section 3, set before t
   - Both result files hold absolute local paths. Scrub them before the public push, which is still held with the 7
     prep commits.
 
+### Sprint 16: the real log's own labels: diagnostics, dispatcher events, the authors' cleaning (2026-10-23)
+
+Results are in README "Sprint 16", tables (x1) to (x3). They are printed by a read-only script whose text is in
+`reports/wr-dev-s16-readme.md`, not by `scripts/sprint8_tables.py` (no section (x); that is a lane item, as for (w)).
+Literature: `docs/LITERATURE.md` Part 9 (refute lines in section 5, set before the runs). Reports:
+`reports/wr-dev-lit-s16.md`, `reports/wr-lane-s16a-moroop-faults.md`, `reports/wr-lane-s16b-moroop-dispatch.md`,
+`reports/wr-dev-s16-readme.md`.
+
+- [x] Literature item `wr-dev-lit-s16` (Part 9): diagnostics levels are the ROS set at rank B (wheel.me docs
+      untested); Error (not noise) -> faulted is our rule; noise list = camera "Frequency too high." at Warning only;
+      dispatcher classes from OperationDispatcher 35dbb76; the authors' cleaning precedes our parser.
+- [x] S16A MoRoOp faults (PR #57, cb6c0d1; local master 2f0535b). `fleet/adapters/moroop.py --faults`,
+      `fleet/moroop_faults.py`, tests `fleet/tests/test_fleet_moroop_faults.py`; without `--faults` every `-sb`/`-sd`
+      output is byte-identical (26/26).
+- [x] Run (queue item `wr-s16a-run`, exit 0; results `results/fleet/moroop_faults.json`, `moroop_label-sf.json`,
+      `timebudget_moroop-sf.json`, `timebudget_moroop_shifts-sf.json`, committed with README (x)). Faulted bucket 508 s
+      (0.19% of the span), 585 s from raw, 58 s of them while driving (0.099). Stuck bucket 1,773 s -> 1,264 s.
+- **S16A refute line: MIXED** (`verdict`). The two `-sb` unknown stalls overlap an Error status for 0 of 47 s and
+  1 of 133 s, which is not ≥ 50% and not "none at all". The driving share is 0.099 (≤ 0.20 holds). "ERROR = stopped"
+  is refuted for 5 small families (Robot Stuck "Blocked by obstacle" 31 of 39 s while driving; four "Power Input: Not
+  Charging." families at 1 to 5 s). Unknown stalls go from 2 (180 s) to 1 (47 s), but the 133 s flip rests on 1 s
+  (the detector's entering-message rule).
+- [x] S16B dispatcher and cleaning (PR #58, 010b257; local master 31897c2). `fleet/moroop_dispatch.py`, tests
+      `fleet/tests/test_fleet_moroop_dispatch.py`.
+- [x] Run (queue item `wr-s16b-run`, exit 0; results `results/fleet/moroop_dispatch.json`, committed with README (x)).
+      Classes: dispatcher refused 41, external call 3, shift start 9, neither 10; 11 resumes against 3 pauses.
+- **S16B dispatcher refute line: MARKS THE INTERVENTION.** An external resume falls 46.6 s after the 3,245 s shift-6
+  episode, and also 38.6 s inside the 47 s stall that follows it. A second one falls 24.4 s after the 127 s labelled
+  stop in shift 7. Who made either call is not knowable (Part 9 section 3).
+- **S16B cleaning refute line: OUR INGEST KEEPS ROWS THE AUTHORS REMOVED** (file verdict "we keep theirs"). Of 2,959
+  authors-removed raw ids, 0 are our rule drops (the match line is ≥ 90%) and 2,959 pass our rules (the line is
+  > 10%). This is a counterfactual run on `robot_state_raw`; production reads the cleaned table.
+- **New finding: `--faults` changes the stall list, not only the budget.** On `-sf`, 5 stalls (36 to 262 s) open
+  as `faulted_self` where `-sb` had no episode, and 2 station overruns (343 s, 344 s) flip to `faulted_self` on 7 s and
+  23 s of Error. Of 8 `faulted_self` episodes, 2 are under an Error status for more than half their seconds.
+- Open (operator):
+  - The gurren page's "no row rejected". Part 9 section 4 bans it on its own. `page_sentence_holds` is true for "No
+    row of the authors' cleaned table was rejected by our parser; the authors had already removed 2,959 of 140,386
+    raw rows (2.1 %)". Adopt that sentence verbatim, or drop the claim? The uncommitted README front-page draft
+    (working tree, not committed here) still has "0 rejected by our parser" and "Sprint 16B, queued, not measured",
+    both stale now.
+  - Which MoRoOp stuck figure is the headline: `-sb` (1,773 s, 0.67%) or `-sf` (1,264 s, 0.48%, with 508 s faulted
+    under our rank-B rule)? The README since (s) quotes `-sb`.
+  - The detector files a stall under `faulted_self` on 1 s of Error. Require an overlap share before a fault cause is
+    assigned (a lane), or keep the entering-message rule and say so next to the cause table?
+  - Re-run S16B on `-sf` (its stuck-episode set is `-sb`; false alarms change 5 -> 3)?
+  - Add section (x) to `scripts/sprint8_tables.py` with (w) in the same lane?
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are

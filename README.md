@@ -1558,3 +1558,104 @@ Alert latency = the rule's first alert overlapping the label minus the start of 
 - **S15B is per run at 10 zones (one run at 30), so every ρ is coarse.** The supports and commodity thresholds are ours (Part 8 section 3). Jobs read AGVs only, while truth and the blocking denominator include pickers (deviations 1-4 in the file).
 - **Both results files record absolute local paths** (`src.moroop_dir` in `stall_baseline.json`, `runs.*.deadlock.path` in `duration_spread.json`). Scrub them before any public copy.
 - One seed set (0-9) and one 500-step shift per simulator run, no CI on any count or ρ. macOS arm64 only (pyastar2d tie-break).
+
+## Sprint 16: the real log's own labels: diagnostics, dispatcher events, the authors' cleaning (2026-10-23)
+
+Sprints 13 to 15 left three of the MoRoOp log's own records unread: the robot's ROS diagnostics, the lab dispatcher's event table, and the rows the dataset's authors removed before publishing. `docs/LITERATURE.md` Part 9 set what each may be called and the refute lines before either run. S16A (PR #57) added `fleet/adapters/moroop.py --faults`. With it, a diagnostics status at level Error that is not on the noise list becomes a FATAL `errors` entry, so the time budget's `faulted` bucket is computed for the first time. It also added `fleet/moroop_faults.py`, which tabulates every status and the overlap of each stall with an Error status. S16B (PR #58) added `fleet/moroop_dispatch.py`, which classes the dispatcher's events against the `-sb` stuck episodes and runs our parser over `robot_state_raw` instead of the authors' cleaned table. The queue items `wr-s16a-run` (exit 0) and `wr-s16b-run` (exit 0) wrote `results/fleet/moroop_faults.json`, `moroop_label-sf.json`, `timebudget_moroop-sf.json`, `timebudget_moroop_shifts-sf.json` and `moroop_dispatch.json`, committed with this section. `-sf` is `-sb` (S14A, bounded station stop, radius 1) plus `--faults`; nothing else changed. As in Sprint 15, the tables are not printed by `scripts/sprint8_tables.py`. A read-only script over those files and the `-sb` ones printed them, and its text is in `reports/wr-dev-s16-readme.md`. The label for faulted seconds and the `faulted_self` cause is "Robot reported a component error". The detector's own cause label for `faulted_self`, still in the `-sf` files, may not be quoted for MoRoOp (Part 9 section 1).
+
+#### (x1) The real-log time budget with `faulted` computed (MoRoOp, 9 shifts, pooled; `-sb` / `-sf`)
+
+| bucket | -sb s | -sb share | -sf s | -sf share | delta s |
+|---|---|---|---|---|---|
+| moving | 106,171 | 40.41% | 106,113 | 40.39% | -58 |
+| waiting_station | 107,005 | 40.73% | 107,188 | 40.80% | +183 |
+| waiting_shelf | n/a | n/a | n/a | n/a | n/a |
+| stuck | 1,773 | 0.67% | 1,264 | 0.48% | -509 |
+| stopped_short | 1,870 | 0.71% | 1,763 | 0.67% | -107 |
+| faulted | not computed | not computed | 508 | 0.19% | +508 |
+| idle | 25,767 | 9.81% | 25,750 | 9.80% | -17 |
+| paused | 161 | 0.06% | 161 | 0.06% | +0 |
+| no_data | 19,970 | 7.60% | 19,970 | 7.60% | +0 |
+| span | 262,717 | | 262,717 | | sum of deltas +0 |
+
+| shift | faulted s (bucket) | faulted share of span | faulted s from raw | stuck s -sb | stuck s -sf |
+|---|---|---|---|---|---|
+| 0: 2026_07_27_morning | 31 | 0.106% | 31 | 0 | 0 |
+| 1: 2026_07_27_evening | 42 | 0.145% | 42 | 160 | 152 |
+| 2: 2026_07_28_morning | 98 | 0.330% | 98 | 0 | 0 |
+| 3: 2026_07_28_evening | 28 | 0.096% | 28 | 0 | 0 |
+| 4: 2026_07_29_morning | 37 | 0.128% | 37 | 0 | 0 |
+| 5: 2026_07_29_evening | 50 | 0.172% | 50 | 0 | 0 |
+| 6: 2026_07_30_morning | 35 | 0.119% | 35 | 1107 | 1107 |
+| 7: 2026_07_31_morning | 120 | 0.415% | 197 | 282 | 5 |
+| 8: 2026_07_31_evening | 67 | 0.228% | 67 | 224 | 0 |
+| **pooled** | 508 | 0.193% | 585 | 1773 | 1264 |
+
+This is the `faulted` column that (q) shows as "not computed". The bucket holds 508 s, against 585 s of Error status counted from the raw rows. The 77 s difference is all in shift 7, and the file's note says why: `no_data` outranks `faulted`. Of the 585 raw seconds, 58 are while driving (0.099) and 0 in paused rows. The (q) caveat "the diagnostics levels (Ok, Warning, Error, Stale) are undocumented" is superseded in part: Part 9 section 1 identifies them as the ROS levels at rank B (inferred), and wheel.me's own documents are untested, not read. Its correction sentence: "`faulted`: the diagnostics levels are the ROS diagnostic levels (OK, WARN, ERROR, STALE; REP 107), inferred from the field names and a stock ROS message, not documented by wheel.me. A component ERROR does not say the robot stopped, so S16A's faulted bucket is our rule and is reported with its seconds while driving." Sources: `results/fleet/timebudget_moroop-sb.json` and `timebudget_moroop-sf.json` (`seconds`, `share`, `faulted`), `results/fleet/timebudget_moroop_shifts-sb.json` and `timebudget_moroop_shifts-sf.json` (`faulted`, `shifts.*.timebudget_robot.seconds`), `results/fleet/moroop_faults.json` (`table_a`, `cross_check`).
+
+#### (x2) Stalls with no identified cause, before and after the diagnostics lookup (`-sb` / `-sf`)
+
+| cause | public label | -sb episodes | -sb s | -sf episodes | -sf s |
+|---|---|---|---|---|---|
+| station_overrun | Station stop over time limit | 4 | 4,250 | 2 | 3,563 |
+| faulted_self | Robot reported a component error | 0 | 0 | 8 | 1,237 |
+| unknown | Stopped, cause not identified | 2 | 180 | 1 | 47 |
+
+| shift | start | s | cause -sb | cause -sf | s under an Error status (share) | Error statuses over the stall |
+|---|---|---|---|---|---|---|
+| 1 | 2026-07-27T19:03:16Z | 318 | station_overrun | station_overrun | 8 (0.025) | /Wheels "Error" 8 s; /Wheels/FL "Lidar: Calibrating" 8 s |
+| 2 | 2026-07-28T09:24:05Z | 41 | no episode | faulted_self | 41 (1.000) | /System "Error" 41 s; /System/Clock "Not synchronized" 41 s |
+| 6 | 2026-07-30T06:16:31Z | 3245 | station_overrun | station_overrun | 0 (0.000) | none |
+| 6 | 2026-07-30T07:10:44Z | 47 | unknown | unknown | 0 (0.000) | none |
+| 6 | 2026-07-30T07:35:38Z | 37 | no episode | faulted_self | 2 (0.054) | /Wheels "Error" 2 s; /Wheels/FL "Lidar: Calibrating" 2 s |
+| 6 | 2026-07-30T10:53:31Z | 36 | no episode | faulted_self | 2 (0.056) | /Wheels "Error" 2 s; /Wheels/BR "Lidar: Calibrating" 2 s |
+| 7 | 2026-07-31T06:42:16Z | 41 | no episode | faulted_self | 2 (0.049) | /Wheels "Error" 2 s; /Wheels/BR "Lidar: Calibrating" 2 s |
+| 7 | 2026-07-31T10:00:24Z | 343 | station_overrun | faulted_self | 7 (0.020) | /Wheels "Error" 7 s; /Wheels/BR "Lidar: Calibrating" 7 s |
+| 7 | 2026-07-31T12:18:25Z | 262 | no episode | faulted_self | 164 (0.626) | /Navigation "Error" 164 s; /Navigation/Robot Stuck ": Goal is obstructed. Remove obstacle from goal location." 164 s |
+| 7 | 2026-07-31T12:23:06Z | 133 | unknown | faulted_self | 1 (0.008) | /Navigation "Error" 1 s; /Navigation/Robot Stuck ": Goal is obstructed. Remove obstacle from goal location." 1 s |
+| 8 | 2026-07-31T17:43:15Z | 344 | station_overrun | faulted_self | 23 (0.067) | /Wheels "Error" 23 s; /Wheels/BR "Lidar: Calibration failed" 23 s |
+
+"No episode" = the `-sb` detector opened no stuck episode at that start. Each stall lists two statuses with the same seconds, a parent path (`/Wheels`, `/System`, `/Navigation`) with message "Error" and a child path under it; the overlap column counts a second once. **Noise families:** the noise list has one entry, `/Devices/Camera` "Frequency too high." at Warning (1,830 status rows, 3,685 s; stock `diagnostic_updater` FrequencyStatus, Part 9 section 2). Warning never counts as faulted, so it removes nothing from the bucket or from the table above. Of the 51 (level, name, message) combinations in the log, 20 at Error are faulted by our rule, 1 is the noise entry, and 30 (29 Warning, 1 Stale) are unclassified. The families on the stalls (Lidar "Calibrating" and "Calibration failed", `/System/Clock` "Not synchronized", Robot Stuck "Goal is obstructed") have no documented meaning, so they are unclassified, not noise (Part 9 section 2). Sources: `results/fleet/moroop_label-sb.json` and `moroop_label-sf.json` (`pooled.causes.table`), `results/fleet/moroop_faults.json` (`table_b.sb`, `table_b.sf`, `table_c`, `verdict_inputs`).
+
+#### (x3) Dispatcher events against the stuck episodes, and the authors' cleaning (S16B)
+
+| class (Part 9 section 3) | events |
+|---|---|
+| dispatcher refused (39 start denials, 2 auto-pauses) | 41 |
+| external call | 3 |
+| shift start (a resume before the shift's first `operation_started`) | 9 |
+| neither (`started`, `stopped`, `operation_failed`) | 10 |
+
+| shift | event | time | class | inside a stuck episode | after a stuck episode | intervention |
+|---|---|---|---|---|---|---|
+| 6: 2026_07_30_morning | paused | 2026-07-30T06:01:31Z | external call | no | no | no |
+| 6: 2026_07_30_morning | paused (auto-pause) | 2026-07-30T06:21:15Z | dispatcher refused | 3245 s episode, 284.2 s in | no | no |
+| 6: 2026_07_30_morning | resumed | 2026-07-30T07:11:22Z | external call | 47 s episode, 38.6 s in | 46.6 s after the 3245 s episode | yes |
+| 7: 2026_07_31_morning | paused (auto-pause) | 2026-07-31T12:23:29Z | dispatcher refused | 127 s episode, 18.7 s in | 42.7 s after the 250 s episode | no |
+| 7: 2026_07_31_morning | resumed | 2026-07-31T12:25:42Z | external call | no | 24.4 s after the 127 s episode | yes |
+
+| raw ids | count | share of the 2,959 the authors removed | collapse drops among them |
+|---|---|---|---|
+| both drop (the authors and our rules) | 0 | 0.0% | 0 |
+| authors only | 2,959 | 100.0% | 1,314 |
+| ours only | 0 | 0.0% | 0 |
+
+The event rows are every pause and every resume other than the 9 shift-start resumes. A stuck episode here is every entry of the `-sb` label file's labelled episodes of 30 s or more and its detector false alarms (S16B lane report, "Rules"). That is why the 127 s and 250 s episodes are the robot's own labels, not the 133 s detector run of (x2). "Near" is ±120 s. The table holds 11 resumes against 3 pauses: 3 resumes have a pause before them, 8 do not, and no explanation is asserted (Part 9 section 3). Cleaning: 140,386 raw rows, 137,427 cleaned, 2,959 removed by the authors (2.1%). Our rule drops on the raw path are 0, and no cleaned id is missing from raw. Collapse drops (the adapter's last-row-per-second resampling) are counted apart and are not "our drops": 6,444 in all, 1,314 of them among the authors-only rows. The authors-only rows are 2,645 Navigating and 314 Idle, all Autonomous, with no missing or non-finite pose or velocity. Their pose stays within x 0.39 to 8.21 m and y -1.84 to 0.41 m. Their diagnostics maximum is Ok in 2,758, Warning in 184, Error in 2 and none in 15. Source: `results/fleet/moroop_dispatch.json` (`pooled.classes`, `pooled.resumes_vs_pauses`, `shifts.*.events`, `pooled.cleaning`, `verdicts`, `page_sentence`).
+
+**Reading the numbers.**
+- **S16A refute line: mixed (x2).** Part 9 section 5: "fault cause" needs both `-sb` "cause not identified" episodes to overlap a faulted status for ≥ 50% of their seconds and ≤ 20% of pooled faulted seconds while driving. "Unknown stays unknown" needs neither to overlap at all. The two episodes overlap for 0 of 47 s and 1 of 133 s (0.008), so the first condition fails. The driving share is 58 of 585 s (0.099), which is under 0.20. One second of overlap is what keeps the verdict from "unknown stays unknown". In substance, the diagnostics give these two stalls no cause. The file says "n = 2: a description, not a rate".
+- **"ERROR = stopped" is refuted for five families (x2, `table_a`).** Part 9's line is a share above 50% while driving. Robot Stuck "Blocked by obstacle. Check robot surroundings." is at 31 of 39 s (0.79), and the four `/Wheels/<BL, BR, FL, FR>` "Power Input: Not Charging." families are at 5 of 5, 5 of 5, 4 of 4 and 1 of 1 s. All five are small. The large families are mostly while stopped: `/Wheels` "Error" 310 s at 0.02, `/Navigation` "Error" 206 s at 0.16, Robot Stuck "Goal is obstructed" 167 s at 0.01.
+- **The unknowns shrink from 2 (180 s) to 1 (47 s), but only one flip rests on the diagnostics (x2).** The 133 s stall becomes `faulted_self` on 1 s of Error status. The S16A lane report puts this down to the detector's rule: a stall takes the cause of the message that enters the stuck state. Two station overruns (343 s and 344 s) flip to `faulted_self` the same way, on 7 s and 23 s. Of the 8 `faulted_self` episodes, 2 are under an Error status for more than half their seconds: 41 of 41 s (clock not synchronized) and 164 of 262 s (goal obstructed). The other 6 are at 0.008 to 0.067. The 47 s stall, which the dispatcher's resume falls inside, overlaps no status at all.
+- **`--faults` moves the stuck bucket, not only the faulted one (x1).** Stuck goes from 1,773 s to 1,264 s (0.67% to 0.48% of the span) and `faulted` takes 508 s, while every bucket together still sums to the span. Shift 8 goes from 224 s stuck to 0, and shift 7 from 282 s to 5. The stuck runs in the label comparison go from 6 to 4, false alarms from 5 to 3, and TIMEOUT operations overlapped from 5 of 8 to 3 of 8. The two labelled stops of 30 s or more are still both detected. The 1,107 s in shift 6 (the 3,245 s station overrun of (s)) do not move: no Error status falls inside that stop.
+- **S16B dispatcher refute line: marks the intervention (x3).** The line is a non-auto pause or resume in or within ±120 s of the 3,245 s shift-6 episode. The external resume at 07:11:22 is 46.6 s after it ends. The auto-pause at 06:21:15 is inside it, but the dispatcher's retry limit raised it, so it does not count. The external pause at 06:01:31 is 15 minutes before the episode and near no episode. The other intervention is the resume 24.4 s after the 127 s labelled stop in shift 7. Who made either call cannot be told from the dispatcher's code (Part 9 section 3), so the README does not say "a human".
+- **S16B cleaning refute line: our ingest keeps rows the authors removed (x3; the file's verdict "we keep theirs").** "Our drops match theirs" needs ≥ 90% of the authors' removed raw ids to be our rule drops. They are 0 of 2,959 (0%). "Our ingest keeps rows the authors removed" needs > 10% to pass our rules, and all 2,959 do (100%). This is a counterfactual run on `robot_state_raw`. Production reads the cleaned table, so on our real path the authors' removals happen before our parser sees anything. The authors-only rows have no missing or non-finite pose or velocity,, and `velocity_x` is at most 0.80 m/s. Why the authors removed them is not answered by the data (Part 9 section 4: no published thresholds).
+- **Page wording (x3).** The file's `page_sentence_holds` is true for "No row of the authors' cleaned table was rejected by our parser; the authors had already removed 2,959 of 140,386 raw rows (2.1 %)". Part 9 section 4 does not allow "no row rejected" on its own.
+
+**Caveats.**
+- One robot, nine shifts, one lab. The S16A verdict rests on two stalls and one second of overlap, and the dispatcher verdict on one resume that also falls inside the next stall (47 s). Neither is a rate.
+- The Error-to-faulted rule is ours, at rank B. A ROS ERROR is a statement about one component, and REP 107 says diagnostics halt nothing. The faulted bucket is our classification, not the robot's own statement that it stopped.
+- The `faulted_self` flips are a detector-rule effect: the entering message sets the cause. A stall whose seconds are under an Error status for 1 to 7% is still filed under it. Whether to require an overlap share before a cause is assigned was not tested.
+- `no_data` outranks `faulted`, so the bucket under-counts raw Error seconds by 77 s, all in shift 7.
+- The S16B stuck-episode set mixes the robot's own labels and our detector's false alarms (`-sb`). On `-sf` the false alarms change (5 to 3), and S16B was not re-run on `-sf`.
+- "Our drops" are message-format rules (json, timestamp, type). They were never meant to catch localization or plausibility faults, so 0 of 2,959 is the expected reading, not a failure of a quality check.
+- Deterministic on one log, no CI. The tables were printed by a read-only script, not by `scripts/sprint8_tables.py`.

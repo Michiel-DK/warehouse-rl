@@ -1,0 +1,2416 @@
+{
+ "cross_check": {
+  "available": true,
+  "bucket_by_shift": {
+   "0": 31,
+   "1": 42,
+   "2": 98,
+   "3": 28,
+   "4": 37,
+   "5": 50,
+   "6": 35,
+   "7": 120,
+   "8": 67
+  },
+  "difference": 77,
+  "equal": false,
+  "faulted_bucket_seconds": 508,
+  "faulted_seconds_from_raw": 585,
+  "note": "the bucket loses seconds to no_data, which outranks faulted"
+ },
+ "jsonl_sf_faulted_messages": {
+  "0": 14,
+  "1": 12,
+  "2": 46,
+  "3": 16,
+  "4": 17,
+  "5": 23,
+  "6": 17,
+  "7": 19,
+  "8": 25
+ },
+ "public_label": "Robot reported a component error",
+ "robot_uptime_column": "present",
+ "table_a": {
+  "label": "Robot reported a component error",
+  "per_shift": {
+   "0": {
+    "families": [
+     {
+      "driving_s": 5,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 5,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 26,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 12,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 11,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     }
+    ],
+    "faulted_driving_s": 5,
+    "faulted_not_driving_s": 26,
+    "faulted_paused_s": 0,
+    "faulted_s": 31,
+    "share_of_span": 0.001060082754847314,
+    "span_s": 29243
+   },
+   "1": {
+    "families": [
+     {
+      "driving_s": 3,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 3,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 8,
+      "message": "Error",
+      "name": "/Network",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 8,
+      "message": "Disconnected",
+      "name": "/Network/MQTT client",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 31,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 26,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     }
+    ],
+    "faulted_driving_s": 3,
+    "faulted_not_driving_s": 39,
+    "faulted_paused_s": 0,
+    "faulted_s": 42,
+    "share_of_span": 0.0014513286568298834,
+    "span_s": 28939
+   },
+   "2": {
+    "families": [
+     {
+      "driving_s": 5,
+      "driving_share": 0.7142857142857143,
+      "faulted_paused_s": 0,
+      "faulted_s": 7,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 5,
+      "driving_share": 0.7142857142857143,
+      "faulted_paused_s": 0,
+      "faulted_s": 7,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Error",
+      "name": "/Network",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Server Error: 14",
+      "name": "/Network/Reserve node",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 18,
+      "driving_share": 0.3,
+      "faulted_paused_s": 0,
+      "faulted_s": 60,
+      "message": "Error",
+      "name": "/System",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 18,
+      "driving_share": 0.3,
+      "faulted_paused_s": 0,
+      "faulted_s": 60,
+      "message": "Not synchronized",
+      "name": "/System/Clock",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 0.03333333333333333,
+      "faulted_paused_s": 0,
+      "faulted_s": 30,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BL",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 8,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 20,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/FR",
+      "refutes_error_equals_stopped": true
+     }
+    ],
+    "faulted_driving_s": 24,
+    "faulted_not_driving_s": 74,
+    "faulted_paused_s": 0,
+    "faulted_s": 98,
+    "share_of_span": 0.0032976647149875497,
+    "span_s": 29718
+   },
+   "3": {
+    "families": [
+     {
+      "driving_s": 4,
+      "driving_share": 0.5,
+      "faulted_paused_s": 0,
+      "faulted_s": 8,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 4,
+      "driving_share": 0.5,
+      "faulted_paused_s": 0,
+      "faulted_s": 8,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 0.05,
+      "faulted_paused_s": 0,
+      "faulted_s": 20,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 2,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 10,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     }
+    ],
+    "faulted_driving_s": 5,
+    "faulted_not_driving_s": 23,
+    "faulted_paused_s": 0,
+    "faulted_s": 28,
+    "share_of_span": 0.0009606807109037261,
+    "span_s": 29146
+   },
+   "4": {
+    "families": [
+     {
+      "driving_s": 1,
+      "driving_share": 0.02702702702702703,
+      "faulted_paused_s": 0,
+      "faulted_s": 37,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BL",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 4,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 23,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 4,
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": true
+     }
+    ],
+    "faulted_driving_s": 1,
+    "faulted_not_driving_s": 36,
+    "faulted_paused_s": 0,
+    "faulted_s": 37,
+    "share_of_span": 0.0012798782386108133,
+    "span_s": 28909
+   },
+   "5": {
+    "families": [
+     {
+      "driving_s": 3,
+      "driving_share": 0.75,
+      "faulted_paused_s": 0,
+      "faulted_s": 4,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 3,
+      "driving_share": 0.75,
+      "faulted_paused_s": 0,
+      "faulted_s": 4,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 46,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 14,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 19,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 2,
+      "message": "Lidar: Calibrating, Mecanum: RPM feedback mismatch",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 8,
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     }
+    ],
+    "faulted_driving_s": 3,
+    "faulted_not_driving_s": 47,
+    "faulted_paused_s": 0,
+    "faulted_s": 50,
+    "share_of_span": 0.0017155012694709394,
+    "span_s": 29146
+   },
+   "6": {
+    "families": [
+     {
+      "driving_s": 5,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 5,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 3,
+      "driving_share": 0.1,
+      "faulted_paused_s": 0,
+      "faulted_s": 30,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 3,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BL",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 6,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 21,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 2,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 2,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": true
+     }
+    ],
+    "faulted_driving_s": 8,
+    "faulted_not_driving_s": 27,
+    "faulted_paused_s": 0,
+    "faulted_s": 35,
+    "share_of_span": 0.0011935208866155158,
+    "span_s": 29325
+   },
+   "7": {
+    "families": [
+     {
+      "driving_s": 5,
+      "driving_share": 0.029411764705882353,
+      "faulted_paused_s": 0,
+      "faulted_s": 170,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 3,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 2,
+      "driving_share": 0.011976047904191617,
+      "faulted_paused_s": 0,
+      "faulted_s": 167,
+      "message": ": Goal is obstructed. Remove obstacle from goal location.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 27,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 17,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 7,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 3,
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     }
+    ],
+    "faulted_driving_s": 5,
+    "faulted_not_driving_s": 192,
+    "faulted_paused_s": 0,
+    "faulted_s": 197,
+    "share_of_span": 0.006815194077354182,
+    "span_s": 28906
+   },
+   "8": {
+    "families": [
+     {
+      "driving_s": 3,
+      "driving_share": 0.75,
+      "faulted_paused_s": 0,
+      "faulted_s": 4,
+      "message": "Error",
+      "name": "/Navigation",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 3,
+      "driving_share": 0.75,
+      "faulted_paused_s": 0,
+      "faulted_s": 4,
+      "message": ": Blocked by obstacle. Check robot surroundings.",
+      "name": "/Navigation/Robot Stuck",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 0.015873015873015872,
+      "faulted_paused_s": 0,
+      "faulted_s": 63,
+      "message": "Error",
+      "name": "/Wheels",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 10,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 23,
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 2,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 1,
+      "driving_share": 1.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 1,
+      "message": "Power Input: Not Charging.",
+      "name": "/Wheels/BR",
+      "refutes_error_equals_stopped": true
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 22,
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     },
+     {
+      "driving_s": 0,
+      "driving_share": 0.0,
+      "faulted_paused_s": 0,
+      "faulted_s": 5,
+      "message": "Lidar: Waiting for scans",
+      "name": "/Wheels/FL",
+      "refutes_error_equals_stopped": false
+     }
+    ],
+    "faulted_driving_s": 4,
+    "faulted_not_driving_s": 63,
+    "faulted_paused_s": 0,
+    "faulted_s": 67,
+    "share_of_span": 0.0022800748681299984,
+    "span_s": 29385
+   }
+  },
+  "pooled": {
+   "driving_share": 0.09914529914529914,
+   "families": [
+    {
+     "driving_s": 33,
+     "driving_share": 0.16019417475728157,
+     "faulted_paused_s": 0,
+     "faulted_s": 206,
+     "message": "Error",
+     "name": "/Navigation",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 31,
+     "driving_share": 0.7948717948717948,
+     "faulted_paused_s": 0,
+     "faulted_s": 39,
+     "message": ": Blocked by obstacle. Check robot surroundings.",
+     "name": "/Navigation/Robot Stuck",
+     "refutes_error_equals_stopped": true
+    },
+    {
+     "driving_s": 2,
+     "driving_share": 0.011976047904191617,
+     "faulted_paused_s": 0,
+     "faulted_s": 167,
+     "message": ": Goal is obstructed. Remove obstacle from goal location.",
+     "name": "/Navigation/Robot Stuck",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 9,
+     "message": "Error",
+     "name": "/Network",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 8,
+     "message": "Disconnected",
+     "name": "/Network/MQTT client",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 1,
+     "message": "Server Error: 14",
+     "name": "/Network/Reserve node",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 18,
+     "driving_share": 0.3,
+     "faulted_paused_s": 0,
+     "faulted_s": 60,
+     "message": "Error",
+     "name": "/System",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 18,
+     "driving_share": 0.3,
+     "faulted_paused_s": 0,
+     "faulted_s": 60,
+     "message": "Not synchronized",
+     "name": "/System/Clock",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 7,
+     "driving_share": 0.02258064516129032,
+     "faulted_paused_s": 0,
+     "faulted_s": 310,
+     "message": "Error",
+     "name": "/Wheels",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 5,
+     "driving_share": 1.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 5,
+     "message": "Power Input: Not Charging.",
+     "name": "/Wheels/BL",
+     "refutes_error_equals_stopped": true
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 79,
+     "message": "Lidar: Calibrating",
+     "name": "/Wheels/BR",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 23,
+     "message": "Lidar: Calibration failed",
+     "name": "/Wheels/BR",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 11,
+     "message": "Lidar: Waiting for scans",
+     "name": "/Wheels/BR",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 5,
+     "driving_share": 1.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 5,
+     "message": "Power Input: Not Charging.",
+     "name": "/Wheels/BR",
+     "refutes_error_equals_stopped": true
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 159,
+     "message": "Lidar: Calibrating",
+     "name": "/Wheels/FL",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 2,
+     "message": "Lidar: Calibrating, Mecanum: RPM feedback mismatch",
+     "name": "/Wheels/FL",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 21,
+     "message": "Lidar: Calibration failed",
+     "name": "/Wheels/FL",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 0,
+     "driving_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 7,
+     "message": "Lidar: Waiting for scans",
+     "name": "/Wheels/FL",
+     "refutes_error_equals_stopped": false
+    },
+    {
+     "driving_s": 4,
+     "driving_share": 1.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 4,
+     "message": "Power Input: Not Charging.",
+     "name": "/Wheels/FL",
+     "refutes_error_equals_stopped": true
+    },
+    {
+     "driving_s": 1,
+     "driving_share": 1.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 1,
+     "message": "Power Input: Not Charging.",
+     "name": "/Wheels/FR",
+     "refutes_error_equals_stopped": true
+    }
+   ],
+   "faulted_driving_s": 58,
+   "faulted_not_driving_s": 527,
+   "faulted_paused_s": 0,
+   "faulted_s": 585,
+   "share_of_span": 0.002226730664555396,
+   "span_s": 262717
+  }
+ },
+ "table_b": {
+  "paused_rule": "a second that is both faulted and paused counts as paused here (faulted_paused_s, paused_seconds); the time budget's bucket order is unchanged",
+  "sb": [
+   {
+    "cause": "station_overrun",
+    "duration_s": 318,
+    "faulted_overlap_s": 8,
+    "faulted_overlap_share": 0.025157232704402517,
+    "faulted_paused_s": 0,
+    "faulted_s": 8,
+    "faulted_share": 0.025157232704402517,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 1,
+    "start": "2026-07-27T19:03:16Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 8
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "paused_seconds": 0,
+      "seconds": 8
+     }
+    ]
+   },
+   {
+    "cause": "station_overrun",
+    "duration_s": 3245,
+    "faulted_overlap_s": 0,
+    "faulted_overlap_share": 0.0,
+    "faulted_paused_s": 0,
+    "faulted_s": 0,
+    "faulted_share": 0.0,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 6,
+    "start": "2026-07-30T06:16:31Z",
+    "statuses": []
+   },
+   {
+    "cause": "unknown",
+    "duration_s": 47,
+    "faulted_overlap_s": 0,
+    "faulted_overlap_share": 0.0,
+    "faulted_paused_s": 0,
+    "faulted_s": 0,
+    "faulted_share": 0.0,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 6,
+    "start": "2026-07-30T07:10:44Z",
+    "statuses": []
+   },
+   {
+    "cause": "station_overrun",
+    "duration_s": 343,
+    "faulted_overlap_s": 7,
+    "faulted_overlap_share": 0.02040816326530612,
+    "faulted_paused_s": 0,
+    "faulted_s": 7,
+    "faulted_share": 0.02040816326530612,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 7,
+    "start": "2026-07-31T10:00:24Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 7
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "paused_seconds": 0,
+      "seconds": 7
+     }
+    ]
+   },
+   {
+    "cause": "unknown",
+    "duration_s": 133,
+    "faulted_overlap_s": 1,
+    "faulted_overlap_share": 0.007518796992481203,
+    "faulted_paused_s": 0,
+    "faulted_s": 1,
+    "faulted_share": 0.007518796992481203,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 7,
+    "start": "2026-07-31T12:23:06Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Navigation",
+      "paused_seconds": 0,
+      "seconds": 1
+     },
+     {
+      "message": ": Goal is obstructed. Remove obstacle from goal location.",
+      "name": "/Navigation/Robot Stuck",
+      "paused_seconds": 0,
+      "seconds": 1
+     }
+    ]
+   },
+   {
+    "cause": "station_overrun",
+    "duration_s": 344,
+    "faulted_overlap_s": 23,
+    "faulted_overlap_share": 0.06686046511627906,
+    "faulted_paused_s": 0,
+    "faulted_s": 23,
+    "faulted_share": 0.06686046511627906,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 8,
+    "start": "2026-07-31T17:43:15Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 23
+     },
+     {
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/BR",
+      "paused_seconds": 0,
+      "seconds": 23
+     }
+    ]
+   }
+  ],
+  "sb_unknown": [
+   {
+    "cause": "unknown",
+    "duration_s": 47,
+    "faulted_overlap_s": 0,
+    "faulted_overlap_share": 0.0,
+    "faulted_paused_s": 0,
+    "faulted_s": 0,
+    "faulted_share": 0.0,
+    "public_label": null,
+    "resolution": "moved",
+    "sf_match": {
+     "cause": "unknown",
+     "duration_s": 47,
+     "public_label": null
+    },
+    "shift": 6,
+    "start": "2026-07-30T07:10:44Z",
+    "statuses": []
+   },
+   {
+    "cause": "unknown",
+    "duration_s": 133,
+    "faulted_overlap_s": 1,
+    "faulted_overlap_share": 0.007518796992481203,
+    "faulted_paused_s": 0,
+    "faulted_s": 1,
+    "faulted_share": 0.007518796992481203,
+    "public_label": null,
+    "resolution": "moved",
+    "sf_match": {
+     "cause": "faulted_self",
+     "duration_s": 133,
+     "public_label": "Robot reported a component error"
+    },
+    "shift": 7,
+    "start": "2026-07-31T12:23:06Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Navigation",
+      "paused_seconds": 0,
+      "seconds": 1
+     },
+     {
+      "message": ": Goal is obstructed. Remove obstacle from goal location.",
+      "name": "/Navigation/Robot Stuck",
+      "paused_seconds": 0,
+      "seconds": 1
+     }
+    ]
+   }
+  ],
+  "sf": [
+   {
+    "cause": "station_overrun",
+    "duration_s": 318,
+    "faulted_overlap_s": 8,
+    "faulted_overlap_share": 0.025157232704402517,
+    "faulted_paused_s": 0,
+    "faulted_s": 8,
+    "faulted_share": 0.025157232704402517,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 1,
+    "start": "2026-07-27T19:03:16Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 8
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "paused_seconds": 0,
+      "seconds": 8
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 41,
+    "faulted_overlap_s": 41,
+    "faulted_overlap_share": 1.0,
+    "faulted_paused_s": 0,
+    "faulted_s": 41,
+    "faulted_share": 1.0,
+    "public_label": "Robot reported a component error",
+    "resolution": "fault_cleared",
+    "shift": 2,
+    "start": "2026-07-28T09:24:05Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/System",
+      "paused_seconds": 0,
+      "seconds": 41
+     },
+     {
+      "message": "Not synchronized",
+      "name": "/System/Clock",
+      "paused_seconds": 0,
+      "seconds": 41
+     }
+    ]
+   },
+   {
+    "cause": "station_overrun",
+    "duration_s": 3245,
+    "faulted_overlap_s": 0,
+    "faulted_overlap_share": 0.0,
+    "faulted_paused_s": 0,
+    "faulted_s": 0,
+    "faulted_share": 0.0,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 6,
+    "start": "2026-07-30T06:16:31Z",
+    "statuses": []
+   },
+   {
+    "cause": "unknown",
+    "duration_s": 47,
+    "faulted_overlap_s": 0,
+    "faulted_overlap_share": 0.0,
+    "faulted_paused_s": 0,
+    "faulted_s": 0,
+    "faulted_share": 0.0,
+    "public_label": null,
+    "resolution": "moved",
+    "shift": 6,
+    "start": "2026-07-30T07:10:44Z",
+    "statuses": []
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 37,
+    "faulted_overlap_s": 2,
+    "faulted_overlap_share": 0.05405405405405406,
+    "faulted_paused_s": 0,
+    "faulted_s": 2,
+    "faulted_share": 0.05405405405405406,
+    "public_label": "Robot reported a component error",
+    "resolution": "moved",
+    "shift": 6,
+    "start": "2026-07-30T07:35:38Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 2
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/FL",
+      "paused_seconds": 0,
+      "seconds": 2
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 36,
+    "faulted_overlap_s": 2,
+    "faulted_overlap_share": 0.05555555555555555,
+    "faulted_paused_s": 0,
+    "faulted_s": 2,
+    "faulted_share": 0.05555555555555555,
+    "public_label": "Robot reported a component error",
+    "resolution": "fault_cleared",
+    "shift": 6,
+    "start": "2026-07-30T10:53:31Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 2
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "paused_seconds": 0,
+      "seconds": 2
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 41,
+    "faulted_overlap_s": 2,
+    "faulted_overlap_share": 0.04878048780487805,
+    "faulted_paused_s": 0,
+    "faulted_s": 2,
+    "faulted_share": 0.04878048780487805,
+    "public_label": "Robot reported a component error",
+    "resolution": "moved",
+    "shift": 7,
+    "start": "2026-07-31T06:42:16Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 2
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "paused_seconds": 0,
+      "seconds": 2
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 343,
+    "faulted_overlap_s": 7,
+    "faulted_overlap_share": 0.02040816326530612,
+    "faulted_paused_s": 0,
+    "faulted_s": 7,
+    "faulted_share": 0.02040816326530612,
+    "public_label": "Robot reported a component error",
+    "resolution": "moved",
+    "shift": 7,
+    "start": "2026-07-31T10:00:24Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 7
+     },
+     {
+      "message": "Lidar: Calibrating",
+      "name": "/Wheels/BR",
+      "paused_seconds": 0,
+      "seconds": 7
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 262,
+    "faulted_overlap_s": 164,
+    "faulted_overlap_share": 0.6259541984732825,
+    "faulted_paused_s": 0,
+    "faulted_s": 164,
+    "faulted_share": 0.6259541984732825,
+    "public_label": "Robot reported a component error",
+    "resolution": "fault_cleared",
+    "shift": 7,
+    "start": "2026-07-31T12:18:25Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Navigation",
+      "paused_seconds": 0,
+      "seconds": 164
+     },
+     {
+      "message": ": Goal is obstructed. Remove obstacle from goal location.",
+      "name": "/Navigation/Robot Stuck",
+      "paused_seconds": 0,
+      "seconds": 164
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 133,
+    "faulted_overlap_s": 1,
+    "faulted_overlap_share": 0.007518796992481203,
+    "faulted_paused_s": 0,
+    "faulted_s": 1,
+    "faulted_share": 0.007518796992481203,
+    "public_label": "Robot reported a component error",
+    "resolution": "fault_cleared",
+    "shift": 7,
+    "start": "2026-07-31T12:23:06Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Navigation",
+      "paused_seconds": 0,
+      "seconds": 1
+     },
+     {
+      "message": ": Goal is obstructed. Remove obstacle from goal location.",
+      "name": "/Navigation/Robot Stuck",
+      "paused_seconds": 0,
+      "seconds": 1
+     }
+    ]
+   },
+   {
+    "cause": "faulted_self",
+    "duration_s": 344,
+    "faulted_overlap_s": 23,
+    "faulted_overlap_share": 0.06686046511627906,
+    "faulted_paused_s": 0,
+    "faulted_s": 23,
+    "faulted_share": 0.06686046511627906,
+    "public_label": "Robot reported a component error",
+    "resolution": "moved",
+    "shift": 8,
+    "start": "2026-07-31T17:43:15Z",
+    "statuses": [
+     {
+      "message": "Error",
+      "name": "/Wheels",
+      "paused_seconds": 0,
+      "seconds": 23
+     },
+     {
+      "message": "Lidar: Calibration failed",
+      "name": "/Wheels/BR",
+      "paused_seconds": 0,
+      "seconds": 23
+     }
+    ]
+   }
+  ],
+  "shift6_intervention": {
+   "duration_s": 3245,
+   "sb": [
+    {
+     "cause": "station_overrun",
+     "duration_s": 3245,
+     "faulted_overlap_s": 0,
+     "faulted_overlap_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 0,
+     "faulted_share": 0.0,
+     "public_label": null,
+     "resolution": "moved",
+     "shift": 6,
+     "start": "2026-07-30T06:16:31Z",
+     "statuses": []
+    }
+   ],
+   "sf": [
+    {
+     "cause": "station_overrun",
+     "duration_s": 3245,
+     "faulted_overlap_s": 0,
+     "faulted_overlap_share": 0.0,
+     "faulted_paused_s": 0,
+     "faulted_s": 0,
+     "faulted_share": 0.0,
+     "public_label": null,
+     "resolution": "moved",
+     "shift": 6,
+     "start": "2026-07-30T06:16:31Z",
+     "statuses": []
+    }
+   ],
+   "start": "2026-07-30T06:16:31Z"
+  }
+ },
+ "table_c": [
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.16019417475728157,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 103188.87,
+    "shift": 0,
+    "time": "2026-07-27T13:36:34Z"
+   },
+   "level": "Error",
+   "message": "Error",
+   "name": "/Navigation",
+   "paused_share": 0.0,
+   "seconds": 206,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 43
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.7948717948717948,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 103188.87,
+    "shift": 0,
+    "time": "2026-07-27T13:36:34Z"
+   },
+   "level": "Error",
+   "message": ": Blocked by obstacle. Check robot surroundings.",
+   "name": "/Navigation/Robot Stuck",
+   "paused_share": 0.0,
+   "seconds": 39,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 37
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.011976047904191617,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 444197.88,
+    "shift": 7,
+    "time": "2026-07-31T12:20:03Z"
+   },
+   "level": "Error",
+   "message": ": Goal is obstructed. Remove obstacle from goal location.",
+   "name": "/Navigation/Robot Stuck",
+   "paused_share": 0.0,
+   "seconds": 167,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 6
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 114006.87,
+    "shift": 1,
+    "time": "2026-07-27T16:36:52Z"
+   },
+   "level": "Error",
+   "message": "Error",
+   "name": "/Network",
+   "paused_share": 0.0,
+   "seconds": 9,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 2
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 114006.87,
+    "shift": 1,
+    "time": "2026-07-27T16:36:52Z"
+   },
+   "level": "Error",
+   "message": "Disconnected",
+   "name": "/Network/MQTT client",
+   "paused_share": 0.0,
+   "seconds": 8,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 1
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 174361.86,
+    "shift": 2,
+    "time": "2026-07-28T09:22:55Z"
+   },
+   "level": "Error",
+   "message": "Server Error: 14",
+   "name": "/Network/Reserve node",
+   "paused_share": 0.0,
+   "seconds": 1,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 1
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.3,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 174423.86,
+    "shift": 2,
+    "time": "2026-07-28T09:23:49Z"
+   },
+   "level": "Error",
+   "message": "Error",
+   "name": "/System",
+   "paused_share": 0.0,
+   "seconds": 60,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 25
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.3,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 174423.86,
+    "shift": 2,
+    "time": "2026-07-28T09:23:49Z"
+   },
+   "level": "Error",
+   "message": "Not synchronized",
+   "name": "/System/Clock",
+   "paused_share": 0.0,
+   "seconds": 60,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 25
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.02258064516129032,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 83174.87,
+    "shift": 0,
+    "time": "2026-07-27T08:03:00Z"
+   },
+   "level": "Error",
+   "message": "Error",
+   "name": "/Wheels",
+   "paused_share": 0.0,
+   "seconds": 310,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 119
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 180615.86,
+    "shift": 2,
+    "time": "2026-07-28T11:07:01Z"
+   },
+   "level": "Error",
+   "message": "Power Input: Not Charging.",
+   "name": "/Wheels/BL",
+   "paused_share": 0.0,
+   "seconds": 5,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 5
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 83198.87,
+    "shift": 0,
+    "time": "2026-07-27T08:03:24Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Calibrating",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 79,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 33
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 463606.88,
+    "shift": 8,
+    "time": "2026-07-31T17:43:32Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Calibration failed",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 23,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 6
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 170376.86,
+    "shift": 2,
+    "time": "2026-07-28T08:16:22Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Waiting for scans",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 11,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 11
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 180615.86,
+    "shift": 2,
+    "time": "2026-07-28T11:07:01Z"
+   },
+   "level": "Error",
+   "message": "Power Input: Not Charging.",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 5,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 5
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 83174.87,
+    "shift": 0,
+    "time": "2026-07-27T08:03:00Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Calibrating",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 159,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 49
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 297175.88,
+    "shift": 5,
+    "time": "2026-07-29T19:29:41Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Calibrating, Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 2,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 1
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 83177.87,
+    "shift": 0,
+    "time": "2026-07-27T08:03:03Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Calibration failed",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 21,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 7
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 0.0,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 213953.88,
+    "shift": 3,
+    "time": "2026-07-28T20:22:39Z"
+   },
+   "level": "Error",
+   "message": "Lidar: Waiting for scans",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 7,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 4
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 180615.86,
+    "shift": 2,
+    "time": "2026-07-28T11:07:01Z"
+   },
+   "level": "Error",
+   "message": "Power Input: Not Charging.",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 4,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 4
+  },
+  {
+   "class": "faulted by our rule",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 180615.86,
+    "shift": 2,
+    "time": "2026-07-28T11:07:01Z"
+   },
+   "level": "Error",
+   "message": "Power Input: Not Charging.",
+   "name": "/Wheels/FR",
+   "paused_share": 0.0,
+   "seconds": 1,
+   "source": "ours, rank B, Part 9 section 1",
+   "status_rows": 1
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 285198.88,
+    "shift": 5,
+    "time": "2026-07-29T16:10:04Z"
+   },
+   "level": "Stale",
+   "message": "Missing data",
+   "name": "/Wheels/BL",
+   "paused_share": 0.0,
+   "seconds": 1,
+   "source": "none",
+   "status_rows": 1
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.42335390946502055,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 79068.87,
+    "shift": 0,
+    "time": "2026-07-27T06:54:34Z"
+   },
+   "level": "Warning",
+   "message": "Warning",
+   "name": "/Devices",
+   "paused_share": 0.0,
+   "seconds": 3888,
+   "source": "none",
+   "status_rows": 2011
+  },
+  {
+   "class": "noise",
+   "driving_share": 0.39918588873812755,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 79142.87,
+    "shift": 0,
+    "time": "2026-07-27T06:55:48Z"
+   },
+   "level": "Warning",
+   "message": "Frequency too high.",
+   "name": "/Devices/Camera",
+   "paused_share": 0.0,
+   "seconds": 3685,
+   "source": "diagnostic_updater FrequencyStatus, rank A, Part 9 section 2",
+   "status_rows": 1830
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.9476744186046512,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 79068.87,
+    "shift": 0,
+    "time": "2026-07-27T06:54:34Z"
+   },
+   "level": "Warning",
+   "message": "Frequency too low.",
+   "name": "/Devices/Camera",
+   "paused_share": 0.0,
+   "seconds": 172,
+   "source": "none",
+   "status_rows": 165
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.3870967741935484,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 91292.87,
+    "shift": 0,
+    "time": "2026-07-27T10:18:18Z"
+   },
+   "level": "Warning",
+   "message": "",
+   "name": "/Devices/Joystick",
+   "paused_share": 0.0,
+   "seconds": 31,
+   "source": "none",
+   "status_rows": 16
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.3055462634642403,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 166780.86,
+    "shift": 2,
+    "time": "2026-07-28T07:16:26Z"
+   },
+   "level": "Warning",
+   "message": "Warning",
+   "name": "/Localization",
+   "paused_share": 0.0076938516090185325,
+   "seconds": 14947,
+   "source": "none",
+   "status_rows": 5844
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.0012690355329949238,
+   "family_note": "unclassified (disk usage warning)",
+   "first_onset": {
+    "robot_uptime": 336083.88,
+    "shift": 6,
+    "time": "2026-07-30T06:18:09Z"
+   },
+   "level": "Warning",
+   "message": "Drive to localize: 0%. ",
+   "name": "/Localization/Perception",
+   "paused_share": 0.0019035532994923859,
+   "seconds": 3152,
+   "source": "none",
+   "status_rows": 83
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 1.0,
+   "family_note": "unclassified (disk usage warning)",
+   "first_onset": {
+    "robot_uptime": 340077.88,
+    "shift": 6,
+    "time": "2026-07-30T07:24:43Z"
+   },
+   "level": "Warning",
+   "message": "New OOB calibration is recommended for improved performance.",
+   "name": "/Localization/Perception",
+   "paused_share": 0.0,
+   "seconds": 5,
+   "source": "none",
+   "status_rows": 5
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.0,
+   "family_note": "unclassified (disk usage warning)",
+   "first_onset": {
+    "robot_uptime": 166780.86,
+    "shift": 2,
+    "time": "2026-07-28T07:16:26Z"
+   },
+   "level": "Warning",
+   "message": "Restarting localization system. ",
+   "name": "/Localization/Perception",
+   "paused_share": 0.8983050847457628,
+   "seconds": 59,
+   "source": "none",
+   "status_rows": 5
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.38890784982935156,
+   "family_note": "unclassified (disk usage warning)",
+   "first_onset": {
+    "robot_uptime": 303005.88,
+    "shift": 5,
+    "time": "2026-07-29T21:06:51Z"
+   },
+   "level": "Warning",
+   "message": "SSD usage above 80%. RGo will stop at 90%.",
+   "name": "/Localization/Perception",
+   "paused_share": 0.00477815699658703,
+   "seconds": 11720,
+   "source": "none",
+   "status_rows": 5750
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.0,
+   "family_note": "unclassified (disk usage warning)",
+   "first_onset": {
+    "robot_uptime": 335986.88,
+    "shift": 6,
+    "time": "2026-07-30T06:16:32Z"
+   },
+   "level": "Warning",
+   "message": "SSD usage above 80%. RGo will stop at 90%. Restarting localization system. ",
+   "name": "/Localization/Perception",
+   "paused_share": 0.0,
+   "seconds": 11,
+   "source": "none",
+   "status_rows": 1
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 122808.87,
+    "shift": 1,
+    "time": "2026-07-27T19:03:34Z"
+   },
+   "level": "Warning",
+   "message": "Warning",
+   "name": "/Navigation",
+   "paused_share": 0.0,
+   "seconds": 1491,
+   "source": "none",
+   "status_rows": 56
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.0,
+   "family_note": "unclassified; cross-tab against paused (the manual intervention shows there)",
+   "first_onset": {
+    "robot_uptime": 122808.87,
+    "shift": 1,
+    "time": "2026-07-27T19:03:34Z"
+   },
+   "level": "Warning",
+   "message": "Next goal ignored, robot is initializing, in manual mode, in emergency stop, or experiencing a sensor error.",
+   "name": "/Navigation/Navigation",
+   "paused_share": 0.0,
+   "seconds": 1491,
+   "source": "none",
+   "status_rows": 56
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.21020329881089375,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 79171.87,
+    "shift": 0,
+    "time": "2026-07-27T06:56:17Z"
+   },
+   "level": "Warning",
+   "message": "Warning",
+   "name": "/Wheels",
+   "paused_share": 0.0,
+   "seconds": 2607,
+   "source": "none",
+   "status_rows": 825
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.6923076923076923,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 79171.87,
+    "shift": 0,
+    "time": "2026-07-27T06:56:17Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Calibrating",
+   "name": "/Wheels/BL",
+   "paused_share": 0.0,
+   "seconds": 104,
+   "source": "none",
+   "status_rows": 89
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 162381.86,
+    "shift": 2,
+    "time": "2026-07-28T06:03:07Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Calibration failed",
+   "name": "/Wheels/BL",
+   "paused_share": 0.0,
+   "seconds": 5,
+   "source": "none",
+   "status_rows": 5
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.18518518518518517,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 79173.87,
+    "shift": 0,
+    "time": "2026-07-27T06:56:19Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Waiting for scans",
+   "name": "/Wheels/BL",
+   "paused_share": 0.0,
+   "seconds": 513,
+   "source": "none",
+   "status_rows": 155
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.8604651162790697,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 99055.87,
+    "shift": 0,
+    "time": "2026-07-27T12:27:41Z"
+   },
+   "level": "Warning",
+   "message": "Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/BL",
+   "paused_share": 0.0,
+   "seconds": 43,
+   "source": "none",
+   "status_rows": 41
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.8846153846153846,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 83197.87,
+    "shift": 0,
+    "time": "2026-07-27T08:03:23Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Calibrating",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 26,
+   "source": "none",
+   "status_rows": 25
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.10234899328859061,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 79240.87,
+    "shift": 0,
+    "time": "2026-07-27T06:57:26Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Waiting for scans",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 596,
+   "source": "none",
+   "status_rows": 123
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 99055.87,
+    "shift": 0,
+    "time": "2026-07-27T12:27:41Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Waiting for scans, Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 4,
+   "source": "none",
+   "status_rows": 4
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.9,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 99056.87,
+    "shift": 0,
+    "time": "2026-07-27T12:27:42Z"
+   },
+   "level": "Warning",
+   "message": "Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/BR",
+   "paused_share": 0.0,
+   "seconds": 50,
+   "source": "none",
+   "status_rows": 48
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.7272727272727273,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 83173.87,
+    "shift": 0,
+    "time": "2026-07-27T08:02:59Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Calibrating",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 33,
+   "source": "none",
+   "status_rows": 31
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.16052060737527116,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 79214.87,
+    "shift": 0,
+    "time": "2026-07-27T06:57:00Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Waiting for scans",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 461,
+   "source": "none",
+   "status_rows": 134
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 114879.87,
+    "shift": 1,
+    "time": "2026-07-27T16:51:25Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Waiting for scans, Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 4,
+   "source": "none",
+   "status_rows": 4
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 100612.87,
+    "shift": 0,
+    "time": "2026-07-27T12:53:38Z"
+   },
+   "level": "Warning",
+   "message": "Low frequency: Tacho",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 1,
+   "source": "none",
+   "status_rows": 1
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.9047619047619048,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 114881.87,
+    "shift": 1,
+    "time": "2026-07-27T16:51:27Z"
+   },
+   "level": "Warning",
+   "message": "Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/FL",
+   "paused_share": 0.0,
+   "seconds": 42,
+   "source": "none",
+   "status_rows": 41
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.4375,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 79463.87,
+    "shift": 0,
+    "time": "2026-07-27T07:01:09Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Calibrating",
+   "name": "/Wheels/FR",
+   "paused_share": 0.0,
+   "seconds": 112,
+   "source": "none",
+   "status_rows": 74
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 1.0,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 138900.88,
+    "shift": 1,
+    "time": "2026-07-27T23:31:46Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Calibration failed",
+   "name": "/Wheels/FR",
+   "paused_share": 0.0,
+   "seconds": 7,
+   "source": "none",
+   "status_rows": 6
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.11624649859943978,
+   "family_note": "unclassified; robot_uptime at first onset is the column of interest",
+   "first_onset": {
+    "robot_uptime": 79465.87,
+    "shift": 0,
+    "time": "2026-07-27T07:01:11Z"
+   },
+   "level": "Warning",
+   "message": "Lidar: Waiting for scans",
+   "name": "/Wheels/FR",
+   "paused_share": 0.0,
+   "seconds": 714,
+   "source": "none",
+   "status_rows": 147
+  },
+  {
+   "class": "unclassified",
+   "driving_share": 0.9166666666666666,
+   "family_note": null,
+   "first_onset": {
+    "robot_uptime": 99055.87,
+    "shift": 0,
+    "time": "2026-07-27T12:27:41Z"
+   },
+   "level": "Warning",
+   "message": "Mecanum: RPM feedback mismatch",
+   "name": "/Wheels/FR",
+   "paused_share": 0.0,
+   "seconds": 60,
+   "source": "none",
+   "status_rows": 58
+  }
+ ],
+ "verdict": "mixed",
+ "verdict_inputs": {
+  "episodes": [
+   {
+    "duration_s": 47,
+    "faulted_overlap_s": 0,
+    "faulted_overlap_share": 0.0,
+    "shift": 6,
+    "start": "2026-07-30T07:10:44Z"
+   },
+   {
+    "duration_s": 133,
+    "faulted_overlap_s": 1,
+    "faulted_overlap_share": 0.007518796992481203,
+    "shift": 7,
+    "start": "2026-07-31T12:23:06Z"
+   }
+  ],
+  "families_refuting_error_equals_stopped": [
+   "/Navigation/Robot Stuck | : Blocked by obstacle. Check robot surroundings.",
+   "/Wheels/BL | Power Input: Not Charging.",
+   "/Wheels/BR | Power Input: Not Charging.",
+   "/Wheels/FL | Power Input: Not Charging.",
+   "/Wheels/FR | Power Input: Not Charging."
+  ],
+  "pooled_driving_share": 0.09914529914529914,
+  "pooled_faulted_driving_s": 58,
+  "pooled_faulted_s": 585,
+  "rule": "Part 9 section 5: 'fault cause' if every -sb 'cause not identified' episode overlaps a faulted status for >= 50 % of its seconds AND <= 20 % of the pooled faulted seconds are while driving; 'unknown stays unknown' if none overlaps at all; else 'mixed'. Overlap counts a faulted second whether or not the robot was paused (table (b) faulted_overlap_s)"
+ },
+ "verdict_sentence": "n = 2: a description, not a rate"
+}

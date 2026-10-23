@@ -1,0 +1,959 @@
+{
+ "faults": true,
+ "faults_note": "--faults: the detector's faulted_self cause label ('Robot error, cannot continue order') in this file must not be quoted for MoRoOp; say 'Robot reported a component error'",
+ "pooled": {
+  "causes": {
+   "denominator": "time budget stuck bucket",
+   "episode_seconds": 4847,
+   "share_total": 3.8346518987341773,
+   "stuck_bucket_s": 1264,
+   "table": [
+    {
+     "cause": "station_overrun",
+     "cause_label": "Station stop over time limit",
+     "episodes": 2,
+     "seconds": 3563,
+     "share": 2.8188291139240507
+    },
+    {
+     "cause": "faulted_self",
+     "cause_label": "Robot error, cannot continue order",
+     "episodes": 8,
+     "seconds": 1237,
+     "share": 0.9786392405063291
+    },
+    {
+     "cause": "unknown",
+     "cause_label": "Stopped, cause not identified",
+     "episodes": 1,
+     "seconds": 47,
+     "share": 0.037183544303797465
+    }
+   ],
+   "uncounted_open_episodes": 0
+  },
+  "counts": {
+   "episodes": 77,
+   "false_alarms": 3,
+   "ge30": 2,
+   "hits": 2,
+   "lt30": 75,
+   "misses": 0,
+   "stuck_runs": 4,
+   "timeouts": 8,
+   "timeouts_detected": 3
+  },
+  "false_alarms": [
+   {
+    "duration_s": 318,
+    "on_station_cell": true,
+    "overlaps_paused_message": false,
+    "overlaps_timeout_operation": true,
+    "shift": 1,
+    "start": "2026-07-27T19:03:16Z"
+   },
+   {
+    "duration_s": 3245,
+    "on_station_cell": false,
+    "overlaps_paused_message": true,
+    "overlaps_timeout_operation": true,
+    "shift": 6,
+    "start": "2026-07-30T06:16:31Z"
+   },
+   {
+    "duration_s": 47,
+    "on_station_cell": false,
+    "overlaps_paused_message": true,
+    "overlaps_timeout_operation": false,
+    "shift": 6,
+    "start": "2026-07-30T07:10:44Z"
+   }
+  ],
+  "missed_episodes_ge_30s": [],
+  "overruns": [
+   {
+    "duration_s": 318,
+    "overlaps_timeout_operation": true,
+    "shift": 1,
+    "start": "2026-07-27T19:03:16Z",
+    "station_cell": [
+     9,
+     -3
+    ]
+   },
+   {
+    "duration_s": 3245,
+    "overlaps_timeout_operation": true,
+    "shift": 6,
+    "start": "2026-07-30T06:16:31Z",
+    "station_cell": [
+     15,
+     -1
+    ]
+   }
+  ],
+  "seconds_per_bucket": {
+   "faulted": 92,
+   "idle": 137,
+   "moving": 134,
+   "no_data": 290,
+   "paused": 0,
+   "stopped_short": 82,
+   "stuck": 0,
+   "waiting_shelf": 0,
+   "waiting_station": 30
+  },
+  "timeout_operations": [
+   {
+    "detected": true,
+    "finish": "2026-07-27T19:08:26Z",
+    "goal": "kitting",
+    "job_id": "1f686cec-b37a-4ce0-b833-bfa9bf558291",
+    "operation_id": "26515ac5-cdb6-4001-aca2-5ecc89466bdf",
+    "shift": 1,
+    "start": "2026-07-27T19:03:26Z"
+   },
+   {
+    "detected": false,
+    "finish": "2026-07-29T17:22:32Z",
+    "goal": "warehouse",
+    "job_id": "a603b193-8e5c-4204-ab80-b99700d89602",
+    "operation_id": "3e9c170b-7920-4afa-aa47-d5b0b1ac3026",
+    "shift": 5,
+    "start": "2026-07-29T17:17:32Z"
+   },
+   {
+    "detected": false,
+    "finish": "2026-07-30T06:07:04Z",
+    "goal": "warehouse",
+    "job_id": "8d621ccf-bb42-4a43-ba96-e883ab273d6c",
+    "operation_id": "47e448e9-3a5e-4096-baaf-fd5148f59409",
+    "shift": 6,
+    "start": "2026-07-30T06:02:04Z"
+   },
+   {
+    "detected": true,
+    "finish": "2026-07-30T06:21:10Z",
+    "goal": "kitting",
+    "job_id": "4474172c-fb96-4072-9bf4-8bd7d64ce863",
+    "operation_id": "f3e63001-ca44-4669-a601-4468aa59b2fb",
+    "shift": 6,
+    "start": "2026-07-30T06:16:10Z"
+   },
+   {
+    "detected": false,
+    "finish": "2026-07-31T10:06:00Z",
+    "goal": "assembly",
+    "job_id": "071242f6-82cc-4ff1-ae6e-a9633779bf37",
+    "operation_id": "9d1d6baf-426e-4150-9497-b2c86dfb9c42",
+    "shift": 7,
+    "start": "2026-07-31T10:01:00Z"
+   },
+   {
+    "detected": false,
+    "finish": "2026-07-31T12:18:24Z",
+    "goal": "warehouse",
+    "job_id": "62ea8a95-71f1-45a9-8cec-57f2671cb750",
+    "operation_id": "05645a41-e504-4aad-82c9-103e064c9a77",
+    "shift": 7,
+    "start": "2026-07-31T12:13:24Z"
+   },
+   {
+    "detected": true,
+    "finish": "2026-07-31T12:23:25Z",
+    "goal": "warehouse",
+    "job_id": "b16cb124-7dd9-4efb-82bb-b4d902ce6e14",
+    "operation_id": "a0d6009d-6aea-4d3d-9f73-641f28711fdc",
+    "shift": 7,
+    "start": "2026-07-31T12:18:25Z"
+   },
+   {
+    "detected": false,
+    "finish": "2026-07-31T17:48:52Z",
+    "goal": "assembly",
+    "job_id": "a4cf0be0-f26c-400d-bf1f-0900ea84f2fd",
+    "operation_id": "13ee6aa0-8bdb-41b1-bb06-6fb2a464bb80",
+    "shift": 8,
+    "start": "2026-07-31T17:43:52Z"
+   }
+  ]
+ },
+ "servicing_max_s": [
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0
+ ],
+ "servicing_pooling": "one bound per shift (a shift is one run: one robot, its own sample); the four servicing_* keys here are lists in shift order, each shift record has its own",
+ "servicing_q1_s": [
+  3.0000000000000004,
+  6.0,
+  4.0,
+  6.0,
+  6.0,
+  3.0000000000000004,
+  3.7224194364083982,
+  2.0,
+  6.0
+ ],
+ "servicing_q3_s": [
+  21.0,
+  21.0,
+  19.999999999999996,
+  21.0,
+  22.000000000000004,
+  21.0,
+  18.999999999999996,
+  21.0,
+  21.745621989828273
+ ],
+ "servicing_sample_n": [
+  823,
+  789,
+  820,
+  802,
+  814,
+  821,
+  780,
+  835,
+  778
+ ],
+ "shifts": {
+  "0": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 0,
+    "share_total": null,
+    "stuck_bucket_s": 0,
+    "table": [],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 12,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 12,
+    "seconds": 80
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 80,
+   "label_seconds_per_bucket": {
+    "faulted": 0,
+    "idle": 23,
+    "moving": 27,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 19,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 11
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 3.0000000000000004,
+   "servicing_q3_s": 21.0,
+   "servicing_sample_n": 823,
+   "stuck_runs": 0,
+   "timeout_operations": {
+    "count": 0,
+    "detected": 0,
+    "list": []
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "1": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 318,
+    "share_total": 2.0921052631578947,
+    "stuck_bucket_s": 152,
+    "table": [
+     {
+      "cause": "station_overrun",
+      "cause_label": "Station stop over time limit",
+      "episodes": 1,
+      "seconds": 318,
+      "share": 2.0921052631578947
+     }
+    ],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 3,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 3,
+    "seconds": 15
+   },
+   "false_alarms": {
+    "count": 1,
+    "list": [
+     {
+      "duration_s": 318,
+      "on_station_cell": true,
+      "overlaps_paused_message": false,
+      "overlaps_timeout_operation": true,
+      "start": "2026-07-27T19:03:16Z"
+     }
+    ]
+   },
+   "label_seconds": 15,
+   "label_seconds_per_bucket": {
+    "faulted": 0,
+    "idle": 15,
+    "moving": 0,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 0,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 0
+   },
+   "overruns": [
+    {
+     "duration_s": 318,
+     "overlaps_timeout_operation": true,
+     "start": "2026-07-27T19:03:16Z",
+     "station_cell": [
+      9,
+      -3
+     ]
+    }
+   ],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 6.0,
+   "servicing_q3_s": 21.0,
+   "servicing_sample_n": 789,
+   "stuck_runs": 1,
+   "timeout_operations": {
+    "count": 1,
+    "detected": 1,
+    "list": [
+     {
+      "detected": true,
+      "finish": "2026-07-27T19:08:26Z",
+      "goal": "kitting",
+      "job_id": "1f686cec-b37a-4ce0-b833-bfa9bf558291",
+      "operation_id": "26515ac5-cdb6-4001-aca2-5ecc89466bdf",
+      "start": "2026-07-27T19:03:26Z"
+     }
+    ]
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "2": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 41,
+    "share_total": null,
+    "stuck_bucket_s": 0,
+    "table": [
+     {
+      "cause": "faulted_self",
+      "cause_label": "Robot error, cannot continue order",
+      "episodes": 1,
+      "seconds": 41,
+      "share": null
+     }
+    ],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 17,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 17,
+    "seconds": 93
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 93,
+   "label_seconds_per_bucket": {
+    "faulted": 2,
+    "idle": 27,
+    "moving": 37,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 25,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 2
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 4.0,
+   "servicing_q3_s": 19.999999999999996,
+   "servicing_sample_n": 820,
+   "stuck_runs": 0,
+   "timeout_operations": {
+    "count": 0,
+    "detected": 0,
+    "list": []
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "3": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 0,
+    "share_total": null,
+    "stuck_bucket_s": 0,
+    "table": [],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 7,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 7,
+    "seconds": 34
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 34,
+   "label_seconds_per_bucket": {
+    "faulted": 1,
+    "idle": 16,
+    "moving": 14,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 3,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 0
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 6.0,
+   "servicing_q3_s": 21.0,
+   "servicing_sample_n": 802,
+   "stuck_runs": 0,
+   "timeout_operations": {
+    "count": 0,
+    "detected": 0,
+    "list": []
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "4": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 0,
+    "share_total": null,
+    "stuck_bucket_s": 0,
+    "table": [],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 2,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 2,
+    "seconds": 5
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 5,
+   "label_seconds_per_bucket": {
+    "faulted": 0,
+    "idle": 0,
+    "moving": 0,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 2,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 3
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 6.0,
+   "servicing_q3_s": 22.000000000000004,
+   "servicing_sample_n": 814,
+   "stuck_runs": 0,
+   "timeout_operations": {
+    "count": 0,
+    "detected": 0,
+    "list": []
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "5": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 0,
+    "share_total": null,
+    "stuck_bucket_s": 0,
+    "table": [],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 6,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 6,
+    "seconds": 27
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 27,
+   "label_seconds_per_bucket": {
+    "faulted": 1,
+    "idle": 14,
+    "moving": 10,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 0,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 2
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 3.0000000000000004,
+   "servicing_q3_s": 21.0,
+   "servicing_sample_n": 821,
+   "stuck_runs": 0,
+   "timeout_operations": {
+    "count": 1,
+    "detected": 0,
+    "list": [
+     {
+      "detected": false,
+      "finish": "2026-07-29T17:22:32Z",
+      "goal": "warehouse",
+      "job_id": "a603b193-8e5c-4204-ab80-b99700d89602",
+      "operation_id": "3e9c170b-7920-4afa-aa47-d5b0b1ac3026",
+      "start": "2026-07-29T17:17:32Z"
+     }
+    ]
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "6": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 3365,
+    "share_total": 3.039747064137308,
+    "stuck_bucket_s": 1107,
+    "table": [
+     {
+      "cause": "station_overrun",
+      "cause_label": "Station stop over time limit",
+      "episodes": 1,
+      "seconds": 3245,
+      "share": 2.931345980126468
+     },
+     {
+      "cause": "faulted_self",
+      "cause_label": "Robot error, cannot continue order",
+      "episodes": 2,
+      "seconds": 73,
+      "share": 0.06594399277326106
+     },
+     {
+      "cause": "unknown",
+      "cause_label": "Stopped, cause not identified",
+      "episodes": 1,
+      "seconds": 47,
+      "share": 0.04245709123757904
+     }
+    ],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 17,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 17,
+    "seconds": 81
+   },
+   "false_alarms": {
+    "count": 2,
+    "list": [
+     {
+      "duration_s": 3245,
+      "on_station_cell": false,
+      "overlaps_paused_message": true,
+      "overlaps_timeout_operation": true,
+      "start": "2026-07-30T06:16:31Z"
+     },
+     {
+      "duration_s": 47,
+      "on_station_cell": false,
+      "overlaps_paused_message": true,
+      "overlaps_timeout_operation": false,
+      "start": "2026-07-30T07:10:44Z"
+     }
+    ]
+   },
+   "label_seconds": 81,
+   "label_seconds_per_bucket": {
+    "faulted": 0,
+    "idle": 15,
+    "moving": 34,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 26,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 6
+   },
+   "overruns": [
+    {
+     "duration_s": 3245,
+     "overlaps_timeout_operation": true,
+     "start": "2026-07-30T06:16:31Z",
+     "station_cell": [
+      15,
+      -1
+     ]
+    }
+   ],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 3.7224194364083982,
+   "servicing_q3_s": 18.999999999999996,
+   "servicing_sample_n": 780,
+   "stuck_runs": 2,
+   "timeout_operations": {
+    "count": 2,
+    "detected": 1,
+    "list": [
+     {
+      "detected": false,
+      "finish": "2026-07-30T06:07:04Z",
+      "goal": "warehouse",
+      "job_id": "8d621ccf-bb42-4a43-ba96-e883ab273d6c",
+      "operation_id": "47e448e9-3a5e-4096-baaf-fd5148f59409",
+      "start": "2026-07-30T06:02:04Z"
+     },
+     {
+      "detected": true,
+      "finish": "2026-07-30T06:21:10Z",
+      "goal": "kitting",
+      "job_id": "4474172c-fb96-4072-9bf4-8bd7d64ce863",
+      "operation_id": "f3e63001-ca44-4669-a601-4468aa59b2fb",
+      "start": "2026-07-30T06:16:10Z"
+     }
+    ]
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "7": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 779,
+    "share_total": 155.8,
+    "stuck_bucket_s": 5,
+    "table": [
+     {
+      "cause": "faulted_self",
+      "cause_label": "Robot error, cannot continue order",
+      "episodes": 4,
+      "seconds": 779,
+      "share": 155.8
+     }
+    ],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 9,
+   "episodes_ge_30s": {
+    "count": 2,
+    "hits": 2,
+    "list": [
+     {
+      "detected": true,
+      "duration_s": 250,
+      "reasons": {
+       "GoalObstructed": 4
+      },
+      "rows": 4,
+      "start": "2026-07-31T12:18:37Z"
+     },
+     {
+      "detected": true,
+      "duration_s": 127,
+      "reasons": {
+       "GoalObstructed": 1
+      },
+      "rows": 1,
+      "start": "2026-07-31T12:23:11Z"
+     }
+    ],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 7,
+    "seconds": 32
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 409,
+   "label_seconds_per_bucket": {
+    "faulted": 87,
+    "idle": 13,
+    "moving": 6,
+    "no_data": 290,
+    "paused": 0,
+    "stopped_short": 7,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 6
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 2.0,
+   "servicing_q3_s": 21.0,
+   "servicing_sample_n": 835,
+   "stuck_runs": 1,
+   "timeout_operations": {
+    "count": 3,
+    "detected": 1,
+    "list": [
+     {
+      "detected": false,
+      "finish": "2026-07-31T10:06:00Z",
+      "goal": "assembly",
+      "job_id": "071242f6-82cc-4ff1-ae6e-a9633779bf37",
+      "operation_id": "9d1d6baf-426e-4150-9497-b2c86dfb9c42",
+      "start": "2026-07-31T10:01:00Z"
+     },
+     {
+      "detected": false,
+      "finish": "2026-07-31T12:18:24Z",
+      "goal": "warehouse",
+      "job_id": "62ea8a95-71f1-45a9-8cec-57f2671cb750",
+      "operation_id": "05645a41-e504-4aad-82c9-103e064c9a77",
+      "start": "2026-07-31T12:13:24Z"
+     },
+     {
+      "detected": true,
+      "finish": "2026-07-31T12:23:25Z",
+      "goal": "warehouse",
+      "job_id": "b16cb124-7dd9-4efb-82bb-b4d902ce6e14",
+      "operation_id": "a0d6009d-6aea-4d3d-9f73-641f28711fdc",
+      "start": "2026-07-31T12:18:25Z"
+     }
+    ]
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  },
+  "8": {
+   "causes": {
+    "denominator": "time budget stuck bucket",
+    "episode_seconds": 344,
+    "share_total": null,
+    "stuck_bucket_s": 0,
+    "table": [
+     {
+      "cause": "faulted_self",
+      "cause_label": "Robot error, cannot continue order",
+      "episodes": 1,
+      "seconds": 344,
+      "share": null
+     }
+    ],
+    "uncounted_open_episodes": 0
+   },
+   "episodes": 4,
+   "episodes_ge_30s": {
+    "count": 0,
+    "hits": 0,
+    "list": [],
+    "misses": 0
+   },
+   "episodes_lt_30s": {
+    "count": 4,
+    "seconds": 21
+   },
+   "false_alarms": {
+    "count": 0,
+    "list": []
+   },
+   "label_seconds": 21,
+   "label_seconds_per_bucket": {
+    "faulted": 1,
+    "idle": 14,
+    "moving": 6,
+    "no_data": 0,
+    "paused": 0,
+    "stopped_short": 0,
+    "stuck": 0,
+    "waiting_shelf": 0,
+    "waiting_station": 0
+   },
+   "overruns": [],
+   "servicing_max_s": 300.0,
+   "servicing_q1_s": 6.0,
+   "servicing_q3_s": 21.745621989828273,
+   "servicing_sample_n": 778,
+   "stuck_runs": 0,
+   "timeout_operations": {
+    "count": 1,
+    "detected": 0,
+    "list": [
+     {
+      "detected": false,
+      "finish": "2026-07-31T17:48:52Z",
+      "goal": "assembly",
+      "job_id": "a4cf0be0-f26c-400d-bf1f-0900ea84f2fd",
+      "operation_id": "13ee6aa0-8bdb-41b1-bb06-6fb2a464bb80",
+      "start": "2026-07-31T17:43:52Z"
+     }
+    ]
+   },
+   "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+  }
+ },
+ "src": {
+  "budget_dir": "fleet/data/moroop/budget",
+  "faults": {
+   "level": "Error",
+   "noise": [
+    [
+     "/Devices/Camera",
+     "Frequency too high.",
+     "Warning"
+    ]
+   ],
+   "note": "--faults: the detector's faulted_self cause label ('Robot error, cannot continue order') in this file must not be quoted for MoRoOp; say 'Robot reported a component error'",
+   "rule": "parse.py: some errors entry with errorLevel FATAL, i.e. the kept row has a qualifying Error status. Our rule, rank B (REP 107: a component ERROR does not halt the system). Public label 'Robot reported a component error', never 'Robot error, cannot continue order'"
+  },
+  "hf": {
+   "license": "cc-by-4.0",
+   "paper": "Klein & Jeong, arXiv 2610.02428v1",
+   "repo": "Self-Organizing-Production-Logistics/MoRoOp",
+   "revision": "1.0.1",
+   "revision_api_sha": "15177e72c99d209d64e20cc013793a5dd3f5b124",
+   "tag_target_commit": "9051cb4653648b625999608367eced435e0b3991"
+  },
+  "jsonl_dir": "fleet/data/moroop/jsonl",
+  "params": {
+   "cell_m": 0.5,
+   "max_gap_s": 60,
+   "moving_eps": 0.05,
+   "omega_eps": 0.05,
+   "shift_s": 3600,
+   "stuck_after_s": 30
+  },
+  "raw_dir": "fleet/data/moroop/raw",
+  "raw_sha256": {
+   "README.md": "861d18f4656a13a9aa7fa857b7a6a429b6414c5e20d49b2a38db23a9eb6baa78",
+   "data/2026_07_27_evening/2026_07_27_evening_dispatch_events.parquet": "96e3ea26630bc415c5eacad6b460ee4a4bff5a089ae1fb32f5ebbcf26c4e0769",
+   "data/2026_07_27_evening/2026_07_27_evening_jobs.parquet": "95063bb9725c6257f54bf859edca8b282e3cb9cab3456f4cd7c1a96f719e1c5b",
+   "data/2026_07_27_evening/2026_07_27_evening_operations.parquet": "d941779cf1195d44e8a2a4af43f3778f9a9ac877e599f07b754d33b46687c3d4",
+   "data/2026_07_27_evening/2026_07_27_evening_robot_state_cleaned.parquet": "413e2d69f85bb190c39bd23e98a78791b80595ec322e6efd66277c641e1c944e",
+   "data/2026_07_27_evening/2026_07_27_evening_robot_state_raw.parquet": "89c1e935225b145931766cce6bd88ff0d8495e71318c298b89cb38b8aa20da31",
+   "data/2026_07_27_morning/2026_07_27_morning_dispatch_events.parquet": "d757d7a588771b2209944b89fabe9797f21a874932b786acc98190f0f5216ac4",
+   "data/2026_07_27_morning/2026_07_27_morning_jobs.parquet": "46ef270549fe2d9e63b1e17a8c845cd3521bdea10c505895f00ba43e433de249",
+   "data/2026_07_27_morning/2026_07_27_morning_operations.parquet": "f7e2a296b5b9391620dc4fcaa9f0c50689e31f5f268c729fce204739e66b73c2",
+   "data/2026_07_27_morning/2026_07_27_morning_robot_state_cleaned.parquet": "c7d5aa3d1f2418fbce56d67b0d93208faf1244ad2d884d1a58d1852db28beb0f",
+   "data/2026_07_27_morning/2026_07_27_morning_robot_state_raw.parquet": "4619a4c2e21c3e08269765187895327687e7b4b21ad9c4e9b9ab8345d080c46a",
+   "data/2026_07_28_evening/2026_07_28_evening_dispatch_events.parquet": "4ec8d07a148908205c6e1b840d852810339e641d89f36a553110988399b4b97f",
+   "data/2026_07_28_evening/2026_07_28_evening_jobs.parquet": "3e628fb263e1a5c18b72e2792abd6494b68d528b52f4cf801a937dc9b8671d07",
+   "data/2026_07_28_evening/2026_07_28_evening_operations.parquet": "a351beb21eeba57f3c419df54b82e8417025840849fe01985d7b0f9471044cbf",
+   "data/2026_07_28_evening/2026_07_28_evening_robot_state_cleaned.parquet": "9f5a8b8b323396420e8d92822652498f5a00a69242653607680c13fe77ee70ca",
+   "data/2026_07_28_evening/2026_07_28_evening_robot_state_raw.parquet": "8ca318645dddbff296d27e46095453b564e6d6778019ca19144440c005c64fd6",
+   "data/2026_07_28_morning/2026_07_28_morning_dispatch_events.parquet": "1735c92c6ad2cbf73ae004cd92e452d70bedddf3847db789a65f8a8266f9ea07",
+   "data/2026_07_28_morning/2026_07_28_morning_jobs.parquet": "9df7f4aa708bf7f7d81f3cb74f012c15f13ddd623fb05940fa5564b113667994",
+   "data/2026_07_28_morning/2026_07_28_morning_operations.parquet": "8996932edb6520365a487544bbc2df5908b35e4127263144c10d6d884164bb79",
+   "data/2026_07_28_morning/2026_07_28_morning_robot_state_cleaned.parquet": "0571e3a299acf36d4ab124bf6769d50b1c503579e9c31e0d6f960627965ed53d",
+   "data/2026_07_28_morning/2026_07_28_morning_robot_state_raw.parquet": "eacac1ee29a78f62ef9843f9130f86015af015334dc59fa8d7af83b42b1b40e8",
+   "data/2026_07_29_evening/2026_07_29_evening_dispatch_events.parquet": "969d2aa56df1964b7360be6c35705725c472658d0f8048e012beb79485c60898",
+   "data/2026_07_29_evening/2026_07_29_evening_jobs.parquet": "591be11caeacf8320e3b2e9e8da91ac6c67977dfcb9ef62dea541a52a0ba54f0",
+   "data/2026_07_29_evening/2026_07_29_evening_operations.parquet": "b95683d07955e21f36005a2d56509fbd711144b2f33647d92b5a63f5c437e7ec",
+   "data/2026_07_29_evening/2026_07_29_evening_robot_state_cleaned.parquet": "55a0b128e63a0431669cad22c2fbb3d4f8e3a2d3f45489f89cdc1cb6c5804483",
+   "data/2026_07_29_evening/2026_07_29_evening_robot_state_raw.parquet": "15ddc812cf81121d22c8acb3ec75ca24ea7add82a69dd46f1056f8fef7e35d3a",
+   "data/2026_07_29_morning/2026_07_29_morning_dispatch_events.parquet": "394d9ffb6ff72ea3359fded0f7972c47df8982fb98961240867f86608d4cf96a",
+   "data/2026_07_29_morning/2026_07_29_morning_jobs.parquet": "739142600c3193ac0da826122691b20c5144679c656a83e561259af251a7d47d",
+   "data/2026_07_29_morning/2026_07_29_morning_operations.parquet": "1bf78f883b25d46206d67e504fcdc235a0267414f73d7dcd5101b1d6745ea3d8",
+   "data/2026_07_29_morning/2026_07_29_morning_robot_state_cleaned.parquet": "d5b00a7504848d5ccc3cb265f543583509e611a3f1daa9574822b67d1ef23ff1",
+   "data/2026_07_29_morning/2026_07_29_morning_robot_state_raw.parquet": "401c56df2e7a24dfec3b94fed9cc268f0c62c5ea48733943e9fe733044e7bf94",
+   "data/2026_07_30_morning/2026_07_30_morning_dispatch_events.parquet": "37af564debd8620acd5d4cd3f138463d3611b9fed3751c6771f5de838420018c",
+   "data/2026_07_30_morning/2026_07_30_morning_jobs.parquet": "9ff26313ba925886afb7d2f7db32fbb096eb0ded3dcf8a87586e8336d058e3fd",
+   "data/2026_07_30_morning/2026_07_30_morning_operations.parquet": "f8a5b0f2786772a3493aeb5ac799b896162a115ebe7d30068aa111a5d7d2bbd4",
+   "data/2026_07_30_morning/2026_07_30_morning_robot_state_cleaned.parquet": "28a98346aba96fc8826244d0f9eaf09a44cfbca80319953d6beb32f1d7416d33",
+   "data/2026_07_30_morning/2026_07_30_morning_robot_state_raw.parquet": "f8b707891fcc57363fa17796d28e120082f82f50ad1b1733d0281e490e3a848a",
+   "data/2026_07_31_evening/2026_07_31_evening_dispatch_events.parquet": "a116a9b83a862d65a052b7ac3c03affd73d241dfa951de7e0db879f55f6d960b",
+   "data/2026_07_31_evening/2026_07_31_evening_jobs.parquet": "1a4b6112ee835be3c2ff872c7d002f8e9e7d3ae2cbb4035282eacb86c0678f37",
+   "data/2026_07_31_evening/2026_07_31_evening_operations.parquet": "50870f65b2d15e11a3d69df669b5837ceffd4dfdd855094bf2c7eb2cc33f45a6",
+   "data/2026_07_31_evening/2026_07_31_evening_robot_state_cleaned.parquet": "e183fac8e2bc4709ddd577283f7585d7b70166bec36aca8928246f753000603f",
+   "data/2026_07_31_evening/2026_07_31_evening_robot_state_raw.parquet": "3be26091061363e24e0e69a13a434e9438c8fa1047c55a0899ac410375832268",
+   "data/2026_07_31_morning/2026_07_31_morning_dispatch_events.parquet": "89b210807248f6f767bc3250a22d01891a1dddaec6a614dbfd119898ac674596",
+   "data/2026_07_31_morning/2026_07_31_morning_jobs.parquet": "893aab3e581b476afa9fbd1848e4137f6af03ac67c095f0b2b316b37f4bffb12",
+   "data/2026_07_31_morning/2026_07_31_morning_operations.parquet": "9cbb25a4675906a9b17d8a942b0e4fd57e37923704cb238193258efbc5857c12",
+   "data/2026_07_31_morning/2026_07_31_morning_robot_state_cleaned.parquet": "fcad96e43c78a23a0598f4aba8e0b4e4c8379ce270010f25d1b0fd0bef1354ca",
+   "data/2026_07_31_morning/2026_07_31_morning_robot_state_raw.parquet": "92608b1477ebb5284a05f6e7e8cfdc85aea8bfb063baf98003ba692dfb630be2",
+   "data/kits.parquet": "9b596c1ac2a0be031b6635c7838976df97a4a0e827de573020a351c416f0fb29"
+  },
+  "script": "fleet/adapters/moroop.py --analyse",
+  "servicing_max_s_spec": "auto",
+  "shifts": [
+   "2026_07_27_morning",
+   "2026_07_27_evening",
+   "2026_07_28_morning",
+   "2026_07_28_evening",
+   "2026_07_29_morning",
+   "2026_07_29_evening",
+   "2026_07_30_morning",
+   "2026_07_31_morning",
+   "2026_07_31_evening"
+  ],
+  "station_rule": {
+   "cells": "the --stations file",
+   "predicate": "detector.at_station",
+   "radius": 1,
+   "run_cell": "cell of the run's first stopped message"
+  },
+  "stations": "fleet/data/moroop/stations.json",
+  "stations_sha256": "3755543ff6b43789303df756358a6a8143e9031623ddb1db13aeed303e0519f6",
+  "timebudget_runs": "one per shift: fleet/timebudget.py --glob fleet/data/moroop/jsonl/zone<k>-000.jsonl.gz --run moroop-<shift> --stations fleet/data/moroop/stations.json"
+ },
+ "station_radius": 1
+}

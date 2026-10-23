@@ -1,0 +1,2792 @@
+{
+ "faulted": {
+  "0": {
+   "seconds": 31,
+   "share": 0.001060082754847314
+  },
+  "1": {
+   "seconds": 42,
+   "share": 0.0014513286568298834
+  },
+  "2": {
+   "seconds": 98,
+   "share": 0.0032976647149875497
+  },
+  "3": {
+   "seconds": 28,
+   "share": 0.0009606807109037261
+  },
+  "4": {
+   "seconds": 37,
+   "share": 0.0012798782386108133
+  },
+  "5": {
+   "seconds": 50,
+   "share": 0.0017155012694709394
+  },
+  "6": {
+   "seconds": 35,
+   "share": 0.0011935208866155158
+  },
+  "7": {
+   "seconds": 120,
+   "share": 0.004151387255241126
+  },
+  "8": {
+   "seconds": 67,
+   "share": 0.0022800748681299984
+  }
+ },
+ "servicing_max_s": [
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0,
+  300.0
+ ],
+ "servicing_pooling": "one bound per shift (a shift is one run: one robot, its own sample); the four servicing_* keys here are lists in shift order, each shift record has its own",
+ "servicing_q1_s": [
+  3.0000000000000004,
+  6.0,
+  4.0,
+  6.0,
+  6.0,
+  3.0000000000000004,
+  3.7224194364083982,
+  2.0,
+  6.0
+ ],
+ "servicing_q3_s": [
+  21.0,
+  21.0,
+  19.999999999999996,
+  21.0,
+  22.000000000000004,
+  21.0,
+  18.999999999999996,
+  21.0,
+  21.745621989828273
+ ],
+ "servicing_sample_n": [
+  823,
+  789,
+  820,
+  802,
+  814,
+  821,
+  780,
+  835,
+  778
+ ],
+ "shifts": {
+  "0": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 14,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 31
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 408,
+     "status_entries_by_level": {
+      "Error": 28,
+      "Ok": 257275,
+      "Warning": 801
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 2,
+     "empty_box_refill": 37,
+     "kit supply": 115
+    },
+    "kept_interval_s": {
+     "max": 124,
+     "p50": 1,
+     "p99": 26
+    },
+    "kept_rows": 14653,
+    "label_rows": 37,
+    "native_rows": 15194,
+    "non_charging_jobs": 152,
+    "omega_only_seconds": 2319,
+    "operating_mode_rows": {
+     "Autonomous": 15194
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 29243
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 175,
+     "none": 133,
+     "running": 14345
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 355,
+    "rows_collapsed": 541,
+    "state_rows": {
+     "Idle": 1743,
+     "Navigating": 13451
+    },
+    "state_seconds": {
+     "Idle": 13745,
+     "Navigating": 15498
+    },
+    "stuck_reason_rows": {
+     "GoalObstructed": 4,
+     "None": 15157,
+     "ObstacleInTheWay": 33
+    },
+    "table_rows": {
+     "dispatch_events": 2149,
+     "jobs": 154,
+     "operations": 536,
+     "robot_state_cleaned": 15194,
+     "robot_state_raw": 15549
+    },
+    "termination_reason_operations": {
+     "NONE": 536
+    },
+    "timeout_operations": 0,
+    "unique_order_ids": 152,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 633,
+    "charging_job_seconds": 801,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 5,
+     "idle": 694,
+     "moving": 102
+    },
+    "is_robot_charging_seconds": 654
+   },
+   "jobs_per_robot_hour": 18.712170433950003,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 0,
+     "share_total": null,
+     "stuck_bucket_s": 0,
+     "table": [],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 12,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 12,
+     "seconds": 80
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 80,
+    "label_seconds_per_bucket": {
+     "faulted": 0,
+     "idle": 23,
+     "moving": 27,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 19,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 11
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 3.0000000000000004,
+    "servicing_q3_s": 21.0,
+    "servicing_sample_n": 823,
+    "stuck_runs": 0,
+    "timeout_operations": {
+     "count": 0,
+     "detected": 0,
+     "list": []
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 14653,
+   "name": "2026_07_27_morning",
+   "no_data": {
+    "intervals_over_60s": 21,
+    "max_gap_inside_stopped_run_s": 124,
+    "seconds_moved_by_60s_rule": 1708,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 687,
+     "waiting_station": 1021
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15194,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15194,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 37,
+     "gating": true,
+     "kind": "exact",
+     "observed": 37,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 0,
+     "gating": true,
+     "kind": "exact",
+     "observed": 0,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 29243,
+     "gating": true,
+     "kind": "exact",
+     "observed": 29243,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 31,
+      "idle": 3340,
+      "moving": 11589,
+      "no_data": 1708,
+      "paused": 0,
+      "stopped_short": 187,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 12388
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 31,
+      "idle": 3340,
+      "moving": 11589,
+      "no_data": 1708,
+      "paused": 0,
+      "stopped_short": 187,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 12388
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 152,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 152,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.12,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.1231,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 152,
+    "per_shift_s": {
+     "faulted": 3.8162979174503304,
+     "idle": 411.17532400916457,
+     "moving": 1426.6798892042539,
+     "no_data": 210.2657046130698,
+     "paused": 0.0,
+     "stopped_short": 23.020893889135863,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1525.0418903669254
+    },
+    "seconds": {
+     "faulted": 31,
+     "idle": 3340,
+     "moving": 11589,
+     "no_data": 1708,
+     "paused": 0,
+     "stopped_short": 187,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 12388
+    },
+    "share": {
+     "faulted": 0.001060082754847314,
+     "idle": 0.1142153677803235,
+     "moving": 0.3962999692234039,
+     "no_data": 0.05840714017029717,
+     "paused": 0.0,
+     "stopped_short": 0.006394692746982184,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.42362274732414595
+    },
+    "span_s": 29243
+   }
+  },
+  "1": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 12,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 42
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 399,
+     "status_entries_by_level": {
+      "Error": 24,
+      "Ok": 254609,
+      "Warning": 813
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 3,
+     "empty_box_refill": 36,
+     "kit supply": 115
+    },
+    "kept_interval_s": {
+     "max": 116,
+     "p50": 1,
+     "p99": 24
+    },
+    "kept_rows": 14543,
+    "label_rows": 3,
+    "native_rows": 15038,
+    "non_charging_jobs": 151,
+    "omega_only_seconds": 2293,
+    "operating_mode_rows": {
+     "Autonomous": 15036,
+     "Reconnecting": 2
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 28936,
+     "Reconnecting": 3
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 257,
+     "gap": 2,
+     "none": 98,
+     "running": 14186
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 2,
+    "removed_rows": 351,
+    "rows_collapsed": 495,
+    "state_rows": {
+     "Idle": 1685,
+     "Navigating": 13353
+    },
+    "state_seconds": {
+     "Idle": 13530,
+     "Navigating": 15409
+    },
+    "stuck_reason_rows": {
+     "None": 15035,
+     "ObstacleInTheWay": 3
+    },
+    "table_rows": {
+     "dispatch_events": 2145,
+     "jobs": 154,
+     "operations": 535,
+     "robot_state_cleaned": 15038,
+     "robot_state_raw": 15389
+    },
+    "termination_reason_operations": {
+     "NONE": 534,
+     "TIMEOUT": 1
+    },
+    "timeout_operations": 1,
+    "unique_order_ids": 151,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 1244,
+    "charging_job_seconds": 1459,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 3,
+     "idle": 1307,
+     "moving": 149
+    },
+    "is_robot_charging_seconds": 1253
+   },
+   "jobs_per_robot_hour": 18.78433947268392,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 318,
+     "share_total": 2.0921052631578947,
+     "stuck_bucket_s": 152,
+     "table": [
+      {
+       "cause": "station_overrun",
+       "cause_label": "Station stop over time limit",
+       "episodes": 1,
+       "seconds": 318,
+       "share": 2.0921052631578947
+      }
+     ],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 3,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 3,
+     "seconds": 15
+    },
+    "false_alarms": {
+     "count": 1,
+     "list": [
+      {
+       "duration_s": 318,
+       "on_station_cell": true,
+       "overlaps_paused_message": false,
+       "overlaps_timeout_operation": true,
+       "start": "2026-07-27T19:03:16Z"
+      }
+     ]
+    },
+    "label_seconds": 15,
+    "label_seconds_per_bucket": {
+     "faulted": 0,
+     "idle": 15,
+     "moving": 0,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 0,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 0
+    },
+    "overruns": [
+     {
+      "duration_s": 318,
+      "overlaps_timeout_operation": true,
+      "start": "2026-07-27T19:03:16Z",
+      "station_cell": [
+       9,
+       -3
+      ]
+     }
+    ],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 6.0,
+    "servicing_q3_s": 21.0,
+    "servicing_sample_n": 789,
+    "stuck_runs": 1,
+    "timeout_operations": {
+     "count": 1,
+     "detected": 1,
+     "list": [
+      {
+       "detected": true,
+       "finish": "2026-07-27T19:08:26Z",
+       "goal": "kitting",
+       "job_id": "1f686cec-b37a-4ce0-b833-bfa9bf558291",
+       "operation_id": "26515ac5-cdb6-4001-aca2-5ecc89466bdf",
+       "start": "2026-07-27T19:03:26Z"
+      }
+     ]
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 14543,
+   "name": "2026_07_27_evening",
+   "no_data": {
+    "intervals_over_60s": 23,
+    "max_gap_inside_stopped_run_s": 116,
+    "seconds_moved_by_60s_rule": 1887,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 436,
+     "stuck": 158,
+     "waiting_station": 1293
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15038,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15038,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 3,
+     "gating": true,
+     "kind": "exact",
+     "observed": 3,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 1,
+     "gating": true,
+     "kind": "exact",
+     "observed": 1,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 28939,
+     "gating": true,
+     "kind": "exact",
+     "observed": 28939,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 42,
+      "idle": 3185,
+      "moving": 11615,
+      "no_data": 1887,
+      "paused": 3,
+      "stopped_short": 151,
+      "stuck": 152,
+      "waiting_shelf": 0,
+      "waiting_station": 11904
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 42,
+      "idle": 3185,
+      "moving": 11615,
+      "no_data": 1887,
+      "paused": 3,
+      "stopped_short": 151,
+      "stuck": 152,
+      "waiting_shelf": 0,
+      "waiting_station": 11904
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 151,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 151,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.04,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.0386,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 151,
+    "per_shift_s": {
+     "faulted": 5.22478316458758,
+     "idle": 396.2127233145582,
+     "moving": 1444.9013442067796,
+     "no_data": 234.74204360897062,
+     "paused": 0.3731987974705415,
+     "stopped_short": 18.78433947268392,
+     "stuck": 18.908739071840767,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1480.8528283631085
+    },
+    "seconds": {
+     "faulted": 42,
+     "idle": 3185,
+     "moving": 11615,
+     "no_data": 1887,
+     "paused": 3,
+     "stopped_short": 151,
+     "stuck": 152,
+     "waiting_shelf": 0,
+     "waiting_station": 11904
+    },
+    "share": {
+     "faulted": 0.0014513286568298834,
+     "idle": 0.1100590898095995,
+     "moving": 0.40136148450188325,
+     "no_data": 0.06520612322471406,
+     "paused": 0.00010366633263070597,
+     "stopped_short": 0.005217872075745534,
+     "stuck": 0.005252427519955769,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.4113480078786413
+    },
+    "span_s": 28939
+   }
+  },
+  "2": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 46,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 98
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 295,
+     "status_entries_by_level": {
+      "Error": 97,
+      "Ok": 263646,
+      "Warning": 531
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 4,
+     "empty_box_refill": 36,
+     "kit supply": 116
+    },
+    "kept_interval_s": {
+     "max": 99,
+     "p50": 1,
+     "p99": 24
+    },
+    "kept_rows": 15010,
+    "label_rows": 52,
+    "native_rows": 15553,
+    "non_charging_jobs": 152,
+    "omega_only_seconds": 2363,
+    "operating_mode_rows": {
+     "Autonomous": 15553
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 29718
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 416,
+     "gap": 1,
+     "none": 99,
+     "running": 14494
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 359,
+    "rows_collapsed": 543,
+    "state_rows": {
+     "Idle": 1766,
+     "Navigating": 13785,
+     "Waiting": 2
+    },
+    "state_seconds": {
+     "Idle": 13819,
+     "Navigating": 15897,
+     "Waiting": 2
+    },
+    "stuck_reason_rows": {
+     "GoalObstructed": 7,
+     "None": 15501,
+     "ObstacleInTheWay": 45
+    },
+    "table_rows": {
+     "dispatch_events": 2173,
+     "jobs": 156,
+     "operations": 540,
+     "robot_state_cleaned": 15553,
+     "robot_state_raw": 15912
+    },
+    "termination_reason_operations": {
+     "NONE": 540
+    },
+    "timeout_operations": 0,
+    "unique_order_ids": 152,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 1938,
+    "charging_job_seconds": 2267,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 7,
+     "idle": 2051,
+     "moving": 209
+    },
+    "is_robot_charging_seconds": 1963
+   },
+   "jobs_per_robot_hour": 18.413082980012113,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 41,
+     "share_total": null,
+     "stuck_bucket_s": 0,
+     "table": [
+      {
+       "cause": "faulted_self",
+       "cause_label": "Robot error, cannot continue order",
+       "episodes": 1,
+       "seconds": 41,
+       "share": null
+      }
+     ],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 17,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 17,
+     "seconds": 93
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 93,
+    "label_seconds_per_bucket": {
+     "faulted": 2,
+     "idle": 27,
+     "moving": 37,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 25,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 2
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 4.0,
+    "servicing_q3_s": 19.999999999999996,
+    "servicing_sample_n": 820,
+    "stuck_runs": 0,
+    "timeout_operations": {
+     "count": 0,
+     "detected": 0,
+     "list": []
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 15010,
+   "name": "2026_07_28_morning",
+   "no_data": {
+    "intervals_over_60s": 22,
+    "max_gap_inside_stopped_run_s": 99,
+    "seconds_moved_by_60s_rule": 1708,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 473,
+     "waiting_station": 1235
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15553,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15553,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 52,
+     "gating": true,
+     "kind": "exact",
+     "observed": 52,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 0,
+     "gating": true,
+     "kind": "exact",
+     "observed": 0,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 29718,
+     "gating": true,
+     "kind": "exact",
+     "observed": 29718,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 98,
+      "idle": 3884,
+      "moving": 11865,
+      "no_data": 1708,
+      "paused": 0,
+      "stopped_short": 231,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 11932
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 98,
+      "idle": 3884,
+      "moving": 11865,
+      "no_data": 1708,
+      "paused": 0,
+      "stopped_short": 231,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 11932
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 152,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 152,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.26,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.255,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 152,
+    "per_shift_s": {
+     "faulted": 11.87159297395518,
+     "idle": 470.50272562083586,
+     "moving": 1437.3107207752878,
+     "no_data": 206.90490611750454,
+     "paused": 0.0,
+     "stopped_short": 27.98304058146578,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1445.4270139309508
+    },
+    "seconds": {
+     "faulted": 98,
+     "idle": 3884,
+     "moving": 11865,
+     "no_data": 1708,
+     "paused": 0,
+     "stopped_short": 231,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 11932
+    },
+    "share": {
+     "faulted": 0.0032976647149875497,
+     "idle": 0.1306952015613433,
+     "moving": 0.39925297799313547,
+     "no_data": 0.05747358503264015,
+     "paused": 0.0,
+     "stopped_short": 0.0077730668281849385,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.40150750386970857
+    },
+    "span_s": 29718
+   }
+  },
+  "3": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 16,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 28
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 230,
+     "status_entries_by_level": {
+      "Error": 32,
+      "Ok": 258577,
+      "Warning": 467
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 4,
+     "empty_box_refill": 35,
+     "kit supply": 116
+    },
+    "kept_interval_s": {
+     "max": 100,
+     "p50": 1,
+     "p99": 24
+    },
+    "kept_rows": 14702,
+    "label_rows": 20,
+    "native_rows": 15252,
+    "non_charging_jobs": 151,
+    "omega_only_seconds": 2338,
+    "operating_mode_rows": {
+     "Autonomous": 15252
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 29146
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 375,
+     "gap": 3,
+     "none": 86,
+     "running": 14238
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 314,
+    "rows_collapsed": 550,
+    "state_rows": {
+     "Idle": 1703,
+     "Navigating": 13549
+    },
+    "state_seconds": {
+     "Idle": 13555,
+     "Navigating": 15591
+    },
+    "stuck_reason_rows": {
+     "GoalObstructed": 1,
+     "None": 15232,
+     "ObstacleInTheWay": 19
+    },
+    "table_rows": {
+     "dispatch_events": 2159,
+     "jobs": 155,
+     "operations": 538,
+     "robot_state_cleaned": 15252,
+     "robot_state_raw": 15566
+    },
+    "termination_reason_operations": {
+     "NONE": 538
+    },
+    "timeout_operations": 0,
+    "unique_order_ids": 151,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 1971,
+    "charging_job_seconds": 2267,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 8,
+     "idle": 2054,
+     "moving": 205
+    },
+    "is_robot_charging_seconds": 2017
+   },
+   "jobs_per_robot_hour": 18.65092980168805,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 0,
+     "share_total": null,
+     "stuck_bucket_s": 0,
+     "table": [],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 7,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 7,
+     "seconds": 34
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 34,
+    "label_seconds_per_bucket": {
+     "faulted": 1,
+     "idle": 16,
+     "moving": 14,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 3,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 0
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 6.0,
+    "servicing_q3_s": 21.0,
+    "servicing_sample_n": 802,
+    "stuck_runs": 0,
+    "timeout_operations": {
+     "count": 0,
+     "detected": 0,
+     "list": []
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 14702,
+   "name": "2026_07_28_evening",
+   "no_data": {
+    "intervals_over_60s": 22,
+    "max_gap_inside_stopped_run_s": 90,
+    "seconds_moved_by_60s_rule": 1727,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 644,
+     "waiting_station": 1083
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15252,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15252,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 20,
+     "gating": true,
+     "kind": "exact",
+     "observed": 20,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 0,
+     "gating": true,
+     "kind": "exact",
+     "observed": 0,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 29146,
+     "gating": true,
+     "kind": "exact",
+     "observed": 29146,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 28,
+      "idle": 3549,
+      "moving": 11756,
+      "no_data": 1727,
+      "paused": 0,
+      "stopped_short": 173,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 11913
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 28,
+      "idle": 3549,
+      "moving": 11756,
+      "no_data": 1727,
+      "paused": 0,
+      "stopped_short": 173,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 11913
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 151,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 151,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.1,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.0961,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 151,
+    "per_shift_s": {
+     "faulted": 3.458450559253414,
+     "idle": 438.3586083853702,
+     "moving": 1452.055170520826,
+     "no_data": 213.3122898510945,
+     "paused": 0.0,
+     "stopped_short": 21.368283812530024,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1471.4471968709256
+    },
+    "seconds": {
+     "faulted": 28,
+     "idle": 3549,
+     "moving": 11756,
+     "no_data": 1727,
+     "paused": 0,
+     "stopped_short": 173,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 11913
+    },
+    "share": {
+     "faulted": 0.0009606807109037261,
+     "idle": 0.12176628010704728,
+     "moving": 0.40334865847800727,
+     "no_data": 0.05925341384752625,
+     "paused": 0.0,
+     "stopped_short": 0.005935634392369451,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.408735332464146
+    },
+    "span_s": 29146
+   }
+  },
+  "4": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 17,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 37
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 255,
+     "status_entries_by_level": {
+      "Error": 36,
+      "Ok": 257385,
+      "Warning": 486
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 1,
+     "empty_box_refill": 38,
+     "kit supply": 116
+    },
+    "kept_interval_s": {
+     "max": 121,
+     "p50": 1,
+     "p99": 24
+    },
+    "kept_rows": 14644,
+    "label_rows": 3,
+    "native_rows": 15182,
+    "non_charging_jobs": 154,
+    "omega_only_seconds": 2390,
+    "operating_mode_rows": {
+     "Autonomous": 15182
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 28909
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 14,
+     "gap": 1,
+     "none": 131,
+     "running": 14498
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 364,
+    "rows_collapsed": 538,
+    "state_rows": {
+     "Idle": 1652,
+     "Navigating": 13530
+    },
+    "state_seconds": {
+     "Idle": 13374,
+     "Navigating": 15535
+    },
+    "stuck_reason_rows": {
+     "GoalObstructed": 3,
+     "None": 15179
+    },
+    "table_rows": {
+     "dispatch_events": 2170,
+     "jobs": 155,
+     "operations": 541,
+     "robot_state_cleaned": 15182,
+     "robot_state_raw": 15546
+    },
+    "termination_reason_operations": {
+     "NONE": 541
+    },
+    "timeout_operations": 0,
+    "unique_order_ids": 154,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 0,
+    "charging_job_seconds": 21,
+    "charging_job_seconds_by_bucket": {
+     "idle": 10,
+     "moving": 11
+    },
+    "is_robot_charging_seconds": 2
+   },
+   "jobs_per_robot_hour": 19.177418796914456,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 0,
+     "share_total": null,
+     "stuck_bucket_s": 0,
+     "table": [],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 2,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 2,
+     "seconds": 5
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 5,
+    "label_seconds_per_bucket": {
+     "faulted": 0,
+     "idle": 0,
+     "moving": 0,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 2,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 3
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 6.0,
+    "servicing_q3_s": 22.000000000000004,
+    "servicing_sample_n": 814,
+    "stuck_runs": 0,
+    "timeout_operations": {
+     "count": 0,
+     "detected": 0,
+     "list": []
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 14644,
+   "name": "2026_07_29_morning",
+   "no_data": {
+    "intervals_over_60s": 34,
+    "max_gap_inside_stopped_run_s": 121,
+    "seconds_moved_by_60s_rule": 2855,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 636,
+     "waiting_station": 2219
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15182,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15182,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 3,
+     "gating": true,
+     "kind": "exact",
+     "observed": 3,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 0,
+     "gating": true,
+     "kind": "exact",
+     "observed": 0,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 28909,
+     "gating": true,
+     "kind": "exact",
+     "observed": 28909,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 37,
+      "idle": 2176,
+      "moving": 11683,
+      "no_data": 2855,
+      "paused": 0,
+      "stopped_short": 147,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 12011
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 37,
+      "idle": 2176,
+      "moving": 11683,
+      "no_data": 2855,
+      "paused": 0,
+      "stopped_short": 147,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 12011
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 154,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 154,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.03,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.0303,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 154,
+    "per_shift_s": {
+     "faulted": 4.607561658998928,
+     "idle": 270.9744370265315,
+     "moving": 1454.868726002283,
+     "no_data": 355.5294199038362,
+     "paused": 0.0,
+     "stopped_short": 18.30571794250925,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1495.714137465841
+    },
+    "seconds": {
+     "faulted": 37,
+     "idle": 2176,
+     "moving": 11683,
+     "no_data": 2855,
+     "paused": 0,
+     "stopped_short": 147,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 12011
+    },
+    "share": {
+     "faulted": 0.0012798782386108133,
+     "idle": 0.07527067695181432,
+     "moving": 0.40413020166730085,
+     "no_data": 0.09875817219551004,
+     "paused": 0.0,
+     "stopped_short": 0.0050849216506970146,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.41547614929606697
+    },
+    "span_s": 28909
+   }
+  },
+  "5": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 23,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 50
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 5760,
+     "status_entries_by_level": {
+      "Error": 45,
+      "Ok": 251426,
+      "Stale": 1,
+      "Warning": 11786
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 3,
+     "empty_box_refill": 36,
+     "kit supply": 116
+    },
+    "kept_interval_s": {
+     "max": 123,
+     "p50": 1,
+     "p99": 25
+    },
+    "kept_rows": 14665,
+    "label_rows": 17,
+    "native_rows": 15168,
+    "non_charging_jobs": 152,
+    "omega_only_seconds": 2358,
+    "operating_mode_rows": {
+     "Autonomous": 15168
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 29146
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 258,
+     "none": 84,
+     "running": 14323
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 323,
+    "rows_collapsed": 503,
+    "state_rows": {
+     "Idle": 1673,
+     "Navigating": 13495
+    },
+    "state_seconds": {
+     "Idle": 13581,
+     "Navigating": 15565
+    },
+    "stuck_reason_rows": {
+     "None": 15151,
+     "ObstacleInTheWay": 17
+    },
+    "table_rows": {
+     "dispatch_events": 2167,
+     "jobs": 155,
+     "operations": 539,
+     "robot_state_cleaned": 15168,
+     "robot_state_raw": 15491
+    },
+    "termination_reason_operations": {
+     "NONE": 538,
+     "TIMEOUT": 1
+    },
+    "timeout_operations": 1,
+    "unique_order_ids": 152,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 1295,
+    "charging_job_seconds": 1504,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 4,
+     "idle": 1357,
+     "moving": 143
+    },
+    "is_robot_charging_seconds": 1337
+   },
+   "jobs_per_robot_hour": 18.774445893089958,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 0,
+     "share_total": null,
+     "stuck_bucket_s": 0,
+     "table": [],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 6,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 6,
+     "seconds": 27
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 27,
+    "label_seconds_per_bucket": {
+     "faulted": 1,
+     "idle": 14,
+     "moving": 10,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 0,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 2
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 3.0000000000000004,
+    "servicing_q3_s": 21.0,
+    "servicing_sample_n": 821,
+    "stuck_runs": 0,
+    "timeout_operations": {
+     "count": 1,
+     "detected": 0,
+     "list": [
+      {
+       "detected": false,
+       "finish": "2026-07-29T17:22:32Z",
+       "goal": "warehouse",
+       "job_id": "a603b193-8e5c-4204-ab80-b99700d89602",
+       "operation_id": "3e9c170b-7920-4afa-aa47-d5b0b1ac3026",
+       "start": "2026-07-29T17:17:32Z"
+      }
+     ]
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 14665,
+   "name": "2026_07_29_evening",
+   "no_data": {
+    "intervals_over_60s": 28,
+    "max_gap_inside_stopped_run_s": 123,
+    "seconds_moved_by_60s_rule": 2221,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 500,
+     "waiting_station": 1721
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15168,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15168,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 17,
+     "gating": true,
+     "kind": "exact",
+     "observed": 17,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 1,
+     "gating": true,
+     "kind": "exact",
+     "observed": 1,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 29146,
+     "gating": true,
+     "kind": "exact",
+     "observed": 29146,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 50,
+      "idle": 2963,
+      "moving": 11692,
+      "no_data": 2221,
+      "paused": 0,
+      "stopped_short": 181,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 12039
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 50,
+      "idle": 2963,
+      "moving": 11692,
+      "no_data": 2221,
+      "paused": 0,
+      "stopped_short": 181,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 12039
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 152,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 152,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.1,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.0961,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 152,
+    "per_shift_s": {
+     "faulted": 6.175804570095382,
+     "idle": 365.9781788238523,
+     "moving": 1444.150140671104,
+     "no_data": 274.32923900363687,
+     "paused": 0.0,
+     "stopped_short": 22.356412543745282,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1487.010224387566
+    },
+    "seconds": {
+     "faulted": 50,
+     "idle": 2963,
+     "moving": 11692,
+     "no_data": 2221,
+     "paused": 0,
+     "stopped_short": 181,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 12039
+    },
+    "share": {
+     "faulted": 0.0017155012694709394,
+     "idle": 0.10166060522884787,
+     "moving": 0.40115281685308446,
+     "no_data": 0.07620256638989913,
+     "paused": 0.0,
+     "stopped_short": 0.0062101145954848004,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.4130583956632128
+    },
+    "span_s": 29146
+   }
+  },
+  "6": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 17,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 35
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 618,
+     "status_entries_by_level": {
+      "Error": 37,
+      "Ok": 249235,
+      "Warning": 1218
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 4,
+     "empty_box_refill": 30,
+     "kit supply": 114
+    },
+    "kept_interval_s": {
+     "max": 190,
+     "p50": 1,
+     "p99": 24
+    },
+    "kept_rows": 14214,
+    "label_rows": 48,
+    "native_rows": 14711,
+    "non_charging_jobs": 144,
+    "omega_only_seconds": 2297,
+    "operating_mode_rows": {
+     "Autonomous": 14696,
+     "Initializing": 3,
+     "Joystick": 10,
+     "PoweredOff": 1,
+     "Reconnecting": 1
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 29204,
+     "Initializing": 53,
+     "Joystick": 12,
+     "PoweredOff": 3,
+     "Reconnecting": 53
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 360,
+     "gap": 80,
+     "none": 25,
+     "running": 13749
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 17,
+    "removed_rows": 342,
+    "rows_collapsed": 497,
+    "state_rows": {
+     "Idle": 1575,
+     "Initializing": 3,
+     "Navigating": 13121,
+     "Nonautonomous": 10,
+     "Paused": 2
+    },
+    "state_seconds": {
+     "Idle": 11009,
+     "Initializing": 53,
+     "Navigating": 18214,
+     "Nonautonomous": 12,
+     "Paused": 37
+    },
+    "stuck_reason_rows": {
+     "GoalObstructed": 9,
+     "None": 14663,
+     "ObstacleInTheWay": 39
+    },
+    "table_rows": {
+     "dispatch_events": 2103,
+     "jobs": 148,
+     "operations": 520,
+     "robot_state_cleaned": 14711,
+     "robot_state_raw": 15053
+    },
+    "termination_reason_operations": {
+     "NONE": 518,
+     "TIMEOUT": 2
+    },
+    "timeout_operations": 2,
+    "unique_order_ids": 144,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 1905,
+    "charging_job_seconds": 2189,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 4,
+     "idle": 1982,
+     "moving": 203
+    },
+    "is_robot_charging_seconds": 2286
+   },
+   "jobs_per_robot_hour": 17.67774936061381,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 3365,
+     "share_total": 3.039747064137308,
+     "stuck_bucket_s": 1107,
+     "table": [
+      {
+       "cause": "station_overrun",
+       "cause_label": "Station stop over time limit",
+       "episodes": 1,
+       "seconds": 3245,
+       "share": 2.931345980126468
+      },
+      {
+       "cause": "faulted_self",
+       "cause_label": "Robot error, cannot continue order",
+       "episodes": 2,
+       "seconds": 73,
+       "share": 0.06594399277326106
+      },
+      {
+       "cause": "unknown",
+       "cause_label": "Stopped, cause not identified",
+       "episodes": 1,
+       "seconds": 47,
+       "share": 0.04245709123757904
+      }
+     ],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 17,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 17,
+     "seconds": 81
+    },
+    "false_alarms": {
+     "count": 2,
+     "list": [
+      {
+       "duration_s": 3245,
+       "on_station_cell": false,
+       "overlaps_paused_message": true,
+       "overlaps_timeout_operation": true,
+       "start": "2026-07-30T06:16:31Z"
+      },
+      {
+       "duration_s": 47,
+       "on_station_cell": false,
+       "overlaps_paused_message": true,
+       "overlaps_timeout_operation": false,
+       "start": "2026-07-30T07:10:44Z"
+      }
+     ]
+    },
+    "label_seconds": 81,
+    "label_seconds_per_bucket": {
+     "faulted": 0,
+     "idle": 15,
+     "moving": 34,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 26,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 6
+    },
+    "overruns": [
+     {
+      "duration_s": 3245,
+      "overlaps_timeout_operation": true,
+      "start": "2026-07-30T06:16:31Z",
+      "station_cell": [
+       15,
+       -1
+      ]
+     }
+    ],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 3.7224194364083982,
+    "servicing_q3_s": 18.999999999999996,
+    "servicing_sample_n": 780,
+    "stuck_runs": 2,
+    "timeout_operations": {
+     "count": 2,
+     "detected": 1,
+     "list": [
+      {
+       "detected": false,
+       "finish": "2026-07-30T06:07:04Z",
+       "goal": "warehouse",
+       "job_id": "8d621ccf-bb42-4a43-ba96-e883ab273d6c",
+       "operation_id": "47e448e9-3a5e-4096-baaf-fd5148f59409",
+       "start": "2026-07-30T06:02:04Z"
+      },
+      {
+       "detected": true,
+       "finish": "2026-07-30T06:21:10Z",
+       "goal": "kitting",
+       "job_id": "4474172c-fb96-4072-9bf4-8bd7d64ce863",
+       "operation_id": "f3e63001-ca44-4669-a601-4468aa59b2fb",
+       "start": "2026-07-30T06:16:10Z"
+      }
+     ]
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 14214,
+   "name": "2026_07_30_morning",
+   "no_data": {
+    "intervals_over_60s": 32,
+    "max_gap_inside_stopped_run_s": 190,
+    "seconds_moved_by_60s_rule": 3171,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 221,
+     "stuck": 2091,
+     "waiting_station": 859
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 14711,
+     "gating": true,
+     "kind": "exact",
+     "observed": 14711,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 48,
+     "gating": true,
+     "kind": "exact",
+     "observed": 48,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 2,
+     "gating": true,
+     "kind": "exact",
+     "observed": 2,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 29325,
+     "gating": true,
+     "kind": "exact",
+     "observed": 29325,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 35,
+      "idle": 2476,
+      "moving": 11169,
+      "no_data": 3171,
+      "paused": 158,
+      "stopped_short": 257,
+      "stuck": 1107,
+      "waiting_shelf": 0,
+      "waiting_station": 10952
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 35,
+      "idle": 2476,
+      "moving": 11169,
+      "no_data": 3171,
+      "paused": 158,
+      "stopped_short": 257,
+      "stuck": 1107,
+      "waiting_shelf": 0,
+      "waiting_station": 10952
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 144,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 144,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.15,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.1458,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 144,
+    "per_shift_s": {
+     "faulted": 4.296675191815857,
+     "idle": 303.95907928388743,
+     "moving": 1371.1304347826087,
+     "no_data": 389.27877237851663,
+     "paused": 19.396419437340153,
+     "stopped_short": 31.54987212276215,
+     "stuck": 135.89769820971867,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1344.4910485933503
+    },
+    "seconds": {
+     "faulted": 35,
+     "idle": 2476,
+     "moving": 11169,
+     "no_data": 3171,
+     "paused": 158,
+     "stopped_short": 257,
+     "stuck": 1107,
+     "waiting_shelf": 0,
+     "waiting_station": 10952
+    },
+    "share": {
+     "faulted": 0.0011935208866155158,
+     "idle": 0.08443307757885762,
+     "moving": 0.3808695652173913,
+     "no_data": 0.10813299232736573,
+     "paused": 0.005387894288150043,
+     "stopped_short": 0.00876385336743393,
+     "stuck": 0.03774936061381074,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.3734697357203751
+    },
+    "span_s": 29325
+   }
+  },
+  "7": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 19,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 197
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 435,
+     "status_entries_by_level": {
+      "Error": 38,
+      "Ok": 264727,
+      "Warning": 867
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 1,
+     "empty_box_refill": 36,
+     "kit supply": 115
+    },
+    "kept_interval_s": {
+     "max": 127,
+     "p50": 1,
+     "p99": 21
+    },
+    "kept_rows": 15175,
+    "label_rows": 17,
+    "native_rows": 15635,
+    "non_charging_jobs": 151,
+    "omega_only_seconds": 2510,
+    "operating_mode_rows": {
+     "Autonomous": 15635
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 28906
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 65,
+     "gap": 14,
+     "none": 70,
+     "running": 15026
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 314,
+    "rows_collapsed": 460,
+    "state_rows": {
+     "Idle": 1561,
+     "Navigating": 14074
+    },
+    "state_seconds": {
+     "Idle": 12258,
+     "Navigating": 16648
+    },
+    "stuck_reason_rows": {
+     "GoalObstructed": 9,
+     "None": 15618,
+     "ObstacleInTheWay": 8
+    },
+    "table_rows": {
+     "dispatch_events": 2149,
+     "jobs": 152,
+     "operations": 533,
+     "robot_state_cleaned": 15635,
+     "robot_state_raw": 15949
+    },
+    "termination_reason_operations": {
+     "NONE": 530,
+     "TIMEOUT": 3
+    },
+    "timeout_operations": 3,
+    "unique_order_ids": 151,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 17,
+    "charging_job_seconds": 103,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 3,
+     "idle": 49,
+     "moving": 51
+    },
+    "is_robot_charging_seconds": 31
+   },
+   "jobs_per_robot_hour": 18.805784266242306,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 779,
+     "share_total": 155.8,
+     "stuck_bucket_s": 5,
+     "table": [
+      {
+       "cause": "faulted_self",
+       "cause_label": "Robot error, cannot continue order",
+       "episodes": 4,
+       "seconds": 779,
+       "share": 155.8
+      }
+     ],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 9,
+    "episodes_ge_30s": {
+     "count": 2,
+     "hits": 2,
+     "list": [
+      {
+       "detected": true,
+       "duration_s": 250,
+       "reasons": {
+        "GoalObstructed": 4
+       },
+       "rows": 4,
+       "start": "2026-07-31T12:18:37Z"
+      },
+      {
+       "detected": true,
+       "duration_s": 127,
+       "reasons": {
+        "GoalObstructed": 1
+       },
+       "rows": 1,
+       "start": "2026-07-31T12:23:11Z"
+      }
+     ],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 7,
+     "seconds": 32
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 409,
+    "label_seconds_per_bucket": {
+     "faulted": 87,
+     "idle": 13,
+     "moving": 6,
+     "no_data": 290,
+     "paused": 0,
+     "stopped_short": 7,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 6
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 2.0,
+    "servicing_q3_s": 21.0,
+    "servicing_sample_n": 835,
+    "stuck_runs": 1,
+    "timeout_operations": {
+     "count": 3,
+     "detected": 1,
+     "list": [
+      {
+       "detected": false,
+       "finish": "2026-07-31T10:06:00Z",
+       "goal": "assembly",
+       "job_id": "071242f6-82cc-4ff1-ae6e-a9633779bf37",
+       "operation_id": "9d1d6baf-426e-4150-9497-b2c86dfb9c42",
+       "start": "2026-07-31T10:01:00Z"
+      },
+      {
+       "detected": false,
+       "finish": "2026-07-31T12:18:24Z",
+       "goal": "warehouse",
+       "job_id": "62ea8a95-71f1-45a9-8cec-57f2671cb750",
+       "operation_id": "05645a41-e504-4aad-82c9-103e064c9a77",
+       "start": "2026-07-31T12:13:24Z"
+      },
+      {
+       "detected": true,
+       "finish": "2026-07-31T12:23:25Z",
+       "goal": "warehouse",
+       "job_id": "b16cb124-7dd9-4efb-82bb-b4d902ce6e14",
+       "operation_id": "a0d6009d-6aea-4d3d-9f73-641f28711fdc",
+       "start": "2026-07-31T12:18:25Z"
+      }
+     ]
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 15175,
+   "name": "2026_07_31_morning",
+   "no_data": {
+    "intervals_over_60s": 32,
+    "max_gap_inside_stopped_run_s": 127,
+    "seconds_moved_by_60s_rule": 2589,
+    "would_have_been_bucket_without_gap_rule": {
+     "faulted": 77,
+     "idle": 299,
+     "stuck": 127,
+     "waiting_station": 2086
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15635,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15635,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 17,
+     "gating": true,
+     "kind": "exact",
+     "observed": 17,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 3,
+     "gating": true,
+     "kind": "exact",
+     "observed": 3,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 28906,
+     "gating": true,
+     "kind": "exact",
+     "observed": 28906,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 120,
+      "idle": 1505,
+      "moving": 12325,
+      "no_data": 2589,
+      "paused": 0,
+      "stopped_short": 281,
+      "stuck": 5,
+      "waiting_shelf": 0,
+      "waiting_station": 12081
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 120,
+      "idle": 1505,
+      "moving": 12325,
+      "no_data": 2589,
+      "paused": 0,
+      "stopped_short": 281,
+      "stuck": 5,
+      "waiting_shelf": 0,
+      "waiting_station": 12081
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 151,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 151,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.03,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.0294,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 151,
+    "per_shift_s": {
+     "faulted": 14.944994118868054,
+     "idle": 187.43513457413687,
+     "moving": 1534.9754376254066,
+     "no_data": 322.4382481145783,
+     "paused": 0.0,
+     "stopped_short": 34.99619456168269,
+     "stuck": 0.622708088286169,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1504.5872829170416
+    },
+    "seconds": {
+     "faulted": 120,
+     "idle": 1505,
+     "moving": 12325,
+     "no_data": 2589,
+     "paused": 0,
+     "stopped_short": 281,
+     "stuck": 5,
+     "waiting_shelf": 0,
+     "waiting_station": 12081
+    },
+    "share": {
+     "faulted": 0.004151387255241126,
+     "idle": 0.05206531515948246,
+     "moving": 0.42638206600705736,
+     "no_data": 0.0895661800318273,
+     "paused": 0.0,
+     "stopped_short": 0.009721165156022971,
+     "stuck": 0.00017297446896838027,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.4179409119214004
+    },
+    "span_s": 28906
+   }
+  },
+  "8": {
+   "adapter": {
+    "collapsed_rows_with_stuck_reason": 0,
+    "diagnostics": {
+     "faulted": {
+      "kept_messages": 25,
+      "kept_messages_unparseable_diagnostics": 0,
+      "seconds": 67
+     },
+     "rows_unparseable": 0,
+     "rows_with_non_ok_level": 643,
+     "status_entries_by_level": {
+      "Error": 50,
+      "Ok": 265384,
+      "Warning": 1262
+     }
+    },
+    "errors": "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)",
+    "job_types": {
+     "charging": 3,
+     "empty_box_refill": 35,
+     "kit supply": 115
+    },
+    "kept_interval_s": {
+     "max": 123,
+     "p50": 1,
+     "p99": 24
+    },
+    "kept_rows": 15232,
+    "label_rows": 10,
+    "native_rows": 15694,
+    "non_charging_jobs": 150,
+    "omega_only_seconds": 3091,
+    "operating_mode_rows": {
+     "Autonomous": 15694
+    },
+    "operating_mode_seconds": {
+     "Autonomous": 29385
+    },
+    "operations_without_start_or_finish": 0,
+    "order_source_rows": {
+     "charging": 274,
+     "gap": 1,
+     "none": 65,
+     "running": 14892
+    },
+    "overlap_rows": 0,
+    "overlap_seconds": 0,
+    "paused_messages": 0,
+    "removed_rows": 237,
+    "rows_collapsed": 462,
+    "state_rows": {
+     "Idle": 1543,
+     "Navigating": 14151
+    },
+    "state_seconds": {
+     "Idle": 13156,
+     "Navigating": 16229
+    },
+    "stuck_reason_rows": {
+     "None": 15684,
+     "ObstacleInTheWay": 10
+    },
+    "table_rows": {
+     "dispatch_events": 2137,
+     "jobs": 153,
+     "operations": 533,
+     "robot_state_cleaned": 15694,
+     "robot_state_raw": 15931
+    },
+    "termination_reason_operations": {
+     "NONE": 532,
+     "TIMEOUT": 1
+    },
+    "timeout_operations": 1,
+    "unique_order_ids": 150,
+    "waiting_shelf": "n/a"
+   },
+   "charging": {
+    "both_seconds": 1376,
+    "charging_job_seconds": 1599,
+    "charging_job_seconds_by_bucket": {
+     "faulted": 4,
+     "idle": 1441,
+     "moving": 154
+    },
+    "is_robot_charging_seconds": 1384
+   },
+   "jobs_per_robot_hour": 18.376722817764165,
+   "label": {
+    "causes": {
+     "denominator": "time budget stuck bucket",
+     "episode_seconds": 344,
+     "share_total": null,
+     "stuck_bucket_s": 0,
+     "table": [
+      {
+       "cause": "faulted_self",
+       "cause_label": "Robot error, cannot continue order",
+       "episodes": 1,
+       "seconds": 344,
+       "share": null
+      }
+     ],
+     "uncounted_open_episodes": 0
+    },
+    "episodes": 4,
+    "episodes_ge_30s": {
+     "count": 0,
+     "hits": 0,
+     "list": [],
+     "misses": 0
+    },
+    "episodes_lt_30s": {
+     "count": 4,
+     "seconds": 21
+    },
+    "false_alarms": {
+     "count": 0,
+     "list": []
+    },
+    "label_seconds": 21,
+    "label_seconds_per_bucket": {
+     "faulted": 1,
+     "idle": 14,
+     "moving": 6,
+     "no_data": 0,
+     "paused": 0,
+     "stopped_short": 0,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 0
+    },
+    "overruns": [],
+    "servicing_max_s": 300.0,
+    "servicing_q1_s": 6.0,
+    "servicing_q3_s": 21.745621989828273,
+    "servicing_sample_n": 778,
+    "stuck_runs": 0,
+    "timeout_operations": {
+     "count": 1,
+     "detected": 0,
+     "list": [
+      {
+       "detected": false,
+       "finish": "2026-07-31T17:48:52Z",
+       "goal": "assembly",
+       "job_id": "a4cf0be0-f26c-400d-bf1f-0900ea84f2fd",
+       "operation_id": "13ee6aa0-8bdb-41b1-bb06-6fb2a464bb80",
+       "start": "2026-07-31T17:43:52Z"
+      }
+     ]
+    },
+    "windows": "hit: stuck run [start, end) vs [label start, label end + 30]; false alarm: no label episode vs [run start - 30, run end + 30]; TIMEOUT: stuck run vs [start_time, finish_time]"
+   },
+   "messages": 15232,
+   "name": "2026_07_31_evening",
+   "no_data": {
+    "intervals_over_60s": 25,
+    "max_gap_inside_stopped_run_s": 123,
+    "seconds_moved_by_60s_rule": 2104,
+    "would_have_been_bucket_without_gap_rule": {
+     "idle": 386,
+     "waiting_station": 1718
+    }
+   },
+   "parse_rejects": 0,
+   "sanity": [
+    {
+     "check": "cleaned_rows",
+     "expected": 15694,
+     "gating": true,
+     "kind": "exact",
+     "observed": 15694,
+     "ok": true
+    },
+    {
+     "check": "label_rows",
+     "expected": 10,
+     "gating": true,
+     "kind": "exact",
+     "observed": 10,
+     "ok": true
+    },
+    {
+     "check": "timeout_operations",
+     "expected": 1,
+     "gating": true,
+     "kind": "exact",
+     "observed": 1,
+     "ok": true
+    },
+    {
+     "check": "buckets_sum_to_span",
+     "expected": 29385,
+     "gating": true,
+     "kind": "exact",
+     "observed": 29385,
+     "ok": true
+    },
+    {
+     "check": "bucket_seconds_equal_timebudget",
+     "expected": {
+      "faulted": 67,
+      "idle": 2672,
+      "moving": 12419,
+      "no_data": 2104,
+      "paused": 0,
+      "stopped_short": 155,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 11968
+     },
+     "gating": true,
+     "kind": "exact",
+     "observed": {
+      "faulted": 67,
+      "idle": 2672,
+      "moving": 12419,
+      "no_data": 2104,
+      "paused": 0,
+      "stopped_short": 155,
+      "stuck": 0,
+      "waiting_shelf": 0,
+      "waiting_station": 11968
+     },
+     "ok": true
+    },
+    {
+     "check": "unique_order_ids_vs_non_charging_jobs",
+     "expected": 150,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 150,
+     "ok": true
+    },
+    {
+     "check": "span_hours",
+     "expected": 8.16,
+     "gating": false,
+     "kind": "5pct",
+     "observed": 8.1625,
+     "ok": true
+    }
+   ],
+   "timebudget_robot": {
+    "jobs": 150,
+    "per_shift_s": {
+     "faulted": 8.208269525267994,
+     "idle": 327.3506891271057,
+     "moving": 1521.470137825421,
+     "no_data": 257.76416539050535,
+     "paused": 0.0,
+     "stopped_short": 18.98928024502297,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 1466.217457886677
+    },
+    "seconds": {
+     "faulted": 67,
+     "idle": 2672,
+     "moving": 12419,
+     "no_data": 2104,
+     "paused": 0,
+     "stopped_short": 155,
+     "stuck": 0,
+     "waiting_shelf": 0,
+     "waiting_station": 11968
+    },
+    "share": {
+     "faulted": 0.0022800748681299984,
+     "idle": 0.09093074697975158,
+     "moving": 0.42263059384039475,
+     "no_data": 0.07160115705291815,
+     "paused": 0.0,
+     "stopped_short": 0.005274800068061937,
+     "stuck": 0.0,
+     "waiting_shelf": 0.0,
+     "waiting_station": 0.4072826271907436
+    },
+    "span_s": 29385
+   }
+  }
+ },
+ "src": {
+  "budget_dir": "fleet/data/moroop/budget",
+  "faults": {
+   "level": "Error",
+   "noise": [
+    [
+     "/Devices/Camera",
+     "Frequency too high.",
+     "Warning"
+    ]
+   ],
+   "note": "--faults: the detector's faulted_self cause label ('Robot error, cannot continue order') in this file must not be quoted for MoRoOp; say 'Robot reported a component error'",
+   "rule": "parse.py: some errors entry with errorLevel FATAL, i.e. the kept row has a qualifying Error status. Our rule, rank B (REP 107: a component ERROR does not halt the system). Public label 'Robot reported a component error', never 'Robot error, cannot continue order'"
+  },
+  "hf": {
+   "license": "cc-by-4.0",
+   "paper": "Klein & Jeong, arXiv 2610.02428v1",
+   "repo": "Self-Organizing-Production-Logistics/MoRoOp",
+   "revision": "1.0.1",
+   "revision_api_sha": "15177e72c99d209d64e20cc013793a5dd3f5b124",
+   "tag_target_commit": "9051cb4653648b625999608367eced435e0b3991"
+  },
+  "jsonl_dir": "fleet/data/moroop/jsonl",
+  "params": {
+   "cell_m": 0.5,
+   "max_gap_s": 60,
+   "moving_eps": 0.05,
+   "omega_eps": 0.05,
+   "shift_s": 3600,
+   "stuck_after_s": 30
+  },
+  "raw_dir": "fleet/data/moroop/raw",
+  "raw_sha256": {
+   "README.md": "861d18f4656a13a9aa7fa857b7a6a429b6414c5e20d49b2a38db23a9eb6baa78",
+   "data/2026_07_27_evening/2026_07_27_evening_dispatch_events.parquet": "96e3ea26630bc415c5eacad6b460ee4a4bff5a089ae1fb32f5ebbcf26c4e0769",
+   "data/2026_07_27_evening/2026_07_27_evening_jobs.parquet": "95063bb9725c6257f54bf859edca8b282e3cb9cab3456f4cd7c1a96f719e1c5b",
+   "data/2026_07_27_evening/2026_07_27_evening_operations.parquet": "d941779cf1195d44e8a2a4af43f3778f9a9ac877e599f07b754d33b46687c3d4",
+   "data/2026_07_27_evening/2026_07_27_evening_robot_state_cleaned.parquet": "413e2d69f85bb190c39bd23e98a78791b80595ec322e6efd66277c641e1c944e",
+   "data/2026_07_27_evening/2026_07_27_evening_robot_state_raw.parquet": "89c1e935225b145931766cce6bd88ff0d8495e71318c298b89cb38b8aa20da31",
+   "data/2026_07_27_morning/2026_07_27_morning_dispatch_events.parquet": "d757d7a588771b2209944b89fabe9797f21a874932b786acc98190f0f5216ac4",
+   "data/2026_07_27_morning/2026_07_27_morning_jobs.parquet": "46ef270549fe2d9e63b1e17a8c845cd3521bdea10c505895f00ba43e433de249",
+   "data/2026_07_27_morning/2026_07_27_morning_operations.parquet": "f7e2a296b5b9391620dc4fcaa9f0c50689e31f5f268c729fce204739e66b73c2",
+   "data/2026_07_27_morning/2026_07_27_morning_robot_state_cleaned.parquet": "c7d5aa3d1f2418fbce56d67b0d93208faf1244ad2d884d1a58d1852db28beb0f",
+   "data/2026_07_27_morning/2026_07_27_morning_robot_state_raw.parquet": "4619a4c2e21c3e08269765187895327687e7b4b21ad9c4e9b9ab8345d080c46a",
+   "data/2026_07_28_evening/2026_07_28_evening_dispatch_events.parquet": "4ec8d07a148908205c6e1b840d852810339e641d89f36a553110988399b4b97f",
+   "data/2026_07_28_evening/2026_07_28_evening_jobs.parquet": "3e628fb263e1a5c18b72e2792abd6494b68d528b52f4cf801a937dc9b8671d07",
+   "data/2026_07_28_evening/2026_07_28_evening_operations.parquet": "a351beb21eeba57f3c419df54b82e8417025840849fe01985d7b0f9471044cbf",
+   "data/2026_07_28_evening/2026_07_28_evening_robot_state_cleaned.parquet": "9f5a8b8b323396420e8d92822652498f5a00a69242653607680c13fe77ee70ca",
+   "data/2026_07_28_evening/2026_07_28_evening_robot_state_raw.parquet": "8ca318645dddbff296d27e46095453b564e6d6778019ca19144440c005c64fd6",
+   "data/2026_07_28_morning/2026_07_28_morning_dispatch_events.parquet": "1735c92c6ad2cbf73ae004cd92e452d70bedddf3847db789a65f8a8266f9ea07",
+   "data/2026_07_28_morning/2026_07_28_morning_jobs.parquet": "9df7f4aa708bf7f7d81f3cb74f012c15f13ddd623fb05940fa5564b113667994",
+   "data/2026_07_28_morning/2026_07_28_morning_operations.parquet": "8996932edb6520365a487544bbc2df5908b35e4127263144c10d6d884164bb79",
+   "data/2026_07_28_morning/2026_07_28_morning_robot_state_cleaned.parquet": "0571e3a299acf36d4ab124bf6769d50b1c503579e9c31e0d6f960627965ed53d",
+   "data/2026_07_28_morning/2026_07_28_morning_robot_state_raw.parquet": "eacac1ee29a78f62ef9843f9130f86015af015334dc59fa8d7af83b42b1b40e8",
+   "data/2026_07_29_evening/2026_07_29_evening_dispatch_events.parquet": "969d2aa56df1964b7360be6c35705725c472658d0f8048e012beb79485c60898",
+   "data/2026_07_29_evening/2026_07_29_evening_jobs.parquet": "591be11caeacf8320e3b2e9e8da91ac6c67977dfcb9ef62dea541a52a0ba54f0",
+   "data/2026_07_29_evening/2026_07_29_evening_operations.parquet": "b95683d07955e21f36005a2d56509fbd711144b2f33647d92b5a63f5c437e7ec",
+   "data/2026_07_29_evening/2026_07_29_evening_robot_state_cleaned.parquet": "55a0b128e63a0431669cad22c2fbb3d4f8e3a2d3f45489f89cdc1cb6c5804483",
+   "data/2026_07_29_evening/2026_07_29_evening_robot_state_raw.parquet": "15ddc812cf81121d22c8acb3ec75ca24ea7add82a69dd46f1056f8fef7e35d3a",
+   "data/2026_07_29_morning/2026_07_29_morning_dispatch_events.parquet": "394d9ffb6ff72ea3359fded0f7972c47df8982fb98961240867f86608d4cf96a",
+   "data/2026_07_29_morning/2026_07_29_morning_jobs.parquet": "739142600c3193ac0da826122691b20c5144679c656a83e561259af251a7d47d",
+   "data/2026_07_29_morning/2026_07_29_morning_operations.parquet": "1bf78f883b25d46206d67e504fcdc235a0267414f73d7dcd5101b1d6745ea3d8",
+   "data/2026_07_29_morning/2026_07_29_morning_robot_state_cleaned.parquet": "d5b00a7504848d5ccc3cb265f543583509e611a3f1daa9574822b67d1ef23ff1",
+   "data/2026_07_29_morning/2026_07_29_morning_robot_state_raw.parquet": "401c56df2e7a24dfec3b94fed9cc268f0c62c5ea48733943e9fe733044e7bf94",
+   "data/2026_07_30_morning/2026_07_30_morning_dispatch_events.parquet": "37af564debd8620acd5d4cd3f138463d3611b9fed3751c6771f5de838420018c",
+   "data/2026_07_30_morning/2026_07_30_morning_jobs.parquet": "9ff26313ba925886afb7d2f7db32fbb096eb0ded3dcf8a87586e8336d058e3fd",
+   "data/2026_07_30_morning/2026_07_30_morning_operations.parquet": "f8a5b0f2786772a3493aeb5ac799b896162a115ebe7d30068aa111a5d7d2bbd4",
+   "data/2026_07_30_morning/2026_07_30_morning_robot_state_cleaned.parquet": "28a98346aba96fc8826244d0f9eaf09a44cfbca80319953d6beb32f1d7416d33",
+   "data/2026_07_30_morning/2026_07_30_morning_robot_state_raw.parquet": "f8b707891fcc57363fa17796d28e120082f82f50ad1b1733d0281e490e3a848a",
+   "data/2026_07_31_evening/2026_07_31_evening_dispatch_events.parquet": "a116a9b83a862d65a052b7ac3c03affd73d241dfa951de7e0db879f55f6d960b",
+   "data/2026_07_31_evening/2026_07_31_evening_jobs.parquet": "1a4b6112ee835be3c2ff872c7d002f8e9e7d3ae2cbb4035282eacb86c0678f37",
+   "data/2026_07_31_evening/2026_07_31_evening_operations.parquet": "50870f65b2d15e11a3d69df669b5837ceffd4dfdd855094bf2c7eb2cc33f45a6",
+   "data/2026_07_31_evening/2026_07_31_evening_robot_state_cleaned.parquet": "e183fac8e2bc4709ddd577283f7585d7b70166bec36aca8928246f753000603f",
+   "data/2026_07_31_evening/2026_07_31_evening_robot_state_raw.parquet": "3be26091061363e24e0e69a13a434e9438c8fa1047c55a0899ac410375832268",
+   "data/2026_07_31_morning/2026_07_31_morning_dispatch_events.parquet": "89b210807248f6f767bc3250a22d01891a1dddaec6a614dbfd119898ac674596",
+   "data/2026_07_31_morning/2026_07_31_morning_jobs.parquet": "893aab3e581b476afa9fbd1848e4137f6af03ac67c095f0b2b316b37f4bffb12",
+   "data/2026_07_31_morning/2026_07_31_morning_operations.parquet": "9cbb25a4675906a9b17d8a942b0e4fd57e37923704cb238193258efbc5857c12",
+   "data/2026_07_31_morning/2026_07_31_morning_robot_state_cleaned.parquet": "fcad96e43c78a23a0598f4aba8e0b4e4c8379ce270010f25d1b0fd0bef1354ca",
+   "data/2026_07_31_morning/2026_07_31_morning_robot_state_raw.parquet": "92608b1477ebb5284a05f6e7e8cfdc85aea8bfb063baf98003ba692dfb630be2",
+   "data/kits.parquet": "9b596c1ac2a0be031b6635c7838976df97a4a0e827de573020a351c416f0fb29"
+  },
+  "script": "fleet/adapters/moroop.py --analyse",
+  "servicing_max_s_spec": "auto",
+  "shifts": [
+   "2026_07_27_morning",
+   "2026_07_27_evening",
+   "2026_07_28_morning",
+   "2026_07_28_evening",
+   "2026_07_29_morning",
+   "2026_07_29_evening",
+   "2026_07_30_morning",
+   "2026_07_31_morning",
+   "2026_07_31_evening"
+  ],
+  "station_rule": {
+   "cells": "the --stations file",
+   "predicate": "detector.at_station",
+   "radius": 1,
+   "run_cell": "cell of the run's first stopped message"
+  },
+  "stations": "fleet/data/moroop/stations.json",
+  "stations_sha256": "3755543ff6b43789303df756358a6a8143e9031623ddb1db13aeed303e0519f6",
+  "timebudget_runs": "one per shift: fleet/timebudget.py --glob fleet/data/moroop/jsonl/zone<k>-000.jsonl.gz --run moroop-<shift> --stations fleet/data/moroop/stations.json"
+ },
+ "waiting_shelf": "n/a"
+}
