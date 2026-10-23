@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -299,6 +300,115 @@ class RunTests(unittest.TestCase):
         res = md.analyse(label, "sha", "raw", [1, 6], load, label_path="l")
         self.assertEqual(res["pooled"]["interventions"], 0)
         self.assertEqual(res["verdicts"]["dispatcher"], "mixed")
+
+
+def kinds_out(res):
+    return [(e["ts_us"] // 1_000_000 - BASE, e["kind"].replace("operation_", ""), e["cls"], e["intervention"])
+            for e in res["events"]]
+
+
+class EdgeClassTests(unittest.TestCase):
+    """Re-verify round: rules the first suite left open (mutants named in each `# inject:`)."""
+
+    def test_lifecycle_and_failed_are_neither_inside_an_episode(self):
+        # inject: class started / stopped / failed as "external call" -> a failed operation becomes an intervention
+        events = [ev(0, "operation_started", "o"), ev(1010, "operation_dispatcher_started"),
+                  ev(1020, "operation_dispatcher_stopped"),
+                  ev(1030, "operation_failed", "o", dict(termination_reason="TIMEOUT"))]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [episode(1000, 100)])
+        self.assertEqual(kinds_out(res), [(1010, "dispatcher_started", "neither", False),
+                                          (1020, "dispatcher_stopped", "neither", False),
+                                          (1030, "failed", "neither", False)])
+        self.assertEqual(res["events"][2]["termination_reason"], "TIMEOUT")
+
+    def test_shift_without_operation_started_has_no_shift_start(self):
+        # inject: treat a missing first operation_started as +infinity -> every resume becomes "shift start"
+        events = [ev(1010, "operation_dispatcher_resumed")]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [episode(1000, 100)])
+        self.assertEqual(kinds_out(res), [(1010, "dispatcher_resumed", "external call", True)])
+        self.assertIsNone(res["first_operation_started"])
+
+    def test_pause_before_first_started_is_external_call_and_tie_is_not_before(self):
+        # inject: apply the shift-start rule to pauses, or use <= for "before the first operation_started"
+        events = [ev(1005, "operation_dispatcher_paused"), ev(1010, "operation_started", "o"),
+                  ev(1010, "operation_dispatcher_resumed")]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [episode(1000, 100)])
+        self.assertEqual(kinds_out(res), [(1005, "dispatcher_paused", "external call", True),
+                                          (1010, "dispatcher_resumed", "external call", True)])
+
+    def test_window_boundaries_exact(self):
+        # inject: inside as (start, end] or [start, end], near_before as (start-120, start] or [start-121, start)
+        events = [ev(0, "operation_started", "o")] + [ev(t, "operation_dispatcher_paused")
+                                                      for t in (879, 880, 1000, 1099, 1100)]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [episode(1000, 100)])
+
+        def d(x):
+            return x and x["delta_s"]
+        got = [(e["ts_us"] // 1_000_000 - BASE, d(e["in_episode"]), d(e["near_before"]), d(e["near_after"]))
+               for e in res["events"] if e["kind"].endswith("paused")]
+        self.assertEqual(got, [(879, None, None, None), (880, None, 120.0, None), (1000, 0.0, None, None),
+                               (1099, 99.0, None, None), (1100, None, None, 0.0)])
+
+    def test_nearest_episode_wins(self):
+        # inject: pick the farthest candidate (max instead of min)
+        events = [ev(0, "operation_started", "o"), ev(1125, "operation_dispatcher_paused")]
+        eps = [episode(1000, 100), episode(1110, 10, lst="episodes_ge_30s")]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), eps)
+        self.assertEqual(res["events"][0]["near_after"],
+                         dict(list="episodes_ge_30s", start=iso(1110), duration_s=10, delta_s=5.0))
+
+
+class DispatcherVerdictTests(unittest.TestCase):
+    """dispatcher_verdict on one shift: intervention episode [5000, 5100), another stuck episode [1000, 1100)."""
+
+    def verdict(self, *extra):
+        inter, other = episode(5000, 100), episode(1000, 100, lst="episodes_ge_30s")
+        res = md.analyse_shift("S", tables([ev(0, "operation_started", "o")] + list(extra), [state_row(1, 0)]),
+                               [other, inter])
+        return md.dispatcher_verdict({"S": res["events"]}, [("S", inter)])
+
+    def test_marks_on_both_sides_and_inclusive_end(self):
+        # inject: drop the before side of touches(), or make its end exclusive
+        self.assertEqual(self.verdict(ev(4940, "operation_dispatcher_paused")), "marks the intervention")
+        self.assertEqual(self.verdict(ev(4880, "operation_dispatcher_paused")), "marks the intervention")
+        self.assertEqual(self.verdict(ev(4879, "operation_dispatcher_paused")), "adds nothing")
+        self.assertEqual(self.verdict(ev(5220, "operation_dispatcher_resumed")), "marks the intervention")
+        self.assertEqual(self.verdict(ev(5221, "operation_dispatcher_resumed")), "adds nothing")
+
+    def test_only_pause_or_resume_near_an_episode_makes_mixed(self):
+        # inject: count denials in the "mixed" test, ignore resumes, or ignore the near windows
+        self.assertEqual(self.verdict(denied(1050, "opX", 1)), "adds nothing")
+        self.assertEqual(self.verdict(ev(1050, "operation_failed", "o")), "adds nothing")
+        self.assertEqual(self.verdict(ev(1050, "operation_dispatcher_resumed")), "mixed")
+        self.assertEqual(self.verdict(ev(1150, "operation_dispatcher_paused")), "mixed")
+        self.assertEqual(self.verdict(ev(950, "operation_dispatcher_resumed")), "mixed")
+        self.assertEqual(self.verdict(), "adds nothing")
+
+
+class ParserRuleTests(unittest.TestCase):
+    def test_parser_reject_is_a_rule_drop_with_its_reason(self):
+        # inject: skip parse_line on the raw path -> a line our parser rejects would pass
+        row = raw_row(1, 10)
+        self.assertIsNone(md.rule_drop_reason(row))
+        with mock.patch.object(md.moroop, "encode_line", lambda m: b"not json\n"):
+            self.assertEqual(md.rule_drop_reason(row), "json")
+        with mock.patch.object(md.moroop, "encode_line", lambda m: b'{"timestamp": "x"}\n'):
+            self.assertEqual(md.rule_drop_reason(row), "missing:headerId")
+            c = md.clean_shift([row, raw_row(2, 20)], [row])
+        self.assertEqual((c["rule_drops"], c["both_drop"]["ids"], c["ours_only"]["ids"]), (2, 1, 1))
+        self.assertEqual(c["rule_drop_reasons"], {"missing:headerId": 2})
+
+    def test_page_sentence_holds_needs_no_ours_only_and_no_foreign_cleaned_ids(self):
+        # inject: drop either term of page_sentence_holds
+        def run(raw, cleaned):
+            def load(_raw, _name):
+                return tables([ev(0, "operation_started", "o")], cleaned, raw)
+            return md.analyse(synthetic_label(), "sha", "raw", [6], load, label_path="l")["page_sentence_holds"]
+        rows = [raw_row(i, i * 10) for i in (1, 2, 3)]
+        self.assertTrue(run(rows, rows[:2]))
+        self.assertFalse(run(rows, rows[:2] + [raw_row(99, 990)]))
+        bad = [dict(rows[0], diagnostics="not json")] + rows[1:]
+        self.assertFalse(run(bad, bad))
 
 
 @unittest.skipUnless(HAVE_PYARROW and RAW_DIR.is_dir(), "needs pyarrow and the MoRoOp raw parquet (WR_MOROOP_RAW)")
