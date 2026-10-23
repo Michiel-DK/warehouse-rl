@@ -50,8 +50,9 @@ Gap-spanning alerts (N1, N2-W): an alert is gap-spanning iff its evidence window
 stuck_runs for every rule = the number of alert episodes. The MoRoOp label match is fleet/adapters/moroop.py
 label_comparison, called unchanged with moroop.run_intervals substituted (a context-managed module attribute swap) by the
 rule's episodes as (start, end, first index, last index); no detector, gap or label-match logic is copied. On the sim the
-truth and the match are fleet_analyser.score.score_run (TRUTH_DEFINITION, _truth_runs, _overlap), called once per zone
-with that zone's lines and episode rows, stuck_after 30 for every rule so the truth is identical across rules. N0 rows keep
+reference stuck episodes and the match are fleet_analyser.score.score_run (its TRUTH_DEFINITION, run builder and overlap
+rule), called once per zone with that zone's lines and episode rows, stuck_after 30 for every rule so the reference set is
+identical across rules. N0 rows keep
 the Detector's faulted_self episodes, which score_run excludes from `detected`; N1 / N2-W rows have no error logic and so
 count a frozen robot as detected (cause "position_rule").
 
@@ -89,6 +90,7 @@ from fleet_analyser.stations import load_stations, resolve_workers  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
 SCHEMA = "stall-baseline/1"
+SCORE_FIELDS = ("detected_excluded", "matched", "precision", "recall")
 BOX_LIMIT_M = 2.0
 N1_WINDOW_S = 60
 N1_SUSTAIN_S = 600
@@ -489,15 +491,15 @@ def sim_run(run_dir, stations_spec="auto", station_radius=0, workers=1):
                     kw.update(stations=stations, station_radius=station_radius, servicing_max_s=bound)
                 rows = [_episode_row(r["robot"], r, r["cause"]) for r in detector_rows(msgs_by_zone[z], **kw)]
             res = score_mod.score_run({z: lines[z]}, _RowsStore(rows), str(run_dir), stuck_after=STUCK_AFTER)
-            row = dict(episodes_total=len(rows), detected_episodes=res["detected_episodes"],
-                       detected_excluded=res["detected_excluded"], truth_episodes=res["truth_episodes"],
-                       matched=res["matched"], precision=res["precision"], recall=res["recall"])
+            # the benchmark's own field names: detected_episodes, <reference>_episodes, matched, precision, recall
+            row = dict(episodes_total=len(rows),
+                       **{k: v for k, v in res.items() if k in SCORE_FIELDS or k.endswith("_episodes")})
             if rule in POSITION_RULES:
                 row.update(scale=SIM_SCALE_NOTE, gap_spanning_alerts=gap_alerts)
             zone_rules[rule] = row
         zones[z] = zone_rules
     zones = {z: zones[z] for z in sorted(zones, key=int)}
-    return dict(zones=zones, truth_definition=score_mod.TRUTH_DEFINITION, servicing=dict(stats, station_radius=station_radius),
+    return dict(zones=zones, scoring_definition=score_mod.TRUTH_DEFINITION, servicing=dict(stats, station_radius=station_radius),
                 ours_episodes_total=sum(zones[z]["ours"]["episodes_total"] for z in zones))
 
 
