@@ -326,32 +326,41 @@ class TestTruthColumn(unittest.TestCase):
         lines += [raw_line("Z0-01", 8, "o1", True, True, x=2), raw_line("Z0-01", 9, "o2", True, False, x=3)]
         lines += [raw_line("Z0-01", k, "o2", False, k >= 11, x=4) for k in (10, 11)]
         lines += [raw_line("Z0-01", 12, "o2", True, True, x=5), raw_line("Z0-01", 13, "", False, False, x=5)]
+        # steps 14-19 stopped on o3, 15-20 carry stuck_event: an episode of exactly ts(14)..ts(20) = 30 s, the >= boundary
+        lines += [raw_line("Z0-01", k, "o3", False, k >= 15, x=6) for k in range(14, 20)]
+        lines += [raw_line("Z0-01", 20, "o3", True, True, x=7), raw_line("Z0-01", 21, "", False, False, x=7)]
         path = Path(d) / "zone0-000.jsonl.gz"
         with gzip.open(path, "wt") as fh:
             fh.write("\n".join(lines) + "\n")
-        long_s, short_s = 5 * (8 - 1), 5 * (12 - 10)
-        return path, long_s, short_s
+        long_s, short_s, edge_s = 5 * (8 - 1), 5 * (12 - 10), 5 * (20 - 14)
+        return path, long_s, short_s, edge_s
+
+    def test_keep_threshold_is_score_runs_default(self):
+        # inject: change STUCK_AFTER away from score_run's stuck_after default (30)
+        import inspect
+        from fleet_analyser import score
+        self.assertEqual(ds.STUCK_AFTER, inspect.signature(score.score_run).parameters["stuck_after"].default)
+        self.assertEqual(ds.STUCK_AFTER, 30)
 
     def test_keep_rule_sums_only_episodes_of_at_least_30_s(self):
         # inject: drop the keep rule, change STUCK_AFTER, or sum a different interval
         with tempfile.TemporaryDirectory() as d:
-            path, long_s, short_s = self.write_stream(d)
-            self.assertGreaterEqual(long_s, ds.STUCK_AFTER)
-            self.assertLess(short_s, ds.STUCK_AFTER)
-            self.assertEqual(ds.reference_seconds([str(path)], "0"), (long_s, 1))
+            path, long_s, short_s, edge_s = self.write_stream(d)
+            self.assertEqual((long_s, short_s, edge_s), (35, 10, 30))
+            self.assertEqual(ds.reference_seconds([str(path)], "0"), (long_s + edge_s, 2))
 
     def test_zone_task_divides_by_the_deadlock_robot_hours_and_copies_blocking(self):
         # inject: divide by the AGV hours or the stream span, or read a different deadlock field
         with tempfile.TemporaryDirectory() as d:
-            path, long_s, _ = self.write_stream(d)
+            path, long_s, _, edge_s = self.write_stream(d)
             task = dict(run="r", zone="0", files=[str(path)], pickers=[], blocked=123.25, robot_hours=2.5)
             run, zone, rec = ds.zone_task(task)
         self.assertEqual((run, zone), ("r", "0"))
         self.assertEqual(rec["blocked_s_per_robot_hour"], 123.25)
         self.assertEqual(rec["robot_hours"], 2.5)
-        self.assertEqual(rec["truth_stuck_s"], long_s)
-        self.assertEqual(rec["truth_episodes"], 1)
-        self.assertAlmostEqual(rec["truth_stuck_s_per_robot_hour"], long_s / 2.5, places=12)
+        self.assertEqual(rec["truth_stuck_s"], long_s + edge_s)
+        self.assertEqual(rec["truth_episodes"], 2)
+        self.assertAlmostEqual(rec["truth_stuck_s_per_robot_hour"], (long_s + edge_s) / 2.5, places=12)
 
 
 class TestSmoke(unittest.TestCase):
