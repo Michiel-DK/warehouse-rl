@@ -17,6 +17,8 @@ cell is not stuck; timebudget.run_is_stuck with stations, the same predicate as 
 timebudget_moroop-S.json, timebudget_moroop_shifts-S.json and moroop_label-S.json (the per-shift and pooled `label`
 objects) and never the unsuffixed files. Both absent: the S13A files, byte for byte (S14A adds a `causes` table and an
 `overruns` list to every label object).
+S16A: --faults (build and --analyse, default off) turns the diagnostics Error statuses into VDA 5050 errors (FATAL), which
+parse.py reads as faulted; see FAULT_NOTE and docs/LITERATURE.md Part 9. Without it every output is byte-identical to before.
 S14A: --servicing-max-s S|auto (with --station-radius) turns a station stop longer than the bound back into a stuck run
 (cause station_overrun, the detector's rule). auto computes one bound PER SHIFT (a shift is one run) from that shift's dwell
 times at stations; the four servicing_* keys are in each shift's label object and, as lists in shift order, in the pooled
@@ -58,6 +60,9 @@ DEFAULT_STATIONS = FLEET / "data" / "moroop" / "stations.json"
 DEFAULT_JSONL = FLEET / "data" / "moroop" / "jsonl"
 DEFAULT_BUDGET = FLEET / "data" / "moroop" / "budget"
 DEFAULT_RESULTS = REPO / "results" / "fleet"
+FAULT_LEVEL = "Error"  # S16A: the only diagnostics level that can become an error entry (Part 9 section 1, rank B, ours)
+NOISE = frozenset({("/Devices/Camera", "Frequency too high.", "Warning")})  # (name, message, level); Part 9 section 2, rank A
+FAULT_DESC_MAX = 120
 STUCK_AFTER_S = 30  # fleet_analyser.detector.DEFAULT_STUCK_AFTER, asserted equal in analyse()
 
 HF = dict(repo="Self-Organizing-Production-Logistics/MoRoOp", revision="1.0.1",
@@ -106,6 +111,20 @@ MAPPING = [
          rule="per current_position_id in 135 charging / 136 warehouse / 137 kitting / 138 assembly, every cell (same "
               "grid) holding >= 5 % of the state == 'Idle' cleaned rows at that id, pooled over nine shifts; shelves []"),
 ]
+# S16A: used instead of the MAPPING rows of the same field ONLY with --faults (the rows above stay as they were)
+MAPPING_FAULTS = {
+    "errors": dict(field="errors", source_columns=["diagnostics"],
+                   rule="one entry per diagnostics status of the kept row at level exactly 'Error' whose (name, message, level) "
+                        "is not on the noise list, in status order: {errorType: name, errorLevel: 'FATAL', errorDescription: "
+                        "message[:120]}; Ok, Warning, Stale and noise never enter; unparseable diagnostics -> [] and counted; "
+                        "stuck_reason, TIMEOUT and operation_start_denied are never errors"),
+    "faulted": dict(field="faulted", source_columns=["diagnostics"],
+                    rule="parse.py: some errors entry with errorLevel FATAL, i.e. the kept row has a qualifying Error status. "
+                         "Our rule, rank B (REP 107: a component ERROR does not halt the system). Public label 'Robot "
+                         "reported a component error', never 'Robot error, cannot continue order'"),
+}
+FAULT_NOTE = ("--faults: the detector's faulted_self cause label ('Robot error, cannot continue order') in this file must "
+              "not be quoted for MoRoOp; say 'Robot reported a component error'")
 
 DEVIATIONS = [
     dict(item="pooled numbers",
@@ -142,6 +161,21 @@ DEVIATIONS = [
          reason="reuse the precedence instead of rewriting it; the per-bucket second counts are asserted equal to the "
                 "timebudget output"),
 ]
+
+
+def mapping_for(faults):
+    return MAPPING if not faults else [MAPPING_FAULTS.get(m["field"], m) for m in MAPPING]
+
+
+def deviations_for(faults):
+    if not faults:
+        return DEVIATIONS
+    return DEVIATIONS + [dict(item="faults: errors and faulted",
+                              deviation="a diagnostics status at level Error that is not on the noise list is an errors entry "
+                                        "(FATAL), so parse.faulted is true; the faulted time-budget bucket is computed",
+                              reason="docs/LITERATURE.md Part 9 section 1 (ours, rank B); REP 107 says a component ERROR "
+                                     "does not by itself halt the system, so the faulted bucket is a count of reported "
+                                     "errors, not of stopped seconds")]
 
 
 # ------------------------------------------------------------------------------------------------ pure helpers
@@ -238,6 +272,36 @@ def _count_by(rows, key):
     return dict(sorted(collections.Counter(r[key] for r in rows).items(), key=lambda kv: str(kv[0])))
 
 
+def status_list(diagnostics):
+    """The statuses of one diagnostics JSON text, or None when it does not parse as {"statuses": [dict, ...]}."""
+    try:
+        sts = json.loads(diagnostics)["statuses"]
+        if not isinstance(sts, list) or not all(isinstance(s, dict) for s in sts):
+            return None
+        return sts
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return None
+
+
+def status_key(s):
+    return (str(s.get("name")), str(s.get("message")), str(s.get("level")))
+
+
+def is_qualifying_error(s):
+    """S16A: level exactly 'Error' and not on the noise list (Part 9 sections 1 and 2)."""
+    k = status_key(s)
+    return k[2] == FAULT_LEVEL and k not in NOISE
+
+
+def qualifying_errors(diagnostics):
+    """(errors, parsed): the VDA 5050 errors entries of one diagnostics text, in status order; parsed False if unparseable."""
+    sts = status_list(diagnostics)
+    if sts is None:
+        return [], False
+    return [dict(errorType=str(s.get("name")), errorLevel="FATAL",
+                 errorDescription=str(s.get("message"))[:FAULT_DESC_MAX]) for s in sts if is_qualifying_error(s)], True
+
+
 def _diag_levels(rows):
     levels, rows_non_ok, bad = collections.Counter(), 0, 0
     for r in rows:
@@ -257,14 +321,16 @@ def _diag_levels(rows):
 
 
 def convert_shift(state_rows, operations, jobs, cell_m=DEFAULT_CELL_M, moving_eps=DEFAULT_MOVING_EPS,
-                  omega_eps=DEFAULT_OMEGA_EPS):
-    """(messages, aux, stats). messages: dicts in emission key order; aux[i]: per-message side data for the analysis."""
+                  omega_eps=DEFAULT_OMEGA_EPS, faults=False):
+    """(messages, aux, stats). messages: dicts in emission key order; aux[i]: per-message side data for the analysis.
+    faults=True (S16A): errors from the kept row's diagnostics (qualifying_errors); False: errors [] always."""
     native = sorted(state_rows, key=lambda r: (r["created_at"], r.get("id", 0)))
     kept, dropped = collapse_seconds(native)
     resolver = OrderResolver(operations, jobs)
     messages, aux = [], []
     how_rows = collections.Counter()
     overlap_rows = 0
+    fault_msgs = fault_bad = 0
     for n, r in enumerate(kept, 1):
         job_id, how, n_run = resolver.resolve(r["created_at"])
         charging_job = resolver.is_charging(job_id)
@@ -272,11 +338,17 @@ def convert_shift(state_rows, operations, jobs, cell_m=DEFAULT_CELL_M, moving_ep
         how_rows["charging" if charging_job else how] += 1
         overlap_rows += n_run >= 2
         ts = r["created_at"] // 1_000_000
+        errors = []
+        if faults:
+            errors, parsed_ok = qualifying_errors(r.get("diagnostics"))
+            fault_bad += not parsed_ok
+            fault_msgs += bool(errors)
         messages.append({
             "headerId": n, "timestamp": iso(ts), "manufacturer": MANUFACTURER, "serialNumber": SERIAL, "orderId": order,
             "agvPosition": {"x": cell_of(r["pos_x"], cell_m), "y": cell_of(r["pos_y"], cell_m),
                             "theta": float(r["pos_theta"])},
-            "driving": bool(is_driving(r, moving_eps, omega_eps)), "paused": bool(is_paused(r)), "errors": [], "loads": []})
+            "driving": bool(is_driving(r, moving_eps, omega_eps)), "paused": bool(is_paused(r)), "errors": errors,
+            "loads": []})
         aux.append(dict(ts=ts, state=r["state"], operating_mode=r["operating_mode"], job_id=job_id,
                         charging_job=charging_job, is_robot_charging=bool(r["is_robot_charging"]),
                         omega_only=bool(omega_only(r, moving_eps, omega_eps)), overlap=n_run >= 2, paused=is_paused(r)))
@@ -313,6 +385,11 @@ def convert_shift(state_rows, operations, jobs, cell_m=DEFAULT_CELL_M, moving_ep
         termination_reason_operations=_count_by(operations, "termination_reason"),
         timeout_operations=sum(1 for o in operations if o["termination_reason"] == "TIMEOUT"),
         errors="[] (diagnostics levels tabulated only)", waiting_shelf="n/a")
+    if faults:
+        faulted_s = sum(dt for m, dt in zip(messages, owned) if m["errors"])
+        stats["errors"] = "Error-level diagnostics statuses off the noise list, FATAL (see MAPPING_FAULTS)"
+        stats["diagnostics"]["faulted"] = dict(kept_messages=fault_msgs, kept_messages_unparseable_diagnostics=fault_bad,
+                                               seconds=faulted_s)
     return messages, aux, stats
 
 
@@ -390,7 +467,7 @@ def sha256_file(path):
 
 # ------------------------------------------------------------------------------------------------ build
 def build(raw, out, shift=None, cell_m=DEFAULT_CELL_M, moving_eps=DEFAULT_MOVING_EPS, omega_eps=DEFAULT_OMEGA_EPS,
-          stations_path=DEFAULT_STATIONS):
+          stations_path=DEFAULT_STATIONS, faults=False):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     data = {n: load_shift(raw, n) for n in SHIFTS}
@@ -400,7 +477,8 @@ def build(raw, out, shift=None, cell_m=DEFAULT_CELL_M, moving_eps=DEFAULT_MOVING
     shifts = {}
     for k, name in enumerate(SHIFTS):
         d = data[name]
-        msgs, _aux, stats = convert_shift(d["robot_state_cleaned"], d["operations"], d["jobs"], cell_m, moving_eps, omega_eps)
+        msgs, _aux, stats = convert_shift(d["robot_state_cleaned"], d["operations"], d["jobs"], cell_m, moving_eps, omega_eps,
+                                      faults)
         stats["table_rows"] = {t: len(d[t]) for t in TABLES}
         shifts[str(k)] = dict(name=name, **stats)
         if shift is None or shift == k:
@@ -579,7 +657,8 @@ def _check(name, expected, observed, kind, tol=0.05, gating=None):
 
 
 def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, stations_path=DEFAULT_STATIONS,
-            results=DEFAULT_RESULTS, cell_m=DEFAULT_CELL_M, station_radius=None, suffix=None, servicing_spec=None):
+            results=DEFAULT_RESULTS, cell_m=DEFAULT_CELL_M, station_radius=None, suffix=None, servicing_spec=None,
+            faults=False):
     tb = _tb()
     from fleet_analyser import servicing as sv_mod
     from fleet_analyser.detector import DEFAULT_STUCK_AFTER
@@ -602,7 +681,7 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     exact_fail = False
     for k, name in enumerate(SHIFTS):
         d = data[name]
-        msgs, aux, stats = convert_shift(d["robot_state_cleaned"], d["operations"], d["jobs"], cell_m)
+        msgs, aux, stats = convert_shift(d["robot_state_cleaned"], d["operations"], d["jobs"], cell_m, faults=faults)
         stats["table_rows"] = {t: len(d[t]) for t in TABLES}
         lines = (Path(jsonl) / f"zone{k}-000.jsonl.gz")
         with gzip.open(lines, "rb") as f:
@@ -693,7 +772,8 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     share = {b: secs[b] / span_s for b in tb.BUCKETS}
     secs_out, share_out = dict(secs), dict(share)
     secs_out["waiting_shelf"] = share_out["waiting_shelf"] = "n/a"
-    secs_out["faulted"] = share_out["faulted"] = "not computed"
+    if not faults:
+        secs_out["faulted"] = share_out["faulted"] = "not computed"
     jph = pooled["jobs"] / (span_s / 3600)
     pooled_sanity = [
         _check("pooled_span_hours", EXPECTED["pooled_span_h"], round(span_s / 3600, 4), "5pct"),
@@ -721,6 +801,15 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
                                    run_cell="cell of the run's first stopped message")
     if servicing_spec is not None:
         src["servicing_max_s_spec"] = servicing_spec
+    if faults:
+        src["faults"] = dict(rule=MAPPING_FAULTS["faulted"]["rule"], level=FAULT_LEVEL, noise=sorted(list(k) for k in NOISE),
+                             note=FAULT_NOTE)
+        faulted_doc = dict(seconds=secs["faulted"], share=share["faulted"], note=FAULT_NOTE)
+        faulted_shifts = {k: dict(seconds=s["timebudget_robot"]["seconds"]["faulted"],
+                                  share=s["timebudget_robot"]["seconds"]["faulted"] / s["timebudget_robot"]["span_s"])
+                          for k, s in shifts.items()}
+    else:
+        faulted_doc, faulted_shifts = "not computed", "not computed"
     out_pooled = dict(
         shifts=len(SHIFTS), span_s=span_s, seconds=secs_out, share=share_out, jobs=pooled["jobs"], jobs_per_robot_hour=jph,
         messages=pooled["messages"], parse_rejects=pooled["rejects"], charging=dict(pooled["charge"]),
@@ -729,8 +818,8 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
                    false_alarms=pooled_lists["false_alarms"], missed_episodes_ge_30s=pooled_lists["misses"],
                    timeout_operations=pooled_lists["timeouts"],
                    causes=causes_block(pooled_eps, pooled_sec.get("stuck", 0)), overruns=pooled_lists["overruns"]),
-        waiting_shelf="n/a", faulted="not computed", sanity=pooled_sanity, mapping=MAPPING, deviations=DEVIATIONS, src=src)
-    out_shifts = dict(shifts=shifts, waiting_shelf="n/a", faulted="not computed", src=src)
+        waiting_shelf="n/a", faulted=faulted_doc, sanity=pooled_sanity, mapping=mapping_for(faults), deviations=deviations_for(faults), src=src)
+    out_shifts = dict(shifts=shifts, waiting_shelf="n/a", faulted=faulted_shifts, src=src)
     sv_doc = {}
     if servicing_spec is not None:  # S14A: one bound per shift (each shift is one run); pooled files carry lists in shift order
         sv_doc = {key: [row[key] for row in pooled_lists["servicing"]] for key in sv_mod.KEYS}
@@ -746,6 +835,9 @@ def analyse(raw=DEFAULT_RAW, jsonl=DEFAULT_JSONL, budget=DEFAULT_BUDGET, station
     if suffix:
         label_doc = dict(shifts={k: v["label"] for k, v in shifts.items()}, pooled=out_pooled["label"],
                          station_radius=station_radius, src=src, **sv_doc)
+        if faults:
+            label_doc["faults"] = True
+            label_doc["faults_note"] = FAULT_NOTE
         (results / f"moroop_label{tag}.json").write_text(json.dumps(label_doc, sort_keys=True, indent=1) + "\n")
     print(f"{'check':45s} {'kind':6s} {'expected':>24s} {'observed':>24s} ok")
     for k, s in shifts.items():
@@ -785,6 +877,9 @@ def main(argv=None):
     ap.add_argument("--servicing-max-s", type=_spec, default=None, metavar="S|auto",
                     help="--analyse only (ignored when building), S14A, needs --station-radius: a station stop longer than this many seconds is stuck "
                          "again (station_overrun); auto = one bound per shift from that shift's dwell times at stations")
+    ap.add_argument("--faults", action="store_true",
+                    help="S16A: diagnostics Error statuses (not on the noise list) become FATAL errors, so the messages are "
+                         "faulted; build and --analyse must use the same flag (default off: byte-identical to before)")
     ap.add_argument("--suffix", default=None, help="--analyse: write timebudget_moroop-S.json etc. instead of the S13A files")
     args = ap.parse_args(argv)
     if args.station_radius is not None and args.station_radius < 0:
@@ -795,12 +890,12 @@ def main(argv=None):
         print("moroop: --servicing-max-s has no effect in build mode (it applies to --analyse)", file=sys.stderr)
     if args.analyse:
         return analyse(args.raw, args.jsonl, args.budget, args.stations, args.results, args.cell_m, args.station_radius,
-                       args.suffix, args.servicing_max_s)
+                       args.suffix, args.servicing_max_s, args.faults)
     if args.out is None:
         ap.error("--out is required unless --analyse")
     if args.shift is not None and not 0 <= args.shift < len(SHIFTS):
         ap.error(f"--shift must be 0..{len(SHIFTS) - 1}")
-    shifts, st = build(args.raw, args.out, args.shift, args.cell_m, args.moving_eps, args.omega_eps, args.stations)
+    shifts, st = build(args.raw, args.out, args.shift, args.cell_m, args.moving_eps, args.omega_eps, args.stations, args.faults)
     for k, s in shifts.items():
         print(f"shift {k} {s['name']}: native {s['native_rows']} kept {s['kept_rows']} collapsed {s['rows_collapsed']}")
     print(f"stations: {st['station_cells']}, disjoint {st['cell_sets_disjoint']}, "
