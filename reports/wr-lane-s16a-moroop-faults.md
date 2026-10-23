@@ -86,17 +86,25 @@ emptying `mo.NOISE` in-process fails `test_table_c_classes` and the report test.
 
 ## Gate
 
-`.venv/bin/python -m unittest discover -s tests` from the worktree root (venv from the main checkout):
+Lane run, worktree on origin/master a0a1854 + this branch: `Ran 1234 tests in 785.971s` / `FAILED (failures=1, skipped=9)`.
+The one failure was `fleet.tests.test_fleet_s8o_step4_label.TestOverviewStep4.test_committed_page_is_a_fresh_build`
+(`fleet/overview_build.py` still emitted `laptop-scheduler/reports/wr-s8e-lessons-long.md` while the committed page says
+`reports/...`). The correctness refuter refuted on it: red gate, no master baseline.
 
-    Ran 1234 tests in 785.971s
-    FAILED (failures=1, skipped=9)
+Main loop, re-verification:
+- Baseline: the same test fails alone on a clean detached worktree of origin/master a0a1854 (`FAILED (failures=1)`), so it
+  predates this lane. The diff touches neither `fleet/overview_build.py` nor `docs/overview/`.
+- Local master gained `233f82f` during the lane (overview_build.py emits `reports/` paths; unpushed, with the held public-repo
+  prep commits). Gate on a detached worktree of local master 233f82f with this branch merged in:
+  `Ran 1234 tests in 898.537s` / `OK (skipped=9)`, exit 0 (1222 on 233f82f + the 12 new cases). The 9 skips are the data
+  tests that need untracked data, absent in a worktree.
+- origin/master stays red on that one test until the held commits are pushed (operator's call); this PR does not change that.
 
-The one failure is `fleet.tests.test_fleet_s8o_step4_label.TestOverviewStep4.test_committed_page_is_a_fresh_build`: the
-committed overview page says `laptop-scheduler/reports/wr-s8e-lessons-long.md`, a fresh build says
-`reports/wr-s8e-lessons-long.md` (that file landed in S15B, #55). It fails identically in isolation, neither it nor
-overview_build.py mentions moroop, and the known master-red-on-overview-freshness note predates this lane. NOT an OK line:
-the gate does not exit 0 here. The 9 skips are the data tests that need `fleet/data/moroop/raw` or other untracked data,
-absent in a worktree.
+## Part 9 is not on origin/master
+
+`docs/LITERATURE.md` Part 9 (the rules this lane implements) is in local master commits 682bdd0 / 35251c8, held unpushed with
+the public-repo prep. Until they are pushed, the rules are restated in this report's "Deviations" and in the module
+docstrings; the PR's Part 9 citations are checkable on local master only.
 
 ## Dev run (lane dev run, pending wr-s16a-run)
 
@@ -107,6 +115,8 @@ absent in a worktree.
   reproduced from the Detector re-run):
 - shift 6 2026-07-30T07:10:44Z: 47 s, overlaps a faulted status for 0 s (0.000)
 - shift 7 2026-07-31T12:23:06Z: 133 s, overlaps a faulted status for 1 s (0.008)
+- Caveat (main loop): 'mixed' rests on that one second. With 0 s it would read 'unknown stays unknown'; at 1 s of 133 the
+  diagnostics give these two stalls no cause in substance. Read the verdict with that number next to it.
 - Pooled faulted seconds from raw: 585 (0.0022 of 262717 s span), driving
   58 s (share 0.099), in paused rows 0 s.
 - Cross-check: time-budget faulted bucket 508 s vs 585 s from raw,
@@ -149,7 +159,7 @@ The label file also carries `faults_note` saying so.
       k=$((k+1))
     done
     $P fleet/adapters/moroop.py --analyse --raw $M/raw --jsonl $M/jsonl-sf --budget $M/budget-sf --stations $M/stations.json --station-radius 1 --servicing-max-s auto --suffix sf --faults
-    $P fleet/moroop_faults.py --raw $M/raw --jsonl-sf $M/jsonl-sf --budget-dir $M/budget-sf --label-sf results/fleet/moroop_label-sf.json --jsonl-sb $M/jsonl-sb --label-sb results/fleet/moroop_label-sb.json --out results/fleet/moroop_faults-sf.json
+    $P fleet/moroop_faults.py --raw $M/raw --jsonl-sf $M/jsonl-sf --budget-dir $M/budget-sf --label-sf results/fleet/moroop_label-sf.json --jsonl-sb $M/jsonl-sb --label-sb results/fleet/moroop_label-sb.json --out results/fleet/moroop_faults.json
     echo "SCHED_RESULT: OK wr-s16a-run MoRoOp --faults into *-sf outputs and moroop_faults-sf.json"
 
-SCHED_RESULT: OK wr-lane-s16a-moroop-faults PR pending, 12 new tests ok, byte-identity 26/26 files match, gate 1 pre-existing unrelated failure (overview freshness)
+SCHED_RESULT: OK wr-lane-s16a-moroop-faults 12 new tests ok, byte-identity 26/26 without --faults, gate on master 233f82f + branch Ran 1234 OK (skipped=9) (origin/master a0a1854 red on a pre-existing overview test, fixed in held 233f82f); dev-run verdict mixed on 1 s of overlap, pending wr-s16a-run
