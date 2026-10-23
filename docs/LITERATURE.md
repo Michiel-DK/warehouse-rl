@@ -1326,7 +1326,7 @@ Scope: the two builds the operator's 23 Oct decision puts before the page (lapto
 `jobs/wr-lane-s15a-naive-stall-baseline.md`, `jobs/wr-lane-s15b-duration-spread.md`): measure the page's "real stalls"
 and blocking figures against the two vendor methods COMPETITION pass 4 found (InOrbit, OTTO), on data already on disk.
 One pass on 2026-10-23 (WebSearch, curl of the InOrbit developer doc and the FHWA report, OpenAlex, CORE API v3),
-so `verified@2026-10-23` unless a row says otherwise. Query log: `laptop-scheduler/reports/wr-dev-lit-s15.md`. Ranks
+so `verified@2026-10-23` unless a row says otherwise (eCFR, OPC and one PDF added after review). Query log: `laptop-scheduler/reports/wr-dev-lit-s15.md`. Ranks
 as in Part 2 (A read, A- abstract or record, S snippet). **Coverage:** OpenAlex 7 queries; CORE 9 flat queries ran,
 5 more answered 429 and are not counted; calibration hits: Tarapore 2017 (stall field) and Li et al. 2018 (AGV
 travel time). Semantic Scholar, dblp, Lens: not tried (Part 7 found them closed).
@@ -1349,29 +1349,27 @@ not shipped defaults. Formant (https://docs.formant.io/llms.txt, title index rea
 numeric stream ("Each datapoint in this numeric set stream is compared to the threshold(s) you define",
 /docs/getting-started-create-an-event-and-configure-notifications.md, A); no stuck, stillness or idle title. MiR:
 5 s path timeout then replan (Part 5 §1, 2020 guide on a mirror, verified@2026-10-21). VDA 5050 `driving` / `paused`
-carry no duration (Part 2 §2, Part 5 §1). Locus, Geek+, Seegrid: no public doc tree found by a WebSearch for
-stuck-alert docs: UNTESTED. **Literature:** the robot-side form is Nav2's progress checker, 0.5 m in 10 s (Part 6
-(1)); failure labels sit at 60 s and up (Lee 2026, Gerling 2016, OEE; Part 5 §1). No named "stall rule" with a
-window: not found in OpenAlex ("mobile robot fleet stuck detection time threshold", "robot stall detection no
-progress timeout") or CORE ("robot stuck threshold seconds", "robot stall detection fleet": 0 hits each; Tarapore
-retrieved). A k × planned-dwell window: not found (Part 4 §1, kept). SPC has no fixed window either: the bound is a
-fence on the sample (Part 4 §1, the S14A rule).
+carry no duration (Part 2 §2, Part 5 §1). Locus, Geek+, Seegrid: no public doc tree found: UNTESTED. **Literature:**
+the robot-side form is Nav2's progress checker, 0.5 m in 10 s (Part 6 (1)); failure labels start at 60 s (Part 5 §1).
+A named "stall rule" with a window: not found in OpenAlex or CORE (queries in the report; Tarapore retrieved). A
+k × planned-dwell window: not found (Part 4 §1). SPC has no fixed window: the bound is a fence on the sample (S14A).
 
 **Verdict 1.** Name the baseline **"stopped on a mission"**, InOrbit's own wording; there is no standard name. S15A
-runs four rules on the same stream, all gated on `orderId` non-empty, none with station or error logic:
+runs these rules on the same stream, all gated on `orderId` non-empty, none with station or error logic:
 - **N0-30**, **N0-60**: the existing detector with `stations=None` at `stuck_after` 30 s and 60 s (stillness = the
   stream's `driving` flag; N0-30 is the old 567-run rule). Expressible as the detector.
 - **N1** (InOrbit `unableToNavigate`): bounding-box diagonal of the positions in the last 60 s < 2 m, held for 600 s.
-- **N2** (InOrbit "stopped while on a mission"): largest bounding-box side of the positions in the last 180 s < 2 m.
+- **N2-W** (InOrbit "stopped while on a mission"): largest bounding-box side of the positions in the last W s < 2 m,
+  W ∈ {30, 60, 120, 180}; 180 is the documented value, the others because InOrbit's numbers are editable examples.
 N1 and N2 are position rules and **not** expressible as the detector: MoRoOp's `driving` counts rotation in place
 (omega > 0.05 rad/s) as moving, a displacement box does not. Positions: MoRoOp cells are floored 0.5 m, so 2 m = 4
 cells (quantisation ≤ one cell); the simulator grid has no metre scale on record, so N1/N2 there read 2 m as 2 cells
 and are labelled "scale assumed". A change-only log fills the window by carrying each message's position and
 orderId forward to the next message; report how many N1/N2 alerts span a gap > 60 s (timebudget's gap rule).
-**Expected trade-off, to be measured:** the two labelled stops ≥ 30 s on MoRoOp last 250 s and 127 s
-(`results/fleet/moroop_label-sb.json`, shift 7, both GoalObstructed), so N1 (≥ 600 s) cannot fire on either and N2
-(≥ 180 s) can fire on the 250 s one only. The InOrbit forms buy fewer alarms with missed short stalls; the comparison
-needs both axes, plus latency (alert time minus stop start).
+**Not predicted.** The labelled stops ≥ 30 s (shift 7: 250 s and 127 s, GoalObstructed, `moroop_label-sb.json`)
+are both hit by one `driving`-false run of 133 s (`fleet/data/moroop/budget-sb/zone7.json`, cause `unknown`), so
+label length is not stillness length and a 2 m box may hold longer or shorter. S15A reports, per label, the stopped
+run, the box-stillness span and each rule's alert latency.
 
 ### 2. Duration spread as a congestion signal
 
@@ -1392,39 +1390,43 @@ free flow) is FHWA's average-congestion measure (Part 6 (4), verified@2026-10-21
 | (p95 − mean) / mean | buffer index, FHWA (A) | no: freeway reliability vs incident counts explored (Chen 2010, KTC, https://doi.org/10.13023/ktc.rr.2010.08, A-, abstract only, no result read) |
 | p95 / free-flow | planning time index, FHWA (A) | no; SHRP 2 L03 / L33 predict p95 TTI from mean TTI ("1 + 3.4201·ln(meanTTI)", https://www.nap.edu/read/22282/chapter/2, S, snippet; page text not readable): spread tracks mean congestion on freeways |
 | σ / μ | coefficient of variation; FHWA discourages it (A) | no |
-| IQR / median, p95 / median | no source found naming them as congestion measures | no |
+| p95 / p50; p80 / p50 | Truck Travel Time Reliability (TTTR), "95th percentile travel time divided by the Normal Truck Travel Time" (50th), 23 CFR 490.611 (https://www.ecfr.gov/current/title-23/part-490/section-490.611, A); LOTTR, "80th percentile travel time divided by the 50th percentile travel time", 490.511 (A): US federal reliability measures | no |
+| IQR / median | no source found naming it as a congestion measure | no |
 | mean job duration | OTTO "Average Run Time" (A) | no |
 
 No AGV or AMR paper using duration spread as a congestion or blocking proxy: not found in OpenAlex ("AGV travel
 time variability congestion indicator", "task duration variance congestion warehouse robots") or CORE ("AGV
 variability congestion indicator", "AGV variance blocking travel": 0 hits; Li et al. 2018,
 https://doi.org/10.1155/2018/4037695, retrieved: travel-time uncertainty as a *cause* of AGV catch-up conflicts).
+**Manufacturing.** ISO 22400-2's 34 KPIs, as reproduced by Kikolski 2020 (MODELSWARD,
+https://www.scitepress.org/Papers/2020/91758/91758.pdf, A- secondary, table read), have no dispersion KPI on a time
+(the capability indices are on quality characteristics); OPC 40001-1 C.2 maps time elements only (read). Kingman's
+heavy-traffic queue (1961, https://doi.org/10.1017/S0305004100036094, A- record; the VUT form via Hopp & Spearman,
+not read) has variability as a *cause* of waiting, so spread is an expected correlate of congestion, not a validated
+measure of it; Little's law (1961, https://doi.org/10.1287/opre.9.3.383, A- record) relates means only.
 **Trap:** raw job durations vary with route length, so a zone with mixed job lengths shows spread with no congestion.
 
-**Verdict 2.** S15B computes, per (run, zone), over completed jobs: **buffer index** (primary, FHWA-named, no
-free-flow time needed), **mean job duration** (OTTO's documented figure) and **CV** (secondary), each twice: on raw
-durations (OTTO's hand method) and on durations divided by the job's free-flow time (Manhattan distance of the job's
-cells times `STEP_S`, a planning-time-index-style normaliser; the lane says which cells it uses). Agreement:
+**Verdict 2.** S15B's two **decisive** statistics, per (run, zone) over completed jobs on raw durations (OTTO's hand
+method): **p95 / median** (the TTTR form: needs no free-flow time, robust to one long job) and **mean job duration**
+(OTTO's figure). Descriptive only: buffer index, CV, and all of them on durations over free-flow time (Manhattan along
+the job's waypoints times `STEP_S`). Agreement:
 **Spearman ρ per run** (average ranks for ties) with **Kendall τ-b** next to it (scipy: tau-b is the variant that
 handles ties, https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kendalltau.html, A), and **top-3
 overlap** with its chance value k²/n (0.9 zones of 3 at n = 10, 0.3 at n = 30). Per run and the median over runs;
 never one pooled ρ over raw values from different runs (the 30-zone sticky run would dominate). With n = 10 a ρ near
-0.65 is about the p < 0.05 line; say so. Rank-biased overlap (Webber, Moffat & Zobel 2010, TOIS,
-https://doi.org/10.1145/1852102.1852106, A-) is the standard for long top-weighted lists, not needed at 10 zones.
+0.65 is about the p < 0.05 line; say so. A run where either column is constant has ρ undefined: null, counted as
+undecided for that run.
 
 ### 3. What refutes each
 
-- **S15A.** Commodity if N1 or N2 on MoRoOp lands within 2× of our 6 stuck runs with 2/2 labelled hits (not
-  expected from the durations above); also commodity if N0-60 does. **Supports the lead** if every naive rule
-  either misses a labelled stop or raises ≥ 5× our false alarms (the old rule N0-30 had 544 unlabelled runs against
-  our 5, README (q), (s)). "Within 2×" and "5×" are our thresholds, set here before the run.
-- **S15B.** Commodity if, in at least 4 of 5 runs, ρ(spread or mean, truth stuck s per robot-hour) ≥ ρ(blocking
-  number, truth): the vendor's hand method reads truth as well as ours. ρ(spread, blocking) alone decides nothing.
-  **Supports the lead** if ρ(blocking, truth) exceeds every spread and mean statistic's ρ with truth in at least 4 of
-  5 runs. Mixed results are reported as mixed.
+- **S15A.** Commodity if any N2-W, N1 or N0-60 on MoRoOp reaches 2/2 labelled hits with ≤ 12 stuck runs (2× our
+  6). **Supports the lead** if none does. A "supports" result shows only that station logic plus the bound removes
+  the alarms: InOrbit customers can write that logic (COMPETITION pass 4 scores it present as a configurable rule),
+  so the page may say "not in the documented example", never "a vendor can't".
+- **S15B.** Commodity if, for either decisive statistic, the median over runs of ρ(statistic, blocking number) is ≥
+  0.7 with median top-3 overlap ≥ 2/3, **or** ρ(statistic, truth) ≥ ρ(blocking, truth) in at least 3 of the decided
+  runs. **Supports the lead** only if both decisive statistics have median ρ with the blocking number < 0.4 **and**
+  the blocking number beats both on truth in at least 4 of 5 runs. Anything else is reported as mixed. All
+  thresholds are ours, set here before the run.
 
-### 4. Lane briefs rewritten (2026-10-23)
-
-Both drafts were rewritten in place from Verdicts 1-2 (S15A: rules N0-30/N0-60/N1/N2, fixture, refute line; S15B:
-buffer index, mean, CV, raw and normalised, ρ per run, τ-b, top-3 with chance); file names, tests and result paths
-kept. The diff is listed in `reports/wr-dev-lit-s15.md`.
+**Briefs:** both S15 drafts rewritten in place from Verdicts 1-2; file names, tests and result paths kept; diff in the report.
