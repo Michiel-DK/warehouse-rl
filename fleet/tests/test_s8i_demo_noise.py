@@ -33,6 +33,9 @@ from fleet_analyser.store import JsonlStore  # noqa: E402
 EMIT = str(ROOT / "fleet" / "emit.py")
 SMALL = "tarware-small-4agvs-2pickers-globalobs-v1"
 STEPS = 40
+# S17A: parse_line names the key of a type / timestamp reject; the emitter's three noise kinds map to these exact reasons
+# (emitter._bad_line: a truncated line, a local-format timestamp, agvPosition.x as a string)
+S17A_REASON_OF_KIND = {"json": "json", "timestamp": "timestamp:timestamp", "type": "type:agvPosition.x"}
 
 
 def run_small(noise, seed=0, steps=STEPS, ctl="/nonexistent-control-file"):
@@ -139,7 +142,7 @@ class TestNoiseOffAndOn(unittest.TestCase):
             self.assertTrue(line.endswith(b"\n") and line.count(b"\n") == 1)
             msg, reason = parse_line(line)
             if msg is None:
-                self.assertEqual(reason, next(kinds))
+                self.assertEqual(reason, S17A_REASON_OF_KIND[next(kinds)])
             elif line == prev:
                 pass  # an exact duplicate
             prev = line
@@ -228,7 +231,7 @@ class TestEndToEnd(unittest.TestCase):
         rejects = st.select("rejects", {"run": "r"})
         self.assertEqual(len(rejects), noise["malformed"])
         self.assertTrue(all(r["reason"] for r in rejects))
-        self.assertEqual({r["reason"] for r in rejects}, {"json", "timestamp", "type"})
+        self.assertEqual({r["reason"] for r in rejects}, set(S17A_REASON_OF_KIND.values()))
 
     def test_coverage_as_the_exporter_computes_it_is_one(self):
         files = rx.zone_files(self.dirs["noisy"], "0")

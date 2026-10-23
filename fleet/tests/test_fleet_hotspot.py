@@ -143,12 +143,12 @@ class TestParserFields(unittest.TestCase):
         # inject: accept a message with a bad pre-existing field because the new fields parse
         obj = json.loads(self.raw())
         obj["driving"] = "no"
-        self.assertEqual(parse_line(json.dumps(obj).encode()), (None, "type"))
+        self.assertEqual(parse_line(json.dumps(obj).encode()), (None, "type:driving"))
         obj = json.loads(self.raw())
         del obj["orderId"]
         self.assertEqual(parse_line(json.dumps(obj).encode())[1], "missing:orderId")
         self.assertEqual(parse_line(b"not json")[1], "json")
-        self.assertEqual(parse_line(self.raw(timestamp="yesterday"))[1], "timestamp")
+        self.assertEqual(parse_line(self.raw(timestamp="yesterday"))[1], "timestamp:timestamp")
 
 
 class TestStallExtraction(unittest.TestCase):
