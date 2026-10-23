@@ -3,3 +3,5 @@
 confluent-kafka==2.5.3
 # needed only by fleet/adapters/moroop.py to read MoRoOp parquet (imported lazily; requirements.lock.txt unchanged)
 pyarrow
+# needed only by fleet/duration_spread.py (Kendall tau-b p-value; checked at its CLI start; requirements.lock.txt unchanged)
+scipy
