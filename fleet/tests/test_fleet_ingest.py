@@ -321,7 +321,7 @@ class TestGrowingFiles(unittest.TestCase):
         write_gz(self.dir / "zone0-000.jsonl.gz", lines)
         ing, store, _ = ingest_dir(self.dir, once=True)
         rows = store.select("rejects", {"run": "r"})
-        self.assertEqual([r["reason"] for r in rows], ["json", "json", "type"])
+        self.assertEqual([r["reason"] for r in rows], ["json", "json", "type:line"])
         self.assertEqual(rows[0]["offset"], sum(map(len, self.lines[:8])))
         self.assertEqual(ing.ledger.total("messages_rejected"), 3)
         self.assertEqual(ing.ledger.total("messages_parsed"), 12)
@@ -448,6 +448,113 @@ class TestRealEmitterRuns(unittest.TestCase):
         k = subprocess.run([sys.executable, INGEST, "--source", "kafka"], capture_output=True, text=True)
         self.assertEqual(k.returncode, 2)
         self.assertEqual(k.stderr.strip(), "kafka source: S5B2")
+
+
+
+# ---------------------------------------------------------------------------------------------------- S17A
+S17A_FIXTURE = ROOT / "fleet" / "tests" / "data" / "s17a_emit50"
+# Store content hash of the fixture ingest measured on the code before S17A (parse.py unmodified), 23 Oct 2026.
+S17A_FIXTURE_HASH = "233700cb3016c31c8706a56376537a22c4f3fec7b4df98158dca9a475225e27a"
+S17A_BAD_LOG = [b'{"robot":"r1","time":"2026-10-23 08:00:00","x":1,"y":2}\n',
+                b'{"robot":"r1","time":"2026-10-23 08:00:00","x":1,"y":2}\n', b"not json at all\n"]
+
+
+def store_content_hash(store_dir):
+    """Every *.jsonl of a jsonl store except ingest_* (wall clock); decisions rows without recorded_at, sorted."""
+    import hashlib
+    h = hashlib.sha256()
+    for f in sorted(Path(store_dir).glob("*.jsonl")):
+        if f.name.startswith("ingest_"):
+            continue
+        lines = f.read_bytes().splitlines()
+        if f.name == "decisions.jsonl":
+            rows = [json.loads(ln) for ln in lines]
+            for r in rows:
+                r.pop("recorded_at", None)
+            lines = sorted(json.dumps(r, sort_keys=True).encode() for r in rows)
+        h.update(f.name.encode() + b"\0" + b"\n".join(lines) + b"\0")
+    return h.hexdigest()
+
+
+def run_ingest(*args):
+    return subprocess.run([sys.executable, INGEST, *map(str, args)], capture_output=True, text=True)
+
+
+class TestS17aMinAccepted(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        (self.dir / "badlog").mkdir()
+        write_gz(self.dir / "badlog" / "zone0-000.jsonl.gz", S17A_BAD_LOG)
+
+    def test_bad_log_once_with_flag_exits_2_and_names_the_reasons(self):
+        # inject: leave the exit code at 0, or drop the DOES NOT MATCH line
+        r = run_ingest("--glob", self.dir / "badlog" / "*.jsonl.gz", "--store", f"jsonl:{self.dir / 's'}", "--once",
+                       "--min-accepted", "0.5")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        out = r.stdout.splitlines()
+        self.assertIn("accepted 0 (parsed 0, rejected 3, duplicates 0)", out[0])
+        self.assertTrue(out[0].endswith("exit 2"), out[0])
+        self.assertEqual(out[1], "ingest badlog: rejects by reason missing:headerId 2, json 1; top failing keys "
+                                 "headerId 2")
+        self.assertEqual(out[2], "ingest badlog: DOES NOT MATCH the fleet-state contract, run fleet/check_log.py")
+        rows = [json.loads(ln) for ln in (self.dir / "s" / "rejects.jsonl").read_text().splitlines()]
+        self.assertEqual([x["reason"] for x in rows], ["missing:headerId", "missing:headerId", "json"])
+
+    def test_bad_log_once_without_flag_keeps_exit_0(self):
+        # inject: make the default 0.5 apply with --once
+        r = run_ingest("--glob", self.dir / "badlog" / "*.jsonl.gz", "--store", f"jsonl:{self.dir / 's'}", "--once")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(len(r.stdout.splitlines()), 1)
+        self.assertTrue(r.stdout.strip().endswith("exit 0"))
+
+    def test_flag_is_validated(self):
+        # inject: accept 1.5
+        r = run_ingest("--glob", self.dir / "badlog" / "*.jsonl.gz", "--once", "--min-accepted", "1.5")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--min-accepted", r.stderr)
+
+    def test_existing_nonzero_code_is_kept_and_empty_input_is_no_mismatch(self):
+        # inject: report 0 rejected + 0 accepted as a mismatch, or overwrite exit 1 with 2
+        ing = Ingester(str(self.dir / "badlog" / "*.jsonl.gz"), "r", MemoryStore(), poll=0, once=True)
+        self.assertEqual(ing.contract_check(0.5, 0), (0, []))
+        ing.reject_reasons["json"] += 4
+        ing.ledger.rejected()
+        self.assertEqual(ing.contract_check(0.5, 1)[0], 1)
+        self.assertEqual(ing.contract_check(0.5, 0)[0], 2)
+        self.assertEqual(ing.contract_check(None, 0), (0, []))
+
+    def test_share_boundary(self):
+        # inject: compare with <= instead of <
+        ing = Ingester(str(self.dir / "badlog" / "*.jsonl.gz"), "r", MemoryStore(), poll=0, once=True)
+        ing.ledger.accepted()
+        ing.ledger.rejected()
+        ing.reject_reasons["json"] += 1
+        self.assertEqual(ing.contract_check(0.5, 0), (0, []))
+        self.assertEqual(ing.contract_check(0.51, 0)[0], 2)
+
+
+class TestS17aFixtureIngest(unittest.TestCase):
+    def ingest_hash(self, *extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = run_ingest("--glob", S17A_FIXTURE / "*.jsonl.gz", "--run", "s17a-emit50", "--store",
+                           f"jsonl:{tmp}", "--once", *extra)
+            return r.returncode, r.stdout, store_content_hash(tmp)
+
+    def test_store_content_hash_equals_pre_change_value(self):
+        # inject: let the extended reasons or the min-accepted check change a store row
+        code, out, h = self.ingest_hash()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(h, S17A_FIXTURE_HASH)
+        self.assertEqual(self.ingest_hash()[2], S17A_FIXTURE_HASH)
+
+    def test_matching_log_with_flag_is_unchanged(self):
+        # inject: write a row or print a line when the log matches
+        code, out, h = self.ingest_hash("--min-accepted", "0.5")
+        self.assertEqual((code, h), (0, S17A_FIXTURE_HASH))
+        self.assertEqual(len(out.splitlines()), 1)
+        self.assertIn("accepted 600 (parsed 600, rejected 0, duplicates 0)", out)
 
 
 if __name__ == "__main__":
