@@ -1,5 +1,5 @@
 {
-  "phase_a": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/closed_loop_sticky/phaseA",
+  "phase_a": "results/closed_loop_sticky/phaseA",
   "source_costmap_sha256": "30b4c70868aac8458b6a5c6edddc9851784b72587572e2b9f282325dff714c21",
   "env": "tarware-medium-8agvs-4pickers-globalobs-v1",
   "steps": 500,
@@ -17,10 +17,10 @@
     8,
     9
   ],
-  "baseline_none_file": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/closed_loop_sticky/none/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-86550f4e27_timeout.json",
+  "baseline_none_file": "results/closed_loop_sticky/none/stuck_aware_cta_tarware-medium-8agvs-4pickers-globalobs-v1_500_cfg-86550f4e27_timeout.json",
   "evaluate_command_template": [
-    "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/.venv/bin/python",
-    "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/scripts/evaluate.py",
+    ".venv/bin/python",
+    "scripts/evaluate.py",
     "--policy",
     "stuck_aware_cta",
     "--recovery",

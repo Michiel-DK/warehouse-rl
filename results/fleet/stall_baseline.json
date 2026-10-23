@@ -9990,7 +9990,7 @@
  "smoke": false,
  "src": {
   "jsonl_dir": "jsonl-sb",
-  "moroop_dir": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop",
+  "moroop_dir": "fleet/data/moroop",
   "moroop_station_radius": 1,
   "runs": [
    "fleet/data/s10-none",

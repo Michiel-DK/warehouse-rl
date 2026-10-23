@@ -1181,7 +1181,7 @@ a{color:var(--accent)}
 
 <footer><div class="wrap">
   <div><span class="wm">roger<span class="wmn">3000</span></span> &nbsp;·&nbsp; a product studio in Ericeira, Portugal</div>
-  <div>Synthetic data from a simulator (TA-RWARE, medium map). Sources in the warehouse-rl repo: <code>docs/replay/data.js</code>, <code>results/fleet/benchmark.json</code>, <code>results/fleet/hotspot_s8b-medium-80-p03-07.json</code>, <code>results/closed_loop_sticky/summary.json</code>, <code>results/fleet/hotspot_s8e-long-w0.5.json</code> (the lesson counts, carried in data.js) and <code>laptop-scheduler/reports/wr-s8e-lessons-long.md</code>. Cause labels are compared with a proximity proxy, not a known answer.</div>
+  <div>Synthetic data from a simulator (TA-RWARE, medium map). Sources in the warehouse-rl repo: <code>docs/replay/data.js</code>, <code>results/fleet/benchmark.json</code>, <code>results/fleet/hotspot_s8b-medium-80-p03-07.json</code>, <code>results/closed_loop_sticky/summary.json</code>, <code>results/fleet/hotspot_s8e-long-w0.5.json</code> (the lesson counts, carried in data.js) and <code>reports/wr-s8e-lessons-long.md</code>. Cause labels are compared with a proximity proxy, not a known answer.</div>
 </div></footer>
 <script>
 const D = __DATA__;
