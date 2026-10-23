@@ -1137,6 +1137,47 @@ Literature: `docs/LITERATURE.md` Parts 4 to 6. Reports: `reports/wr-lane-s14a-se
     seconds (sums to 1)?
   - 3 of 8 MoRoOp TIMEOUT operations still overlap no stuck run under the bound; inspect them?
 
+### Sprint 15: the two page figures against the vendor-documented methods (2026-10-23)
+
+Results are in README "Sprint 15", tables (w1) and (w2). They are printed by a read-only script whose text is in
+`reports/wr-dev-s15-readme.md`, not by `scripts/sprint8_tables.py` (no section (w) yet; that is a lane item).
+Literature: `docs/LITERATURE.md` Part 8 (refute lines in section 3, set before the runs). Reports:
+`reports/wr-lane-s15a-naive-stall-baseline.md`, `reports/wr-lane-s15b-duration-spread.md`,
+`reports/wr-dev-s15-readme.md`.
+
+- [x] Literature item `wr-dev-lit-s15` (Part 8): baseline name "stopped on a mission"; rules N0-30/60, N1, N2-W;
+      decisive S15B statistics p95 / median (TTTR) and mean job duration (OTTO); both refute lines.
+- [x] S15A naive stall baseline (PR #56, a0a1854). `fleet/stall_baseline.py`, tests
+      `fleet/tests/test_fleet_stall_baseline.py`.
+- [x] Run (queue item `wr-s15a-run`, exit 0, 1.0 min; results `results/fleet/stall_baseline.json`, committed with
+      README (w)). MoRoOp stuck runs / hits / false alarms: N0-30 567/2/544, N0-60 10/2/6, N1 1/0/1, N2-180 7/1/5,
+      N2-120 55/2/52, ours 6/2/5. Ours on the simulator matches the `-sb` detector episodes on all five runs.
+- **S15A refute line: COMMODITY, via N0-60** (2/2 hits at 10 stuck runs, the line is ≤ 12). The documented InOrbit
+  forms do not meet it: N2-180 hits 1/2 at 7 runs, N1 0/2. Page consequence (Part 8): no claim that the station
+  filter beats a naive rule. "InOrbit's documented example misses one of the two labelled stops" is supported, on a
+  sample of two.
+- [x] S15B duration spread (PR #55, 036c50e). `fleet/duration_spread.py`, tests
+      `fleet/tests/test_fleet_duration_spread.py`.
+- [x] Run (queue item `wr-s15b-run`, exit 0, 1.0 min; results `results/fleet/duration_spread.json`, committed with
+      README (w)). Median ρ against the blocking number: p95 / median 0.13, mean 0.06 (top-3 0.33 both). Blocking
+      beats both statistics on truth in 3 of 5 runs. `ended_to_new_order` 0 on every run.
+- **S15B refute line: MIXED** (`verdict.verdict`). Not commodity (medians far below 0.7; stat ≥ blocking on truth in
+  2 and 1 runs, not 3). Not supported (both medians < 0.4 holds, blocking beats both in 3 of 5, not 4).
+- **New finding: the blocking number does not rank zones by truth stuck time.** The median ρ(blocking, truth) is 0.04,
+  per run -0.01 to 0.48, and no run reaches the p < 0.05 line. Its "beats" are the statistics going negative against
+  truth. The page's blocking figure has no validation against truth on record.
+- Open (operator):
+  - Page wording for the stall filter now that S15A reads commodity. Drop "removes the false alarms a naive rule
+    raises", or keep it against the 30 s rule only (567 to 6) and name the 60 s timer next to it?
+  - The blocking number: keep it on the page as a congestion count without a truth claim, or hold it until a test
+    against a direct blocking truth (robot blocked by robot, not every stuck second) exists?
+  - Mean job duration ranks against truth on the undisturbed and s8b runs (ρ -0.87, -0.67). Inspect why, or leave it?
+  - Ours alerts 413 s into the first labelled MoRoOp stop (after the label ended), against 98 s for N0-60. Inspect
+    (station radius 1, the 300 s bound)?
+  - Add section (w) to `scripts/sprint8_tables.py` (a lane), so (w1)/(w2) are reprinted like (a)-(v)?
+  - Both result files hold absolute local paths. Scrub them before the public push, which is still held with the 7
+    prep commits.
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are

@@ -1,0 +1,4172 @@
+{
+ "agreement_summary": {
+  "blocking|truth": {
+   "median_rho": 0.035650655745092984,
+   "median_tau_b": 0.022733144649015782,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "buffer_index_norm|blocking": {
+   "median_rho": 0.0303030303030303,
+   "median_tau_b": -0.022222222222222223,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "buffer_index_norm|truth": {
+   "median_rho": -0.13939393939393938,
+   "median_tau_b": -0.06666666666666667,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "buffer_index|blocking": {
+   "median_rho": 0.12158110873601292,
+   "median_tau_b": 0.08989331499509895,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "buffer_index|truth": {
+   "median_rho": -0.05454545454545454,
+   "median_tau_b": -0.022222222222222223,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "cv_norm|blocking": {
+   "median_rho": -0.2121212121212121,
+   "median_tau_b": -0.2,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "cv_norm|truth": {
+   "median_rho": 0.19999999999999998,
+   "median_tau_b": 0.15555555555555556,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "cv|blocking": {
+   "median_rho": 0.17955278785041293,
+   "median_tau_b": 0.1426928447661439,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "cv|truth": {
+   "median_rho": -0.19999999999999998,
+   "median_tau_b": -0.1111111111111111,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "mean_norm|blocking": {
+   "median_rho": 0.1172544227969859,
+   "median_tau_b": 0.0828539098642126,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "mean_norm|truth": {
+   "median_rho": 0.04242424242424241,
+   "median_tau_b": 0.022222222222222223,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "mean_s|blocking": {
+   "median_rho": 0.059405940961660776,
+   "median_tau_b": 0.05523593990947506,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "mean_s|truth": {
+   "median_rho": -0.2727272727272727,
+   "median_tau_b": -0.2,
+   "median_top3_fraction": 0.0,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "p95_over_median_norm|blocking": {
+   "median_rho": -0.0037824007353866413,
+   "median_tau_b": -0.022222222222222223,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "p95_over_median_norm|truth": {
+   "median_rho": -0.38181818181818183,
+   "median_tau_b": -0.24444444444444444,
+   "median_top3_fraction": 0.0,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "p95_over_median|blocking": {
+   "median_rho": 0.13371899070396306,
+   "median_tau_b": 0.11047187981895012,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  },
+  "p95_over_median|truth": {
+   "median_rho": 0.04242424242424241,
+   "median_tau_b": -0.06666666666666667,
+   "median_top3_fraction": 0.3333333333333333,
+   "n_decided": 5,
+   "n_runs": 5
+  }
+ },
+ "definition": "jobs = maximal runs of one non-empty orderId per AGV (kept_messages), duration = ts of the first later message with another orderId minus the job's first ts; see the module docstring of fleet/duration_spread.py",
+ "deviations": [
+  "Truth source: the operator brief said truth from truth.json, but truth.json holds no stuck episodes (only floor, blocked, outage and frozen windows; closed-loop-sticky's is the v1 file). The truth used is the stuck-episode definition of fleet_analyser/score.py (benchmark.json batch.score.truth_definition): score._load + score._truth_runs, kept when end - start >= 30. fleet/truth.py is not imported.",
+  "Message sets differ: jobs read timebudget.kept_messages (sorted by (ts, header_id), a message whose ts <= the previous kept ts is dropped, duplicate (serial, headerId) and rejected lines dropped by read_messages); the truth episodes read score._load over every raw line (drops nothing, pickers included). dropped_by_kept_messages counts the messages kept_messages dropped per zone (AGVs only).",
+  "Denominator: robot_hours of the deadlock file includes the pickers (12 robots x shift on the medium map) for both blocking and truth, so the two columns share a scale.",
+  "The statistics read a different robot set (AGVs) than the truth column (all robots of the zone, score_run's rule).",
+  "No per-seed incremental write or resume: the run reads existing streams only and writes one file (--out) at the end; the CLAUDE.md long-run rule applies to simulators, and nothing besides --out may be written here."
+ ],
+ "notes": [
+  "At n = 10 zones a Spearman rho near 0.65 is about the p < 0.05 line (two-sided); at n = 30 about 0.36.",
+  "Agreement is per run only. The median over runs is over decided runs; a pair with no decided run has null medians.",
+  "'blocking' always means zones[z].blocked_s_per_robot_hour of the -sb deadlock file, not the blocking_cluster / blocking_chain objects.",
+  "cv uses the population standard deviation (ddof = 0).",
+  "All thresholds of the verdict are ours, set in docs/LITERATURE.md Part 8 before the run."
+ ],
+ "params": {
+  "cv_ddof": 0,
+  "decisive": [
+   "p95_over_median",
+   "mean_s"
+  ],
+  "max_gap_s": 60,
+  "min_jobs": 5,
+  "statistics": [
+   "p95_over_median",
+   "mean_s",
+   "buffer_index",
+   "cv",
+   "p95_over_median_norm",
+   "mean_norm",
+   "buffer_index_norm",
+   "cv_norm"
+  ],
+  "step_s": 5,
+  "top_k": 3,
+  "truth_keep_s": 30
+ },
+ "runs": {
+  "closed-loop-sticky": {
+   "agreement": {
+    "blocking|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.035650655745092984,
+     "tau_b": -0.006977046065852202,
+     "tau_b_p": 0.9572290452119877,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "buffer_index_norm|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": -0.1884525542866168,
+     "tau_b": -0.15189883475105642,
+     "tau_b_p": 0.23891802442531473,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "buffer_index_norm|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.33307375907389425,
+     "tau_b": 0.2555308014748934,
+     "tau_b_p": 0.049279263598274635,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.13972633304840062,
+     "tau_b": 0.09666289484158136,
+     "tau_b_p": 0.4535904911681553,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "buffer_index|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.2185587676598597,
+     "tau_b": 0.1347344225958529,
+     "tau_b_p": 0.29987265815001807,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv_norm|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.193569919987434,
+     "tau_b": 0.12888385978877515,
+     "tau_b_p": 0.3176703156317404,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv_norm|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.27537067974269785,
+     "tau_b": 0.19977862660764392,
+     "tau_b_p": 0.124247887257974,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.17955278785041293,
+     "tau_b": 0.1426928447661439,
+     "tau_b_p": 0.26858803453531943,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.06550079275433104,
+     "tau_b": 0.05575217486724947,
+     "tau_b_p": 0.6679363216955144,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.1172544227969859,
+     "tau_b": 0.0828539098642126,
+     "tau_b_p": 0.520626897927621,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "mean_norm|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.484572191294796,
+     "tau_b": 0.3716811657816631,
+     "tau_b_p": 0.004238013104800682,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_s|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.059405940961660776,
+     "tau_b": 0.05523593990947506,
+     "tau_b_p": 0.6684670013954248,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "mean_s|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.06416404188179368,
+     "tau_b": 0.0418141311504371,
+     "tau_b_p": 0.7476523220285312,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median_norm|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": -0.0037824007353866413,
+     "tau_b": -0.01841197996982502,
+     "tau_b_p": 0.8864868615857423,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median_norm|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.18736791396732114,
+     "tau_b": 0.14867246631266523,
+     "tau_b_p": 0.2526435403677879,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median|blocking": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.13371899070396306,
+     "tau_b": 0.11047187981895012,
+     "tau_b_p": 0.39171805890327704,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median|truth": {
+     "decided": true,
+     "n": 30,
+     "reason": null,
+     "rho": 0.11607453409866147,
+     "tau_b": 0.10685833516222815,
+     "tau_b_p": 0.410954255117593,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.3,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    }
+   },
+   "counts": {
+    "completed": 696,
+    "dropped_by_kept_messages": 0,
+    "ended_to_idle": 696,
+    "ended_to_new_order": 0,
+    "open_at_end": 231,
+    "open_at_start": 240,
+    "raw_distance_zero": 3,
+    "with_gap_over_60s": 0,
+    "zones": 30,
+    "zones_below_min_jobs": 0
+   },
+   "deadlock": {
+    "path": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/fleet/deadlock_closed-loop-sticky-sb.json",
+    "sha256": "102ebe48e343db11caa5d01997448c2d92257b51bd44160bce1649b126a1db6f"
+   },
+   "run_dir": "results/closed_loop_sticky/phaseA",
+   "undecided_pairs": 0,
+   "zones": {
+    "0": {
+     "blocked_s_per_robot_hour": 101.00200400801603,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 5,
+      "ended_to_idle": 5,
+      "ended_to_new_order": 0,
+      "open_at_end": 6,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.0301353261967279,
+      "cv": 0.7294800417694856,
+      "mean": 2.679112554112554,
+      "median": 1.1666666666666667,
+      "n": 5,
+      "p95": 5.438961038961039,
+      "p95_over_median": 4.661966604823747
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.7958115183246068,
+      "cv": 1.1648949935223774,
+      "mean_s": 191.0,
+      "median_s": 70.0,
+      "n": 5,
+      "p95_over_median": 7.628571428571427,
+      "p95_s": 533.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 0,
+     "truth_stuck_s": 0,
+     "truth_stuck_s_per_robot_hour": 0.0
+    },
+    "1": {
+     "blocked_s_per_robot_hour": 215.2304609218437,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 38,
+      "ended_to_idle": 38,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 0.7510703865416143,
+      "cv": 2.6882246401456427,
+      "mean": 8.985320460191929,
+      "median": 4.477272727272727,
+      "n": 38,
+      "p95": 15.733928571428557,
+      "p95_over_median": 3.514176939811455
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3547995139732687,
+      "cv": 0.7516882831307256,
+      "mean_s": 324.86842105263156,
+      "median_s": 262.5,
+      "n": 38,
+      "p95_over_median": 2.914285714285714,
+      "p95_s": 765.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 490,
+     "truth_stuck_s_per_robot_hour": 58.91783567134269
+    },
+    "10": {
+     "blocked_s_per_robot_hour": 526.6533066132265,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 25,
+      "ended_to_idle": 25,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.40035499672617,
+      "cv": 1.8889048522033935,
+      "mean": 7.7578487075823315,
+      "median": 1.9047619047619047,
+      "n": 25,
+      "p95": 18.62159090909091,
+      "p95_over_median": 9.776335227272728
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.566309911586784,
+      "cv": 0.9927166462846664,
+      "mean_s": 429.8,
+      "median_s": 200.0,
+      "n": 25,
+      "p95_over_median": 5.514999999999999,
+      "p95_s": 1102.9999999999998
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 3,
+     "truth_stuck_s": 240,
+     "truth_stuck_s_per_robot_hour": 28.857715430861724
+    },
+    "11": {
+     "blocked_s_per_robot_hour": 431.062124248497,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 15,
+      "ended_to_idle": 15,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.0391636136742406,
+      "cv": 1.2184445330646927,
+      "mean": 5.755132561796648,
+      "median": 2.8125,
+      "n": 15,
+      "p95": 17.490789473684192,
+      "p95_over_median": 6.218947368421046
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.358963815789473,
+      "cv": 1.1549589913994371,
+      "mean_s": 405.3333333333333,
+      "median_s": 190.0,
+      "n": 15,
+      "p95_over_median": 7.1657894736842085,
+      "p95_s": 1361.4999999999995
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 5,
+     "truth_stuck_s": 370,
+     "truth_stuck_s_per_robot_hour": 44.48897795591183
+    },
+    "12": {
+     "blocked_s_per_robot_hour": 98.59719438877755,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 14,
+      "ended_to_idle": 14,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.4031898488908476,
+      "cv": 1.557979138396887,
+      "mean": 5.349259448596025,
+      "median": 2.9671052631578947,
+      "n": 14,
+      "p95": 18.204545454545446,
+      "p95_over_median": 6.135456561177179
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.205607476635514,
+      "cv": 1.0005411699152071,
+      "mean_s": 343.92857142857144,
+      "median_s": 257.5,
+      "n": 14,
+      "p95_over_median": 4.281553398058253,
+      "p95_s": 1102.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 1,
+     "truth_stuck_s": 40,
+     "truth_stuck_s_per_robot_hour": 4.809619238476954
+    },
+    "13": {
+     "blocked_s_per_robot_hour": 209.2184368737475,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 12,
+      "ended_to_idle": 12,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.4060168979826366,
+      "cv": 0.9018593026730776,
+      "mean": 4.713381772166602,
+      "median": 1.4404761904761905,
+      "n": 12,
+      "p95": 11.34047619047619,
+      "p95_over_median": 7.872727272727272
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5745945945945945,
+      "cv": 0.9591764587073631,
+      "mean_s": 462.5,
+      "median_s": 142.5,
+      "n": 12,
+      "p95_over_median": 8.356140350877194,
+      "p95_s": 1190.75
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 0,
+     "truth_stuck_s": 0,
+     "truth_stuck_s_per_robot_hour": 0.0
+    },
+    "14": {
+     "blocked_s_per_robot_hour": 162.3246492985972,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 24,
+      "ended_to_idle": 24,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.9442874803188488,
+      "cv": 1.0839509463632904,
+      "mean": 5.853849796216283,
+      "median": 3.677777777777778,
+      "n": 24,
+      "p95": 17.235416666666648,
+      "p95_over_median": 4.6863670694863995
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.7969555035128801,
+      "cv": 0.9118404645027642,
+      "mean_s": 355.8333333333333,
+      "median_s": 230.0,
+      "n": 24,
+      "p95_over_median": 4.327173913043477,
+      "p95_s": 995.2499999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 0,
+     "truth_stuck_s": 0,
+     "truth_stuck_s_per_robot_hour": 0.0
+    },
+    "15": {
+     "blocked_s_per_robot_hour": 365.53106212424854,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 28,
+      "ended_to_idle": 28,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6319545932772503,
+      "cv": 0.9721036796434583,
+      "mean": 6.97320460680285,
+      "median": 4.541666666666666,
+      "n": 28,
+      "p95": 18.353157894736842,
+      "p95_over_median": 4.041062288749397
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.530542089026,
+      "cv": 1.0756174335008903,
+      "mean_s": 405.17857142857144,
+      "median_s": 305.0,
+      "n": 28,
+      "p95_over_median": 4.690163934426225,
+      "p95_s": 1430.4999999999989
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 3,
+     "truth_stuck_s": 240,
+     "truth_stuck_s_per_robot_hour": 28.857715430861724
+    },
+    "16": {
+     "blocked_s_per_robot_hour": 296.99398797595194,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 20,
+      "ended_to_idle": 20,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.109282547176026,
+      "cv": 0.97592143033698,
+      "mean": 6.422118773450715,
+      "median": 3.5595238095238093,
+      "n": 20,
+      "p95": 19.96818181818182,
+      "p95_over_median": 5.60979020979021
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.8888888888888888,
+      "cv": 0.9644707882188902,
+      "mean_s": 398.25,
+      "median_s": 260.0,
+      "n": 20,
+      "p95_over_median": 4.425,
+      "p95_s": 1150.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 2,
+     "truth_stuck_s": 160,
+     "truth_stuck_s_per_robot_hour": 19.238476953907817
+    },
+    "17": {
+     "blocked_s_per_robot_hour": 290.9819639278557,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 23,
+      "ended_to_idle": 23,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.8530898263260918,
+      "cv": 1.270325767272165,
+      "mean": 8.284754885235099,
+      "median": 4.285714285714286,
+      "n": 23,
+      "p95": 31.92190476190475,
+      "p95_over_median": 7.4484444444444415
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.317641509433961,
+      "cv": 1.064153661511315,
+      "mean_s": 460.8695652173913,
+      "median_s": 225.0,
+      "n": 23,
+      "p95_over_median": 6.795555555555553,
+      "p95_s": 1528.9999999999993
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 10,
+     "truth_stuck_s": 1060,
+     "truth_stuck_s_per_robot_hour": 127.45490981963928
+    },
+    "18": {
+     "blocked_s_per_robot_hour": 210.42084168336675,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 30,
+      "ended_to_idle": 30,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.9586956943764129,
+      "cv": 0.9855325604941663,
+      "mean": 6.128753598277255,
+      "median": 2.9565217391304346,
+      "n": 30,
+      "p95": 18.133116883116863,
+      "p95_over_median": 6.133260122230704
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5010887316276529,
+      "cv": 1.0370077310972654,
+      "mean_s": 306.1666666666667,
+      "median_s": 155.0,
+      "n": 30,
+      "p95_over_median": 4.94032258064516,
+      "p95_s": 765.7499999999998
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 5,
+     "truth_stuck_s": 365,
+     "truth_stuck_s_per_robot_hour": 43.88777555110221
+    },
+    "19": {
+     "blocked_s_per_robot_hour": 74.54909819639279,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 30,
+      "ended_to_idle": 30,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.325663871359854,
+      "cv": 1.059223567502809,
+      "mean": 6.636572202450683,
+      "median": 2.9,
+      "n": 30,
+      "p95": 22.071008403361333,
+      "p95_over_median": 7.6106925528832186
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.3906111603188664,
+      "cv": 1.1827157764950975,
+      "mean_s": 376.3333333333333,
+      "median_s": 180.0,
+      "n": 30,
+      "p95_over_median": 7.088888888888889,
+      "p95_s": 1276.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 3,
+     "truth_stuck_s": 225,
+     "truth_stuck_s_per_robot_hour": 27.054108216432866
+    },
+    "2": {
+     "blocked_s_per_robot_hour": 283.7675350701403,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 19,
+      "ended_to_idle": 19,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.5199580432027453,
+      "cv": 1.2673832674043735,
+      "mean": 7.424330918886483,
+      "median": 4.166666666666667,
+      "n": 19,
+      "p95": 26.133333333333304,
+      "p95_over_median": 6.271999999999992
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5254448398576501,
+      "cv": 0.7926791637115004,
+      "mean_s": 295.7894736842105,
+      "median_s": 205.0,
+      "n": 19,
+      "p95_over_median": 3.6439024390243886,
+      "p95_s": 746.9999999999997
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 495,
+     "truth_stuck_s_per_robot_hour": 59.519038076152306
+    },
+    "20": {
+     "blocked_s_per_robot_hour": 239.27855711422848,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 29,
+      "ended_to_idle": 29,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.9383256591023859,
+      "cv": 1.0363156147242347,
+      "mean": 7.169616002707546,
+      "median": 3.5555555555555554,
+      "n": 29,
+      "p95": 21.066666666666663,
+      "p95_over_median": 5.924999999999999
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5454545454545454,
+      "cv": 0.7591311097546215,
+      "mean_s": 330.0,
+      "median_s": 285.0,
+      "n": 29,
+      "p95_over_median": 2.9473684210526314,
+      "p95_s": 840.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 3,
+     "truth_stuck_s": 285,
+     "truth_stuck_s_per_robot_hour": 34.2685370741483
+    },
+    "21": {
+     "blocked_s_per_robot_hour": 509.81963927855713,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 28,
+      "ended_to_idle": 28,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 0.2651114563294698,
+      "cv": 2.3996261276156554,
+      "mean": 6.325349981803275,
+      "median": 2.732142857142857,
+      "n": 28,
+      "p95": 8.002272727272727,
+      "p95_over_median": 2.9289364230540698
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3171014492753623,
+      "cv": 1.0023308269959983,
+      "mean_s": 246.42857142857142,
+      "median_s": 187.5,
+      "n": 28,
+      "p95_over_median": 3.0453333333333332,
+      "p95_s": 571.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 1,
+     "truth_stuck_s": 80,
+     "truth_stuck_s_per_robot_hour": 9.619238476953909
+    },
+    "22": {
+     "blocked_s_per_robot_hour": 372.74549098196394,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 27,
+      "ended_to_idle": 27,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.3107762933151803,
+      "cv": 1.1166782662975452,
+      "mean": 5.2772410933229645,
+      "median": 2.3333333333333335,
+      "n": 27,
+      "p95": 17.471764705882354,
+      "p95_over_median": 7.487899159663866
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.4580046403712283,
+      "cv": 1.1159547116333508,
+      "mean_s": 319.25925925925924,
+      "median_s": 175.0,
+      "n": 27,
+      "p95_over_median": 6.308571428571426,
+      "p95_s": 1103.9999999999995
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 600,
+     "truth_stuck_s_per_robot_hour": 72.14428857715431
+    },
+    "23": {
+     "blocked_s_per_robot_hour": 462.9258517034068,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 20,
+      "ended_to_idle": 20,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.7007685214688935,
+      "cv": 1.147701748674636,
+      "mean": 4.2966944126135305,
+      "median": 2.1006493506493507,
+      "n": 20,
+      "p95": 15.90107142857143,
+      "p95_over_median": 7.569598145285936
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 3.7530335474660963,
+      "cv": 1.464987206319317,
+      "mean_s": 350.25,
+      "median_s": 110.0,
+      "n": 20,
+      "p95_over_median": 15.134090909090911,
+      "p95_s": 1664.7500000000002
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 5,
+     "truth_stuck_s": 310,
+     "truth_stuck_s_per_robot_hour": 37.274549098196395
+    },
+    "24": {
+     "blocked_s_per_robot_hour": 173.14629258517036,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 14,
+      "ended_to_idle": 14,
+      "ended_to_new_order": 0,
+      "open_at_end": 6,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6747427836524715,
+      "cv": 0.8050287910464671,
+      "mean": 3.2885338345864663,
+      "median": 2.4947368421052634,
+      "n": 14,
+      "p95": 8.795982142857142,
+      "p95_over_median": 3.5258156268836642
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.6889867841409687,
+      "cv": 0.8847316918551456,
+      "mean_s": 243.21428571428572,
+      "median_s": 187.5,
+      "n": 14,
+      "p95_over_median": 3.4879999999999995,
+      "p95_s": 653.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 1,
+     "truth_stuck_s": 80,
+     "truth_stuck_s_per_robot_hour": 9.619238476953909
+    },
+    "25": {
+     "blocked_s_per_robot_hour": 542.8857715430862,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 34,
+      "ended_to_idle": 34,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.2879917026452254,
+      "cv": 1.310102274124266,
+      "mean": 4.400482515925969,
+      "median": 2.1833333333333336,
+      "n": 34,
+      "p95": 14.468749999999972,
+      "p95_over_median": 6.626908396946551
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.9982537834691498,
+      "cv": 0.9518223926368384,
+      "mean_s": 252.64705882352942,
+      "median_s": 140.0,
+      "n": 34,
+      "p95_over_median": 5.410714285714285,
+      "p95_s": 757.4999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 4,
+     "truth_stuck_s": 270,
+     "truth_stuck_s_per_robot_hour": 32.46492985971944
+    },
+    "26": {
+     "blocked_s_per_robot_hour": 462.9258517034068,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 21,
+      "ended_to_idle": 21,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.448492792164346,
+      "cv": 1.056998862263301,
+      "mean": 8.49646548966997,
+      "median": 6.666666666666667,
+      "n": 21,
+      "p95": 29.3,
+      "p95_over_median": 4.395
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.1440371708828083,
+      "cv": 0.9497244524178663,
+      "mean_s": 461.1904761904762,
+      "median_s": 200.0,
+      "n": 21,
+      "p95_over_median": 7.25,
+      "p95_s": 1450.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 4,
+     "truth_stuck_s": 280,
+     "truth_stuck_s_per_robot_hour": 33.66733466933868
+    },
+    "27": {
+     "blocked_s_per_robot_hour": 933.0661322645291,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 12,
+      "ended_to_idle": 12,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.2970984631983897,
+      "cv": 0.7344156677078654,
+      "mean": 2.414373053846738,
+      "median": 2.083333333333333,
+      "n": 12,
+      "p95": 5.546052631578945,
+      "p95_over_median": 2.662105263157894
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 0.9122994652406409,
+      "cv": 0.5639873487338799,
+      "mean_s": 155.83333333333334,
+      "median_s": 122.5,
+      "n": 12,
+      "p95_over_median": 2.4326530612244888,
+      "p95_s": 297.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 0,
+     "truth_stuck_s": 0,
+     "truth_stuck_s_per_robot_hour": 0.0
+    },
+    "28": {
+     "blocked_s_per_robot_hour": 232.66533066132266,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 24,
+      "ended_to_idle": 24,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.374715700689894,
+      "cv": 0.7337669298703837,
+      "mean": 5.108708703827705,
+      "median": 4.06045751633987,
+      "n": 24,
+      "p95": 12.131730769230767,
+      "p95_over_median": 2.9877743383377178
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3705340699815836,
+      "cv": 0.6913554372711769,
+      "mean_s": 339.375,
+      "median_s": 285.0,
+      "n": 24,
+      "p95_over_median": 2.8228070175438593,
+      "p95_s": 804.4999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 4,
+     "truth_stuck_s": 320,
+     "truth_stuck_s_per_robot_hour": 38.476953907815634
+    },
+    "29": {
+     "blocked_s_per_robot_hour": 42.08416833667335,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 32,
+      "ended_to_idle": 32,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.6415733861810216,
+      "cv": 1.1529938263233042,
+      "mean": 7.455568547108879,
+      "median": 3.5,
+      "n": 32,
+      "p95": 27.15,
+      "p95_over_median": 7.757142857142857
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5834710743801652,
+      "cv": 0.8893998163542967,
+      "mean_s": 302.5,
+      "median_s": 165.0,
+      "n": 32,
+      "p95_over_median": 4.736363636363636,
+      "p95_s": 781.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 545,
+     "truth_stuck_s_per_robot_hour": 65.53106212424849
+    },
+    "3": {
+     "blocked_s_per_robot_hour": 229.65931863727457,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 32,
+      "ended_to_idle": 32,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.2817486856948548,
+      "cv": 1.8119620685572815,
+      "mean": 6.323157862787797,
+      "median": 3.4057692307692307,
+      "n": 32,
+      "p95": 14.427857142857142,
+      "p95_over_median": 4.236299104622086
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.7304029304029305,
+      "cv": 1.1085776642778107,
+      "mean_s": 341.25,
+      "median_s": 187.5,
+      "n": 32,
+      "p95_over_median": 6.789333333333333,
+      "p95_s": 1273.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 550,
+     "truth_stuck_s_per_robot_hour": 66.13226452905812
+    },
+    "4": {
+     "blocked_s_per_robot_hour": 413.62725450901803,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 21,
+      "ended_to_idle": 21,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6316963539107314,
+      "cv": 1.3616747705586483,
+      "mean": 6.321536149731639,
+      "median": 2.111111111111111,
+      "n": 21,
+      "p95": 16.636363636363637,
+      "p95_over_median": 7.880382775119617
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5548961424332344,
+      "cv": 0.9459710744854128,
+      "mean_s": 320.95238095238096,
+      "median_s": 185.0,
+      "n": 21,
+      "p95_over_median": 4.4324324324324325,
+      "p95_s": 820.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 2,
+     "truth_stuck_s": 160,
+     "truth_stuck_s_per_robot_hour": 19.238476953907817
+    },
+    "5": {
+     "blocked_s_per_robot_hour": 520.6412825651303,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 15,
+      "ended_to_idle": 15,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 3,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.5052250604601423,
+      "cv": 1.0374611386631407,
+      "mean": 7.7619591358721785,
+      "median": 2.909090909090909,
+      "n": 15,
+      "p95": 19.44545454545453,
+      "p95_over_median": 6.684374999999995
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.4321428571428534,
+      "cv": 1.4054981928369836,
+      "mean_s": 280.0,
+      "median_s": 110.0,
+      "n": 15,
+      "p95_over_median": 8.736363636363627,
+      "p95_s": 960.999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 9,
+     "truth_stuck_s": 690,
+     "truth_stuck_s_per_robot_hour": 82.96593186372746
+    },
+    "6": {
+     "blocked_s_per_robot_hour": 144.28857715430863,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 17,
+      "ended_to_idle": 17,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.063861729259485,
+      "cv": 1.05167966285797,
+      "mean": 6.594851880145997,
+      "median": 3.5714285714285716,
+      "n": 17,
+      "p95": 20.20571428571428,
+      "p95_over_median": 5.657599999999998
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.6119205298013246,
+      "cv": 0.8269374492259011,
+      "mean_s": 355.29411764705884,
+      "median_s": 280.0,
+      "n": 17,
+      "p95_over_median": 3.3142857142857145,
+      "p95_s": 928.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 520,
+     "truth_stuck_s_per_robot_hour": 62.5250501002004
+    },
+    "7": {
+     "blocked_s_per_robot_hour": 279.55911823647295,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 26,
+      "ended_to_idle": 26,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.070944077349424,
+      "cv": 0.9837554464147501,
+      "mean": 8.207425736094764,
+      "median": 6.116666666666667,
+      "n": 26,
+      "p95": 25.204545454545453,
+      "p95_over_median": 4.120634134258112
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.8487439871726348,
+      "cv": 0.8672463636591994,
+      "mean_s": 359.8076923076923,
+      "median_s": 290.0,
+      "n": 26,
+      "p95_over_median": 3.5344827586206895,
+      "p95_s": 1025.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 505,
+     "truth_stuck_s_per_robot_hour": 60.721442885771545
+    },
+    "8": {
+     "blocked_s_per_robot_hour": 46.8937875751503,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 25,
+      "ended_to_idle": 25,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.496610544741468,
+      "cv": 1.0182688601238692,
+      "mean": 4.1948787133059575,
+      "median": 2.4615384615384617,
+      "n": 25,
+      "p95": 14.667857142857132,
+      "p95_over_median": 5.95881696428571
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.499999999999999,
+      "cv": 0.780099996219066,
+      "mean_s": 244.8,
+      "median_s": 160.0,
+      "n": 25,
+      "p95_over_median": 3.8249999999999984,
+      "p95_s": 611.9999999999998
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 4,
+     "truth_stuck_s": 245,
+     "truth_stuck_s_per_robot_hour": 29.458917835671343
+    },
+    "9": {
+     "blocked_s_per_robot_hour": 119.03807615230461,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 36,
+      "ended_to_idle": 36,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.2329881756791603,
+      "cv": 1.0700914651351268,
+      "mean": 5.423995799808492,
+      "median": 2.9117647058823533,
+      "n": 36,
+      "p95": 17.535714285714285,
+      "p95_over_median": 6.0223665223665215
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.2783326096396006,
+      "cv": 0.80830994578779,
+      "mean_s": 319.8611111111111,
+      "median_s": 180.0,
+      "n": 36,
+      "p95_over_median": 4.048611111111111,
+      "p95_s": 728.75
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 530,
+     "truth_stuck_s_per_robot_hour": 63.72745490981964
+    }
+   }
+  },
+  "s10-breakdown": {
+   "agreement": {
+    "blocking|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.006097674333191042,
+     "tau_b": 0.022733144649015782,
+     "tau_b_p": 0.928154536694891,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.030488371665955208,
+     "tau_b": -0.022733144649015782,
+     "tau_b_p": 0.928154536694891,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.13939393939393938,
+     "tau_b": -0.06666666666666667,
+     "tau_b_p": 0.8618005952380953,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "buffer_index|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.17073488132934914,
+     "tau_b": -0.20459830184114203,
+     "tau_b_p": 0.4170770595205646,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.1515151515151515,
+     "tau_b": 0.1111111111111111,
+     "tau_b_p": 0.7274895282186948,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.21341860166168644,
+     "tau_b": 0.15913201254311046,
+     "tau_b_p": 0.5279301962697656,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.32121212121212117,
+     "tau_b": -0.15555555555555556,
+     "tau_b_p": 0.6006536596119929,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2195162759948775,
+     "tau_b": -0.2500645911391736,
+     "tau_b_p": 0.3212772414140661,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.19999999999999998,
+     "tau_b": -0.1111111111111111,
+     "tau_b_p": 0.7274895282186948,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.15244185832977605,
+     "tau_b": -0.15913201254311046,
+     "tau_b_p": 0.5279301962697656,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.6363636363636362,
+     "tau_b": -0.5111111111111111,
+     "tau_b_p": 0.04662257495590829,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "mean_s|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.12195348666382083,
+     "tau_b": -0.11366572324507891,
+     "tau_b_p": 0.6521086053828111,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_s|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.16363636363636364,
+     "tau_b": -0.1111111111111111,
+     "tau_b_p": 0.7274895282186948,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.21341860166168644,
+     "tau_b": -0.15913201254311046,
+     "tau_b_p": 0.5279301962697656,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.4424242424242424,
+     "tau_b": -0.4222222222222222,
+     "tau_b_p": 0.10831349206349207,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2743953449935969,
+     "tau_b": -0.2500645911391736,
+     "tau_b_p": 0.3212772414140661,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.04242424242424241,
+     "tau_b": -0.06666666666666667,
+     "tau_b_p": 0.8618005952380953,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    }
+   },
+   "counts": {
+    "completed": 402,
+    "dropped_by_kept_messages": 0,
+    "ended_to_idle": 402,
+    "ended_to_new_order": 0,
+    "open_at_end": 78,
+    "open_at_start": 79,
+    "raw_distance_zero": 1,
+    "with_gap_over_60s": 0,
+    "zones": 10,
+    "zones_below_min_jobs": 0
+   },
+   "deadlock": {
+    "path": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/fleet/deadlock_s10-breakdown-sb.json",
+    "sha256": "8db21cb8c1c8173d24f83b6f87aad5d120c89dacf99ead0a755900aeafa5fdcf"
+   },
+   "run_dir": "fleet/data/s10-breakdown",
+   "undecided_pairs": 0,
+   "zones": {
+    "0": {
+     "blocked_s_per_robot_hour": 101.00200400801603,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 27,
+      "ended_to_idle": 27,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 1,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.1728483869547017,
+      "cv": 1.0283473463483623,
+      "mean": 8.856395444400784,
+      "median": 4.7,
+      "n": 27,
+      "p95": 28.099999999999998,
+      "p95_over_median": 5.978723404255319
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5407441016333938,
+      "cv": 1.0307928828234227,
+      "mean_s": 408.14814814814815,
+      "median_s": 200.0,
+      "n": 27,
+      "p95_over_median": 5.185,
+      "p95_s": 1037.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 625,
+     "truth_stuck_s_per_robot_hour": 75.1503006012024
+    },
+    "1": {
+     "blocked_s_per_robot_hour": 103.40681362725451,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 46,
+      "ended_to_idle": 46,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.339180623168685,
+      "cv": 1.1195281044260046,
+      "mean": 4.434528699930189,
+      "median": 1.9375,
+      "n": 46,
+      "p95": 14.807692307692307,
+      "p95_over_median": 7.642679900744416
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.334369287020109,
+      "cv": 1.0647892701785344,
+      "mean_s": 297.2826086956522,
+      "median_s": 120.0,
+      "n": 46,
+      "p95_over_median": 8.260416666666666,
+      "p95_s": 991.25
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 14,
+     "truth_stuck_s": 1170,
+     "truth_stuck_s_per_robot_hour": 140.6813627254509
+    },
+    "2": {
+     "blocked_s_per_robot_hour": 353.5070140280561,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 43,
+      "ended_to_idle": 43,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.6840538910805676,
+      "cv": 1.4147601520703195,
+      "mean": 5.4891222604484895,
+      "median": 1.4,
+      "n": 43,
+      "p95": 20.222222222222218,
+      "p95_over_median": 14.444444444444443
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.2060266896254848,
+      "cv": 1.130025049519523,
+      "mean_s": 270.1162790697674,
+      "median_s": 120.0,
+      "n": 43,
+      "p95_over_median": 7.216666666666667,
+      "p95_s": 866.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 565,
+     "truth_stuck_s_per_robot_hour": 67.93587174348697
+    },
+    "3": {
+     "blocked_s_per_robot_hour": 239.27855711422848,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 42,
+      "ended_to_idle": 42,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.3774654381628624,
+      "cv": 0.9940261997446156,
+      "mean": 4.204336139032094,
+      "median": 2.383928571428571,
+      "n": 42,
+      "p95": 14.199999999999989,
+      "p95_over_median": 5.956554307116101
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5954090909090908,
+      "cv": 0.8258304110218967,
+      "mean_s": 261.9047619047619,
+      "median_s": 172.5,
+      "n": 42,
+      "p95_over_median": 3.9405797101449274,
+      "p95_s": 679.75
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 9,
+     "truth_stuck_s": 675,
+     "truth_stuck_s_per_robot_hour": 81.1623246492986
+    },
+    "4": {
+     "blocked_s_per_robot_hour": 135.87174348697394,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 42,
+      "ended_to_idle": 42,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.167753418152456,
+      "cv": 1.3735969361579639,
+      "mean": 5.10462775528565,
+      "median": 1.4914529914529915,
+      "n": 42,
+      "p95": 16.170202020202016,
+      "p95_over_median": 10.8419119562386
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.6617659852109607,
+      "cv": 0.9058147050705219,
+      "mean_s": 273.6904761904762,
+      "median_s": 125.0,
+      "n": 42,
+      "p95_over_median": 5.827999999999999,
+      "p95_s": 728.4999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 5,
+     "truth_stuck_s": 380,
+     "truth_stuck_s_per_robot_hour": 45.69138276553107
+    },
+    "5": {
+     "blocked_s_per_robot_hour": 344.4889779559118,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 15,
+      "ended_to_idle": 15,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.8061783150243018,
+      "cv": 1.0286816890050041,
+      "mean": 7.89653700566744,
+      "median": 4.409090909090909,
+      "n": 15,
+      "p95": 22.159090909090903,
+      "p95_over_median": 5.025773195876287
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5737704918032787,
+      "cv": 0.9055724290523745,
+      "mean_s": 549.0,
+      "median_s": 485.0,
+      "n": 15,
+      "p95_over_median": 2.91340206185567,
+      "p95_s": 1413.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 0,
+     "truth_stuck_s": 0,
+     "truth_stuck_s_per_robot_hour": 0.0
+    },
+    "6": {
+     "blocked_s_per_robot_hour": 101.00200400801603,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 51,
+      "ended_to_idle": 51,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.3998969017206802,
+      "cv": 0.9128441429978807,
+      "mean": 4.684411757479049,
+      "median": 3.090909090909091,
+      "n": 51,
+      "p95": 11.242105263157896,
+      "p95_over_median": 3.6371517027863782
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.7915789473684207,
+      "cv": 0.8828305856893631,
+      "mean_s": 279.4117647058824,
+      "median_s": 220.0,
+      "n": 51,
+      "p95_over_median": 3.5454545454545454,
+      "p95_s": 780.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 825,
+     "truth_stuck_s_per_robot_hour": 99.19839679358718
+    },
+    "7": {
+     "blocked_s_per_robot_hour": 51.703406813627254,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 45,
+      "ended_to_idle": 45,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.507926705124825,
+      "cv": 1.1148338847820625,
+      "mean": 5.163815335087265,
+      "median": 1.4285714285714286,
+      "n": 45,
+      "p95": 18.114285714285714,
+      "p95_over_median": 12.68
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.9919678714859432,
+      "cv": 1.0601074246896576,
+      "mean_s": 249.0,
+      "median_s": 130.0,
+      "n": 45,
+      "p95_over_median": 5.73076923076923,
+      "p95_s": 744.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 1,
+     "truth_stuck_s": 80,
+     "truth_stuck_s_per_robot_hour": 9.619238476953909
+    },
+    "8": {
+     "blocked_s_per_robot_hour": 33.66733466933868,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 36,
+      "ended_to_idle": 36,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 7,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.5480441735271806,
+      "cv": 1.3371282493531407,
+      "mean": 5.584062382262847,
+      "median": 1.3333333333333335,
+      "n": 36,
+      "p95": 19.8125,
+      "p95_over_median": 14.859374999999998
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.157758620689655,
+      "cv": 1.070461272771772,
+      "mean_s": 322.22222222222223,
+      "median_s": 130.0,
+      "n": 36,
+      "p95_over_median": 7.826923076923077,
+      "p95_s": 1017.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 1,
+     "truth_stuck_s": 40,
+     "truth_stuck_s_per_robot_hour": 4.809619238476954
+    },
+    "9": {
+     "blocked_s_per_robot_hour": 135.87174348697394,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 55,
+      "ended_to_idle": 55,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.8190626512913664,
+      "cv": 1.491931864416771,
+      "mean": 4.523361247859774,
+      "median": 2.0,
+      "n": 55,
+      "p95": 17.274999999999974,
+      "p95_over_median": 8.637499999999987
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5838033843674457,
+      "cv": 0.9923111030332298,
+      "mean_s": 225.63636363636363,
+      "median_s": 130.0,
+      "n": 55,
+      "p95_over_median": 4.484615384615385,
+      "p95_s": 583.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 10,
+     "truth_stuck_s": 585,
+     "truth_stuck_s_per_robot_hour": 70.34068136272545
+    }
+   }
+  },
+  "s10-none": {
+   "agreement": {
+    "blocking|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.0,
+     "tau_b": 0.0,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "buffer_index_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.15197638592001614,
+     "tau_b": 0.13483997249264842,
+     "tau_b_p": 0.590013887163346,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.22424242424242422,
+     "tau_b": -0.15555555555555556,
+     "tau_b_p": 0.6006536596119929,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "buffer_index|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.12158110873601292,
+     "tau_b": 0.08989331499509895,
+     "tau_b_p": 0.7194375444233914,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.5393939393939393,
+     "tau_b": -0.37777777777777777,
+     "tau_b_p": 0.1557418430335097,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.3525852153344375,
+     "tau_b": -0.26967994498529685,
+     "tau_b_p": 0.2811980995641792,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.13939393939393938,
+     "tau_b": 0.1111111111111111,
+     "tau_b_p": 0.7274895282186948,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.2249250511616239,
+     "tau_b": 0.1797866299901979,
+     "tau_b_p": 0.47249761400068846,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "cv|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.3939393939393939,
+     "tau_b": -0.28888888888888886,
+     "tau_b_p": 0.2912483465608466,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.6504589317376691,
+     "tau_b": 0.4944132324730442,
+     "tau_b_p": 0.048193488293190756,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "mean_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.04242424242424241,
+     "tau_b": 0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_s|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.13981827504641486,
+     "tau_b": 0.08989331499509895,
+     "tau_b_p": 0.7194375444233914,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_s|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.8666666666666665,
+     "tau_b": -0.7333333333333333,
+     "tau_b_p": 0.002212852733686067,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.17021355223041806,
+     "tau_b": 0.13483997249264842,
+     "tau_b_p": 0.590013887163346,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.38181818181818183,
+     "tau_b": -0.24444444444444444,
+     "tau_b_p": 0.38071979717813054,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.26747843921922837,
+     "tau_b": 0.22473328748774737,
+     "tau_b_p": 0.36917141633269157,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.34545454545454546,
+     "tau_b": -0.24444444444444444,
+     "tau_b_p": 0.38071979717813054,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    }
+   },
+   "counts": {
+    "completed": 1070,
+    "dropped_by_kept_messages": 0,
+    "ended_to_idle": 1070,
+    "ended_to_new_order": 0,
+    "open_at_end": 80,
+    "open_at_start": 80,
+    "raw_distance_zero": 34,
+    "with_gap_over_60s": 0,
+    "zones": 10,
+    "zones_below_min_jobs": 0
+   },
+   "deadlock": {
+    "path": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/fleet/deadlock_s10-none-sb.json",
+    "sha256": "cc0e24aa09855ad28e20764fcd1e7b203b07a8163580833dbff30d57ed9d25b6"
+   },
+   "run_dir": "fleet/data/s10-none",
+   "undecided_pairs": 0,
+   "zones": {
+    "0": {
+     "blocked_s_per_robot_hour": 0.0,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 108,
+      "ended_to_idle": 108,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.203136807621541,
+      "cv": 1.7425990329902212,
+      "mean": 3.60037697189816,
+      "median": 1.6654411764705883,
+      "n": 108,
+      "p95": 11.532499999999983,
+      "p95_over_median": 6.924591611479018
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.6294776119402978,
+      "cv": 0.6913062430466009,
+      "mean_s": 148.88888888888889,
+      "median_s": 125.0,
+      "n": 108,
+      "p95_over_median": 3.1319999999999992,
+      "p95_s": 391.4999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 11,
+     "truth_stuck_s": 585,
+     "truth_stuck_s_per_robot_hour": 70.34068136272545
+    },
+    "1": {
+     "blocked_s_per_robot_hour": 32.46492985971944,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 116,
+      "ended_to_idle": 116,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 2,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.174458149534162,
+      "cv": 2.045284481140336,
+      "mean": 3.1693719504986015,
+      "median": 1.458041958041958,
+      "n": 116,
+      "p95": 6.891666666666667,
+      "p95_over_median": 4.726658673061551
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 0.9168625146886017,
+      "cv": 0.5430719095740272,
+      "mean_s": 146.72413793103448,
+      "median_s": 135.0,
+      "n": 116,
+      "p95_over_median": 2.0833333333333335,
+      "p95_s": 281.25
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 13,
+     "truth_stuck_s": 665,
+     "truth_stuck_s_per_robot_hour": 79.95991983967936
+    },
+    "2": {
+     "blocked_s_per_robot_hour": 70.94188376753507,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 110,
+      "ended_to_idle": 110,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.1105198385223316,
+      "cv": 0.9740573467490474,
+      "mean": 3.0396848407472774,
+      "median": 1.6666666666666667,
+      "n": 110,
+      "p95": 9.455,
+      "p95_over_median": 5.673
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.1444509688784492,
+      "cv": 0.5644097989355579,
+      "mean_s": 154.8181818181818,
+      "median_s": 137.5,
+      "n": 110,
+      "p95_over_median": 2.4145454545454537,
+      "p95_s": 331.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 9,
+     "truth_stuck_s": 445,
+     "truth_stuck_s_per_robot_hour": 53.50701402805611
+    },
+    "3": {
+     "blocked_s_per_robot_hour": 16.83366733466934,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 105,
+      "ended_to_idle": 105,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.0086104150983064,
+      "cv": 1.5007420796758786,
+      "mean": 3.165274199439926,
+      "median": 1.4,
+      "n": 105,
+      "p95": 9.523076923076916,
+      "p95_over_median": 6.802197802197798
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3209876543209862,
+      "cv": 0.6592523234480487,
+      "mean_s": 162.0,
+      "median_s": 125.0,
+      "n": 105,
+      "p95_over_median": 3.0079999999999982,
+      "p95_s": 375.9999999999998
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 365,
+     "truth_stuck_s_per_robot_hour": 43.88777555110221
+    },
+    "4": {
+     "blocked_s_per_robot_hour": 365.53106212424854,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 112,
+      "ended_to_idle": 112,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 30,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.5995509638027607,
+      "cv": 1.0254059466301217,
+      "mean": 5.770227323436354,
+      "median": 2.3831521739130435,
+      "n": 112,
+      "p95": 15.0,
+      "p95_over_median": 6.29418472063854
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.1848715164676067,
+      "cv": 0.6222818343311957,
+      "mean_s": 123.34821428571429,
+      "median_s": 87.5,
+      "n": 112,
+      "p95_over_median": 3.0799999999999987,
+      "p95_s": 269.4999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 43,
+     "truth_stuck_s": 3025,
+     "truth_stuck_s_per_robot_hour": 363.72745490981964
+    },
+    "5": {
+     "blocked_s_per_robot_hour": 269.33867735470943,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 76,
+      "ended_to_idle": 76,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.621282850904202,
+      "cv": 1.2664470435071975,
+      "mean": 4.232583198673321,
+      "median": 1.626086956521739,
+      "n": 76,
+      "p95": 15.327380952380953,
+      "p95_over_median": 9.42592946269417
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.6755690440060702,
+      "cv": 0.8267220055750258,
+      "mean_s": 216.77631578947367,
+      "median_s": 135.0,
+      "n": 76,
+      "p95_over_median": 4.296296296296297,
+      "p95_s": 580.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 5,
+     "truth_stuck_s": 330,
+     "truth_stuck_s_per_robot_hour": 39.67935871743487
+    },
+    "6": {
+     "blocked_s_per_robot_hour": 75.75150300601203,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 111,
+      "ended_to_idle": 111,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 1,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.2828841859032978,
+      "cv": 2.2980333811482296,
+      "mean": 3.7233601478721954,
+      "median": 1.5714285714285714,
+      "n": 111,
+      "p95": 8.5,
+      "p95_over_median": 5.409090909090909
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.2455699940933254,
+      "cv": 0.6249905058120596,
+      "mean_s": 152.52252252252254,
+      "median_s": 120.0,
+      "n": 111,
+      "p95_over_median": 2.8541666666666665,
+      "p95_s": 342.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 5,
+     "truth_stuck_s": 325,
+     "truth_stuck_s_per_robot_hour": 39.078156312625254
+    },
+    "7": {
+     "blocked_s_per_robot_hour": 128.6573146292585,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 111,
+      "ended_to_idle": 111,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.0595290671968414,
+      "cv": 1.5112679960562596,
+      "mean": 3.3297608149001334,
+      "median": 1.625,
+      "n": 111,
+      "p95": 10.1875,
+      "p95_over_median": 6.269230769230769
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.320729537366548,
+      "cv": 0.6740430224457362,
+      "mean_s": 151.8918918918919,
+      "median_s": 120.0,
+      "n": 111,
+      "p95_over_median": 2.9375,
+      "p95_s": 352.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 13,
+     "truth_stuck_s": 675,
+     "truth_stuck_s_per_robot_hour": 81.1623246492986
+    },
+    "8": {
+     "blocked_s_per_robot_hour": 46.8937875751503,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 100,
+      "ended_to_idle": 100,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.0313212660553197,
+      "cv": 0.9776899215344406,
+      "mean": 3.04542668243142,
+      "median": 1.339080459770115,
+      "n": 100,
+      "p95": 9.231666666666664,
+      "p95_over_median": 6.894034334763947
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.42874469375379,
+      "cv": 0.659028368016543,
+      "mean_s": 164.9,
+      "median_s": 130.0,
+      "n": 100,
+      "p95_over_median": 3.080769230769231,
+      "p95_s": 400.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 4,
+     "truth_stuck_s": 210,
+     "truth_stuck_s_per_robot_hour": 25.250501002004007
+    },
+    "9": {
+     "blocked_s_per_robot_hour": 0.0,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 121,
+      "ended_to_idle": 121,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 1,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.5125028948400523,
+      "cv": 1.9187103654033322,
+      "mean": 2.736315255245773,
+      "median": 1.4,
+      "n": 121,
+      "p95": 6.875,
+      "p95_over_median": 4.910714285714286
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.0435555555555556,
+      "cv": 0.5108373287124147,
+      "mean_s": 139.46280991735537,
+      "median_s": 125.0,
+      "n": 121,
+      "p95_over_median": 2.28,
+      "p95_s": 285.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 16,
+     "truth_stuck_s": 820,
+     "truth_stuck_s_per_robot_hour": 98.59719438877755
+    }
+   }
+  },
+  "s10c-blind": {
+   "agreement": {
+    "blocking|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.4787878787878787,
+     "tau_b": 0.4666666666666667,
+     "tau_b_p": 0.07255015432098766,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "buffer_index_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.0303030303030303,
+     "tau_b": 0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.23636363636363633,
+     "tau_b": -0.15555555555555556,
+     "tau_b_p": 0.6006536596119929,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.32121212121212117,
+     "tau_b": 0.24444444444444444,
+     "tau_b_p": 0.38071979717813054,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "buffer_index|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.309090909090909,
+     "tau_b": -0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2121212121212121,
+     "tau_b": -0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.19999999999999998,
+     "tau_b": 0.15555555555555556,
+     "tau_b_p": 0.6006536596119929,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.23636363636363633,
+     "tau_b": 0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "cv|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.2606060606060606,
+     "tau_b": 0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.8909090909090909,
+     "tau_b": 0.7777777777777778,
+     "tau_b_p": 0.0009463183421516755,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 1.0,
+     "top3_overlap": 3
+    },
+    "mean_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.6363636363636362,
+     "tau_b": 0.5111111111111111,
+     "tau_b_p": 0.04662257495590829,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "mean_s|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.29696969696969694,
+     "tau_b": 0.3333333333333333,
+     "tau_b_p": 0.21637345679012346,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "mean_s|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2727272727272727,
+     "tau_b": -0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.04242424242424241,
+     "tau_b": -0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.3939393939393939,
+     "tau_b": -0.28888888888888886,
+     "tau_b_p": 0.2912483465608466,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "p95_over_median|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.5757575757575757,
+     "tau_b": 0.4222222222222222,
+     "tau_b_p": 0.10831349206349207,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "p95_over_median|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.09090909090909088,
+     "tau_b": 0.06666666666666667,
+     "tau_b_p": 0.8618005952380953,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    }
+   },
+   "counts": {
+    "completed": 925,
+    "dropped_by_kept_messages": 0,
+    "ended_to_idle": 925,
+    "ended_to_new_order": 0,
+    "open_at_end": 78,
+    "open_at_start": 80,
+    "raw_distance_zero": 32,
+    "with_gap_over_60s": 0,
+    "zones": 10,
+    "zones_below_min_jobs": 0
+   },
+   "deadlock": {
+    "path": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/fleet/deadlock_s10c-blind-sb.json",
+    "sha256": "e860afe0dfd4c0f7e82a10af08b25239ce7cd48fb7ab0f5ec2b231107c0a0b79"
+   },
+   "run_dir": "fleet/data/s10c-blind",
+   "undecided_pairs": 0,
+   "zones": {
+    "0": {
+     "blocked_s_per_robot_hour": 185.17034068136272,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 92,
+      "ended_to_idle": 92,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.1238569577002426,
+      "cv": 1.1195900002664407,
+      "mean": 3.5658757315464173,
+      "median": 1.6515151515151516,
+      "n": 92,
+      "p95": 11.139285714285718,
+      "p95_over_median": 6.744888597640893
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3134172551427692,
+      "cv": 0.7066999529833887,
+      "mean_s": 177.0108695652174,
+      "median_s": 135.0,
+      "n": 92,
+      "p95_over_median": 3.033333333333333,
+      "p95_s": 409.5
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 15,
+     "truth_stuck_s": 775,
+     "truth_stuck_s_per_robot_hour": 93.18637274549098
+    },
+    "1": {
+     "blocked_s_per_robot_hour": 228.4569138276553,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 73,
+      "ended_to_idle": 73,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.1999100304587516,
+      "cv": 1.3083023898425477,
+      "mean": 4.052197262811075,
+      "median": 1.7,
+      "n": 73,
+      "p95": 12.966666666666656,
+      "p95_over_median": 7.627450980392151
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.526613398893669,
+      "cv": 0.9976935233817674,
+      "mean_s": 222.87671232876713,
+      "median_s": 125.0,
+      "n": 73,
+      "p95_over_median": 6.287999999999999,
+      "p95_s": 785.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 13,
+     "truth_stuck_s": 780,
+     "truth_stuck_s_per_robot_hour": 93.7875751503006
+    },
+    "2": {
+     "blocked_s_per_robot_hour": 61.322645290581164,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 104,
+      "ended_to_idle": 104,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.9048263969684844,
+      "cv": 1.0757335622342932,
+      "mean": 3.265255372885165,
+      "median": 1.7697368421052633,
+      "n": 104,
+      "p95": 9.485,
+      "p95_over_median": 5.3595539033457245
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.1483348334833483,
+      "cv": 0.5938435117914468,
+      "mean_s": 160.2403846153846,
+      "median_s": 145.0,
+      "n": 104,
+      "p95_over_median": 2.3741379310344826,
+      "p95_s": 344.25
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 9,
+     "truth_stuck_s": 475,
+     "truth_stuck_s_per_robot_hour": 57.11422845691383
+    },
+    "3": {
+     "blocked_s_per_robot_hour": 102.20440881763527,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 102,
+      "ended_to_idle": 102,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6925410288240574,
+      "cv": 2.092738622158361,
+      "mean": 3.7995176427544184,
+      "median": 1.3867521367521367,
+      "n": 102,
+      "p95": 10.23035714285714,
+      "p95_over_median": 7.377206691613469
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.4227272727272724,
+      "cv": 0.6689987837754733,
+      "mean_s": 165.0,
+      "median_s": 130.0,
+      "n": 102,
+      "p95_over_median": 3.0749999999999997,
+      "p95_s": 399.74999999999994
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 405,
+     "truth_stuck_s_per_robot_hour": 48.69739478957916
+    },
+    "4": {
+     "blocked_s_per_robot_hour": 365.53106212424854,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 112,
+      "ended_to_idle": 112,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 30,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.5995509638027607,
+      "cv": 1.0254059466301217,
+      "mean": 5.770227323436354,
+      "median": 2.3831521739130435,
+      "n": 112,
+      "p95": 15.0,
+      "p95_over_median": 6.29418472063854
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.1848715164676067,
+      "cv": 0.6222818343311957,
+      "mean_s": 123.34821428571429,
+      "median_s": 87.5,
+      "n": 112,
+      "p95_over_median": 3.0799999999999987,
+      "p95_s": 269.4999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 43,
+     "truth_stuck_s": 3025,
+     "truth_stuck_s_per_robot_hour": 363.72745490981964
+    },
+    "5": {
+     "blocked_s_per_robot_hour": 272.94589178356716,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 72,
+      "ended_to_idle": 72,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 1,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.168329248757882,
+      "cv": 1.042710949563282,
+      "mean": 4.20174134529076,
+      "median": 1.9583333333333335,
+      "n": 72,
+      "p95": 13.312500000000004,
+      "p95_over_median": 6.797872340425533
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.462036748676425,
+      "cv": 0.859160622801471,
+      "mean_s": 222.98611111111111,
+      "median_s": 135.0,
+      "n": 72,
+      "p95_over_median": 4.066666666666666,
+      "p95_s": 549.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 12,
+     "truth_stuck_s": 700,
+     "truth_stuck_s_per_robot_hour": 84.1683366733467
+    },
+    "6": {
+     "blocked_s_per_robot_hour": 55.31062124248497,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 87,
+      "ended_to_idle": 87,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.3292354800660573,
+      "cv": 1.1177291280011514,
+      "mean": 3.1869861222663505,
+      "median": 1.4,
+      "n": 87,
+      "p95": 10.610227272727276,
+      "p95_over_median": 7.578733766233769
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.932787860755728,
+      "cv": 0.8548374796965855,
+      "mean_s": 193.16091954022988,
+      "median_s": 120.0,
+      "n": 87,
+      "p95_over_median": 4.720833333333334,
+      "p95_s": 566.5000000000001
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 4,
+     "truth_stuck_s": 250,
+     "truth_stuck_s_per_robot_hour": 30.060120240480963
+    },
+    "7": {
+     "blocked_s_per_robot_hour": 105.81162324649299,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 100,
+      "ended_to_idle": 100,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.450175771780429,
+      "cv": 1.4362754423138675,
+      "mean": 3.509137985423589,
+      "median": 1.6666666666666667,
+      "n": 100,
+      "p95": 12.10714285714285,
+      "p95_over_median": 7.26428571428571
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.290712884238064,
+      "cv": 0.6716107824279643,
+      "mean_s": 152.9,
+      "median_s": 122.5,
+      "n": 100,
+      "p95_over_median": 2.8591836734693876,
+      "p95_s": 350.25
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 14,
+     "truth_stuck_s": 710,
+     "truth_stuck_s_per_robot_hour": 85.37074148296594
+    },
+    "8": {
+     "blocked_s_per_robot_hour": 46.8937875751503,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 69,
+      "ended_to_idle": 69,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.09621379775034,
+      "cv": 1.012787368129598,
+      "mean": 3.0941015788252972,
+      "median": 1.3181818181818181,
+      "n": 69,
+      "p95": 9.579999999999997,
+      "p95_over_median": 7.267586206896549
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3131054131054132,
+      "cv": 0.6186492316375202,
+      "mean_s": 152.6086956521739,
+      "median_s": 130.0,
+      "n": 69,
+      "p95_over_median": 2.7153846153846155,
+      "p95_s": 353.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 2,
+     "truth_stuck_s": 100,
+     "truth_stuck_s_per_robot_hour": 12.024048096192384
+    },
+    "9": {
+     "blocked_s_per_robot_hour": 0.0,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 114,
+      "ended_to_idle": 114,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 1,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.7482914898155237,
+      "cv": 1.9449580034053355,
+      "mean": 3.3020514867617443,
+      "median": 1.475,
+      "n": 114,
+      "p95": 9.075,
+      "p95_over_median": 6.152542372881355
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.0626654898499541,
+      "cv": 0.8100451908483426,
+      "mean_s": 149.07894736842104,
+      "median_s": 117.5,
+      "n": 114,
+      "p95_over_median": 2.617021276595742,
+      "p95_s": 307.4999999999997
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 15,
+     "truth_stuck_s": 900,
+     "truth_stuck_s_per_robot_hour": 108.21643286573146
+    }
+   }
+  },
+  "s8b-medium-80-p03-07": {
+   "agreement": {
+    "blocking|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.19999999999999998,
+     "tau_b": 0.06666666666666667,
+     "tau_b_p": 0.8618005952380953,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.05454545454545454,
+     "tau_b": -0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.01818181818181818,
+     "tau_b": 0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "buffer_index|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.24848484848484845,
+     "tau_b": -0.15555555555555556,
+     "tau_b_p": 0.6006536596119929,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "buffer_index|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.05454545454545454,
+     "tau_b": -0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.22424242424242422,
+     "tau_b": -0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "cv_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": 0.24848484848484845,
+     "tau_b": 0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.6666666666666666,
+     "top3_overlap": 2
+    },
+    "cv|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2727272727272727,
+     "tau_b": -0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "cv|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.24848484848484845,
+     "tau_b": -0.15555555555555556,
+     "tau_b_p": 0.6006536596119929,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.16363636363636364,
+     "tau_b": -0.1111111111111111,
+     "tau_b_p": 0.7274895282186948,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.5636363636363636,
+     "tau_b": -0.4222222222222222,
+     "tau_b_p": 0.10831349206349207,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "mean_s|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.11515151515151514,
+     "tau_b": 0.022222222222222223,
+     "tau_b_p": 1.0,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    },
+    "mean_s|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.6727272727272726,
+     "tau_b": -0.5555555555555556,
+     "tau_b_p": 0.02860945767195767,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median_norm|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2121212121212121,
+     "tau_b": -0.06666666666666667,
+     "tau_b_p": 0.8618005952380953,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median_norm|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.2121212121212121,
+     "tau_b": -0.2,
+     "tau_b_p": 0.4843127204585538,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median|blocking": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.16363636363636364,
+     "tau_b": -0.1111111111111111,
+     "tau_b_p": 0.7274895282186948,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.0,
+     "top3_overlap": 0
+    },
+    "p95_over_median|truth": {
+     "decided": true,
+     "n": 10,
+     "reason": null,
+     "rho": -0.32121212121212117,
+     "tau_b": -0.24444444444444444,
+     "tau_b_p": 0.38071979717813054,
+     "ties_at_boundary": {
+      "first": 0,
+      "second": 0
+     },
+     "top3_chance": 0.9,
+     "top3_fraction": 0.3333333333333333,
+     "top3_overlap": 1
+    }
+   },
+   "counts": {
+    "completed": 910,
+    "dropped_by_kept_messages": 0,
+    "ended_to_idle": 910,
+    "ended_to_new_order": 0,
+    "open_at_end": 78,
+    "open_at_start": 80,
+    "raw_distance_zero": 1,
+    "with_gap_over_60s": 0,
+    "zones": 10,
+    "zones_below_min_jobs": 0
+   },
+   "deadlock": {
+    "path": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/results/fleet/deadlock_s8b-medium-80-p03-07-sb.json",
+    "sha256": "d37836d42152f0da4de8068f5a3d18a47d3344b9b488e49b6fdf740a56bd0126"
+   },
+   "run_dir": "fleet/data/s8b-score",
+   "undecided_pairs": 0,
+   "zones": {
+    "0": {
+     "blocked_s_per_robot_hour": 176.75350701402806,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 85,
+      "ended_to_idle": 85,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 1,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6527744327748601,
+      "cv": 1.2421022648003315,
+      "mean": 4.248382320320892,
+      "median": 2.0,
+      "n": 85,
+      "p95": 11.269999999999998,
+      "p95_over_median": 5.634999999999999
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5247524752475246,
+      "cv": 0.7390049631389595,
+      "mean_s": 184.1764705882353,
+      "median_s": 140.0,
+      "n": 85,
+      "p95_over_median": 3.3214285714285716,
+      "p95_s": 465.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 6,
+     "truth_stuck_s": 410,
+     "truth_stuck_s_per_robot_hour": 49.298597194388776
+    },
+    "1": {
+     "blocked_s_per_robot_hour": 274.1482965931864,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 103,
+      "ended_to_idle": 103,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.2765155731661117,
+      "cv": 2.2160205199491605,
+      "mean": 3.6319070470649266,
+      "median": 1.6,
+      "n": 103,
+      "p95": 11.899999999999977,
+      "p95_over_median": 7.437499999999986
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.370127181307305,
+      "cv": 0.6309720989652653,
+      "mean_s": 164.126213592233,
+      "median_s": 140.0,
+      "n": 103,
+      "p95_over_median": 2.7785714285714276,
+      "p95_s": 388.9999999999999
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 15,
+     "truth_stuck_s": 815,
+     "truth_stuck_s_per_robot_hour": 97.99599198396794
+    },
+    "2": {
+     "blocked_s_per_robot_hour": 84.1683366733467,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 88,
+      "ended_to_idle": 88,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6514901949322829,
+      "cv": 1.7033157868105755,
+      "mean": 3.8143216154320516,
+      "median": 1.5857142857142859,
+      "n": 88,
+      "p95": 10.11363636363635,
+      "p95_over_median": 6.377968877968869
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.5993031358885004,
+      "cv": 0.7488356786230694,
+      "mean_s": 179.375,
+      "median_s": 140.0,
+      "n": 88,
+      "p95_over_median": 3.330357142857141,
+      "p95_s": 466.2499999999998
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 12,
+     "truth_stuck_s": 610,
+     "truth_stuck_s_per_robot_hour": 73.34669338677355
+    },
+    "3": {
+     "blocked_s_per_robot_hour": 66.13226452905812,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 101,
+      "ended_to_idle": 101,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6495075864622881,
+      "cv": 1.401598392196616,
+      "mean": 2.956524213539869,
+      "median": 1.8,
+      "n": 101,
+      "p95": 7.833333333333333,
+      "p95_over_median": 4.351851851851851
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.1380441264162193,
+      "cv": 0.6292881951669013,
+      "mean_s": 166.03960396039605,
+      "median_s": 140.0,
+      "n": 101,
+      "p95_over_median": 2.5357142857142856,
+      "p95_s": 355.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 10,
+     "truth_stuck_s": 555,
+     "truth_stuck_s_per_robot_hour": 66.73346693386773
+    },
+    "4": {
+     "blocked_s_per_robot_hour": 76.95390781563127,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 91,
+      "ended_to_idle": 91,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.3434558063829436,
+      "cv": 1.35328445832137,
+      "mean": 3.6489191741996874,
+      "median": 1.6,
+      "n": 91,
+      "p95": 12.2,
+      "p95_over_median": 7.624999999999999
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.3728813559322033,
+      "cv": 0.6741315123283312,
+      "mean_s": 168.57142857142858,
+      "median_s": 140.0,
+      "n": 91,
+      "p95_over_median": 2.857142857142857,
+      "p95_s": 400.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 10,
+     "truth_stuck_s": 515,
+     "truth_stuck_s_per_robot_hour": 61.92384769539078
+    },
+    "5": {
+     "blocked_s_per_robot_hour": 132.26452905811624,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 81,
+      "ended_to_idle": 81,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.6382119019592494,
+      "cv": 2.801483332518283,
+      "mean": 5.117102227449705,
+      "median": 1.6666666666666667,
+      "n": 81,
+      "p95": 13.5,
+      "p95_over_median": 8.1
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.6918429003021147,
+      "cv": 0.7717242211264493,
+      "mean_s": 204.320987654321,
+      "median_s": 140.0,
+      "n": 81,
+      "p95_over_median": 3.9285714285714284,
+      "p95_s": 550.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 9,
+     "truth_stuck_s": 490,
+     "truth_stuck_s_per_robot_hour": 58.91783567134269
+    },
+    "6": {
+     "blocked_s_per_robot_hour": 135.87174348697394,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 98,
+      "ended_to_idle": 98,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 1.631331283590786,
+      "cv": 1.518740352906943,
+      "mean": 3.074368700790545,
+      "median": 1.6794871794871795,
+      "n": 98,
+      "p95": 8.089682539682522,
+      "p95_over_median": 4.816757542711731
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.2696537678207729,
+      "cv": 0.6493496457533566,
+      "mean_s": 175.35714285714286,
+      "median_s": 137.5,
+      "n": 98,
+      "p95_over_median": 2.894545454545453,
+      "p95_s": 397.99999999999983
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 425,
+     "truth_stuck_s_per_robot_hour": 51.102204408817634
+    },
+    "7": {
+     "blocked_s_per_robot_hour": 249.498997995992,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 86,
+      "ended_to_idle": 86,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.085000786223807,
+      "cv": 0.9357073419218099,
+      "mean": 3.7277137987626148,
+      "median": 2.026315789473684,
+      "n": 86,
+      "p95": 11.5,
+      "p95_over_median": 5.675324675324676
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 1.2005256648113791,
+      "cv": 0.6573518304005368,
+      "mean_s": 188.02325581395348,
+      "median_s": 135.0,
+      "n": 86,
+      "p95_over_median": 3.064814814814815,
+      "p95_s": 413.75
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 8,
+     "truth_stuck_s": 385,
+     "truth_stuck_s_per_robot_hour": 46.29258517034068
+    },
+    "8": {
+     "blocked_s_per_robot_hour": 0.0,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 86,
+      "ended_to_idle": 86,
+      "ended_to_new_order": 0,
+      "open_at_end": 7,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.8625787689021376,
+      "cv": 1.6316782404296284,
+      "mean": 4.36075249406176,
+      "median": 1.44375,
+      "n": 86,
+      "p95": 16.84375,
+      "p95_over_median": 11.666666666666666
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.2467300832342447,
+      "cv": 0.9072713861578626,
+      "mean_s": 195.58139534883722,
+      "median_s": 125.0,
+      "n": 86,
+      "p95_over_median": 5.08,
+      "p95_s": 635.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 7,
+     "truth_stuck_s": 350,
+     "truth_stuck_s_per_robot_hour": 42.08416833667335
+    },
+    "9": {
+     "blocked_s_per_robot_hour": 155.11022044088176,
+     "dropped_by_kept_messages": 0,
+     "jobs": {
+      "completed": 91,
+      "ended_to_idle": 91,
+      "ended_to_new_order": 0,
+      "open_at_end": 8,
+      "open_at_start": 8,
+      "raw_distance_zero": 0,
+      "with_gap_over_60s": 0
+     },
+     "n_agv": 8,
+     "normalised": {
+      "buffer_index": 2.132214640011169,
+      "cv": 0.9594424219397382,
+      "mean": 2.744433199547013,
+      "median": 1.5294117647058822,
+      "n": 91,
+      "p95": 8.596153846153847,
+      "p95_over_median": 5.6205621301775155
+     },
+     "null_reason": null,
+     "raw": {
+      "buffer_index": 2.1013202333435683,
+      "cv": 0.898338737037389,
+      "mean_s": 178.95604395604394,
+      "median_s": 110.0,
+      "n": 91,
+      "p95_over_median": 5.045454545454546,
+      "p95_s": 555.0
+     },
+     "robot_hours": 8.316666666666666,
+     "truth_episodes": 13,
+     "truth_stuck_s": 755,
+     "truth_stuck_s_per_robot_hour": 90.78156312625251
+    }
+   }
+  }
+ },
+ "schema_version": "fleet-duration-spread/1",
+ "smoke": false,
+ "verdict": {
+  "both_median_rho_vs_blocking_below_0_4": true,
+  "conditions": {
+   "mean_s": {
+    "blocking_branch_holds": false,
+    "median_rho_vs_blocking": 0.059405940961660776,
+    "median_top3_fraction_vs_blocking": 0.3333333333333333,
+    "runs_stat_truth_ge_blocking_truth": 1,
+    "truth_branch_holds": false
+   },
+   "p95_over_median": {
+    "blocking_branch_holds": false,
+    "median_rho_vs_blocking": 0.13371899070396306,
+    "median_top3_fraction_vs_blocking": 0.3333333333333333,
+    "runs_stat_truth_ge_blocking_truth": 2,
+    "truth_branch_holds": false
+   }
+  },
+  "n_runs": 5,
+  "runs_blocking_beats_both_on_truth": 3,
+  "s15b_line": "**S15B.** Commodity if, for either decisive statistic, the median over runs of \u03c1(statistic, blocking number) is \u2265 0.7 with median top-3 overlap \u2265 2/3, **or** \u03c1(statistic, truth) \u2265 \u03c1(blocking, truth) in at least 3 of the decided runs. **Supports the lead** only if both decisive statistics have median \u03c1 with the blocking number < 0.4 **and** the blocking number beats both on truth in at least 4 of 5 runs. Anything else is reported as mixed. All thresholds are ours, set here before the run.",
+  "verdict": "mixed"
+ }
+}

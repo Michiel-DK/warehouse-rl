@@ -93,6 +93,15 @@ per-robot time split and the blocking number are not documented by any readable 
 offer is fleet level. The station-aware filter is buildable in InOrbit by a customer who writes the expression, which
 is scored as present; nobody ships it as a default. The sixteen walled vendors are UNTESTED on all three.
 
+**Measured against the two documented methods (Sprint 15, 2026-10-23).** README section (w) puts columns 11 and 12
+next to the InOrbit and OTTO methods above, on our data; no cell in this table changes. Column 11: on the MoRoOp log a
+plain 60 s driving-flag timer reaches both labelled stops with 10 stuck runs against our 6, so on the line set in
+`docs/LITERATURE.md` Part 8 the station-aware filter is commodity. InOrbit's documented "stopped while on a mission"
+(180 s) catches one of the two labelled stops. Column 12: OTTO's mean job duration and the p95 / median spread do not
+rank zones like our blocking number (median ρ 0.06 and 0.13), and the verdict is mixed. The blocking number does not
+rank zones by truth stuck time either (median ρ 0.04), so the comparison shows no blocking measure validated on our
+data, ours included.
+
 ## Per vendor (nine capabilities, passes 1 to 3)
 
 ### Formant
