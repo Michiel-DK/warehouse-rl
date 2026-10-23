@@ -60,7 +60,7 @@ Per labelled stop (every MoRoOp label episode >= 30 s of a processed shift; shif
 carries the stopped run (the first driving-false run, of any length, that overlaps the label), the box-stillness span (the
 maximal run of messages around the label's start, grown backwards first and then forwards, whose positions fit one 2 m
 side box), and each rule's alert latency = the alert of the first episode of that rule that overlaps the label window
-(label start .. label end + 30 s) minus the stopped run's start (null when there is none).
+(label start .. label end + 30 s) minus the stopped run's start (null when the rule has no such episode or the label overlaps no stopped run).
 """
 import argparse
 import bisect
@@ -353,13 +353,13 @@ def _label_rows(k, kept, native, eps_by_rule):
                 run = dict(start=r_start, end=r_end, duration_s=r_end - r_start)
                 break
         i0 = min(max(bisect.bisect_right(ts, e["start"]) - 1, 0), len(kept) - 1)
-        stop_start = run["start"] if run else e["start"]
         rules = {}
         for rule in RULES:
             hit = next((x for x in eps_by_rule[rule] if x["start"] <= e["end"] + STUCK_AFTER and x["end"] > e["start"]),
                        None)
+            # latency is measured from the stopped run only; no stopped run -> null, never the label start
             rules[rule] = dict(alert=None if hit is None else hit["alert"],
-                               alert_latency_s=None if hit is None else hit["alert"] - stop_start)
+                               alert_latency_s=None if hit is None or run is None else hit["alert"] - run["start"])
         out.append(dict(shift=k, label_start=iso(e["start"]), label_duration_s=e["end"] - e["start"], reasons=e["reasons"],
                         stopped_run=run, box_stillness=_box_span(kept, i0, MOROOP_CELL_M), rules=rules))
     return out

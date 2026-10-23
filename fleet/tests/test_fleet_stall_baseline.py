@@ -219,6 +219,20 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(sb._box_span(kept, 2, CELL_M), dict(start=10, end=50, duration_s=40))
 
 
+    def test_label_without_stopped_run_has_null_latency(self):
+        # inject: latency measured from the label start when no stopped run overlaps -> a number, not None
+        kept = tb.kept_messages([msg(BASE + 5 * i, i, driving=True) for i in range(40)])
+        native = [dict(created_at=(BASE + 10) * 1_000_000, id=1, stuck_reason="GoalObstructed"),
+                  dict(created_at=(BASE + 100) * 1_000_000, id=2, stuck_reason=None)]
+        eps = {r: [] for r in sb.RULES}
+        eps["N2-30"] = [dict(start=BASE + 10, end=BASE + 90, alert=BASE + 40)]
+        rows = sb._label_rows(7, kept, native, eps)
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]["stopped_run"])
+        self.assertEqual(rows[0]["rules"]["N2-30"]["alert"], BASE + 40)
+        self.assertIsNone(rows[0]["rules"]["N2-30"]["alert_latency_s"])
+
+
 class GapTests(unittest.TestCase):
     def stream(self, gap):
         t0 = BASE
