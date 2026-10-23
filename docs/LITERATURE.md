@@ -1319,3 +1319,112 @@ its harvest.
   were off-topic, which Part 5 already called "uninformative rather than confirmed", as for 4 §1. Part 6 (6) is weakened: say "no accuracy figure found for automatic attribution".
 - The two-index bar is about search coverage. It does not make an absence a proof; CORE's blind spot is 2025-26
   preprints, where this field moves fastest.
+
+## Part 8: the naive stall rule and duration spread as a congestion proxy (2026-10-23)
+
+Scope: the two builds the operator's 23 Oct decision puts before the page (laptop-scheduler
+`jobs/wr-lane-s15a-naive-stall-baseline.md`, `jobs/wr-lane-s15b-duration-spread.md`): measure the page's "real stalls"
+and blocking figures against the two vendor methods COMPETITION pass 4 found (InOrbit, OTTO), on data already on disk.
+One pass on 2026-10-23 (WebSearch, curl of the InOrbit developer doc and the FHWA report, OpenAlex, CORE API v3),
+so `verified@2026-10-23` unless a row says otherwise. Query log: `laptop-scheduler/reports/wr-dev-lit-s15.md`. Ranks
+as in Part 2 (A read, A- abstract or record, S snippet). **Coverage:** OpenAlex 7 queries; CORE 9 flat queries ran,
+5 more answered 429 and are not counted; calibration hits: Tarapore 2017 (stall field) and Li et al. 2018 (AGV
+travel time). Semantic Scholar, dblp, Lens: not tried (Part 7 found them closed).
+
+### 1. The naive stall rule
+
+**What vendors document.** InOrbit's developer doc (https://developer.inorbit.ai/docs, A, raw HTML read) has three
+stillness forms, and **none is a velocity flag or a 30 s timer**:
+
+| InOrbit form | gate | stillness | alert after | what fires |
+|---|---|---|---|---|
+| `unableToNavigate` (Advanced Incidents, "Navigation Problems") | `getValue('dsMission') in ['DELIVERY','RETURN-DOCK']` | `visitedAreaDiagonal(60)` BELOW 2 | `"sustainedForSeconds" : 600` | status ERROR, incident "Unable to reach destination", SEV 2 |
+| "Example: Robot stopped while on a mission" (Expressions Language) | `hasTag("prod") and getValue('currentProgram') == "DELIVERY"` | `visitedAreaSide(180) < 2` | none: "has not left a 2-meter square for three minutes" | a status rule |
+| traffic-zone `blocked` thresholds (`isZoneBlocked`) | robot inside a zone | "moved less than meters over the last seconds"; example 0.3 m / 60 s; "The preset nogo and soz types come with 30 seconds and 0.5 meters" | live | a zone state, not a per-robot alert |
+
+`visitedAreaDiagonal(<seconds>)`: "The diagonal length of the smallest bounding box containing all of the robot
+positions during the last N seconds. It allows determining if the robot is actually moving; beyond its linear or
+angular distance". Pass 4 quoted only the first form; the second is new here. Both are examples a customer copies,
+not shipped defaults. Formant (https://docs.formant.io/llms.txt, title index read): events are thresholds on a
+numeric stream ("Each datapoint in this numeric set stream is compared to the threshold(s) you define",
+/docs/getting-started-create-an-event-and-configure-notifications.md, A); no stuck, stillness or idle title. MiR:
+5 s path timeout then replan (Part 5 §1, 2020 guide on a mirror, verified@2026-10-21). VDA 5050 `driving` / `paused`
+carry no duration (Part 2 §2, Part 5 §1). Locus, Geek+, Seegrid: no public doc tree found by a WebSearch for
+stuck-alert docs: UNTESTED. **Literature:** the robot-side form is Nav2's progress checker, 0.5 m in 10 s (Part 6
+(1)); failure labels sit at 60 s and up (Lee 2026, Gerling 2016, OEE; Part 5 §1). No named "stall rule" with a
+window: not found in OpenAlex ("mobile robot fleet stuck detection time threshold", "robot stall detection no
+progress timeout") or CORE ("robot stuck threshold seconds", "robot stall detection fleet": 0 hits each; Tarapore
+retrieved). A k × planned-dwell window: not found (Part 4 §1, kept). SPC has no fixed window either: the bound is a
+fence on the sample (Part 4 §1, the S14A rule).
+
+**Verdict 1.** Name the baseline **"stopped on a mission"**, InOrbit's own wording; there is no standard name. S15A
+runs four rules on the same stream, all gated on `orderId` non-empty, none with station or error logic:
+- **N0-30**, **N0-60**: the existing detector with `stations=None` at `stuck_after` 30 s and 60 s (stillness = the
+  stream's `driving` flag; N0-30 is the old 567-run rule). Expressible as the detector.
+- **N1** (InOrbit `unableToNavigate`): bounding-box diagonal of the positions in the last 60 s < 2 m, held for 600 s.
+- **N2** (InOrbit "stopped while on a mission"): largest bounding-box side of the positions in the last 180 s < 2 m.
+N1 and N2 are position rules and **not** expressible as the detector: MoRoOp's `driving` counts rotation in place
+(omega > 0.05 rad/s) as moving, a displacement box does not. Positions: MoRoOp cells are floored 0.5 m, so 2 m = 4
+cells (quantisation ≤ one cell); the simulator grid has no metre scale on record, so N1/N2 there read 2 m as 2 cells
+and are labelled "scale assumed". A change-only log fills the window by carrying each message's position and
+orderId forward to the next message; report how many N1/N2 alerts span a gap > 60 s (timebudget's gap rule).
+**Expected trade-off, to be measured:** the two labelled stops ≥ 30 s on MoRoOp last 250 s and 127 s
+(`results/fleet/moroop_label-sb.json`, shift 7, both GoalObstructed), so N1 (≥ 600 s) cannot fire on either and N2
+(≥ 180 s) can fire on the 250 s one only. The InOrbit forms buy fewer alarms with missed short stalls; the comparison
+needs both axes, plus latency (alert time minus stop start).
+
+### 2. Duration spread as a congestion signal
+
+**What OTTO documents** (pass 4, A, verified@2026-10-22): a mean ("Average Run Time", "average run times in seconds")
+and a hand method with no statistic ("task or workflow durations with a lot of variation"). **Traffic engineering**
+names the spread statistics. FHWA's travel-time reliability guide
+(https://ops.fhwa.dot.gov/publications/tt_reliability/TTR_Report.htm, A) recommends four: "90th or 95th percentile
+travel time, buffer index, planning time index, and frequency that congestion exceeds some expected threshold". Buffer
+index = "the difference between the 95th percentile travel time and average travel time, divided by the average
+travel time"; planning time index = "the 95th percentile travel time divided by the free-flow travel time"; the
+indices exist so that "comparisons or combinations of routes or trips with different lengths" are possible. On CV:
+"standard deviation and coefficient of variation ... are discouraged as performance measures, as they are not readily
+understood by non-technical audiences" (a communication argument, not a validity one). The travel time index (mean over
+free flow) is FHWA's average-congestion measure (Part 6 (4), verified@2026-10-21).
+
+| statistic | name and source | validated against a direct blocking measure? |
+|---|---|---|
+| (p95 − mean) / mean | buffer index, FHWA (A) | no: freeway reliability vs incident counts explored (Chen 2010, KTC, https://doi.org/10.13023/ktc.rr.2010.08, A-, abstract only, no result read) |
+| p95 / free-flow | planning time index, FHWA (A) | no; SHRP 2 L03 / L33 predict p95 TTI from mean TTI ("1 + 3.4201·ln(meanTTI)", https://www.nap.edu/read/22282/chapter/2, S, snippet; page text not readable): spread tracks mean congestion on freeways |
+| σ / μ | coefficient of variation; FHWA discourages it (A) | no |
+| IQR / median, p95 / median | no source found naming them as congestion measures | no |
+| mean job duration | OTTO "Average Run Time" (A) | no |
+
+No AGV or AMR paper using duration spread as a congestion or blocking proxy: not found in OpenAlex ("AGV travel
+time variability congestion indicator", "task duration variance congestion warehouse robots") or CORE ("AGV
+variability congestion indicator", "AGV variance blocking travel": 0 hits; Li et al. 2018,
+https://doi.org/10.1155/2018/4037695, retrieved: travel-time uncertainty as a *cause* of AGV catch-up conflicts).
+**Trap:** raw job durations vary with route length, so a zone with mixed job lengths shows spread with no congestion.
+
+**Verdict 2.** S15B computes, per (run, zone), over completed jobs: **buffer index** (primary, FHWA-named, no
+free-flow time needed), **mean job duration** (OTTO's documented figure) and **CV** (secondary), each twice: on raw
+durations (OTTO's hand method) and on durations divided by the job's free-flow time (Manhattan distance of the job's
+cells times `STEP_S`, a planning-time-index-style normaliser; the lane says which cells it uses). Agreement:
+**Spearman ρ per run** (average ranks for ties) with **Kendall τ-b** next to it (scipy: tau-b is the variant that
+handles ties, https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kendalltau.html, A), and **top-3
+overlap** with its chance value k²/n (0.9 zones of 3 at n = 10, 0.3 at n = 30). Per run and the median over runs;
+never one pooled ρ over raw values from different runs (the 30-zone sticky run would dominate). With n = 10 a ρ near
+0.65 is about the p < 0.05 line; say so. Rank-biased overlap (Webber, Moffat & Zobel 2010, TOIS,
+https://doi.org/10.1145/1852102.1852106, A-) is the standard for long top-weighted lists, not needed at 10 zones.
+
+### 3. What refutes each
+
+- **S15A.** Commodity if N1 or N2 on MoRoOp lands within 2× of our 6 stuck runs with 2/2 labelled hits (not
+  expected from the durations above); also commodity if N0-60 does. **Supports the lead** if every naive rule
+  either misses a labelled stop or raises ≥ 5× our false alarms (the old rule N0-30 had 544 unlabelled runs against
+  our 5, README (q), (s)). "Within 2×" and "5×" are our thresholds, set here before the run.
+- **S15B.** Commodity if, in at least 4 of 5 runs, ρ(spread or mean, truth stuck s per robot-hour) ≥ ρ(blocking
+  number, truth): the vendor's hand method reads truth as well as ours. ρ(spread, blocking) alone decides nothing.
+  **Supports the lead** if ρ(blocking, truth) exceeds every spread and mean statistic's ρ with truth in at least 4 of
+  5 runs. Mixed results are reported as mixed.
+
+### 4. Lane briefs rewritten (2026-10-23)
+
+Both drafts were rewritten in place from Verdicts 1-2 (S15A: rules N0-30/N0-60/N1/N2, fixture, refute line; S15B:
+buffer index, mean, CV, raw and normalised, ρ per run, τ-b, top-3 with chance); file names, tests and result paths
+kept. The diff is listed in `reports/wr-dev-lit-s15.md`.
