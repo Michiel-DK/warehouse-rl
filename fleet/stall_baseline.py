@@ -116,14 +116,12 @@ def _is_original_store(path):
     p = Path(path)
     if not p.is_dir():
         return False
-    if (p / "stuck_episodes.jsonl").is_file():
-        return True
     return bool(_STORE_NAME.match(p.name)) and any(p.parent.glob("zone*-000.jsonl.gz"))
 
 
 def guard_out_path(path):
     """SystemExit when `path` is, or lies inside, an original store directory (a run's store / store-* next to its zone
-    files, or any directory holding stuck_episodes.jsonl)."""
+    files; a copy_store_to_temp() copy lives elsewhere and is not)."""
     p = Path(path).resolve()
     for q in (p, *p.parents):
         if _is_original_store(q):
@@ -458,7 +456,8 @@ def _parse_zone(lines):
 
 
 def _episode_row(robot, e, cause):
-    return dict(robot=robot, start=e["start"], end=e["end"], cause=cause, resolution=e["resolution"], left_censored=False)
+    return dict(robot=robot, start=e["start"], end=e["end"], cause=cause, resolution=e["resolution"], left_censored=False,
+                t_entry=e["t_entry"] if "t_entry" in e else e["alert"])
 
 
 def sim_run(run_dir, stations_spec="auto", station_radius=0, workers=1):
