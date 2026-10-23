@@ -18,7 +18,7 @@ Fields ignored: none. decisions.jsonl and forecast_grades.jsonl of the new-store
 `decisions` (only via `stamp_grade` -> `update_where`, the `__upd` lines) and `forecast_grades` (`write_once` -> `upsert` at forecast_grade.py:62; grade.py:53/74 and forecast_grade.py:109 call `write_once`). `lessons.py` has no store writes (grepped `.insert/.upsert/.update_where` in grade.py, fleet_analyser/grade.py, forecast_grade.py, lessons.py, decisions.py; the only other write is `decisions.record_decision` insert, not on the grade path). decision_grades is ClickHouse-only.
 
 ## Tests
-`fleet/tests/test_fleet_store_index.py` (collected by tests/test_fleet_collect.py via `test_fleet_*.py`): property test over 6 seeds x 2,000 ops, 3 tables, list/dict/None/missing cells, identical duplicate rows, no seq leak; index-survival and duplicate-identity tests; (b) byte identity and (c) 8h timing, both ran ok (not skipped) with WR_S10_DATA=/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data.
+`fleet/tests/test_fleet_store_index.py` (collected by tests/test_fleet_collect.py via `test_fleet_*.py`): property test over 6 seeds x 2,000 ops, 3 tables, list/dict/None/missing cells, identical duplicate rows, no seq leak; index-survival and duplicate-identity tests; (b) byte identity and (c) 8h timing, both ran ok (not skipped) with WR_S10_DATA=fleet/data.
 
 ## Gate tail
 `WR_S10_DATA=... .venv/bin/python -m unittest discover -s tests`

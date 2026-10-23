@@ -10,3 +10,5 @@ fleet/data/*
 !fleet/data/moroop/
 fleet/data/moroop/*
 !fleet/data/moroop/stations.json
+harness/
+.claude/

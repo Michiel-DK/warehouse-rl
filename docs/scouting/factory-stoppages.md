@@ -4,7 +4,7 @@ Scope: discrete manufacturing lines (andon events, OEE downtime reasons, PLC ala
 only, no browser, no logins. Source ranks follow `~/.claude/skills/outward-claim-discipline` (A = owner's own docs,
 dataset page or repo; B = first-party marketing; C = press; D = snippet or secondary; F = memory). Every outside
 claim below carries a URL and `verified@2026-10-19`. The search log (every query and URL with its result) is in
-`laptop-scheduler/reports/wr-scout-factory-stoppages.md`, not here. Our own definitions (what a cell and a window
+`reports/wr-scout-factory-stoppages.md`, not here. Our own definitions (what a cell and a window
 mean for us) carry no URL. Coverage limits are stated where they bite; a limit is never written up as an absence.
 
 ## 1. Fit

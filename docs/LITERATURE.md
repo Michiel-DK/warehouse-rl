@@ -3,7 +3,7 @@
 Scope: the academic side of what the fleet stuck analyser does (README "Sprint 5" to "Sprint 10"). The vendor side is
 [COMPETITION.md](COMPETITION.md). Five questions, one research pass each on 2026-10-18, WebSearch/WebFetch only, no
 browser. Rules: `~/.claude/skills/outward-claim-discipline` (source ranks, provenance per claim). A condensed
-query log is in `laptop-scheduler/reports/wr-dev-lit-stall-detection.md`. The queries behind each
+query log is in `reports/wr-dev-lit-stall-detection.md`. The queries behind each
 absence claim are listed at the end of this page.
 
 **Search coverage, read this first.** The Semantic Scholar API answered HTTP 429 (rate limited) to every request in
@@ -257,7 +257,7 @@ Lens or CORE; see Part 7.)*
 Scope: the field the Sprint 12 lanes build into: S12A, a per-robot time budget, and S12B, a deadlock finder and a WiFi
 gap map (laptop-scheduler `jobs/wr-lane-s12a-time-budget.md`, `jobs/wr-lane-s12b-deadlock-gapmap.md`; neither merged
 when this was written). The rules are as in Part 1. One pass on 2026-10-20 with WebSearch and WebFetch only; the query
-log is in `laptop-scheduler/reports/wr-dev-lit-fleet-management.md`. **Coverage:** Semantic Scholar was not queried
+log is in `reports/wr-dev-lit-fleet-management.md`. **Coverage:** Semantic Scholar was not queried
 and Google Scholar was not tried. Crossref answered 429 twice, and both lookups resolved on retry or by another route.
 ACM, MDPI and ISO full texts returned 403, and VDI, ISO and SEMI texts are paywalled (only public contents pages,
 abstracts and a corrigendum were read). Every absence means "not found in the queries in the report".
@@ -477,7 +477,7 @@ fronts a pitch.
 
 Scope: the check before S13A (laptop-scheduler `jobs/wr-lane-s13a-moroop-budget.md`). WebFetch, WebSearch, curl and the
 GitHub API, no parquet downloaded; all fetches ran 2026-10-20 (the brief expected the 21st), hence `verified@2026-10-20`;
-query log `laptop-scheduler/reports/wr-dev-lit-moroop.md`. Ranks: **A** = paper full text or card; **A-** = counts the
+query log `reports/wr-dev-lit-moroop.md`. Ranks: **A** = paper full text or card; **A-** = counts the
 Hugging Face viewer computed from the released files (`/info`, `/statistics`, `/first-rows`: beyond "card and file
 listing", no parquet); **B** = authors' toolkit code or inferred from A; **F** = guess, do not use. **Overrides the Part 2
 §5 MoRoOp row** (summarising fetch): "delays" and "failed navigation" are retained phenomena, not tables or columns, and
@@ -601,7 +601,7 @@ it, get the same, or not try? One pass on 2026-10-21 with WebSearch, WebFetch, c
 `pdftotext` on downloaded PDFs, as three parallel research passes. The main session re-checked these numbers
 against the PDF or abstract text: Stephanedes 1992, Pietrobon 2019, Jiang 2024 Table 3, Yu & Wolf (4.4 % and the
 baseline sentence), Han & Yu Table I and the Pittsburgh MAVG 1.31. The query log is in
-`laptop-scheduler/reports/wr-dev-lit-negative-results.md`. **Coverage:** the Semantic Scholar API answered HTTP 429
+`reports/wr-dev-lit-negative-results.md`. **Coverage:** the Semantic Scholar API answered HTTP 429
 once in each of the three passes, so again **no Semantic Scholar search ran**, and Google Scholar was not tried. ACM
 and ScienceDirect full texts returned 403. Every absence means "not found in the queries listed". The rules are those
 of Part 1. Read depth (A text read, A- abstract or record, M metadata, S snippet) is the rank column, as in Parts 1
@@ -631,7 +631,7 @@ evaluation numbers.
 | Our decayed map K 20 (README (n), `amoc_blind.json`) | sim, 50 planner-blind blocked cells, 10 zones | 6 / 50 | median 295 s | 177.8 per zone-hour (flag-publishes) |
 | Our short-memory map K 20 (`amoc_shortmap.json`) | same | 6 / 50 | median 402.5 s | 451.9 per zone-hour |
 | Our CUSUM k 1 h 3 (`amoc_fast.json`) | same | 2 / 50 | median 525 s | 0.000 per zone-hour |
-| Our CUSUM k 0 h 3, **in-sample tuned** (`laptop-scheduler/reports/wr-lane-s10i-fast-detector.md:37`) | same, tuned on the 50 scored windows | 17 / 50 | median 425 s | 0.000 per zone-hour |
+| Our CUSUM k 0 h 3, **in-sample tuned** (`reports/wr-lane-s10i-fast-detector.md:37`) | same, tuned on the 50 scored windows | 17 / 50 | median 425 s | 0.000 per zone-hour |
 | Pietrobon et al. 2019, HERE (abstract only) | real probes, 12 metro areas | n/a (precision 92 % low-volume, 80 % overall) | n/a | n/a, precision only |
 | T-Closure, Zhang et al. 2023 (abstract only) | real GPS + planned route | n/a ("7000+ closure events monthly") | "within 1.5 hours" | n/a |
 | California #7 / #8 (TTI 2917-1F citing Payne) | real loop detectors | 67 % / 68 % | 2.91 / 3.04 min | 0.134 % / 0.177 % of incident-free intervals |
@@ -801,7 +801,7 @@ fronts a pitch.
 Scope: the check before S14A and S14B (laptop-scheduler `jobs/wr-lane-s14a-servicing-bound.md`,
 `jobs/wr-lane-s14b-traffic-absence.md`). Three research passes on 2026-10-21 (WebSearch, WebFetch, curl); the main
 session re-fetched the quoted pages and grepped the patent texts for every number used. Query log:
-`laptop-scheduler/reports/wr-dev-lit-s14.md`. Ranks as in Part 2, patents their own class; all verified@2026-10-21.
+`reports/wr-dev-lit-s14.md`. Ranks as in Part 2, patents their own class; all verified@2026-10-21.
 **Coverage:** SEMI E10/E58/E116, ISO 22400-2, ISO 3691-4, ISO 14224 and VDI 4486 are paywalled (records and secondary
 mappings read). A station/dock timeout was searched for MiR, OTTO, Kollmorgen NDC, BlueBotics ANT, openTCS and Open-RMF,
 not Geek+ or Locus; none found, but on search results, not doc trees, so that vendor absence is rank F.
@@ -963,7 +963,7 @@ neighbour cause rule (`_cause`, `detector.py:258-271`, Manhattan ≤ 1 via `_nea
 the absence claims of Parts 1 to 4. Scheduled for 2026-10-22, fetched 2026-10-21, so `verified@2026-10-21`. Three
 research passes (WebSearch, WebFetch, curl to raw GitHub, arXiv, OpenAlex, Semantic Scholar); the main session
 re-fetched every quote used; §3's DeepFleet, hospital and Petri-net rows rest on a subagent read. Query log:
-`laptop-scheduler/reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet).
+`reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet).
 **Coverage:** Semantic Scholar answered 9 of 64 queries (170 of 179 tries 429 with backoff; bulk 429; web UI 403);
 OpenAlex all 83. Still not a Semantic Scholar sweep. Google Scholar not tried. ISO, SEMI, VDI paywalled.
 
@@ -1107,7 +1107,7 @@ Scope: one row per deliverable of the fleet analyser, the best published method 
 the operator's "not SOTA, right?" (21 Oct). Scheduled for 2026-10-22, fetched 2026-10-21, so every source checked in
 this pass is `verified@2026-10-21`; rows reused from Parts 1-3 keep the date they were read. One pass (WebSearch,
 WebFetch, curl to arXiv, OpenAlex, Semantic Scholar, `pdftotext` on one ETSI PDF). Query log:
-`laptop-scheduler/reports/wr-dev-lit-sota.md`. Read depth as in Part 2: A text read (A\* through a summarising fetch),
+`reports/wr-dev-lit-sota.md`. Read depth as in Part 2: A text read (A\* through a summarising fetch),
 A- abstract or record (a benchmark number read from an abstract is A-), S snippet. **Coverage:** Semantic Scholar
 answered 1 of 3 queries (2 × HTTP 429); OpenAlex answered 8 searches and 4 DOI lookups, then its daily budget ran out
 (4 searches 429); Google Scholar not tried. Our side never has planner access: the analyser reads the state stream.
@@ -1256,7 +1256,7 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
 Scope: every absence claim marked "kept" in Part 5 §3 and the absence clauses of Part 6, rerun on a second scholarly
 index (operator, 21 Oct: the second index does not have to be Semantic Scholar). Scheduled for 2026-10-22, fetched
 2026-10-21, so `verified@2026-10-21`. Query log, per-query status and raw counts:
-`laptop-scheduler/reports/wr-dev-lit-index-rerun.md`. Ranks as in Part 2 (A read, A- abstract or record).
+`reports/wr-dev-lit-index-rerun.md`. Ranks as in Part 2 (A read, A- abstract or record).
 **Services:** dblp: not run (Anubis bot wall on dblp.org and dblp.dagstuhl.de, uni-trier and SPARQL time out).
 Semantic Scholar: not run (API 429 "apply for a key"; web page 403). Lens: not run (HTTP 200 but a JavaScript shell,
 no result titles). CORE web page: not run (Cloudflare 403). **CORE API v3 without a key
@@ -1319,3 +1319,114 @@ its harvest.
   were off-topic, which Part 5 already called "uninformative rather than confirmed", as for 4 §1. Part 6 (6) is weakened: say "no accuracy figure found for automatic attribution".
 - The two-index bar is about search coverage. It does not make an absence a proof; CORE's blind spot is 2025-26
   preprints, where this field moves fastest.
+
+## Part 8: the naive stall rule and duration spread as a congestion proxy (2026-10-23)
+
+Scope: the two builds the operator's 23 Oct decision puts before the page (laptop-scheduler
+`jobs/wr-lane-s15a-naive-stall-baseline.md`, `jobs/wr-lane-s15b-duration-spread.md`): measure the page's "real stalls"
+and blocking figures against the two vendor methods COMPETITION pass 4 found (InOrbit, OTTO), on data already on disk.
+One pass on 2026-10-23 (WebSearch, curl of the InOrbit developer doc and the FHWA report, OpenAlex, CORE API v3),
+so `verified@2026-10-23` unless a row says otherwise (eCFR, OPC and one PDF added after review). Query log: `reports/wr-dev-lit-s15.md`. Ranks
+as in Part 2 (A read, A- abstract or record, S snippet). **Coverage:** OpenAlex 7 queries; CORE 9 flat queries ran,
+5 more answered 429 and are not counted; calibration hits: Tarapore 2017 (stall field) and Li et al. 2018 (AGV
+travel time). Semantic Scholar, dblp, Lens: not tried (Part 7 found them closed).
+
+### 1. The naive stall rule
+
+**What vendors document.** InOrbit's developer doc (https://developer.inorbit.ai/docs, A, raw HTML read) has three
+stillness forms, and **none is a velocity flag or a 30 s timer**:
+
+| InOrbit form | gate | stillness | alert after | what fires |
+|---|---|---|---|---|
+| `unableToNavigate` (Advanced Incidents, "Navigation Problems") | `getValue('dsMission') in ['DELIVERY','RETURN-DOCK']` | `visitedAreaDiagonal(60)` BELOW 2 | `"sustainedForSeconds" : 600` | status ERROR, incident "Unable to reach destination", SEV 2 |
+| "Example: Robot stopped while on a mission" (Expressions Language) | `hasTag("prod") and getValue('currentProgram') == "DELIVERY"` | `visitedAreaSide(180) < 2` | none: "has not left a 2-meter square for three minutes" | a status rule |
+| traffic-zone `blocked` thresholds (`isZoneBlocked`) | robot inside a zone | "moved less than meters over the last seconds"; example 0.3 m / 60 s; "The preset nogo and soz types come with 30 seconds and 0.5 meters" | live | a zone state, not a per-robot alert |
+
+`visitedAreaDiagonal(<seconds>)`: "The diagonal length of the smallest bounding box containing all of the robot
+positions during the last N seconds. It allows determining if the robot is actually moving; beyond its linear or
+angular distance". Pass 4 quoted only the first form; the second is new here. Both are examples a customer copies,
+not shipped defaults. Formant (https://docs.formant.io/llms.txt, title index read): events are thresholds on a
+numeric stream ("Each datapoint in this numeric set stream is compared to the threshold(s) you define",
+/docs/getting-started-create-an-event-and-configure-notifications.md, A); no stuck, stillness or idle title. MiR:
+5 s path timeout then replan (Part 5 §1, 2020 guide on a mirror, verified@2026-10-21). VDA 5050 `driving` / `paused`
+carry no duration (Part 2 §2, Part 5 §1). Locus, Geek+, Seegrid: no public doc tree found: UNTESTED. **Literature:**
+the robot-side form is Nav2's progress checker, 0.5 m in 10 s (Part 6 (1)); failure labels start at 60 s (Part 5 §1).
+A named "stall rule" with a window: not found in OpenAlex or CORE (queries in the report; Tarapore retrieved). A
+k × planned-dwell window: not found (Part 4 §1). SPC has no fixed window: the bound is a fence on the sample (S14A).
+
+**Verdict 1.** Name the baseline **"stopped on a mission"**, InOrbit's own wording; there is no standard name. S15A
+runs these rules on the same stream, all gated on `orderId` non-empty, none with station or error logic:
+- **N0-30**, **N0-60**: the existing detector with `stations=None` at `stuck_after` 30 s and 60 s (stillness = the
+  stream's `driving` flag; N0-30 is the old 567-run rule). Expressible as the detector.
+- **N1** (InOrbit `unableToNavigate`): bounding-box diagonal of the positions in the last 60 s < 2 m, held for 600 s.
+- **N2-W** (InOrbit "stopped while on a mission"): largest bounding-box side of the positions in the last W s < 2 m,
+  W ∈ {30, 60, 120, 180}; 180 is the documented value, the others because InOrbit's numbers are editable examples.
+N1 and N2 are position rules and **not** expressible as the detector: MoRoOp's `driving` counts rotation in place
+(omega > 0.05 rad/s) as moving, a displacement box does not. Positions: MoRoOp cells are floored 0.5 m, so 2 m = 4
+cells (quantisation ≤ one cell); the simulator grid has no metre scale on record, so N1/N2 there read 2 m as 2 cells
+and are labelled "scale assumed". A change-only log fills the window by carrying each message's position and
+orderId forward to the next message; report how many N1/N2 alerts span a gap > 60 s (timebudget's gap rule).
+**Not predicted.** The labelled stops ≥ 30 s (shift 7: 250 s and 127 s, GoalObstructed, `moroop_label-sb.json`)
+are both hit by one `driving`-false run of 133 s (`fleet/data/moroop/budget-sb/zone7.json`, cause `unknown`), so
+label length is not stillness length and a 2 m box may hold longer or shorter. S15A reports, per label, the stopped
+run, the box-stillness span and each rule's alert latency.
+
+### 2. Duration spread as a congestion signal
+
+**What OTTO documents** (pass 4, A, verified@2026-10-22): a mean ("Average Run Time", "average run times in seconds")
+and a hand method with no statistic ("task or workflow durations with a lot of variation"). **Traffic engineering**
+names the spread statistics. FHWA's travel-time reliability guide
+(https://ops.fhwa.dot.gov/publications/tt_reliability/TTR_Report.htm, A) recommends four: "90th or 95th percentile
+travel time, buffer index, planning time index, and frequency that congestion exceeds some expected threshold". Buffer
+index = "the difference between the 95th percentile travel time and average travel time, divided by the average
+travel time"; planning time index = "the 95th percentile travel time divided by the free-flow travel time"; the
+indices exist so that "comparisons or combinations of routes or trips with different lengths" are possible. On CV:
+"standard deviation and coefficient of variation ... are discouraged as performance measures, as they are not readily
+understood by non-technical audiences" (a communication argument, not a validity one). The travel time index (mean over
+free flow) is FHWA's average-congestion measure (Part 6 (4), verified@2026-10-21).
+
+| statistic | name and source | validated against a direct blocking measure? |
+|---|---|---|
+| (p95 − mean) / mean | buffer index, FHWA (A) | no: freeway reliability vs incident counts explored (Chen 2010, KTC, https://doi.org/10.13023/ktc.rr.2010.08, A-, abstract only, no result read) |
+| p95 / free-flow | planning time index, FHWA (A) | no; SHRP 2 L03 / L33 predict p95 TTI from mean TTI ("1 + 3.4201·ln(meanTTI)", https://www.nap.edu/read/22282/chapter/2, S, snippet; page text not readable): spread tracks mean congestion on freeways |
+| σ / μ | coefficient of variation; FHWA discourages it (A) | no |
+| p95 / p50; p80 / p50 | Truck Travel Time Reliability (TTTR), "95th percentile travel time divided by the Normal Truck Travel Time" (50th), 23 CFR 490.611 (https://www.ecfr.gov/current/title-23/part-490/section-490.611, A); LOTTR, "80th percentile travel time divided by the 50th percentile travel time", 490.511 (A): US federal reliability measures | no |
+| IQR / median | no source found naming it as a congestion measure | no |
+| mean job duration | OTTO "Average Run Time" (A) | no |
+
+No AGV or AMR paper using duration spread as a congestion or blocking proxy: not found in OpenAlex ("AGV travel
+time variability congestion indicator", "task duration variance congestion warehouse robots") or CORE ("AGV
+variability congestion indicator", "AGV variance blocking travel": 0 hits; Li et al. 2018,
+https://doi.org/10.1155/2018/4037695, retrieved: travel-time uncertainty as a *cause* of AGV catch-up conflicts).
+**Manufacturing.** ISO 22400-2's 34 KPIs, as reproduced by Kikolski 2020 (MODELSWARD,
+https://www.scitepress.org/Papers/2020/91758/91758.pdf, A- secondary, table read), have no dispersion KPI on a time
+(the capability indices are on quality characteristics); OPC 40001-1 C.2 maps time elements only (read). Kingman's
+heavy-traffic queue (1961, https://doi.org/10.1017/S0305004100036094, A- record; the VUT form via Hopp & Spearman,
+not read) has variability as a *cause* of waiting, so spread is an expected correlate of congestion, not a validated
+measure of it; Little's law (1961, https://doi.org/10.1287/opre.9.3.383, A- record) relates means only.
+**Trap:** raw job durations vary with route length, so a zone with mixed job lengths shows spread with no congestion.
+
+**Verdict 2.** S15B's two **decisive** statistics, per (run, zone) over completed jobs on raw durations (OTTO's hand
+method): **p95 / median** (the TTTR form: needs no free-flow time, robust to one long job) and **mean job duration**
+(OTTO's figure). Descriptive only: buffer index, CV, and all of them on durations over free-flow time (Manhattan along
+the job's waypoints times `STEP_S`). Agreement:
+**Spearman ρ per run** (average ranks for ties) with **Kendall τ-b** next to it (scipy: tau-b is the variant that
+handles ties, https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kendalltau.html, A), and **top-3
+overlap** with its chance value k²/n (0.9 zones of 3 at n = 10, 0.3 at n = 30). Per run and the median over runs;
+never one pooled ρ over raw values from different runs (the 30-zone sticky run would dominate). With n = 10 a ρ near
+0.65 is about the p < 0.05 line; say so. A run where either column is constant has ρ undefined: null, counted as
+undecided for that run.
+
+### 3. What refutes each
+
+- **S15A.** Commodity if any N2-W, N1 or N0-60 on MoRoOp reaches 2/2 labelled hits with ≤ 12 stuck runs (2× our
+  6). **Supports the lead** if none does. A "supports" result shows only that station logic plus the bound removes
+  the alarms: InOrbit customers can write that logic (COMPETITION pass 4 scores it present as a configurable rule),
+  so the page may say "not in the documented example", never "a vendor can't".
+- **S15B.** Commodity if, for either decisive statistic, the median over runs of ρ(statistic, blocking number) is ≥
+  0.7 with median top-3 overlap ≥ 2/3, **or** ρ(statistic, truth) ≥ ρ(blocking, truth) in at least 3 of the decided
+  runs. **Supports the lead** only if both decisive statistics have median ρ with the blocking number < 0.4 **and**
+  the blocking number beats both on truth in at least 4 of 5 runs. Anything else is reported as mixed. All
+  thresholds are ours, set here before the run.
+
+**Briefs:** both S15 drafts rewritten in place from Verdicts 1-2; file names, tests and result paths kept; diff in the report.
