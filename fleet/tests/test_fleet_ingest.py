@@ -548,7 +548,8 @@ class TestS17aDefault(unittest.TestCase):
             self.assertEqual(min_accepted_for(source, once, 0.0), 0.0)
 
     def test_file_source_without_once_on_a_matching_log_ends_with_exit_0_and_the_same_store(self):
-        # the default 0.5 is in force here (no --once); the fixture's emit_ledger.json says complete, so the run ends
+        # no --once, so the default 0.5 is in force; this proves the run ends and a matching log is untouched by it,
+        # not that the default fires (a matching log exits 0 either way; test_default_share_per_source_and_once pins it)
         with tempfile.TemporaryDirectory() as tmp:
             r = subprocess.run([sys.executable, INGEST, "--glob", str(S17A_FIXTURE / "*.jsonl.gz"), "--run",
                                 "s17a-emit50", "--store", f"jsonl:{tmp}", "--poll", "0.1"],
