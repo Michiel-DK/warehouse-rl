@@ -1479,15 +1479,16 @@ S16A's faulted bucket is our rule and is reported with its seconds while driving
 | `/Navigation/Navigation`: "Next goal ignored, robot is initializing, in manual mode, in emergency" | the robot's own text says goals are refused while it is not autonomous | message text only | unclassified; cross-tab against the `paused` bucket |
 
 **Verdict 2.** The noise list is keyed on (name, message, level) and has **one** entry: camera "Frequency too high." at
-Warning. The same family at Error, for example FrequencyStatus "No events recorded.", which ROS emits at ERROR (`_update_functions.py` L120), stays
+Warning. Since Warning never counts, the list removes nothing from the faulted bucket; it labels S16A's table only. The same family at Error, for example FrequencyStatus "No events recorded.", which ROS emits at ERROR (`_update_functions.py` L120), stays
 unclassified. Unsourced families are never "noise". The navigation family describes manual mode or emergency. If its
 seconds fall in `paused` rows, faulted would count the 3,245 s intervention a second time. S16A reports that overlap and
 gives `paused` priority over `faulted` for those seconds in table (b) only, without changing the bucket order.
 
 ### 3. Dispatcher events as labels
 
-Source: the OperationDispatcher code at **35dbb76** (2026-07-22, the last commit before the 27-31 Jul recording; HEAD
-0609fa7 differs only in README.md), https://github.com/JaFeKl/OperationDispatcher (A). The MoRoOp paper says nothing about
+Source: the OperationDispatcher code at **35dbb76**, https://github.com/JaFeKl/OperationDispatcher (A for what the code does).
+That this is the version recorded is B: it is the last commit before the 27-31 Jul recording (2026-07-22), and HEAD 0609fa7
+differs only in README.md. The MoRoOp paper says nothing about
 pause, resume, denial or manual action (full text searched).
 - `operation_start_denied`: the **application's** approval callback (`on_request_callback`) refused a start, or raised
   an error (`reasoning: "request_callback_exception"`). The meta_data carries `retry_count`, `max_retries`,
@@ -1504,7 +1505,8 @@ pause, resume, denial or manual action (full text searched).
 
 **Verdict 3.** "Dispatcher refused": every `start_denied`, and every pause whose previous event is a `start_denied` of the same
 operation with `retry_count == max_retries` (an auto-pause). "**External call**": every other pause and every resume.
-S16B may call such an event "intervention" only if it falls inside or within ±120 s of a stuck episode and is not an auto-pause.
+S16B may call such an event "intervention" only if it falls inside or within ±120 s of a stuck episode, is not an auto-pause,
+and is not a resume before the shift's first `operation_started` ("shift start").
 "A human" is never claimed. Neither label: `started` and `stopped` (dispatcher lifecycle) and `operation_failed`
 (an application timeout, already the TIMEOUT label). The table has 11 resumes against 3 pauses. S16B reports each resume's offset from the
 shift start and whether a pause precedes it in the same table, and asserts no explanation for the mismatch.

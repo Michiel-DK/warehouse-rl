@@ -1,7 +1,7 @@
 # wr-dev-lit-s16: LITERATURE Part 9 (ROS diagnostics, dispatcher events, the authors' cleaning), 2026-10-23
 
 Unattended docs job, opus. Outputs:
-- `docs/LITERATURE.md` Part 9 (112 lines), plus an inline correction note on the Part 2b §4 `errors` row.
+- `docs/LITERATURE.md` Part 9 (114 lines; commit 682bdd0, then a review-fix commit), plus an inline correction note on the Part 2b §4 `errors` row.
 - The S16A and S16B lane briefs, rewritten in place in `~/code/Michiel-DK/laptop-scheduler/jobs/`. They are **not
   committed there**: this job commits only to warehouse-rl, as the S15 lit job did.
 - No code, no parquet read, no simulator run. README is not edited; the correction sentence for README (r) is in
@@ -30,6 +30,19 @@ Unattended docs job, opus. Outputs:
    S16B must run our path on raw and keep collapse drops apart from rule drops.
 5. **Refute thresholds** are set numerically in Part 9 §5.
 
+## Review fixes (second commit)
+
+An advisor review of 682bdd0 found four problems; all are fixed.
+1. The S16A rewrite put every Warning and Stale status into `errors` as "WARNING". That is wrong:
+   `fleet/fleet_analyser/score.py:41` sets `frozen = bool(obj["errors"])`, checked this session with grep. Now only
+   Error statuses outside the noise list enter, as "FATAL"; the other levels are read from the raw column.
+   Tests (b), (c) and (e) assert `errors == []`. Part 9 §2 now says the one-entry noise list removes nothing from the
+   faulted bucket.
+2. In S16B, a resume before the shift's first `operation_started` is now class "shift start", never "intervention".
+3. The claim that 35dbb76 is the recorded version is now marked rank B, a date inference, in Part 9 §3 and in the
+   S16B Why line.
+4. The gurren-page note below was added.
+
 ## Query and fetch log (all 2026-10-23)
 
 | # | what | result |
@@ -52,8 +65,8 @@ Unattended docs job, opus. Outputs:
 
 **S16A (`jobs/wr-lane-s16a-moroop-faults.md`).**
 - *Why:* now says the levels are the ROS set at rank B, and that Error -> faulted is our rule.
-- *Task 1:* the mapping is explicit. Error -> "FATAL" unless on the noise list; Warning, Stale and noise -> "WARNING";
-  Ok is not emitted. The noise list is one (name, message, level) triple.
+- *Task 1:* the mapping is explicit. Only Error statuses outside the noise list enter `errors`, as "FATAL";
+  everything else stays out (score.py:41). The noise list is one (name, message, level) triple.
 - *Table (a):* adds the driving share per family (> 50 % refutes "ERROR = stopped") and the faulted ∩ paused seconds
   per family.
 - *Table (b):* paused wins over faulted in this table only. The §5 verdict is computed, with the n = 2 caveat.
@@ -83,6 +96,8 @@ Unattended docs job, opus. Outputs:
 - The wheel.me partner portal (login) is the only possible rank-A source for the level vocabulary and the message
   families. A partner account would settle §1-§2.
 - README (r) still says "undocumented". Part 9 §1 has the correction sentence for the S16 docs pass.
+- The gurren page's "no row rejected" line (roger3000 drafts, uncommitted there) must take the Part 9 §4 sentence
+  once S16B has N, M and P.
 - No push. `origin/master..master` already held the 7 public-prep commits, and this commit joins them locally.
 
-SCHED_RESULT: OK Part 9 appended (112 lines) + Part 2b note; S16A/S16B briefs rewritten in laptop-scheduler (uncommitted there); levels = ROS set (B), Error->faulted is our rule (B), noise list 1 entry, wheel.me docs UNTESTED
+SCHED_RESULT: OK Part 9 appended (114 lines) + Part 2b note + review fixes; S16A/S16B briefs rewritten in laptop-scheduler (uncommitted there); levels = ROS set (B), Error->faulted is our rule (B), noise list 1 entry, wheel.me docs UNTESTED
