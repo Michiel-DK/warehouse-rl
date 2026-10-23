@@ -1,0 +1,83 @@
+{
+  "status": "complete",
+  "config": {
+    "env_id": "tarware-medium-8agvs-4pickers-globalobs-v1",
+    "steps": 50,
+    "seed_base": 0,
+    "zones": 1,
+    "disturb_tag": "breakdown-heavy",
+    "disturb": {
+      "breakdown": {
+        "rate_per_hour": 8.0,
+        "duration": [
+          20,
+          60
+        ]
+      }
+    },
+    "recovery": {
+      "name": "timeout",
+      "call_human_cost": 60
+    },
+    "policy": "stuck_aware_cta",
+    "t0": "2026-01-01T00:00:00Z",
+    "t0_mode": "fixed",
+    "rate": "flat",
+    "speed": 1.0,
+    "sink": "file",
+    "rotate_bytes": 209715200,
+    "workers": 1,
+    "schema_version": "fleet-state/2"
+  },
+  "zones": [
+    {
+      "zone": 0,
+      "status": "complete",
+      "seed": 0,
+      "messages": 600,
+      "expected_messages": 600,
+      "complete": true,
+      "bytes_uncompressed": 307903,
+      "bytes_compressed": 6413,
+      "delivered": null,
+      "delivery_failed": null,
+      "robots": 12,
+      "agvs": 8,
+      "pickers": 4,
+      "steps": 50,
+      "steps_done": 50,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:04:05Z",
+      "files": [
+        {
+          "name": "zone0-000.jsonl.gz",
+          "bytes_uncompressed": 307903,
+          "bytes_compressed": 6413,
+          "messages": 600,
+          "first_timestamp": "2026-01-01T00:00:00Z",
+          "last_timestamp": "2026-01-01T00:04:05Z",
+          "first_headerId": 0,
+          "last_headerId": 49,
+          "closed": true
+        }
+      ]
+    }
+  ],
+  "total": {
+    "messages": 600,
+    "expected_messages": 600,
+    "complete": true,
+    "bytes_uncompressed": 307903,
+    "bytes_compressed": 6413,
+    "delivered": null,
+    "delivery_failed": null,
+    "robots": 12,
+    "agvs": 8,
+    "pickers": 4,
+    "steps_done": 50
+  },
+  "truth": {
+    "file": "truth.json",
+    "bytes": 1364
+  }
+}

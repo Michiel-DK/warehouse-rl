@@ -1,5 +1,19 @@
 # Demo v0: fleet stuck analyser, end to end on one laptop
 
+## Before you run this on your own log
+
+Tested data is exactly two sources: the TA-RWARE simulator through `fleet/emit.py`, and MoRoOp through
+`fleet/adapters/moroop.py`. Everything else is untested. Check a log first, field by field:
+
+```sh
+.venv/bin/python fleet/check_log.py --glob 'DIR/*.jsonl.gz'
+```
+
+Exit 0 means every line read parses against the fleet-state contract; exit 2 means it does not (the table names the
+fields). `fleet/ingest.py` also exits 2 and names the reject reasons when fewer than `--min-accepted` of the lines parse
+(default 0.5 for the file source without `--once`, off with `--once` unless you pass it). For any other source, an
+adapter like `fleet/adapters/moroop.py` is the way in.
+
 This is the walkthrough you can show today. The polished demo pack is Sprint 9 (S9D); this is its draft.
 
 **Timing: about 4 min of command wall time** (12 s stack up, 4 s emit, 5 s file ingest + status, 207 s live Kafka

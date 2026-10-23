@@ -291,6 +291,12 @@ def zone_files(run_dir, zone):
     return sorted(Path(run_dir).glob(f"zone{zone}-*.jsonl.gz"))
 
 
+def _page_reason(reason):
+    """S17A: parse_line's type:<key> / timestamp:<key> reasons keep their old page keys (type, timestamp), so the
+    committed replay data stays reproducible; json and missing:<key> are unchanged."""
+    return reason.split(":", 1)[0] if reason.startswith(("type:", "timestamp:")) else reason
+
+
 def replay_extractor(files, t0_ts, steps, expected, bytes_compressed=None, step_seconds=STEP_SECONDS, accepted_out=None):
     """Replay the zone files line by line; returns (series, totals). See the module docstring. accepted_out: an optional set that
     receives (serial, ts) of every accepted message."""
@@ -306,7 +312,7 @@ def replay_extractor(files, t0_ts, steps, expected, bytes_compressed=None, step_
                 if msg is None:
                     step = last_step
                     delta["rejected"][step] += 1
-                    reasons.setdefault(reason, zeros())[step] += 1
+                    reasons.setdefault(_page_reason(reason), zeros())[step] += 1
                 else:
                     step = min(max((msg.ts - t0_ts) // step_seconds, 0), steps - 1)
                     last_step = step

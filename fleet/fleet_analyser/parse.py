@@ -10,6 +10,7 @@ import re
 import time
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Callable, NamedTuple
 
 _TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 _TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -77,40 +78,104 @@ def _intval(v):
     return int(f) if f is not None and f == int(f) else None
 
 
+def _valid_timestamp(v):
+    if not isinstance(v, str) or not _TS_RE.match(v):
+        return False
+    try:
+        _epoch(v)
+    except ValueError:
+        return False
+    return True
+
+
+class Field(NamedTuple):
+    path: str  # key path in the message, "agvPosition.x" for a nested key
+    expected: str  # human-readable expected type
+    valid: Callable  # the predicate parse_line applies to the value of this field
+
+
+# The fleet-state contract as data: parse_line iterates it for its missing-key checks and applies each `valid` predicate;
+# fleet/check_log.py imports it. Order = the order of the missing checks (top-level keys, then agvPosition's).
+REQUIRED_FIELDS = (
+    Field("headerId", "int >= 0", lambda v: _is_int(v) and v >= 0),
+    Field("timestamp", "str YYYY-MM-DDTHH:MM:SSZ (UTC)", _valid_timestamp),
+    Field("serialNumber", "non-empty str", lambda v: isinstance(v, str) and bool(v)),
+    Field("orderId", "str", lambda v: isinstance(v, str)),
+    Field("agvPosition", "object", lambda v: isinstance(v, dict)),
+    Field("driving", "bool", lambda v: isinstance(v, bool)),
+    Field("errors", "list", lambda v: isinstance(v, list)),
+    Field("loads", "list", lambda v: isinstance(v, list)),
+    Field("agvPosition.x", "int", _is_int),
+    Field("agvPosition.y", "int", _is_int),
+)
+# fleet-state/2 fields: read when present and usable, never a reason to reject (they degrade to None / False).
+OPTIONAL_FIELDS = (
+    ("agvPosition.theta", "finite number (radians)"),
+    ("nodeStates", "list of nodes; the first nodePosition is the next cell"),
+    ("paused", "bool"),
+)
+FIELDS = {f.path: f for f in REQUIRED_FIELDS}
+# The order in which parse_line checks values once every key is present (headerId, timestamp, serial, order, x, y, ...).
+_VALUE_ORDER = tuple(FIELDS[k] for k in ("headerId", "timestamp", "serialNumber", "orderId", "agvPosition.x",
+                                         "agvPosition.y", "driving", "errors", "loads"))
+assert {f.path for f in _VALUE_ORDER} | {"agvPosition"} == set(FIELDS)
+
+
+def field_value(obj, path):
+    """(present, value) of a required field in a decoded JSON object; a nested key under a non-object is absent."""
+    if not isinstance(obj, dict):
+        return False, None
+    if "." in path:
+        head, tail = path.split(".", 1)
+        obj = obj.get(head)
+        if not isinstance(obj, dict):
+            return False, None
+        path = tail
+    return (path in obj), obj.get(path)
+
+
+def field_reason(path, value):
+    """Reject reason parse_line gives when this present field's value is invalid: type:<path> or timestamp:timestamp."""
+    if path == "timestamp" and isinstance(value, str):
+        return "timestamp:timestamp"
+    return f"type:{path}"
+
+
+def check_field(obj, path):
+    """(present, ok, value, reason) for one required field of a decoded JSON object. reason is None when ok;
+    missing:<path> when absent. Same predicates parse_line applies."""
+    present, value = field_value(obj, path)
+    if not present:
+        return False, False, None, f"missing:{path}"
+    if FIELDS[path].valid(value):
+        return True, True, value, None
+    return True, False, value, field_reason(path, value)
+
+
 def parse_line(raw):
-    """Returns (Message, None) or (None, reason) with reason one of json, type, missing:<key>, timestamp."""
+    """Returns (Message, None) or (None, reason). reason: json | type:line | missing:<path> | type:<path> |
+    timestamp:timestamp (see REQUIRED_FIELDS for the paths)."""
     try:
         obj = json.loads(raw)
     except ValueError:  # includes JSONDecodeError and UnicodeDecodeError; a blank line lands here too
         return None, "json"
     if not isinstance(obj, dict):
-        return None, "type"
-    for key in ("headerId", "timestamp", "serialNumber", "orderId", "agvPosition", "driving", "errors", "loads"):
-        if key not in obj:
-            return None, f"missing:{key}"
+        return None, "type:line"
+    for f in REQUIRED_FIELDS:
+        if "." not in f.path and f.path not in obj:
+            return None, f"missing:{f.path}"
     pos = obj["agvPosition"]
-    if not isinstance(pos, dict):
-        return None, "type"
-    for key in ("x", "y"):
-        if key not in pos:
-            return None, f"missing:agvPosition.{key}"
+    if not FIELDS["agvPosition"].valid(pos):
+        return None, "type:agvPosition"
+    for f in REQUIRED_FIELDS:
+        if "." in f.path and f.path.split(".", 1)[1] not in pos:
+            return None, f"missing:{f.path}"
+    for f in _VALUE_ORDER:
+        value = pos[f.path.split(".", 1)[1]] if "." in f.path else obj[f.path]
+        if not f.valid(value):
+            return None, field_reason(f.path, value)
     header, ts, serial, order = obj["headerId"], obj["timestamp"], obj["serialNumber"], obj["orderId"]
-    if not _is_int(header) or header < 0:
-        return None, "type"
-    if not isinstance(ts, str):
-        return None, "type"
-    if not _TS_RE.match(ts):
-        return None, "timestamp"
-    try:
-        epoch = _epoch(ts)
-    except ValueError:
-        return None, "timestamp"
-    if not isinstance(serial, str) or not serial or not isinstance(order, str):
-        return None, "type"
-    if not _is_int(pos["x"]) or not _is_int(pos["y"]):
-        return None, "type"
-    if not isinstance(obj["driving"], bool) or not isinstance(obj["errors"], list) or not isinstance(obj["loads"], list):
-        return None, "type"
+    epoch = _epoch(ts)
     # fleet-state/2 fields degrade, never reject: anything master accepted is still accepted. Unusable theta -> None;
     # a present but unusable nodeStates -> next_x = next_y = None with nodes_reported True (no stall, no fallback).
     theta = _num(pos.get("theta"))

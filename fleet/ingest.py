@@ -1,7 +1,7 @@
 """Ingest fleet state into the stuck-detector store.
 
 Usage: python fleet/ingest.py --source file --glob 'fleet/data/<run>/*.jsonl.gz' [--run NAME]
-       [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB] [--stuck-after 30] [--stations auto|PATH [--station-radius 0] [--servicing-max-s S|auto]] [--poll 2] [--ledger-interval 10] [--once]
+       [--store jsonl:DIR | clickhouse://HOST[:PORT]/DB] [--stuck-after 30] [--stations auto|PATH [--station-radius 0] [--servicing-max-s S|auto]] [--poll 2] [--ledger-interval 10] [--once] [--min-accepted SHARE]
        python fleet/ingest.py --source kafka --bootstrap localhost:19092 [--topic fleet.state] [--group stuck-analyser]
        [--run NAME] [--emit-ledger PATH] [--until-idle S] [--store ...]
 The file source reads growing gzip JSONL files (zone files in nnn order) and cross-checks <glob dir>/emit_ledger.json
@@ -9,7 +9,8 @@ when present. The kafka source (needs `pip install -r fleet/requirements.txt`) c
 at-least-once commits; --emit-ledger points at the emitter's ledger (coverage, lag rule) and --until-idle S ends input
 after S seconds without a message. Both write transitions, stuck episodes, decisions, evidence and the ingest ledger to
 the store. File source: exit 0 when the emit ledger says complete and every listed file is complete; 1 on a failed file
-or a failed emit run. Logic: fleet_analyser/ingest.py and kafka_source.py.
+or a failed emit run; 2 when --min-accepted is active and too few lines parse (default 0.5 without --once, off
+with --once and on kafka). Logic: fleet_analyser/ingest.py and kafka_source.py.
 """
 import argparse
 import os
@@ -22,6 +23,26 @@ if str(FLEET) not in sys.path:
     sys.path.insert(0, str(FLEET))
 
 from fleet_analyser import ingest, kafka_source, servicing, store as store_mod  # noqa: E402
+
+
+def _share(text):
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}")
+    if not 0.0 <= v <= 1.0:
+        raise argparse.ArgumentTypeError(f"must be in [0, 1]: {text}")
+    return v
+
+
+def finish_line(ing, run, code, wall, min_accepted):
+    """Print the summary line (its exit is the final code), then the contract lines when the run did not match."""
+    code, lines = ing.contract_check(min_accepted, code)
+    msgs = ing.ledger.total("messages_parsed")
+    print(f"ingest {run}: {ing.summary()}, {msgs / max(wall, 1e-9):.0f} messages/s over {wall:.2f} s wall, exit {code}")
+    for line in lines:
+        print(line)
+    return code
 
 
 def build_parser():
@@ -43,6 +64,10 @@ def build_parser():
                         "from the dwell times of the stops that start at a station (all zones pooled): min(300, "
                         "exp(Q3L + 3 (Q3L - Q1L))), Q1L / Q3L the quartiles of ln(dwell). Needs the whole run on disk "
                         "(a first pass reads every zone file). Absent = today's rule")
+    p.add_argument("--min-accepted", type=_share, default=None, metavar="SHARE",
+                   help="S17A: exit 2 and name the reject reasons when accepted / (accepted + rejected) is below SHARE "
+                        "(0..1) at the end of the run. Default 0.5 for the file source without --once; off with --once "
+                        "and for the kafka source unless passed")
     p.add_argument("--poll", type=float, default=2.0)
     p.add_argument("--ledger-interval", type=float, default=10.0)
     p.add_argument("--once", action="store_true", help="process what is on disk now, end input, exit")
@@ -81,10 +106,7 @@ def run_kafka(p, a):
     finally:
         consumer.close()
         st.close()
-    wall = time.monotonic() - t0
-    msgs = ing.ledger.total("messages_parsed")
-    print(f"ingest {run}: {ing.summary()}, {msgs / max(wall, 1e-9):.0f} messages/s over {wall:.2f} s wall, exit {code}")
-    return code
+    return finish_line(ing, run, code, time.monotonic() - t0, a.min_accepted)
 
 
 def main(argv=None):
@@ -126,9 +148,8 @@ def main(argv=None):
     ingest.install_signal_handlers(ing)
     t0 = time.monotonic()
     code = ing.run_loop()
-    wall = time.monotonic() - t0
-    msgs = ing.ledger.total("messages_parsed")
-    print(f"ingest {run}: {ing.summary()}, {msgs / max(wall, 1e-9):.0f} messages/s over {wall:.2f} s wall, exit {code}")
+    min_accepted = a.min_accepted if a.min_accepted is not None else (None if a.once else 0.5)
+    code = finish_line(ing, run, code, time.monotonic() - t0, min_accepted)
     st.close()
     return code
 

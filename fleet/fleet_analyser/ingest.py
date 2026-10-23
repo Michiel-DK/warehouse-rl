@@ -27,7 +27,7 @@ import signal
 import threading
 import time
 import zlib
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from pathlib import Path
 
 from . import decisions
@@ -96,6 +96,7 @@ class Pipeline:
         self.ledger = IngestLedger(run, source, clock)
         self.seq = SequenceTracker()
         self.exit_code = 0
+        self.reject_reasons = Counter()  # this process only, memory only (S17A); the store keeps each reject's reason row
         self._tx = []  # transition rows of the chunk in progress
         self._last_ledger_write = clock()
         self._latest_ts = None
@@ -171,6 +172,7 @@ class Pipeline:
         msg, reason = parse_line(line)
         if msg is None:
             led.rejected()
+            self.reject_reasons[reason] += 1
             led.keep(minute, min(len(line), REJECT_RAW_BYTES))
             self.store.insert("rejects", [dict(run=self.run, source=self.source, file=f.name, offset=f.consumed,
                                                reason=reason, raw=line[:REJECT_RAW_BYTES].decode("utf-8", "replace"))])
@@ -339,6 +341,26 @@ class Pipeline:
             self._flush_evidence(zone=zone)
         self._write_files()
         self._maybe_ledger(force=True)
+
+    def contract_check(self, min_accepted, code):
+        """S17A: (exit code, lines to print after the summary). min_accepted None = off. A run whose accepted share of
+        accepted + rejected is below min_accepted, or that accepted nothing while rejecting something, does not match the
+        fleet-state contract: exit 2 unless a nonzero code is already set. Zero accepted and zero rejected is no mismatch."""
+        if min_accepted is None:
+            return code, []
+        acc, rej = self.ledger.total("messages_accepted"), self.ledger.total("messages_rejected")
+        if rej == 0 or (acc > 0 and acc / (acc + rej) >= min_accepted):
+            return code, []
+        reasons = sorted(self.reject_reasons.items(), key=lambda kv: (-kv[1], kv[0]))
+        keys = Counter()
+        for reason, n in reasons:
+            if ":" in reason:
+                keys[reason.split(":", 1)[1]] += n
+        top = sorted(keys.items(), key=lambda kv: (-kv[1], kv[0]))[:3]
+        return (code or 2), [
+            f"ingest {self.run}: rejects by reason " + ", ".join(f"{r} {n}" for r, n in reasons)
+            + "; top failing keys " + (", ".join(f"{k} {n}" for k, n in top) or "none"),
+            f"ingest {self.run}: DOES NOT MATCH the fleet-state contract, run fleet/check_log.py"]
 
     def summary(self):
         acc = self.ledger.total("messages_accepted")
