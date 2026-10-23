@@ -47,12 +47,15 @@ holds the unpushed public-repo prep commits).
   fleet.tests.test_s8k_overview fleet.tests.test_s8j_page fleet.tests.test_fleet_moroop_faults
   fleet.tests.test_fleet_moroop_dispatch`: Ran 129 tests, FAILED (failures=1). The failure is
   `test_s8k_overview.TestWords.test_footer_paths_are_visible_and_pass`: it expects
-  `laptop-scheduler/reports/wr-s8e-lessons-long.md` in the committed `docs/overview` footer, which 233f82f changed to
-  `reports/...`. This diff touches no file under docs/overview or fleet/tests (git diff --name-only: README.md,
-  docs/SCOPE.md), so the failure was already there. No test reads the root README content (grep of tests and
+  `laptop-scheduler/reports/wr-s8e-lessons-long.md` in the committed `docs/overview` footer. Observed with `git show
+  <rev>:...  | grep -c`: the page has the string at bacfab7~1 (1) and not from bacfab7 on (0 at bacfab7, 233f82f and
+  HEAD~1), while the test expects it at all four. So the test is red on local master since bacfab7, before this
+  commit; 233f82f's message reports a green gate, which this does not explain (not inspected). This diff touches no
+  file under docs/overview or fleet/tests. S17A gates on local master and will meet this red test. No test reads the root README content (grep of tests and
   fleet/tests). The full gate (~13 min) was not run: this commit is docs plus result JSON only.
-- Every number in (x1)-(x3) comes from the printer output below, except the derived 58/585 and the two time
-  differences (06:01:31 to 06:16:31 = 15 min) in the reading bullets.
+- Every number in (x1)-(x3) comes from the printer output below or is a sum or difference of printed values (51 =
+  20 + 1 + 29 + 1 combinations; 06:01:31 to 06:16:31 = 15 min), except "39 start denials" in the (x3) class header,
+  read from `moroop_dispatch.json` `pooled.per_kind.operation_start_denied.count` (39) and not printed by the script.
 
 ## The printer (read-only, run as `python3 -I /tmp/wr_s16/s16_tables.py results/fleet`)
 
