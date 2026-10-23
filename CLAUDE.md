@@ -9,7 +9,7 @@ seed. Plan, review findings, sprint checklists and the compute profile: `docs/SC
 ```sh
 .venv/bin/python -m unittest discover -s tests          # the deterministic gate (plain unittest, no pytest)
 .venv/bin/python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-9 --steps 500
-harness/claude/skills/harness-audit/drift_check.sh "$PWD"   # execute directly, never `sh`
+# internal dev harness (roger3000-dev, private): checked out locally at harness/, not part of this tree
 ```
 
 Then read `docs/SCOPE.md` "Review findings" before touching the env: the API facts, the class-level counters and
