@@ -25,13 +25,12 @@ buffer_index = (p95 - mean) / mean, cv = std / mean with ddof = 0, and the same 
 driving-false run inside the job, the cell of the last message carrying the orderId; consecutive equal cells collapse)).
 
 Columns: blocked_s_per_robot_hour is copied from zones[z] of the run's -sb deadlock file (path and whole-file sha256
-recorded); T_stuck_s_per_robot_hour = sum(end - start) of the stuck reference episodes with end - start >= 30 of the zone,
+recorded); truth_stuck_s_per_robot_hour = sum(end - start) of the stuck reference episodes with end - start >= 30 of the zone,
 over zones[z].robot_hours of the same file (pickers included, deliberately; the same denominator as blocking). The
 episodes come from fleet_analyser.score (_load and its run finder), imported, with score_run's keep rule. The fleet
 module that reads the simulator's window file is not imported, and no simulator-side block of a message is read here.
-Naming: "reference" below is the simulator-side stuck episodes; the output keys carry the brief's t-word (T below),
-which the repo's analyst-isolation scan (test_fleet_hotspot.TestAnalystIsolation, fleet/*.py) forbids as literal text
-in a module it has not exempted, so this file spells it T = "tru" + "th" and never writes it out.
+Naming: "reference" below is the simulator-side truth stuck episodes (output keys truth_*). This is an evaluation script
+like hotspot_score.py, exempted by name from the analyst-isolation scan (test_fleet_hotspot.TestAnalystIsolation).
 
 Agreement is per run only (never pooled): Spearman rho (Pearson on average ranks) and Kendall tau-b, both numpy;
 tau-b p-value from scipy.stats.kendalltau(variant='b', method='auto'); top-3 overlap. A pair (two columns, zones where
@@ -70,7 +69,7 @@ from fleet_analyser.stations import auto_layouts, resolve_workers  # noqa: E402
 from timebudget import DEFAULT_MAX_GAP_S, kept_messages  # noqa: E402
 from warehouse_rl.disturb import STEP_SECONDS as STEP_S  # noqa: E402
 
-T = "tru" + "th"  # see the module docstring (Naming)
+T = "truth"  # the output key stem of the truth columns
 SCHEMA = "fleet-duration-spread/1"
 MIN_JOBS = 5
 STUCK_AFTER = 30  # score_run's default keep rule, end - start >= 30
@@ -93,29 +92,28 @@ DEFAULT_RUNS = {
 
 # docs/LITERATURE.md Part 8 section 3, the S15B line (line breaks of the document collapsed to single spaces).
 S15B_LINE = ("**S15B.** Commodity if, for either decisive statistic, the median over runs of ρ(statistic, blocking "
-             "number) is ≥ 0.7 with median top-3 overlap ≥ 2/3, **or** ρ(statistic, @T) ≥ ρ(blocking, @T) in at "
+             "number) is ≥ 0.7 with median top-3 overlap ≥ 2/3, **or** ρ(statistic, truth) ≥ ρ(blocking, truth) in at "
              "least 3 of the decided runs. **Supports the lead** only if both decisive statistics have median ρ with "
-             "the blocking number < 0.4 **and** the blocking number beats both on @T in at least 4 of 5 runs. "
-             "Anything else is reported as mixed. All thresholds are ours, set here before the run.").replace("@T", T)
+             "the blocking number < 0.4 **and** the blocking number beats both on truth in at least 4 of 5 runs. "
+             "Anything else is reported as mixed. All thresholds are ours, set here before the run.").replace("truth", T)
 
 DEFINITION = ("jobs = maximal runs of one non-empty orderId per AGV (kept_messages), duration = ts of the first later message "
               "with another orderId minus the job's first ts; see the module docstring of fleet/duration_spread.py")
 DEVIATIONS = [
-    "@T source: the operator brief said @T from @T.json, but @T.json holds no stuck episodes (only floor, "
-    "blocked, outage and frozen windows; closed-loop-sticky's is the v1 file). The @T used is the stuck-episode "
-    "definition of fleet_analyser/score.py (benchmark.json batch.score.@T_definition): score._load + score._@T_runs, "
-    "kept when end - start >= 30. fleet/@T.py is not imported.",
+    "Truth source: the operator brief said truth from truth.json, but truth.json holds no stuck episodes (only floor, "
+    "blocked, outage and frozen windows; closed-loop-sticky's is the v1 file). The truth used is the stuck-episode "
+    "definition of fleet_analyser/score.py (benchmark.json batch.score.truth_definition): score._load + score._truth_runs, "
+    "kept when end - start >= 30. fleet/truth.py is not imported.",
     "Message sets differ: jobs read timebudget.kept_messages (sorted by (ts, header_id), a message whose ts <= the "
-    "previous kept ts is dropped, duplicate (serial, headerId) and rejected lines dropped by read_messages); the @T "
+    "previous kept ts is dropped, duplicate (serial, headerId) and rejected lines dropped by read_messages); the truth "
     "episodes read score._load over every raw line (drops nothing, pickers included). dropped_by_kept_messages counts "
     "the messages kept_messages dropped per zone (AGVs only).",
     "Denominator: robot_hours of the deadlock file includes the pickers (12 robots x shift on the medium map) for both "
-    "blocking and @T, so the two columns share a scale.",
-    "The statistics read a different robot set (AGVs) than the @T column (all robots of the zone, score_run's rule).",
+    "blocking and truth, so the two columns share a scale.",
+    "The statistics read a different robot set (AGVs) than the truth column (all robots of the zone, score_run's rule).",
     "No per-seed incremental write or resume: the run reads existing streams only and writes one file (--out) at the end; "
     "the CLAUDE.md long-run rule applies to simulators, and nothing besides --out may be written here.",
 ]
-DEVIATIONS = [d.replace("@T", T) for d in DEVIATIONS]
 NOTES = [
     "At n = 10 zones a Spearman rho near 0.65 is about the p < 0.05 line (two-sided); at n = 30 about 0.36.",
     "Agreement is per run only. The median over runs is over decided runs; a pair with no decided run has null medians.",
@@ -402,7 +400,7 @@ def reference_seconds(files, zone):
     total = n = 0
     for serial in sorted(robots):
         recs = robots[serial]
-        for first, last in getattr(_score, f"_{T}_runs")(recs):
+        for first, last in _score._truth_runs(recs):
             d = recs[last + 1].ts - recs[first].ts
             if d >= STUCK_AFTER:
                 total += d

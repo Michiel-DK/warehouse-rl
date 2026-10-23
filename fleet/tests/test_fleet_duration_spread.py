@@ -302,6 +302,58 @@ class TestCli(unittest.TestCase):
         self.assertEqual(list(ds.parse_runs(None, None, None)), list(ds.DEFAULT_RUNS))
 
 
+def raw_line(serial, k, order, driving, stuck_event, x=0, y=0):
+    """One emitter-format JSON line at step k (5 s per step from 2026-01-01T00:00:00Z)."""
+    import json
+    sec = 5 * k
+    ts = f"2026-01-01T00:{sec // 60:02d}:{sec % 60:02d}Z"
+    return json.dumps(dict(schema_version="fleet-state/2", headerId=k, timestamp=ts, manufacturer="sim", serialNumber=serial,
+                           orderId=order, lastNodeId="", nodeStates=[], agvPosition=dict(x=x, y=y, theta=0.0, mapId="m"),
+                           driving=driving, paused=False, errors=[], loads=[],
+                           custom=dict(stuck_count=0, carrying=False, recovery_action="wait", stuck_event=stuck_event,
+                                       clash_event=False)))
+
+
+class TestTruthColumn(unittest.TestCase):
+    """The truth column: score._truth_runs episodes, score_run's >= 30 s keep rule, over the deadlock robot_hours."""
+
+    def write_stream(self, d):
+        import gzip
+        # Z0-01: step 0 moving; steps 1-7 stopped on order o1 and steps 2-8 carry stuck_event, so truth steps 1..7 form one
+        # episode from ts(1) to ts(8); steps 9 moving; steps 10-11 stopped, 11-12 stuck_event: a short episode ts(10)..ts(12)
+        lines = [raw_line("Z0-01", 0, "o1", True, False, x=0)]
+        lines += [raw_line("Z0-01", k, "o1", False, k >= 2, x=1) for k in range(1, 8)]
+        lines += [raw_line("Z0-01", 8, "o1", True, True, x=2), raw_line("Z0-01", 9, "o2", True, False, x=3)]
+        lines += [raw_line("Z0-01", k, "o2", False, k >= 11, x=4) for k in (10, 11)]
+        lines += [raw_line("Z0-01", 12, "o2", True, True, x=5), raw_line("Z0-01", 13, "", False, False, x=5)]
+        path = Path(d) / "zone0-000.jsonl.gz"
+        with gzip.open(path, "wt") as fh:
+            fh.write("\n".join(lines) + "\n")
+        long_s, short_s = 5 * (8 - 1), 5 * (12 - 10)
+        return path, long_s, short_s
+
+    def test_keep_rule_sums_only_episodes_of_at_least_30_s(self):
+        # inject: drop the keep rule, change STUCK_AFTER, or sum a different interval
+        with tempfile.TemporaryDirectory() as d:
+            path, long_s, short_s = self.write_stream(d)
+            self.assertGreaterEqual(long_s, ds.STUCK_AFTER)
+            self.assertLess(short_s, ds.STUCK_AFTER)
+            self.assertEqual(ds.reference_seconds([str(path)], "0"), (long_s, 1))
+
+    def test_zone_task_divides_by_the_deadlock_robot_hours_and_copies_blocking(self):
+        # inject: divide by the AGV hours or the stream span, or read a different deadlock field
+        with tempfile.TemporaryDirectory() as d:
+            path, long_s, _ = self.write_stream(d)
+            task = dict(run="r", zone="0", files=[str(path)], pickers=[], blocked=123.25, robot_hours=2.5)
+            run, zone, rec = ds.zone_task(task)
+        self.assertEqual((run, zone), ("r", "0"))
+        self.assertEqual(rec["blocked_s_per_robot_hour"], 123.25)
+        self.assertEqual(rec["robot_hours"], 2.5)
+        self.assertEqual(rec["truth_stuck_s"], long_s)
+        self.assertEqual(rec["truth_episodes"], 1)
+        self.assertAlmostEqual(rec["truth_stuck_s_per_robot_hour"], long_s / 2.5, places=12)
+
+
 class TestSmoke(unittest.TestCase):
     def setUp(self):
         self.data = find_file("fleet", "data", "s10-none")
