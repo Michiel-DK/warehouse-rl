@@ -142,6 +142,18 @@ class ClassTests(unittest.TestCase):
                          [("resumed", True), ("resumed", False)])
 
 
+    def test_pause_after_denial_below_max_is_external_call(self):
+        # inject: auto-pause test without retry_count == max_retries (e.g. `True`) -> this pause becomes "dispatcher
+        # refused" and loses its intervention
+        events = [ev(0, "operation_started", "o"), denied(1010, "opC", 3), ev(1011, "operation_dispatcher_paused"),
+                  ev(1020, "operation_start_denied", "opD"), ev(1021, "operation_dispatcher_paused")]
+        res = md.analyse_shift("s", tables(events, [state_row(1, 0)]), [episode(1000, 100)])
+        pauses = [(e["ts_us"] // 1_000_000 - BASE, e["auto_pause"], e["cls"], e["intervention"])
+                  for e in res["events"] if e["kind"] == "operation_dispatcher_paused"]
+        self.assertEqual(pauses, [(1011, False, "external call", True), (1021, False, "external call", True)])
+        self.assertEqual(res["auto_pauses"], 0)
+
+
 class NearTests(unittest.TestCase):
     def test_near_before_after_and_outside(self):
         # inject: make the window 121 s, or collapse near_before and near_after into one column
@@ -267,6 +279,25 @@ class RunTests(unittest.TestCase):
         res = md.analyse(label, "sha", "raw", [1, 6], lambda raw, name: tables(
             events if name == md.moroop.SHIFTS[1] else [ev(0, "operation_started", "o")], [state_row(1, 0)]),
             label_path="l")
+        self.assertEqual(res["verdicts"]["dispatcher"], "mixed")
+
+
+    def test_auto_pause_at_intervention_does_not_mark_it(self):
+        # inject: drop the `cls == "external call"` filter in dispatcher_verdict -> an auto-pause inside the
+        # intervention episode would read "marks the intervention"
+        label = synthetic_label()
+        t0 = md.epoch_of(md.INTERVENTION_START) - BASE
+
+        def load(raw, name):
+            if name == md.INTERVENTION_SHIFT:
+                evs = [ev(t0 - 500, "operation_started", "o")] + [denied(t0 + 100 + n, "opB", n + 1)
+                                                                   for n in range(5)]
+                evs.append(ev(t0 + 106, "operation_dispatcher_paused"))
+            else:
+                evs = [ev(0, "operation_started", "o")]
+            return tables(evs, [state_row(1, 0)])
+        res = md.analyse(label, "sha", "raw", [1, 6], load, label_path="l")
+        self.assertEqual(res["pooled"]["interventions"], 0)
         self.assertEqual(res["verdicts"]["dispatcher"], "mixed")
 
 
