@@ -6,7 +6,7 @@ Robotics, Brightpick, Vecna Robotics, Seegrid). A fourth pass on 2026-10-22 scor
 (per-robot time budget, station-aware stall filter, blocking metric per shift) on the three readable doc trees only
 (Formant, InOrbit, OTTO). WebFetch/WebSearch only (no browser, no
 logins), at most 12 fetches per vendor. The search logs (every URL fetched, with its result, and the count per vendor)
-are in `laptop-scheduler/reports/wr-dev-competition-sweep.md`, `wr-dev-competition-sweep-2.md` and
+are in `reports/wr-dev-competition-sweep.md`, `wr-dev-competition-sweep-2.md` and
 `wr-dev-competition-sweep-3.md` (pass 3) and `wr-dev-competition-sweep-4.md` (pass 4), not here. Rules:
 `~/.claude/skills/outward-claim-discipline`.
 

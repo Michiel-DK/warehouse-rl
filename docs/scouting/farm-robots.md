@@ -4,7 +4,7 @@ Scope: field robots (weeding, seeding, harvesting), autonomous tractors and barn
 pushers). WebFetch/WebSearch only, no browser, no logins. Source ranks follow
 `~/.claude/skills/outward-claim-discipline` (A = owner's own docs, dataset page or repo; B = first-party marketing;
 C = press; D = tutorials, mirrors, forum posts; F = memory). The search log (every query and URL with its result) is in
-`laptop-scheduler/reports/wr-scout-farm-robots.md`, not here. Our own definitions (metric names, what a cell means
+`reports/wr-scout-farm-robots.md`, not here. Our own definitions (metric names, what a cell means
 for us) carry no URL; every claim about the outside world does.
 
 ## 1. Fit

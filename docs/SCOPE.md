@@ -425,7 +425,7 @@ under disturbance" instead. Also record how much of the disturbance loss the stu
         `ABANDON_COST` 15 stuck-steps per abandon decision; exploration follows `TimeoutRecovery` with
         `random_share` 0.1 uniform random; a timeout reference per run and an abort below 0.5 x reference;
         `FORMAT_VERSION` 2 (v1 checkpoints and run dirs refused); `DEFAULT_EPISODES` 3200 (~9 h for 9 runs).
-        Review (laptop-scheduler `reports/wr-lane-s3d.md`, PR #8 refuted 2/3): greedy eval 3.17 at episode 40 vs
+        Review (`reports/wr-lane-s3d.md`, PR #8 refuted 2/3): greedy eval 3.17 at episode 40 vs
         reference 50.11, and the net rerouted at ~95% of stuck events: `_reroute_stuck` resets the StuckCounter and
         the stuck term only counted `count > 0`, so rerouting dodged the stuck penalty for free.
       - 13 Oct operator decision: training reward = deliveries + the real action costs. `STUCK_PENALTY` 0.0;
@@ -927,7 +927,7 @@ shown one yet.
 ### Sprint 10: the analyser on other disturbances (2026-10-18)
 
 Results are in README "Sprint 10", printed by `scripts/sprint8_tables.py` sections (f) to (n). Reports are in
-laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md`,
+`reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md`, `wr-lane-s11a-explorer.md`,
 `wr-dev-s10-readme.md`, `wr-lane-s10c-blind-blockage.md`, `wr-lane-s10d-persistence-baseline.md`,
 `wr-lane-s10d-pass2.md`, `wr-lane-s10e-amoc.md`, `wr-dev-s10c-readme.md`, `wr-lane-s10f-false-alarm-floor.md`,
 `wr-lane-s10g-frozen-truth-cells.md`, `wr-lane-s10h-persistence-on-pages.md`, `wr-dev-s10f-readme.md`,
@@ -992,7 +992,7 @@ laptop-scheduler `reports/wr-lane-s10a-truth-v2.md`, `wr-lane-s10b-ttd-change.md
 ### Sprint 12: where the shift goes (2026-10-20)
 
 Results are in README "Sprint 12", printed by `scripts/sprint8_tables.py` sections (o) and (p). Reports: this
-repo's untracked `reports/wr-lane-s12a-time-budget.md` and `reports/wr-dev-lit-fleet-management.md`; laptop-scheduler
+repo's `reports/wr-lane-s12a-time-budget.md` and `reports/wr-dev-lit-fleet-management.md`; laptop-scheduler
 `reports/wr-lane-s12b-deadlock-gapmap.md` and `reports/wr-dev-s12a-readme.md`. Names follow
 `docs/LITERATURE.md` Part 2.
 

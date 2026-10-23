@@ -4,7 +4,7 @@ Scope: pipe-rail trolleys, harvest carts, induction-wire carts and container-far
 browser, no logins. Source ranks follow `~/.claude/skills/outward-claim-discipline` (A = owner's own docs, dataset page or
 repo; B = first-party marketing; C = press; D = tutorials, mirrors, blogs, dataset pages without a card; F = memory or
 name only). The search log (every query and URL with its result) is in
-`laptop-scheduler/reports/wr-scout-greenhouse-logistics.md`, not here. Sibling scout: [farm-robots.md](farm-robots.md).
+`reports/wr-scout-greenhouse-logistics.md`, not here. Sibling scout: [farm-robots.md](farm-robots.md).
 
 ## 1. Fit
 

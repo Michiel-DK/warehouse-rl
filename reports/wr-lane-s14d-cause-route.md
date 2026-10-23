@@ -265,7 +265,7 @@ The size of that last change follows from its scope: tests only, and all three m
 
 ## Gate tail
 
-`WR_S10_DATA=/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data .venv/bin/python -m unittest discover -s tests`
+`WR_S10_DATA=fleet/data .venv/bin/python -m unittest discover -s tests`
 
 - On 3cf86be, the final code and tests:
 

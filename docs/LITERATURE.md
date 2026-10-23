@@ -3,7 +3,7 @@
 Scope: the academic side of what the fleet stuck analyser does (README "Sprint 5" to "Sprint 10"). The vendor side is
 [COMPETITION.md](COMPETITION.md). Five questions, one research pass each on 2026-10-18, WebSearch/WebFetch only, no
 browser. Rules: `~/.claude/skills/outward-claim-discipline` (source ranks, provenance per claim). A condensed
-query log is in `laptop-scheduler/reports/wr-dev-lit-stall-detection.md`. The queries behind each
+query log is in `reports/wr-dev-lit-stall-detection.md`. The queries behind each
 absence claim are listed at the end of this page.
 
 **Search coverage, read this first.** The Semantic Scholar API answered HTTP 429 (rate limited) to every request in
@@ -257,7 +257,7 @@ Lens or CORE; see Part 7.)*
 Scope: the field the Sprint 12 lanes build into: S12A, a per-robot time budget, and S12B, a deadlock finder and a WiFi
 gap map (laptop-scheduler `jobs/wr-lane-s12a-time-budget.md`, `jobs/wr-lane-s12b-deadlock-gapmap.md`; neither merged
 when this was written). The rules are as in Part 1. One pass on 2026-10-20 with WebSearch and WebFetch only; the query
-log is in `laptop-scheduler/reports/wr-dev-lit-fleet-management.md`. **Coverage:** Semantic Scholar was not queried
+log is in `reports/wr-dev-lit-fleet-management.md`. **Coverage:** Semantic Scholar was not queried
 and Google Scholar was not tried. Crossref answered 429 twice, and both lookups resolved on retry or by another route.
 ACM, MDPI and ISO full texts returned 403, and VDI, ISO and SEMI texts are paywalled (only public contents pages,
 abstracts and a corrigendum were read). Every absence means "not found in the queries in the report".
@@ -477,7 +477,7 @@ fronts a pitch.
 
 Scope: the check before S13A (laptop-scheduler `jobs/wr-lane-s13a-moroop-budget.md`). WebFetch, WebSearch, curl and the
 GitHub API, no parquet downloaded; all fetches ran 2026-10-20 (the brief expected the 21st), hence `verified@2026-10-20`;
-query log `laptop-scheduler/reports/wr-dev-lit-moroop.md`. Ranks: **A** = paper full text or card; **A-** = counts the
+query log `reports/wr-dev-lit-moroop.md`. Ranks: **A** = paper full text or card; **A-** = counts the
 Hugging Face viewer computed from the released files (`/info`, `/statistics`, `/first-rows`: beyond "card and file
 listing", no parquet); **B** = authors' toolkit code or inferred from A; **F** = guess, do not use. **Overrides the Part 2
 §5 MoRoOp row** (summarising fetch): "delays" and "failed navigation" are retained phenomena, not tables or columns, and
@@ -601,7 +601,7 @@ it, get the same, or not try? One pass on 2026-10-21 with WebSearch, WebFetch, c
 `pdftotext` on downloaded PDFs, as three parallel research passes. The main session re-checked these numbers
 against the PDF or abstract text: Stephanedes 1992, Pietrobon 2019, Jiang 2024 Table 3, Yu & Wolf (4.4 % and the
 baseline sentence), Han & Yu Table I and the Pittsburgh MAVG 1.31. The query log is in
-`laptop-scheduler/reports/wr-dev-lit-negative-results.md`. **Coverage:** the Semantic Scholar API answered HTTP 429
+`reports/wr-dev-lit-negative-results.md`. **Coverage:** the Semantic Scholar API answered HTTP 429
 once in each of the three passes, so again **no Semantic Scholar search ran**, and Google Scholar was not tried. ACM
 and ScienceDirect full texts returned 403. Every absence means "not found in the queries listed". The rules are those
 of Part 1. Read depth (A text read, A- abstract or record, M metadata, S snippet) is the rank column, as in Parts 1
@@ -631,7 +631,7 @@ evaluation numbers.
 | Our decayed map K 20 (README (n), `amoc_blind.json`) | sim, 50 planner-blind blocked cells, 10 zones | 6 / 50 | median 295 s | 177.8 per zone-hour (flag-publishes) |
 | Our short-memory map K 20 (`amoc_shortmap.json`) | same | 6 / 50 | median 402.5 s | 451.9 per zone-hour |
 | Our CUSUM k 1 h 3 (`amoc_fast.json`) | same | 2 / 50 | median 525 s | 0.000 per zone-hour |
-| Our CUSUM k 0 h 3, **in-sample tuned** (`laptop-scheduler/reports/wr-lane-s10i-fast-detector.md:37`) | same, tuned on the 50 scored windows | 17 / 50 | median 425 s | 0.000 per zone-hour |
+| Our CUSUM k 0 h 3, **in-sample tuned** (`reports/wr-lane-s10i-fast-detector.md:37`) | same, tuned on the 50 scored windows | 17 / 50 | median 425 s | 0.000 per zone-hour |
 | Pietrobon et al. 2019, HERE (abstract only) | real probes, 12 metro areas | n/a (precision 92 % low-volume, 80 % overall) | n/a | n/a, precision only |
 | T-Closure, Zhang et al. 2023 (abstract only) | real GPS + planned route | n/a ("7000+ closure events monthly") | "within 1.5 hours" | n/a |
 | California #7 / #8 (TTI 2917-1F citing Payne) | real loop detectors | 67 % / 68 % | 2.91 / 3.04 min | 0.134 % / 0.177 % of incident-free intervals |
@@ -801,7 +801,7 @@ fronts a pitch.
 Scope: the check before S14A and S14B (laptop-scheduler `jobs/wr-lane-s14a-servicing-bound.md`,
 `jobs/wr-lane-s14b-traffic-absence.md`). Three research passes on 2026-10-21 (WebSearch, WebFetch, curl); the main
 session re-fetched the quoted pages and grepped the patent texts for every number used. Query log:
-`laptop-scheduler/reports/wr-dev-lit-s14.md`. Ranks as in Part 2, patents their own class; all verified@2026-10-21.
+`reports/wr-dev-lit-s14.md`. Ranks as in Part 2, patents their own class; all verified@2026-10-21.
 **Coverage:** SEMI E10/E58/E116, ISO 22400-2, ISO 3691-4, ISO 14224 and VDI 4486 are paywalled (records and secondary
 mappings read). A station/dock timeout was searched for MiR, OTTO, Kollmorgen NDC, BlueBotics ANT, openTCS and Open-RMF,
 not Geek+ or Locus; none found, but on search results, not doc trees, so that vendor absence is rank F.
@@ -963,7 +963,7 @@ neighbour cause rule (`_cause`, `detector.py:258-271`, Manhattan ≤ 1 via `_nea
 the absence claims of Parts 1 to 4. Scheduled for 2026-10-22, fetched 2026-10-21, so `verified@2026-10-21`. Three
 research passes (WebSearch, WebFetch, curl to raw GitHub, arXiv, OpenAlex, Semantic Scholar); the main session
 re-fetched every quote used; §3's DeepFleet, hospital and Petri-net rows rest on a subagent read. Query log:
-`laptop-scheduler/reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet).
+`reports/wr-dev-lit-part5.md`. Ranks as in Part 2 (A read, A- abstract or record, S snippet).
 **Coverage:** Semantic Scholar answered 9 of 64 queries (170 of 179 tries 429 with backoff; bulk 429; web UI 403);
 OpenAlex all 83. Still not a Semantic Scholar sweep. Google Scholar not tried. ISO, SEMI, VDI paywalled.
 
@@ -1107,7 +1107,7 @@ Scope: one row per deliverable of the fleet analyser, the best published method 
 the operator's "not SOTA, right?" (21 Oct). Scheduled for 2026-10-22, fetched 2026-10-21, so every source checked in
 this pass is `verified@2026-10-21`; rows reused from Parts 1-3 keep the date they were read. One pass (WebSearch,
 WebFetch, curl to arXiv, OpenAlex, Semantic Scholar, `pdftotext` on one ETSI PDF). Query log:
-`laptop-scheduler/reports/wr-dev-lit-sota.md`. Read depth as in Part 2: A text read (A\* through a summarising fetch),
+`reports/wr-dev-lit-sota.md`. Read depth as in Part 2: A text read (A\* through a summarising fetch),
 A- abstract or record (a benchmark number read from an abstract is A-), S snippet. **Coverage:** Semantic Scholar
 answered 1 of 3 queries (2 × HTTP 429); OpenAlex answered 8 searches and 4 DOI lookups, then its daily budget ran out
 (4 searches 429); Google Scholar not tried. Our side never has planner access: the analyser reads the state stream.
@@ -1256,7 +1256,7 @@ Our numbers are the headline rule of README (s) unless a row says otherwise; non
 Scope: every absence claim marked "kept" in Part 5 §3 and the absence clauses of Part 6, rerun on a second scholarly
 index (operator, 21 Oct: the second index does not have to be Semantic Scholar). Scheduled for 2026-10-22, fetched
 2026-10-21, so `verified@2026-10-21`. Query log, per-query status and raw counts:
-`laptop-scheduler/reports/wr-dev-lit-index-rerun.md`. Ranks as in Part 2 (A read, A- abstract or record).
+`reports/wr-dev-lit-index-rerun.md`. Ranks as in Part 2 (A read, A- abstract or record).
 **Services:** dblp: not run (Anubis bot wall on dblp.org and dblp.dagstuhl.de, uni-trier and SPARQL time out).
 Semantic Scholar: not run (API 429 "apply for a key"; web page 403). Lens: not run (HTTP 200 but a JavaScript shell,
 no result titles). CORE web page: not run (Cloudflare 403). **CORE API v3 without a key
@@ -1326,7 +1326,7 @@ Scope: the two builds the operator's 23 Oct decision puts before the page (lapto
 `jobs/wr-lane-s15a-naive-stall-baseline.md`, `jobs/wr-lane-s15b-duration-spread.md`): measure the page's "real stalls"
 and blocking figures against the two vendor methods COMPETITION pass 4 found (InOrbit, OTTO), on data already on disk.
 One pass on 2026-10-23 (WebSearch, curl of the InOrbit developer doc and the FHWA report, OpenAlex, CORE API v3),
-so `verified@2026-10-23` unless a row says otherwise (eCFR, OPC and one PDF added after review). Query log: `laptop-scheduler/reports/wr-dev-lit-s15.md`. Ranks
+so `verified@2026-10-23` unless a row says otherwise (eCFR, OPC and one PDF added after review). Query log: `reports/wr-dev-lit-s15.md`. Ranks
 as in Part 2 (A read, A- abstract or record, S snippet). **Coverage:** OpenAlex 7 queries; CORE 9 flat queries ran,
 5 more answered 429 and are not counted; calibration hits: Tarapore 2017 (stall field) and Li et al. 2018 (AGV
 travel time). Semantic Scholar, dblp, Lens: not tried (Part 7 found them closed).

@@ -1,7 +1,7 @@
 # Scouting synthesis: does the fleet stall analyser transfer? (2026-10-19)
 
 Six domain scouts ran on 19 Oct 2026 (briefs in `laptop-scheduler/jobs/wr-scout-*.md`, search logs in
-`laptop-scheduler/reports/wr-scout-*.md`). Five ran on the haiku model in 4 to 7 minutes each, the farm-robots one on
+`reports/wr-scout-*.md`). Five ran on the haiku model in 4 to 7 minutes each, the farm-robots one on
 opus in 18 minutes with a review pass; the depth difference is visible and is stated per row below. This file adds no
 new web research. Every number and name here is quoted from the six docs, which carry the URLs and `verified@` dates.
 
