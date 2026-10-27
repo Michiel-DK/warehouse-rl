@@ -1,11 +1,70 @@
 # warehouse-rl
 
-Can a learned policy make a simulated robot warehouse recover from stuck robots better than a timeout or a hand-written rule? And, as the original question, does a learned task-allocation policy beat the Closest-Task-Assignment (CTA) heuristic on pick-rate?
+A record of experiments on robot-fleet stall analysis, with every number tied to a results file in this tree and the negatives left in. It started as a reinforcement-learning question (can a learned policy beat the simulator's heuristic at recovering stuck robots, and at task assignment) and turned into a diagnostic tool measured on a simulator and on one public real-robot log. Everything below the "Setup" heading is the lab notebook in sprint order; this page is the summary.
 
-Environment: [TA-RWARE](https://github.com/uoe-agents/task-assignment-robotic-warehouse) (Edinburgh, MIT).
-Metric: pick-rate in order-lines per hour, same map, same seeds, against the CTA heuristic that ships with the env (nearest free AGV per request).
+## What was tried, and what survived
 
-Plan, decision log, review findings and sprint plan: [docs/SCOPE.md](docs/SCOPE.md). Current direction (2026-10-10): Sprint 1 evaluation harness, Sprint 2 disturbance layer and density/failure sweeps with CTA only, Sprint 3 learned stuck-recovery vs timeout vs hand-written rule. Dispatcher learning is optional Sprint 4. Short summary page: https://claude.ai/artifact/33YWuNCVFjQxH3LdYXRbS3
+| Experiment | Result | Where |
+|---|---|---|
+| Learned stuck recovery (double DQN, warm start, priced abandons) | Killed. The net learned to abandon every stuck task: 0 deliveries against the timeout baseline; a greedy probe scored 1.44 lines/h against 50.11 for the timeout | Sprint 3 |
+| Learned task assignment, the original question | Never built. Plan and kill criteria in `docs/SCOPE.md` Sprint 4 | SCOPE |
+| Dispatch that skips frozen robots (stuck-aware CTA) and routing around other robots (`cta_care`) | Within noise. Paired delta against CTA inside +/-0.7 lines/h at every breakdown rate and delay level; `cta_care` has a paired CI that contains 0 at every fleet size from 2 to 16 AGVs | Sprint 2 |
+| Hand-written stuck recovery rules and a call-a-human rung, against the simulator's own timeout | None beats the timeout at any breakdown rate. The call-human rule is below it at every rate and significantly at rates 1, 2 and 4 (rate 1: -2.11 lines/h, CI -3.56 to -0.67). The human's time is accounting only, so no cost changes the pick-rate | Sprint 3 |
+| A hotspot map against "last hour's spots" (persistence) | Within noise: precision 0.925 against 0.932 at the top 20 cells | (j) |
+| The same map against the true bad cells (floor truth) | precision 0.965 at the top 20 cells, recall 0.241; recall plateaus at 0.56 because 44% of the bad cells are never driven over in 500 steps | S8B |
+| Routing robots around the map | +0.96 lines/h, 95% CI -0.72 to +2.64; 15.6% of the floor's loss recovered, CI -11% to 45%; an oracle that knows the floor gets 22.7%, CI -4% to 50% | Sprint 8, (a) |
+| Routing on a sticky floor (p 0.9-0.99), dose over the map weight | The strongest weight recovers 11.1% of the floor's loss (CI 6.0% to 15.9%) against an oracle's 15.9% (11.9% to 20.3%); over a 1,500-step shift 8.6% and 16.4% | Sprint 8, sticky |
+| Tuning the map-to-cost transform by random search, held out on seeds 10-29 | Mixed. At p 0.9-0.99 it beats the fixed weight-4 map (+2.81 lines/h, CI +1.09 to +4.52) but not the weight-32 map; at p 0.8-0.95 it is worse than weight 32 (-3.60, CI -5.89 to -1.31) | Sprint 8, guidance |
+| Lessons that persist (a hot cell still hot in the next window) against chance | Above chance at every window: 18 of 25 at a half-hour window against a chance mean of 0.241, lift 2.99. Shared pools, no CI, so a direction, not a significance claim | Sprint 8, lessons |
+| Early warning of a blockage the planner cannot see | Not solved. While open: the map catches 6 of 50 at 177.8 false alarms per zone-hour, a CUSUM 2 of 50 at none, a traffic-absence test 0 of 50. Over eight hours: 31 of 661, 0, 11 of 661 | (k), (n), (t), (u) |
+| A false-alarm gate on the map's forecasts | Removes the floor: 1,391 false forecasts on an undisturbed run become 2 or 5. It removes the recall with it: 1 of 50 blind-blockage cells | (l) |
+| Per-robot time budget | Stuck time is 20.81% of AGV time on an undisturbed floor and 32.05% on a sticky one. On the real log: one robot, nine shifts, stuck 0.42% | (o), (q) |
+| A stall list that leaves station stops out | On the real log, stuck runs 567 to 6, both labelled stops still caught. But a plain 60-second timer on the driving flag gets 10 runs with the same two hits, so most of the gain is the threshold, not the station logic | (r), (s), (w1) |
+| "Blocked by" only when the neighbour is on the robot's route | 8% to 31% of the neighbour-cause stall episodes have the neighbour on the route; the rest are stopped next to a robot that is not in the way | (v) |
+| A blocking number per shift | Three times higher on the sticky floor than on the undisturbed one. It has no measured relation to truth stuck time per zone (rank correlation 0.04), so it is a difference between floors, not a validated congestion gauge | (p), (w2) |
+| The real log's own records as labels (ROS diagnostics, dispatcher events) | Mixed. A component-error bucket holds 0.19% of the span, and the two stalls with no cause stay without one: 0 of 47 s and 1 of 133 s under an Error status. The dispatcher's two external resumes land 47 s and 24 s after labelled stops, so they mark an intervention but not who made it. Two stalls, not a rate | (x1), (x2), (x3) |
+
+What survived: the time budget, the stall list with its caveat, the blocking number as a comparison between floors, and the map as a diagnosis of the worst cells after the fact. What did not: everything learned, every hand-written recovery rule, the map as a forecast, routing on the map, early warning.
+
+## Speed and coverage
+
+| | Figure | Where |
+|---|---|---|
+| Batch ingest | 2,789 messages per second, 6,912,000 messages, 12 robots, one laptop | `results/fleet/benchmark.json` |
+| Re-grading an eight-hour shift | 4.4 to 4.7 s | Sprint 14E |
+| Real log | 132,838 rows read, 0 rejected by our parser | (q) |
+
+The reject count is against our own contract, and that contract is a format check, not a quality check. The dataset's authors removed 2,959 of 140,386 raw rows (2.1%) before publishing; run on the raw table, our parser rejects none of them (x3). The live Kafka leg of the benchmark runs at the emitter's pace, not at a limit.
+
+## Tested on
+
+| Source | What it is |
+|---|---|
+| TA-RWARE simulator, medium map | 8 AGVs and 4 pickers, synthetic, emitted as VDA 5050-shaped JSON lines by `fleet/emit.py` |
+| MoRoOp (Klein and Jeong 2026, arXiv 2610.02428, CC BY 4.0) | one wheel.me robot in a lab, nine 8-hour shifts, four named positions, through `fleet/adapters/moroop.py` |
+
+Nothing else. A log in any other shape needs an adapter like the MoRoOp one; the ingester accepts the contract in `docs/SCOPE.md` "S5A" and nothing else. Before running anything on your own log, check it field by field:
+
+```sh
+.venv/bin/python fleet/check_log.py --glob 'DIR/*.jsonl.gz'
+```
+
+It prints one row per required field and a verdict line, exit 0 on a match and 2 otherwise. The ingester refuses a log the same way when fewer than `--min-accepted` of its lines parse; pass `--once --min-accepted 0.5` on a plain folder of files, because without `--once` a folder with no emitter ledger never ends and the default never fires (S17A lane report, open point). One robot on four positions cannot produce a map, a congestion figure or a blockage, so every claim about those is simulator-only.
+
+## Reproducing
+
+- `./scripts/setup.sh` fetches the two vendored packages (both MIT) at pinned commits. The simulator numbers here are macOS arm64 numbers; Linux gives different absolute values from the A* tie-break and the same paired comparisons (`docs/PLATFORM.md`).
+- The raw simulator streams (about 2.5 GB) are not in the repo. `fleet/emit.py` regenerates them from the seeds named in each section. The results files they produced are in `results/`.
+- MoRoOp is downloaded from Hugging Face (dataset `Self-Organizing-Production-Logistics/MoRoOp`, revision 1.0.1, fetched by `fleet/adapters/moroop.py`; the raw and converted files are not committed); only the derived stations file `fleet/data/moroop/stations.json` is. No client data is in this repo and none will be.
+- Every lane and literature report cited from here is under `reports/`. The gate is `.venv/bin/python -m unittest discover -s tests`.
+
+## Reading further
+
+`docs/SCOPE.md` (plan, decisions, kill criteria, open questions), `docs/LITERATURE.md` (what was already known before each build, with the standard names), `docs/COMPETITION.md` (which of these capabilities vendors document, every cell dated with its URL, absences only from documentation trees), `docs/DEMO.md` (the pipeline end to end on a laptop), `docs/overview/` and `docs/replay/` (pages built from the results).
+
+## The notebook
+
+Everything from here on is in sprint order, written as the work happened. Numbers in each section come from the results files named in the same commit.
 
 Replay of one CTA episode: open `results/replay_small.html` in a browser (made by `scripts/record_episode.py` + `scripts/replay_template.html`).
 
