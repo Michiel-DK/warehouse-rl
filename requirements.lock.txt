@@ -6,7 +6,7 @@ networkx==3.2.1
 numpy==1.26.4
 packaging==26.3
 pillow==12.3.0
-pyastar2d @ file:///Users/michieldekoninck/code/Michiel-DK/warehouse-rl/vendor/pyastar2d
+# pyastar2d: built from vendor/pyastar2d at the commit pinned in scripts/setup.sh
 pyglet==1.5.11
 six==1.16.0
 -e git+https://github.com/uoe-agents/task-assignment-robotic-warehouse.git@6109c33f7228cace1e463c81f0568b754ff5f198#egg=tarware

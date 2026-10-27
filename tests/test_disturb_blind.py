@@ -26,7 +26,7 @@ def blocked_cfg(**extra):
     return {"blocked_cell": {**BLK, **extra}}
 
 
-# The four S10 configs (queue item wr-s10-disturbance-measure, laptop-scheduler/queues/warehouse-rl.json).
+# The four S10 configs (queue item wr-s10-disturbance-measure).
 S10_CONFIGS = {
     "s10-blocked": blocked_cfg(),
     "s10-outage": {"outage": {"rate_per_hour": 4.0, "duration": [120, 360]}},

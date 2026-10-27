@@ -25,7 +25,7 @@ import absencemap  # noqa: E402
 from fleet_analyser import hotspot  # noqa: E402
 from fleet_analyser.parse import iso  # noqa: E402
 
-REAL_DATA = Path("/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data")
+REAL_DATA = Path(__file__).resolve().parents[1] / "data"
 T0 = 1767225600  # 2026-01-01T00:00:00Z
 STEP = 5
 B = 60

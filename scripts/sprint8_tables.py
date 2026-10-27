@@ -1239,7 +1239,7 @@ def real_shift():
           f"(median {st_dur[(len(st_dur) - 1) // 2]} s, a dwell just over the threshold). "
           "Failed navigation: no label in the data. The closest is the operations that ended in TIMEOUT: "
           f"{c['timeouts']}, all {c['timeouts_detected']} overlapped by a stuck run (the lane report finds only 2 of "
-          "them overlap a run off a station cell, `laptop-scheduler/reports/wr-lane-s13a-moroop-budget.md` section 5 (d), "
+          "them overlap a run off a station cell, `reports/wr-lane-s13a-moroop-budget.md` section 5 (d), "
           f"not stored). Paused (joystick or non-autonomous rows): {num['paused']} s. `faulted` is \"" + pooled["faulted"] + "\" (the diagnostics levels "
           "are undocumented) and `waiting_shelf` is \"" + shifts["waiting_shelf"] + "\" (no shelves, no picker). "
           f"`no_data` is mostly station dwell: the log stores a row only when a value changes, and the {prm['max_gap_s']} "

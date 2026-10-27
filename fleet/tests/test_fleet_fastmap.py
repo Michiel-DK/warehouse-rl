@@ -27,7 +27,7 @@ import time_to_detect as ttd  # noqa: E402
 from fleet_analyser.store import JsonlStore  # noqa: E402
 
 B, N, K_OFF, H = 60, 30, 1.0, 3.0
-REAL_DATA = Path("/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data")
+REAL_DATA = Path(__file__).resolve().parents[1] / "data"
 ENV = "tarware-small-4agvs-2pickers-globalobs-v1"
 BLIND = '{"blocked_cell": {"rate_per_hour": 8.0, "duration": [60, 240], "known": false}}'
 RUN = "t4run"

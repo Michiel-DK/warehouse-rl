@@ -422,7 +422,7 @@ class TestWords(Committed):
 
     def test_footer_paths_are_visible_and_pass(self):
         foot = self.root.find_all("footer")[0].text()
-        for p in ("results/fleet/hotspot_s8e-long-w0.5.json", "laptop-scheduler/reports/wr-s8e-lessons-long.md"):
+        for p in ("results/fleet/hotspot_s8e-long-w0.5.json", "reports/wr-s8e-lessons-long.md"):
             self.assertIn(p, foot)
         self.assertIsNone(s8i.BANNED.search(foot))
 
