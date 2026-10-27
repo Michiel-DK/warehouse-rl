@@ -2,6 +2,8 @@
 
 A record of experiments on robot-fleet stall analysis, with every number tied to a results file in this tree and the negatives left in. It started as a reinforcement-learning question (can a learned policy beat the simulator's heuristic at recovering stuck robots, and at task assignment) and turned into a diagnostic tool measured on a simulator and on one public real-robot log. Everything below the "Setup" heading is the lab notebook in sprint order; this page is the summary.
 
+Two things a reader notices first, said plainly. The name is the original question, and that question was not answered: the learned recovery policy was killed by its own criterion in Sprint 3 and learned task assignment was never built; everything after that is what the measurement harness turned up instead. And the work was produced with an agent pipeline, Claude Code lanes with adversarial reviewers behind a test gate, under the rules in `CLAUDE.md`; the commits carry the trailers. Direction, kill criteria, the reward design and every change to a metric were the author's decisions, and `docs/PROCESS.md` says what the pipeline did and what the author did.
+
 ## What was tried, and what survived
 
 | Experiment | Result | Where |
@@ -60,7 +62,7 @@ It prints one row per required field and a verdict line, exit 0 on a match and 2
 
 ## Reading further
 
-`docs/SCOPE.md` (plan, decisions, kill criteria, open questions), `docs/LITERATURE.md` (what was already known before each build, with the standard names), `docs/COMPETITION.md` (which of these capabilities vendors document, every cell dated with its URL, absences only from documentation trees), `docs/DEMO.md` (the pipeline end to end on a laptop), `docs/overview/` and `docs/replay/` (pages built from the results).
+`docs/PROCESS.md` (how the work was produced, what the agents did and what the author did), `docs/SCOPE.md` (plan, decisions, kill criteria, open questions), `docs/LITERATURE.md` (what was already known before each build, with the standard names), `docs/COMPETITION.md` (which of these capabilities vendors document, every cell dated with its URL, absences only from documentation trees), `docs/DEMO.md` (the pipeline end to end on a laptop), `docs/overview/` and `docs/replay/` (pages built from the results).
 
 ## The notebook
 
