@@ -1,32 +1,38 @@
 # warehouse-rl
 
-A record of experiments on robot-fleet stall analysis, with every number tied to a results file in this tree and the negatives left in. It started as a reinforcement-learning question (can a learned policy beat the simulator's heuristic at recovering stuck robots, and at task assignment) and turned into a diagnostic tool measured on a simulator and on one public real-robot log. Everything below the "Setup" heading is the lab notebook in sprint order; this page is the summary.
+A record of experiments on robot-fleet stall analysis, with every number tied to a results file in this tree and the negatives left in. It started as a reinforcement-learning question (can a learned policy beat the simulator's heuristic at recovering stuck robots, and at task assignment) and turned into a diagnostic tool measured on a simulator and on one public real-robot log.
 
-Two things a reader notices first, said plainly. The name is the original question, and that question was not answered: the learned recovery policy was killed by its own criterion in Sprint 3 and learned task assignment was never built; everything after that is what the measurement harness turned up instead. And the work was produced with an agent pipeline, Claude Code lanes with adversarial reviewers behind a test gate, under the rules in `CLAUDE.md`; the commits carry the trailers. Direction, kill criteria, the reward design and every change to a metric were the author's decisions, and `docs/PROCESS.md` says what the pipeline did and what the author did.
+**What survived:** the per-robot time budget, the stall list with its caveat, the blocking number as a comparison between floors, and the hotspot map as a diagnosis of the worst cells after the fact.
+
+**What did not:** everything learned, every hand-written recovery rule, the map as a forecast, routing on the map, early warning of a blockage.
+
+The name is the original question, and that question was not answered: the learned recovery policy was killed by its own criterion in Sprint 3 and learned task assignment was never built. Everything after that is what the measurement harness turned up instead.
+
+The work was produced with an agent pipeline, Claude Code lanes with adversarial reviewers behind a test gate, under the rules in `CLAUDE.md`; the commits carry the trailers. Direction, kill criteria, the reward design and every change to a metric were the author's decisions. `docs/PROCESS.md` says what the pipeline did and what the author did.
+
+Everything below the "Setup" heading is the lab notebook in sprint order; this page is the summary. The confidence intervals behind each row are in the section the row points to.
 
 ## What was tried, and what survived
 
 | Experiment | Result | Where |
 |---|---|---|
-| Learned stuck recovery (double DQN, warm start, priced abandons) | Killed. The net learned to abandon every stuck task: 0 deliveries against the timeout baseline; a greedy probe scored 1.44 lines/h against 50.11 for the timeout | Sprint 3 |
+| Learned stuck recovery (double DQN, warm start, priced abandons) | Killed. The net abandoned every stuck task: 0 deliveries against the timeout baseline | Sprint 3 |
 | Learned task assignment, the original question | Never built. Plan and kill criteria in `docs/SCOPE.md` Sprint 4 | SCOPE |
-| Dispatch that skips frozen robots (stuck-aware CTA) and routing around other robots (`cta_care`) | Within noise. Paired delta against CTA inside +/-0.7 lines/h at every breakdown rate and delay level; `cta_care` has a paired CI that contains 0 at every fleet size from 2 to 16 AGVs | Sprint 2 |
-| Hand-written stuck recovery rules and a call-a-human rung, against the simulator's own timeout | None beats the timeout at any breakdown rate. The call-human rule is below it at every rate and significantly at rates 1, 2 and 4 (rate 1: -2.11 lines/h, CI -3.56 to -0.67). The human's time is accounting only, so no cost changes the pick-rate | Sprint 3 |
+| Dispatch that skips frozen robots (stuck-aware CTA), routing around other robots (`cta_care`) | Within noise. Paired delta against CTA inside +/-0.7 lines/h at every breakdown rate and fleet size | Sprint 2 |
+| Hand-written recovery rules and a call-a-human rung, against the simulator's timeout | None beats the timeout at any breakdown rate; call-human is below it at every rate | Sprint 3 |
 | A hotspot map against "last hour's spots" (persistence) | Within noise: precision 0.925 against 0.932 at the top 20 cells | (j) |
-| The same map against the true bad cells (floor truth) | precision 0.965 at the top 20 cells, recall 0.241; recall plateaus at 0.56 because 44% of the bad cells are never driven over in 500 steps | S8B |
-| Routing robots around the map | +0.96 lines/h, 95% CI -0.72 to +2.64; 15.6% of the floor's loss recovered, CI -11% to 45%; an oracle that knows the floor gets 22.7%, CI -4% to 50% | Sprint 8, (a) |
-| Routing on a sticky floor (p 0.9-0.99), dose over the map weight | The strongest weight recovers 11.1% of the floor's loss (CI 6.0% to 15.9%) against an oracle's 15.9% (11.9% to 20.3%); over a 1,500-step shift 8.6% and 16.4% | Sprint 8, sticky |
-| Tuning the map-to-cost transform by random search, held out on seeds 10-29 | Mixed. At p 0.9-0.99 it beats the fixed weight-4 map (+2.81 lines/h, CI +1.09 to +4.52) but not the weight-32 map; at p 0.8-0.95 it is worse than weight 32 (-3.60, CI -5.89 to -1.31) | Sprint 8, guidance |
-| Lessons that persist (a hot cell still hot in the next window) against chance | Above chance at every window: 18 of 25 at a half-hour window against a chance mean of 0.241, lift 2.99. Shared pools, no CI, so a direction, not a significance claim | Sprint 8, lessons |
-| Early warning of a blockage the planner cannot see | Not solved. While open: the map catches 6 of 50 at 177.8 false alarms per zone-hour, a CUSUM 2 of 50 at none, a traffic-absence test 0 of 50. Over eight hours: 31 of 661, 0, 11 of 661 | (k), (n), (t), (u) |
-| A false-alarm gate on the map's forecasts | Removes the floor: 1,391 false forecasts on an undisturbed run become 2 or 5. It removes the recall with it: 1 of 50 blind-blockage cells | (l) |
-| Per-robot time budget | Stuck time is 20.81% of AGV time on an undisturbed floor and 32.05% on a sticky one. On the real log: one robot, nine shifts, stuck 0.42% | (o), (q) |
-| A stall list that leaves station stops out | On the real log, stuck runs 567 to 6, both labelled stops still caught. But a plain 60-second timer on the driving flag gets 10 runs with the same two hits, so most of the gain is the threshold, not the station logic | (r), (s), (w1) |
-| "Blocked by" only when the neighbour is on the robot's route | 8% to 31% of the neighbour-cause stall episodes have the neighbour on the route; the rest are stopped next to a robot that is not in the way | (v) |
-| A blocking number per shift | Three times higher on the sticky floor than on the undisturbed one. It has no measured relation to truth stuck time per zone (rank correlation 0.04), so it is a difference between floors, not a validated congestion gauge | (p), (w2) |
-| The real log's own records as labels (ROS diagnostics, dispatcher events) | Mixed. A component-error bucket holds 0.19% of the span, and the two stalls with no cause stay without one: 0 of 47 s and 1 of 133 s under an Error status. The dispatcher's two external resumes land 47 s and 24 s after labelled stops, so they mark an intervention but not who made it. Two stalls, not a rate | (x1), (x2), (x3) |
-
-What survived: the time budget, the stall list with its caveat, the blocking number as a comparison between floors, and the map as a diagnosis of the worst cells after the fact. What did not: everything learned, every hand-written recovery rule, the map as a forecast, routing on the map, early warning.
+| The same map against the true bad cells (floor truth) | Precision 0.965 at the top 20 cells, recall 0.241; 44% of the bad cells are never driven over | S8B |
+| Routing robots around the map | 15.6% of the floor's loss recovered, CI includes 0; an oracle that knows the floor gets 22.7% | Sprint 8, (a) |
+| Routing on a sticky floor (p 0.9-0.99), dose over the map weight | The strongest weight recovers 11.1% of the floor's loss against an oracle's 15.9% | Sprint 8, sticky |
+| Tuning the map-to-cost transform by random search, held out | Mixed. Beats the weight-4 map at p 0.9-0.99, worse than weight 32 at p 0.8-0.95 | Sprint 8, guidance |
+| Lessons that persist (a hot cell still hot next window) against chance | Above chance at every window: 18 of 25 against a chance mean of 0.241, lift 2.99; no CI | Sprint 8, lessons |
+| Early warning of a blockage the planner cannot see | Not solved. Best while open: the map catches 6 of 50 at 177.8 false alarms per zone-hour; CUSUM 2 of 50 at none | (k), (n), (t), (u) |
+| A false-alarm gate on the map's forecasts | 1,391 false forecasts on an undisturbed run become 2 or 5, and recall goes with them: 1 of 50 cells | (l) |
+| Per-robot time budget | Stuck time 20.81% of AGV time on an undisturbed floor, 32.05% on a sticky one; real log 0.42% | (o), (q) |
+| A stall list that leaves station stops out | Real log: stuck runs 567 to 6, both labelled stops kept. A plain 60 s timer gets 10 runs with the same hits | (r), (s), (w1) |
+| "Blocked by" only when the neighbour is on the robot's route | 8% to 31% of neighbour-cause episodes have the neighbour on the route | (v) |
+| A blocking number per shift | Three times higher on the sticky floor; rank correlation 0.04 with truth stuck time, so not a validated gauge | (p), (w2) |
+| The real log's own records as labels (ROS diagnostics, dispatcher events) | Mixed. Component errors cover 0.19% of the span; the two uncaused stalls stay uncaused. Two stalls, not a rate | (x1), (x2), (x3) |
 
 ## Speed and coverage
 
