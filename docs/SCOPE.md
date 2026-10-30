@@ -1225,6 +1225,21 @@ Literature: `docs/LITERATURE.md` Part 9 (refute lines in section 5, set before t
   - Re-run S16B on `-sf` (its stuck-episode set is `-sb`; false alarms change 5 -> 3)?
   - Add section (x) to `scripts/sprint8_tables.py` with (w) in the same lane?
 
+### Sprint 18: keeping less of the log (2026-10-30)
+
+Results are in README "Sprint 18", table (y). Literature: `docs/LITERATURE.md` Part 10 (refute line in section 5, set
+before the run). Reports: `reports/wr-dev-lit-s18.md`, `reports/wr-lane-s18a-keep-what-matters.md`,
+`reports/wr-dev-s18-readme.md`.
+
+- [x] Literature item `wr-dev-lit-s18` (Part 10): report by exception with a maximum interval, zero deadband; keep-rule
+      ladder R0-R5; references gzip of the full log, lines per robot-hour, AVEVA 3:1.
+- [x] S18A keep what matters (PR #60, 4c50c3e). `fleet/reduce.py`, `fleet/reduce_check.py`, tests
+      `fleet/tests/test_fleet_reduce.py`; results `results/fleet/reduce_s10-none.json`, `reduce_moroop-sf.json`.
+- **2026-10-30: S18 CLOSED, verdict "identical, not worth it".** Identical on both runs at H = 30 s and 60 s (first
+  identical rung `recovered` on s10-none, `threshold` on MoRoOp), ratio_gzip at that rung 1.18 and 1.0001-1.0002,
+  below 3:1. MoRoOp is already change-only and a VDA 5050 fleet already sends `state` change-only, so the simulator
+  ratio is the best case. Not run: the eight-hour runs (`wr-s18a-run`, `s10-none-8h`, `s10c-blind-8h`).
+
 ## Compute and timing
 
 Everything above is CPU on the M1 Pro. The step-rate number is measured; parallel throughput and run times are

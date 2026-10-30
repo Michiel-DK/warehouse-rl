@@ -4,7 +4,7 @@ A record of experiments on robot-fleet stall analysis, with every number tied to
 
 **What survived:** the per-robot time budget, the stall list with its caveat, the blocking number as a comparison between floors, and the hotspot map as a diagnosis of the worst cells after the fact.
 
-**What did not:** everything learned, every hand-written recovery rule, the map as a forecast, routing on the map, early warning of a blockage.
+**What did not:** everything learned, every hand-written recovery rule, the map as a forecast, routing on the map, early warning of a blockage; keeping less of the log (report by exception, S18): identical, not worth it.
 
 The name is the original question, and that question was not answered: the learned recovery policy was killed by its own criterion in Sprint 3 and learned task assignment was never built. Everything after that is what the measurement harness turned up instead.
 
@@ -30,6 +30,7 @@ Everything below the "Setup" heading is the lab notebook in sprint order; this p
 | A false-alarm gate on the map's forecasts | 1,391 false forecasts on an undisturbed run become 2 or 5, and recall goes with them: 1 of 50 cells | (l) |
 | Per-robot time budget | Stuck time 20.81% of AGV time on an undisturbed floor, 32.05% on a sticky one; real log 0.42% | (o), (q) |
 | A stall list that leaves station stops out | Real log: stuck runs 567 to 6, both labelled stops kept. A plain 60 s timer gets 10 runs with the same hits | (r), (s), (w1) |
+| Keeping less of the log (report by exception, S18) | Identical, not worth it. At a 30 s heartbeat every answer is identical at the first identical rung on both runs, but the reduced log gzips only 1.1820 times smaller than gzip of the full log on the simulator (line ratio 1.5021) and 1.0001 times on the real log (line ratio 1.0003), below the 3:1 reference | (y) |
 | "Blocked by" only when the neighbour is on the robot's route | 8% to 31% of neighbour-cause episodes have the neighbour on the route | (v) |
 | A blocking number per shift | Three times higher on the sticky floor; rank correlation 0.04 with truth stuck time, so not a validated gauge | (p), (w2) |
 | The real log's own records as labels (ROS diagnostics, dispatcher events) | Mixed. Component errors cover 0.19% of the span; the two uncaused stalls stay uncaused. Two stalls, not a rate | (x1), (x2), (x3) |
@@ -1726,3 +1727,67 @@ The event rows are every pause and every resume other than the 9 shift-start res
 - The S16B stuck-episode set mixes the robot's own labels and our detector's false alarms (`-sb`). On `-sf` the false alarms change (5 to 3), and S16B was not re-run on `-sf`.
 - "Our drops" are message-format rules (json, timestamp, type). They were never meant to catch localization or plausibility faults, so 0 of 2,959 is the expected reading, not a failure of a quality check.
 - Deterministic on one log, no CI. The tables were printed by a read-only script, not by `scripts/sprint8_tables.py`.
+
+## Sprint 18: keeping less of the log (2026-10-30)
+
+Question (operator, from buyers): how small can a fleet state log get while every answer the analyser gives stays the same. Standard name (`docs/LITERATURE.md` Part 10 section 1): report by exception (change-only) with a maximum interval, zero deadband. Not compression: gzip of the full log is the baseline the ratio is measured against. Reports: `reports/wr-dev-lit-s18.md`, `reports/wr-lane-s18a-keep-what-matters.md`, `reports/wr-dev-s18-readme.md`.
+
+#### (y) Keeping less of the log (S18A)
+
+The keep rules are a ladder (Part 10 section 4), each rung the one before plus one rule: `all` (identity), `change` (a line only when a field the analyser reads changes, plus each robot's first and last line), `gap` (no interval longer than the heartbeat H, source gaps kept as gaps), `threshold` (the line that makes a stop count as stuck), `neighbours` (the zone batch at each episode's entry), `recovered` (the line after each episode ends). Every rung is run at H = 30 s (the VDA 5050 `state` heartbeat) and H = 60 s (our gap rule). "Identical" means every applicable output equal to the full log's, no tolerance: time budget, stall list, transitions, and on MoRoOp also the station bound, the S15A rows and the labelled-stop hits. `ratio_gzip` = gzip bytes of the full log / gzip bytes of the reduced log, both re-gzipped the same way, so `all` is exactly 1.0.
+
+**s10-none** (`results/fleet/reduce_s10-none.json`): 120 robots, 83.2 robot-hours, 60,000 lines in, 721.4 lines per robot-hour in; outputs not applicable: station_bound, s15a_rules, label_hits.
+
+| rung | H | lines kept | line ratio | ratio_gzip | kept lines/robot-h | outputs that differ (items) | identical |
+|---|---|---|---|---|---|---|---|
+| all | 30 s | 60,000 | 1.0000 | 1.0000 | 721.4 | none | yes |
+| all | 60 s | 60,000 | 1.0000 | 1.0000 | 721.4 | none | yes |
+| change | 30 s | 33,340 | 1.7996 | 1.2646 | 400.9 | time_budget 117, stall_list 627, transitions 8,230 | no |
+| change | 60 s | 33,340 | 1.7996 | 1.2646 | 400.9 | time_budget 117, stall_list 627, transitions 8,230 | no |
+| gap | 30 s | 37,188 | 1.6134 | 1.2185 | 447.2 | stall_list 41, transitions 5,425 | no |
+| gap | 60 s | 35,080 | 1.7104 | 1.2040 | 421.8 | time_budget 26, stall_list 233, transitions 6,470 | no |
+| threshold | 30 s | 37,193 | 1.6132 | 1.2183 | 447.2 | stall_list 37, transitions 5,420 | no |
+| threshold | 60 s | 35,732 | 1.6792 | 1.2088 | 429.6 | stall_list 40, transitions 5,420 | no |
+| neighbours | 30 s | 39,746 | 1.5096 | 1.1843 | 477.9 | transitions 5,187 | no |
+| neighbours | 60 s | 38,443 | 1.5608 | 1.1839 | 462.2 | transitions 5,187 | no |
+| recovered | 30 s | 39,944 | 1.5021 | 1.1820 | 480.3 | none | yes |
+| recovered | 60 s | 38,641 | 1.5528 | 1.1816 | 464.6 | none | yes |
+
+**moroop-sf** (`results/fleet/reduce_moroop-sf.json`): 9 robots, 73.0 robot-hours, 132,838 lines in, 1820.3 lines per robot-hour in; outputs not applicable: none.
+
+| rung | H | lines kept | line ratio | ratio_gzip | kept lines/robot-h | outputs that differ (items) | identical |
+|---|---|---|---|---|---|---|---|
+| all | 30 s | 132,838 | 1.0000 | 1.0000 | 1820.3 | none | yes |
+| all | 60 s | 132,838 | 1.0000 | 1.0000 | 1820.3 | none | yes |
+| change | 30 s | 132,740 | 1.0007 | 1.0004 | 1818.9 | time_budget 1, transitions 2, s15a_rules 4 | no |
+| change | 60 s | 132,740 | 1.0007 | 1.0004 | 1818.9 | time_budget 1, transitions 2, s15a_rules 4 | no |
+| gap | 30 s | 132,801 | 1.0003 | 1.0001 | 1819.8 | transitions 1 | no |
+| gap | 60 s | 132,785 | 1.0004 | 1.0002 | 1819.5 | transitions 1 | no |
+| threshold | 30 s | 132,802 | 1.0003 | 1.0001 | 1819.8 | none | yes |
+| threshold | 60 s | 132,786 | 1.0004 | 1.0002 | 1819.6 | none | yes |
+| neighbours | 30 s | 132,802 | 1.0003 | 1.0001 | 1819.8 | none | yes |
+| neighbours | 60 s | 132,786 | 1.0004 | 1.0002 | 1819.6 | none | yes |
+| recovered | 30 s | 132,802 | 1.0003 | 1.0001 | 1819.8 | none | yes |
+| recovered | 60 s | 132,786 | 1.0004 | 1.0002 | 1819.6 | none | yes |
+
+| run | H | first identical rung | verdict | ratio_gzip | line ratio | headerId gaps / missing at that rung |
+|---|---|---|---|---|---|---|
+| s10-none | 30 s | recovered | identical | 1.1820 | 1.5021 | 6,466 / 20,056 |
+| s10-none | 60 s | recovered | identical | 1.1816 | 1.5528 | 5,481 / 21,359 |
+| moroop-sf | 30 s | threshold | identical | 1.0001 | 1.0003 | 42 / 45 |
+| moroop-sf | 60 s | threshold | identical | 1.0002 | 1.0004 | 44 / 61 |
+
+The three references (Part 10 section 2):
+- (a) **gzip of the full log**: the ratio is against it, so the number is the gain over plain compression.
+- (b) **kept lines per robot-hour against the emitted rate**: the simulator emits every robot every 5 s (721.4 lines per robot-hour in); MoRoOp is already change-only (1820.3 in).
+- (c) **the 3:1 floor** AVEVA calls the suggested minimum (a vendor's rule of thumb, rank D). It counts events; on gzip bytes it is the stricter reading, so the line ratio is shown next to it. Neither ratio reaches 3 on either run.
+
+**Reading the numbers.** The refute line (Part 10 section 5) is met as **identical** on both runs at both H: a reduced stream gives the same answers. The ratio at the first identical rung is below 3 in all four cells, so on these two runs the pitch is **not worth making**. On the simulator `change` alone is not enough (117 time-budget items and 627 stall-list items differ); each later rung fixes the diff the one before it leaves, and only `recovered` is identical. On MoRoOp `threshold` is enough.
+
+**Caveats.**
+- **MoRoOp is already change-only** (q), and `theta` changes on almost every line, so `change` keeps 132,740 of 132,838 lines. A ratio near 1 there is expected and is not a refutation; the MoRoOp cell shows the reduction is harmless there, not that it pays.
+- **A VDA 5050 fleet already sends `state` change-only with a 30 s heartbeat**, so the simulator's every-step stream overstates the gain for such a fleet: the simulator ratio is the best case. A real VDA 5050 fleet's gain would be against `visualization` messages or bags, which the analyser does not read.
+- Dropping lines leaves headerId holes by construction (last column of the summary table); a consumer that alarms on them would alarm on a reduced log. They are reported apart, not in "identical".
+- Two runs: a 10-zone x 500-step undisturbed simulator run and nine MoRoOp shifts. The eight-hour simulator runs (`s10-none-8h`, `s10c-blind-8h`) were not run.
+
+Source: `results/fleet/reduce_s10-none.json`, `results/fleet/reduce_moroop-sf.json` (`heartbeat.<H>.rungs`, `first_identical_rule`, `ratio_gzip_at_first_identical_rule`, `verdict`), written by `fleet/reduce_check.py`. The tables were printed by a read-only script whose text is in `reports/wr-dev-s18-readme.md`.
