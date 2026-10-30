@@ -1597,7 +1597,8 @@ compression and is the baseline the result is measured against (§2).
 R = gzip bytes of the full log / gzip bytes of the reduced log, so the gain over plain compression is the number;
 (b) **kept lines per robot-hour against the emitted rate** (the sim emits every robot every 5 s; MoRoOp is already
 change-only, README (q)); (c) the **3:1 floor** AVEVA calls the suggested minimum (D, a vendor's rule of thumb, cited as
-such). Our test is stricter than the literature's: identity of every output, no tolerance.
+such). AVEVA's 3:1 counts events, not bytes; applied here to gzip bytes it is stricter, and the line ratio is
+reported next to it for the like-for-like reading. Our test is stricter than the literature's: identity of every output, no tolerance.
 
 ### 3. Who already does it for robot fleets
 
@@ -1612,7 +1613,8 @@ and were not re-swept.
   lines) has no "retention" entry and no page on checking analyses after reduction.
 - **InOrbit (A).** The agent does "Adaptive sampling & throttling" (named, not defined), and a `DataSourceDefinition`'s
   `timeline` field chooses whether a value is stored in the time-series database (https://developer.inorbit.ai/docs).
-  The page has no "retention" and no check of results after sampling.
+  That page (the surface searched; `api.inorbit.ai/docs` and `/tutorials` were not) has no "retention" and no check
+  of results after sampling.
 
 **Verdict 3.** Reducing robot data volume **is** documented, as rate throttling, store-on-device and choose-what-to-store:
 "keep less" is not new. Keeping less **and checking that every answer is unchanged** was not found in either doc tree
@@ -1649,7 +1651,8 @@ as cumulative `--rules` sets and reports every rung, so the first rung that give
 
 The full stream is needed if no rung up to R5 is `identical` on every output on `s10-none` and MoRoOp `-sf`. A reduced
 stream is enough if one is, at gzip ratio R over gzip of the full log; below **R = 3** (§2 floor) the pitch is not worth
-making. A VDA 5050 fleet already logs `state` change-only with a 30 s heartbeat, so the sim's every-step stream
+making (3:1 counts events in the source; on gzip bytes it is the stricter reading). Anything else (one run
+identical and the other not, or identical at H = 60 but not at H = 30) is **mixed**, reported per run and per H. A VDA 5050 fleet already logs `state` change-only with a 30 s heartbeat, so the sim's every-step stream
 overstates the gain for such a fleet: the gain there is against `visualization` or bags, which the analyser does not read.
 
 **Brief:** `wr-lane-s18a-keep-what-matters.md` was rewritten in place from Verdicts 1-4; file names, tests and result paths

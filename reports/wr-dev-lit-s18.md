@@ -1,7 +1,7 @@
 # wr-dev-lit-s18: LITERATURE Part 10 (keeping less of a fleet log without losing the answers), 2026-10-30
 
 Unattended docs job, opus. Outputs:
-- `docs/LITERATURE.md` Part 10 (109 lines, under the 120 limit).
+- `docs/LITERATURE.md` Part 10 (112 lines after the review-fix pass, under the 120 limit).
 - The S18A lane brief `~/code/Michiel-DK/laptop-scheduler/jobs/wr-lane-s18a-keep-what-matters.md`, rewritten in place.
   Its DRAFT header is gone, so the lane's own self-fail check no longer fires. The brief is **not committed** in
   laptop-scheduler: this job commits only to warehouse-rl, as the S15 and S16 lit jobs did.
@@ -49,7 +49,7 @@ Fetched with curl, except where WebFetch is noted. All dated 2026-10-30.
 
 | what | where | status | used for |
 |---|---|---|---|
-| VDA 5050 2.1.0 and 3.0.0 text | raw.githubusercontent.com/VDA5050/VDA5050/{2.1.0,main}/VDA5050_EN.md (tags 511d01d, e9ba560) | 200, read §6.10 (2.1.0) and §6.6 (3.0.0), topic tables | §1 |
+| VDA 5050 2.1.0 and 3.0.0 text | raw.githubusercontent.com/VDA5050/VDA5050/{2.1.0,main,3.0.0}/VDA5050_EN.md (tag 2.1.0 511d01d; main 0b2ae43 read first; tag 3.0.0 e9ba560 fetched after and checked: same 30 s sentence (L1028), same 16 triggers, `minimumStateInterval` present; the files differ elsewhere) | 200, read §6.10 (2.1.0) and §6.6 (3.0.0), topic tables | §1 |
 | Sparkplug RBE | eclipse-sparkplug/sparkplug master e45b610, Sparkplug_2_Principles.adoc | 200, read | §1 |
 | AVEVA PI deck (Bregenzer 2023) | cdn.osisoft.com …UC23NA-3PGK04…pdf | 200, pdftotext, read | §1, §2 |
 | AVEVA docs pages | docs.aveva.com/bundle/pi-server-s-da-admin/page/1021696.html | JS shell, no text | UNTESTED |
@@ -98,6 +98,19 @@ Part 7 rule this is **one index plus a partial second**, so the absence is not p
   `results/fleet/reduce_<run>.json`, proof runs (s10-none, moroop/jsonl-sf), the follow-on items `wr-s18a-run` and
   `wr-dev-s18-readme`.
 
+## Rank per name (item 1 asked for rank A)
+
+Report by exception: A (Sparkplug). VDA 5050: A. Bag filtering: A (source). Event-based sampling: A- (abstract).
+Exception and swinging door: **D** (AVEVA's deck; the AVEVA docs are a JavaScript shell to our fetch, so UNTESTED) plus
+the patent record. LTTB: **F** for content (the thesis was not opened). Neither D nor F name is the lane's name.
+
+## Review-fix pass
+
+After b6943f6 an advisor read added: the **mixed** outcome in the refute line, per run and per H; the 3:1 units
+(events, not bytes; stricter on gzip; the line ratio is reported next to it); the MoRoOp label match by kept index
+(the brief now says to compare by timestamp); the 3.0.0 tag check; and the InOrbit searched surface. Part 10 is now 112
+lines.
+
 ## Open for the operator
 
 - The 3:1 floor is a vendor's rule of thumb (rank D), not a buyer's number. If buyers named a size or cost target, that
@@ -105,3 +118,8 @@ Part 7 rule this is **one index plus a partial second**, so the absence is not p
 - R4 needs the detector inside the reducer. That makes the reducer analyser-specific: "keep what *this* analyser needs",
   not a general log policy. The page wording should say so.
 - Formant's two pages disagree on the default stream rate (0.5 Hz vs 5 Hz). Noted only; nothing depends on it.
+
+## Commits
+
+b6943f6 (Part 10 + report) and the review-fix commit after it are on local `master`, **not pushed** (the job said
+commit). A lane that squash-merges should rebase onto them knowingly (memory: S15B squash folded unpushed master commits).
