@@ -60,6 +60,18 @@ Nothing else. A log in any other shape needs an adapter like the MoRoOp one; the
 
 It prints one row per required field and a verdict line, exit 0 on a match and 2 otherwise. The ingester refuses a log the same way when fewer than `--min-accepted` of its lines parse; pass `--once --min-accepted 0.5` on a plain folder of files, because without `--once` a folder with no emitter ledger never ends and the default never fires (S17A lane report, open point). One robot on four positions cannot produce a map, a congestion figure or a blockage, so every claim about those is simulator-only.
 
+## Run it on your own log
+
+```sh
+.venv/bin/python fleet/run_on_log.py --glob 'DIR/*.jsonl.gz' --stations PATH [--out DIR] [--station-radius N] [--servicing-max-s S|auto]
+```
+
+It needs a log in the fleet-state contract (`docs/SCOPE.md` "S5A", files named `zone<z>-<nnn>.jsonl.gz`) and a stations file, `{"stations": [[x, y], ...], "shelves": [[x, y], ...]}`, with cells in the log's grid (example: `fleet/data/moroop/stations.json`). It runs `fleet/check_log.py`, `fleet/ingest.py`, `fleet/timebudget.py`, `fleet/deadlock.py` (on a copy of the store) and `fleet/report.py` in that order, stops at the first step that fails with that step's exit code, and refuses an `--out` that is not empty (exit 2; the default is `fleet/data/<log directory name>-run-on-log`). It writes five outputs into `--out`: `check_log.txt`, `store/`, `timebudget.json`, `blocking.json` and `report.md`, which starts with a header (input glob and line count, stations file, the commit of each step's script).
+
+Descriptive, not graded: this log carries no right answers, so no figure here is a hit rate. The blocking number compares shifts; it does not say where.
+
+A log in any other shape needs an adapter; `fleet/adapters/moroop.py` is the worked example.
+
 ## Reproducing
 
 - `./scripts/setup.sh` fetches the two vendored packages (both MIT) at pinned commits. The simulator numbers here are macOS arm64 numbers; Linux gives different absolute values from the A* tie-break and the same paired comparisons (`docs/PLATFORM.md`).
