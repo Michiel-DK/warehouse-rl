@@ -1657,3 +1657,77 @@ overstates the gain for such a fleet: the gain there is against `visualization` 
 
 **Brief:** `wr-lane-s18a-keep-what-matters.md` was rewritten in place from Verdicts 1-4; file names, tests and result paths
 are kept, and the report has the diff.
+
+## Part 11: fleet log shapes a converter must read (2026-10-30)
+
+Scope: the check before S19B (laptop-scheduler `jobs/wr-lane-s19b-converter.md`): a mapping file that takes a fleet log
+in another shape to the fleet-state contract (`fleet_analyser/parse.py` REQUIRED_FIELDS: headerId, timestamp,
+serialNumber, orderId, agvPosition {x, y int}, driving, errors, loads; optional theta, nodeStates, paused) with no new
+code. One pass on 2026-10-30 (curl of GitHub raw files and tag shas, ros.org REPs, docs.formant.io, docs.ottomotors.com,
+WebFetch of developer.inorbit.ai), so `verified@2026-10-30` throughout. Query log: `reports/wr-dev-lit-s19.md`. Ranks as
+in Part 2 (A read, B inferred from A, F guess); vendor ranks as in `outward-claim-discipline`. Code facts are this repo (A).
+
+### 1. The shapes in the wild
+
+| shape (source, rank A) | direct | derived (how) | absent |
+|---|---|---|---|
+| **VDA 5050 2.0 / 2.1 `state`** (`json_schemas/state.schema` at tags 2.0.0 `a8974b1`, 2.1.0 `511d01d`; 2.1.0 `VDA5050_EN.md` L1016-1077, https://github.com/VDA5050/VDA5050) | headerId, serialNumber, driving ("driving and/or rotating"), errors, loads (optional: absent = "cannot determine"), paused (optional), nodeStates, agvPosition.theta | timestamp: "YYYY-MM-DDTHH:mm:ss.ffZ", floor to the second; x, y: "m", float64, to cells; **orderId: not "has a job"**. The schema says it is "the current order or the previous finished order ... kept until a new order is received", so a finished robot keeps it. Busy = `nodeStates` non-empty ("empty array if idle", L1026; Part 2 §2 L318) | nothing required; `errorLevel` is only WARNING / FATAL in 2.x |
+| **MassRobotics AMR Interop `statusReport`** (`AMR_Interop_Standard.json`, main `f9357a4`, https://github.com/MassRobotics-AMR/AMR_Interop_Standard) | timestamp (`date-time`; the example has `-05:00`, so normalise to UTC); robot id (uuid, from the identityReport) | x, y (number, no unit in the schema) to cells; theta = yaw of the `angle` quaternion; driving from `operationalState` (enum navigating, idle, disabled, offline, charging, waitingHumanEvent, waitingExternalEvent, waitingInternalEvent, manualOverride) or from `velocity.linear` (m/s); paused from manualOverride / disabled (ours, B) | headerId (generate), orderId (only `destinations`; no job id), loads, error level (`errorCodes` are bare strings, "omitted for normal operation") |
+| **Open-RMF** (a) `rmf_fleet_msgs/RobotState.msg` (rmf_internal_msgs main `0e7ab42`), (b) API `robot_state.json` (rmf_api_msgs main `5da2210`), https://github.com/open-rmf | name; (a) seq ("increment ... by 1"), (b) task_id ("Empty string if the robot is not working on a task") | timestamp from (a) `location.t` (ROS Time) or (b) `unix_millis_time`; x, y (float32; ROS metres, REP 103) to cells; theta = yaw; driving from mode MOVING (a) or status (b) only (no velocity field); paused = MODE_PAUSED (a); errors from MODE_EMERGENCY / ADAPTER_ERROR (a) or `issues` / status `error` (b), level by our rule | loads; (b) has no sequence number |
+| **ROS 2 bag of `nav_msgs/Odometry`** (common_interfaces rolling `05a5c4e`; REP 103 units, REP 105 frames, https://ros.org/reps/) | none as a row: a bag is sqlite3 / MCAP, not CSV, JSON lines or parquet, so it needs an export first | timestamp = header.stamp sec + nanosec; x, y from pose, metres (REP 103). REP 105: odom "can drift over time, without any bounds", so cells need a map-frame pose (`/amcl_pose` or tf map->base_link), never raw odom; driving from twist (m/s, rad/s) with a threshold | robot id (the bag or namespace), orderId, errors (diagnostics is a separate topic, Part 9), loads |
+| **Formant export** (https://docs.formant.io/docs/exporting-data-from-the-web-application.md, updated 2025-11-11) | deviceName (robot id) | **long format**: one JSON line per (streamName, streamType, timestamp, value); timestamp 13 digits in the example, so unix ms (B, the unit is not stated); every contract field is a stream the customer named, so a pivot (long to wide) per device and time is needed first | everything not configured as a stream |
+| **OTTO** (docs.ottomotors.com, Software 2.36) | none | Fleet Analytics export = dashboard data as a `.json` file (`30495-31067-...`), aggregates, not a state stream. Robot statuses page (`30495-122774-...`) lists status/state words (OFFLINE, Manual, Paused, Blocked, Queued, Work In Place, Charging, ...) a state enum could map | a per-robot state log export: not on the public pages read; help centre is a login, so **UNTESTED** |
+| **InOrbit** (https://developer.inorbit.ai/docs, first 100k of 198k characters read) | none | pose x, y, yaw + frame (units of x, y not stated); status values OK / WARNING / ERROR; mission rows with `startTs`, `endTs`, `data.status` (an interval table, like MoRoOp's operations) | bulk export: not found on the half read = **UNTESTED** |
+| MiR, Locus, Geek+ and the other COMPETITION.md vendors | | | **UNTESTED**: doc tree behind a login or absent (COMPETITION.md summary matrix, not re-swept) |
+
+**Verdict 1.** No shape in the wild carries the contract as-is. VDA 5050 is closest, but even there orderId is derived.
+The converter needs four capabilities: (i) a wide table with named columns; (ii) a long-to-wide pivot (Formant);
+(iii) a second interval table for "has a job" (MoRoOp operations, InOrbit missions); (iv) constants for absent fields.
+ROS bags are out of scope until exported. The converter reads CSV, JSON lines and parquet, and says so.
+
+### 2. The derivations
+
+| contract field | rule the standard gives | otherwise: parameter (MoRoOp default) |
+|---|---|---|
+| timestamp | VDA: UTC ISO 8601 with fractions; MassRobotics: `date-time` with offset; RMF: unix ms or ROS Time | `time.format` in iso8601 / epoch_s / epoch_ms / epoch_us / epoch_ns / ros_stamp; always to UTC, floor to the second; `time.per_second: last` (keep the last row of each second, ties by `time.tiebreak` column) (MoRoOp: parquet timestamp, read as epoch_us; tiebreak `id`) |
+| headerId | VDA/RMF: +1 per message, per robot | `header.from: generate` gives 1..n per robot after the per-second collapse. `header.from: <column>` passes it through, so source gaps stay gaps. (MoRoOp: generate, never `id`, Part 2b §4) |
+| serialNumber, manufacturer | | `robot.column` or `robot.const` (MoRoOp const `moroop-amr-1`); `manufacturer.const` (`wheel.me`) |
+| agvPosition x, y | metres (VDA "m", REP 103); MassRobotics silent | `position.x`, `position.y`, `position.unit` (m / mm / cm), `position.cell_m` (0.5); cell = **floor**(v / cell_m), never int() |
+| agvPosition.theta | VDA radians [-pi, pi]; MassRobotics/ROS quaternion | `position.theta` column, or `position.quaternion` [x, y, z, w] to yaw; absent = omit |
+| driving | VDA: a bool. Others: none, so a threshold | one of `driving.column` (bool); `driving.enum` {value: true/false}, where an unknown value is a counted drop; `driving.speed` [vx, vy] with `speed_eps` (0.05 m/s) OR `driving.omega` with `omega_eps` (0.05 rad/s), **strict >** |
+| orderId ("has a job") | VDA: orderId only while `nodeStates` non-empty; RMF API: task_id, "" when idle | `order.column` + optional `order.active_if_nonempty` (VDA: `nodeStates`); or `order.intervals` {path template, job_col, start_col, end_col, gap_same_job, latest_start_wins, blank_if {lookup path, key, json field, values}} (MoRoOp: operations, job_id, start_time / finish_time, gap true, charging jobs via jobs.payload.job_type to "") |
+| errors | VDA errorLevel; RMF issues; ROS diagnostics levels (Part 9) | `errors.const: []` (MoRoOp default); or `errors.column` (+ JSON list path), `level_key`, `error_levels`, `noise`, written as errorLevel FATAL. Which levels count is **ours** (Part 9 verdict 1); MassRobotics strings default to [] |
+| paused | VDA `paused` (optional); RMF MODE_PAUSED | `paused.any`: list of {column, in / not_in} (MoRoOp: state in [Paused] OR operating_mode not_in [Autonomous]); absent = omit |
+| loads | VDA loads | `loads.const: []` (MoRoOp) or `loads.column` |
+| zone | | `zone.from: file` with `zone.order` (the file stems in zone order) or `zone.column`. MoRoOp needs the order list: sorted names put `27_evening` before `27_morning`, while `moroop.SHIFTS` puts morning first |
+
+**Verdict 2.** These are the mapping-file keys. `maps/moroop.json` with the defaults in brackets must reproduce
+`moroop.py` build without --faults. Output key order: headerId, timestamp, manufacturer, serialNumber, orderId,
+agvPosition {x, y, theta}, driving, paused, errors, loads. Encoding: compact JSON, gzip mtime 0.
+
+### 3. Stations without a floor plan
+
+- **VDA LIF.** OTTO exports its map as LIF: "Any Marker that includes the dock type parameter (for example, docks,
+  chargers and carts) will also be exported as a Station". The example has `stations[].stationPosition {x, y, theta}`
+  in metres and `interactionNodeIds`
+  (https://docs.ottomotors.com/en/30495-136209-export-the-map-in-lif-format.html, A for OTTO's export). The VDMA LIF
+  guideline itself was not read: **UNTESTED** at rank A.
+- **Open-RMF nav graph.** Waypoints carry `name`, `is_charger`, `is_parking_spot`, `is_holding_point` (rmf_ros2 main
+  `b892a9a`, `parse_graph.cpp` L150-200, A), and `Location.index` gives the waypoint a robot is at.
+- **VDA 5050 state.** It has `lastNodeId` ("current node" when on one) and `batteryState.charging`, but no station type.
+- **MassRobotics** has none. **MoRoOp** has `current_position_id` 135-138, with names in the paper (Part 2b §1).
+
+**Verdict 3.** The rule, first match:
+1. `--stations-from` a LIF file (stationPosition to cells) or an RMF nav graph (named / charger / parking waypoints).
+2. With a `stations.position_column` and `stations.ids` in the map, the generalised `moroop.py` rule: per id, every
+   cell holding >= `stations.min_share` (0.05) of the rows matching `stations.dwell_if` (MoRoOp: state in [Idle]) at
+   that id, pooled over **all** --in files.
+3. Otherwise exit 2: "a stations file is needed".
+
+Never derive stations from dwell positions alone. A place where robots stop often is also where they get stuck, and the
+station filter (S13B) would then hide exactly those stalls.
+
+### 4. What refutes it
+
+`generic.py --map maps/moroop.json` on MoRoOp gives messages (or a stations file) that differ from `moroop.py`'s in any
+field beyond the deviations listed here (none are expected) -> the converter is not general enough.
