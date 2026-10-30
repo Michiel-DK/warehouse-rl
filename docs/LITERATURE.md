@@ -1544,3 +1544,113 @@ form "no row rejected" alone is not allowed.
 MoRoOp record, so by the Part 7 rule that is **one index**.
 
 **Briefs:** both S16 drafts were rewritten in place from Verdicts 1-4. File names, tests and result paths are kept; the diff is in the report.
+
+## Part 10: keeping less of a fleet log without losing the answers (2026-10-30)
+
+Scope: the check before S18A (laptop-scheduler `jobs/wr-lane-s18a-keep-what-matters.md`). The premise is first-hand from
+the operator (30 Oct): buyers say fleet logs are too big. One pass on 2026-10-30 (curl of GitHub raw files, Formant's
+`llms.txt` index, the InOrbit `/docs` page, an AVEVA conference PDF, OpenAlex, CORE API v3), so `verified@2026-10-30`
+throughout. Query log: `reports/wr-dev-lit-s18.md`. Ranks as in Part 2; vendor ranks as in
+`outward-claim-discipline` (A doc tree, D conference talk). Code facts are file:line in this repo (A, read).
+
+### 1. The standard names
+
+| name | what it keeps | source (rank) |
+|---|---|---|
+| **report by exception (RBE)**, change-only | a message only when a value changes; works only if the receiver knows the sender is alive | Sparkplug spec, Principles, "Report by Exception": "messages only need to be sent by an Edge Node when values at the edge change", and RBE needs the session state "always known" (https://github.com/eclipse-sparkplug/sparkplug/blob/master/specification/src/main/asciidoc/chapters/Sparkplug_2_Principles.adoc, sha e45b610, A) |
+| **VDA 5050 `state`** | event-triggered plus a heartbeat | 2.1.0 §6.10: "published with occurrence of relevant events or at the latest every 30s"; triggers are order, load, errors, node, operating mode, `driving`, node/edge/action states, maps; "There should be an effort to curb the amount of communication" (https://github.com/VDA5050/VDA5050/blob/2.1.0/VDA5050_EN.md, A). 3.0.0 §6.6: same 30 s, adds `paused`, `safetyState`, `lastNodeId` and others, and a factsheet `minimumStateInterval` (https://github.com/VDA5050/VDA5050/blob/3.0.0/VDA5050_EN.md, A). A position change alone is **not** a trigger in either version; position at high rate is the optional `visualization` topic, "for visualization purposes only" (2.1.0 topic table) |
+| **exception (deadband) + compression (swinging door)**, max-time | historian filters: ExcDev deadband, swinging-door CompDev, ExcMax / CompMax = "max time allowed between events" | AVEVA (OSIsoft PI) deck, Bregenzer 2023, https://cdn.osisoft.com/osi/presentations/2023-AVEVA-San-Francisco/UC23NA-3PGK04-AVEVA_Bregenzer_Brent-Exception-Compression-and-their-Impacts-On-PI-System-Performance.pdf (D, read); swinging door = Bristol, US 4,669,097, Foxboro, filed 1985 (https://patents.google.com/patent/US4669097A/en, record read). The AVEVA docs pages are a JavaScript shell to our fetch: UNTESTED |
+| **event-based (Lebesgue) sampling** | a sample when the signal passes a level, not on a clock | Åström & Bernhardsson, CDC 2002, https://doi.org/10.1109/cdc.2002.1184824 (A-, abstract) |
+| **downsampling for display (LTTB)** | the points that keep a line plot's shape | Steinarsson 2013 MSc thesis, Univ. of Iceland, handle 1946/15343 (cited by the `lttb` packages; thesis not opened, F for content) |
+| **bag filtering** | topic or predicate selection over a recorded bag | ROS 1 `rosbag filter INBAG OUTBAG EXPRESSION`, a Python predicate over `topic, m, t` (ros_comm noetic-devel 30483a9, `rosbag_main.py` L325); ROS 2 `ros2 bag convert` with `exclude_topics` / `exclude_regex` and zstd `compression_mode` (rosbag2 rolling 737e0fa, README) (A) |
+
+**Verdict 1.** The lane's name is **report by exception (change-only) with a maximum interval**: zero deadband,
+because every field the analyser reads is discrete (`parse.Message`: order id, integer cell, `driving`, `faulted`,
+`loaded`, `paused`, next node, `theta`; parse.py L22-40). Deadband and swinging door are for continuous signals and
+interpolate between kept points; LTTB is for plots; neither may be used, since the analyser reads the log as a step
+function (message i owns [ts_i, ts_i+1), timebudget.py L13). Bag filtering is the ROS form of the same act (a predicate
+per message). README words: "a change-only log with a heartbeat (report by exception)". Not "compression": gzip is
+compression and is the baseline the result is measured against (§2).
+
+### 2. What it costs elsewhere
+
+- **Status tags, historian (D).** AVEVA's own example: a 0/1 status tag at 1 s scan, CompMax 8 h: 172,800 events in
+  48 h with no compression, 15 with "minimal compression". The ratio is set by scan rate against change rate, not by the
+  method: a ratio without the emission rate means nothing.
+- **Analog tags, historian (D).** Same deck, oil and gas customer, 14 tags: 0.2 % to 95 % of events removed, "Half of
+  tags met or surpassed the suggested minimum compression ratio of 3:1", and the KPI was "Maximum delta between
+  original & compressed", all below instrument precision. A reconstruction-error check, not an answers check. Offshore
+  pilot: "~94% reduction in archived events".
+- **Downstream task tests exist, as degradation.** Muñiz-Cuza et al., EDBT 2024 (https://doi.org/10.48786/edbt.2024.56,
+  A-, abstract): mean ratios 13.65 / 5.56 / 14.97 (PMC / Swing / SZ) at a forecasting-accuracy cost of 5.56 % / 3.3 % /
+  8.5 %. Hollmig et al., Information Systems 65 (2017) (https://doi.org/10.1016/j.is.2016.11.001, A-, abstract via
+  https://dbis.ipd.kit.edu/english/722_2434.php): compression plus change detection, quality "highly contingent on the
+  nature of the data". Thornhill, Choudhury & Shah, J. Process Control 14 (2004) 389
+  (https://doi.org/10.1016/j.jprocont.2003.06.003): compressed historian data distorts data-driven analyses (metadata A-;
+  content from a secondary summary only, C; its "factor 3" heuristic is not used here).
+- **"Answers identical" (exact equality of every downstream output) was not found**: every downstream test above
+  reports a degradation at a tolerance. Searched: OpenAlex and CORE (queries in the report). CORE retrieved the known
+  Thornhill paper, and only 2 robot-side CORE queries ran before HTTP 429. So this is one index plus a partial second,
+  short of the Part 7 bar, and may not front a pitch.
+
+**Verdict 2.** Every ratio S18A reports carries three references: (a) **gzip of the full log**, the trivial competitor:
+R = gzip bytes of the full log / gzip bytes of the reduced log, so the gain over plain compression is the number;
+(b) **kept lines per robot-hour against the emitted rate** (the sim emits every robot every 5 s; MoRoOp is already
+change-only, README (q)); (c) the **3:1 floor** AVEVA calls the suggested minimum (D, a vendor's rule of thumb, cited as
+such). Our test is stricter than the literature's: identity of every output, no tolerance.
+
+### 3. Who already does it for robot fleets
+
+Only the two vendors with a readable doc tree in `docs/COMPETITION.md` (Formant, InOrbit); the rest are UNTESTED there
+and were not re-swept.
+- **Formant (A).** Documented: per-stream and per-device rate limits ("between `0 Hz` and `5 Hz`", default 0.5 Hz,
+  https://docs.formant.io/docs/configure-stream-rate.md; the agent page says "up to 20Hz, with 5Hz being the default" and
+  that a throttled datapoint is "dropped", https://docs.formant.io/docs/how-telemetry-streams-work.md: the two pages
+  disagree); on-demand streams kept on the device until requested (https://docs.formant.io/docs/on-demand-streams.md);
+  a Low Bandwidth Agent and "Often times, however, we see that there is more data collected than is necessary"
+  (https://docs.formant.io/docs/faq-reduce-bandwidth-in-constrained-situations.md). The full `llms.txt` index (502
+  lines) has no "retention" entry and no page on checking analyses after reduction.
+- **InOrbit (A).** The agent does "Adaptive sampling & throttling" (named, not defined), and a `DataSourceDefinition`'s
+  `timeline` field chooses whether a value is stored in the time-series database (https://developer.inorbit.ai/docs).
+  The page has no "retention" and no check of results after sampling.
+
+**Verdict 3.** Reducing robot data volume **is** documented, as rate throttling, store-on-device and choose-what-to-store:
+"keep less" is not new. Keeping less **and checking that every answer is unchanged** was not found in either doc tree
+(verified@2026-10-30). Words for the page: "keep only the lines that change an answer, and prove it output by output",
+never "nobody reduces fleet logs".
+
+### 4. Rules the build must keep
+
+Set from the code (A, read), simplest first. Each rung fixes a diff the rung before it leaves; the lane implements them
+as cumulative `--rules` sets and reports every rung, so the first rung that gives `identical` everywhere is the result.
+- **R0 `all`**: identity.
+- **R1 `change`**: per robot, keep a line when its `parse.Message` minus (`header_id`, `ts`, `raw_len`) differs from the
+  last kept line, plus each robot's first and last line (span; `unresolved` closes). Never read `custom` (S5B
+  invariant). Pair rules stay exact: `stop_minutes` (timebudget.py L246) and the hotspot heading test (hotspot.py L65)
+  compare consecutive lines, and a dropped line equals the kept line before it.
+- **R2 `+gap`**: never create an interval longer than `max_gap_s` (60 s, timebudget.py L203, which turns the whole
+  interval into `no_data`): keep a line whenever the next one kept would be more than H later, and keep both ends of
+  every gap already in the source. A reducer cannot add lines, so on MoRoOp the source gaps stay `no_data`, as README (q)
+  says; this rule only stops the reducer making new ones. H = 60 (our gap rule) and H = 30 (the VDA 5050 heartbeat) are
+  both reported. This is ExcMax / CompMax (§1) and the "state always known" condition of RBE.
+- **R3 `+threshold`**: in each stopped run, keep the first line at or after `since + stuck_after` and at or after
+  `since + servicing_max_s` (the bound taken from the full-log run and passed in fixed). Both the detector (`_step`,
+  detector.py L212) and `run_is_stuck` (timebudget.py L166, last line of the run minus the first) decide only on lines
+  that exist, so without R3 a stop reduced to its first and ending line never becomes an episode.
+- **R4 `+neighbours`**: at each episode's T_entry, keep the whole zone batch at that ts. `_cause` reads only robots with a
+  line at that exact ts (detector.py L287), so change-only turns `traffic` and `blocked_by_*` into `unknown`. This needs
+  the detector run inside the reducer; the brief says so.
+- **R5 `+recovered`**: keep the line after each episode's ending line. `RECOVERED` lasts one message, so the next
+  transition's ts moves if that line is dropped.
+- **Not in "identical", by construction:** the ledger's `sequence_gaps` / `missing_messages` (dropped lines leave
+  headerId holes; the reducer must not renumber, which would hide real loss) and byte counts. Reported apart.
+
+### 5. What refutes it
+
+The full stream is needed if no rung up to R5 is `identical` on every output on `s10-none` and MoRoOp `-sf`. A reduced
+stream is enough if one is, at gzip ratio R over gzip of the full log; below **R = 3** (§2 floor) the pitch is not worth
+making. A VDA 5050 fleet already logs `state` change-only with a 30 s heartbeat, so the sim's every-step stream
+overstates the gain for such a fleet: the gain there is against `visualization` or bags, which the analyser does not read.
+
+**Brief:** `wr-lane-s18a-keep-what-matters.md` was rewritten in place from Verdicts 1-4; file names, tests and result paths
+are kept, and the report has the diff.
