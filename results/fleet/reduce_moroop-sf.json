@@ -9,25 +9,25 @@
  },
  "args": {
   "glob_files": [
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone0-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone1-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone2-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone3-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone4-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone5-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone6-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone7-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/jsonl-sf/zone8-000.jsonl.gz"
+   "fleet/data/moroop/jsonl-sf/zone0-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone1-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone2-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone3-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone4-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone5-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone6-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone7-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone8-000.jsonl.gz"
   ],
   "heartbeats": [
    30.0,
    60.0
   ],
   "max_gap_s": 60,
-  "moroop_raw": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/raw",
+  "moroop_raw": "fleet/data/moroop/raw",
   "servicing_max_s": 300.0,
   "station_radius": 1,
-  "stations": "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/moroop/stations-sf.json",
+  "stations": "fleet/data/moroop/stations-sf.json",
   "stations_sha256": "3755543ff6b43789303df756358a6a8143e9031623ddb1db13aeed303e0519f6",
   "timebudget_layout": "path"
  },

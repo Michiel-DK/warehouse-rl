@@ -211,6 +211,26 @@ class TestIdentityAndBytes(Base):
         self.assertNotEqual(cm.exception.code, 0)
         self.assertFalse((self.tmp / "o").exists())
 
+    def test_auto_stations_are_rejected(self):
+        # inject: drop type=stations_path from --stations (and the Reducer guard) -> red
+        p = self.make(log_lines(scenario()))
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            rd.main(["--glob", str(p), "--rules", "all", "--out", str(self.tmp / "o"), "--stations", "auto"])
+        self.assertNotEqual(cm.exception.code, 0)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            rc.main(["--glob", str(p), "--run", "t", "--out", str(self.tmp / "x.json"), "--stations", "auto"])
+        self.assertNotEqual(cm.exception.code, 0)
+        with self.assertRaises(ValueError):
+            rd.Reducer([str(p)], stations="auto")
+        self.assertFalse((self.tmp / "o").exists())
+
+    def test_out_of_order_input_stops_the_check(self):
+        # inject: drop the n_out_of_order guard in reduce_check.check -> red (the comparison would run on two input views)
+        p = self.make([L("r1", 1, 0), L("r1", 2, 0, x=1), L("r1", 3, 5, x=2)])
+        with self.assertRaises(SystemExit) as cm:
+            self.check(p)
+        self.assertIn("out-of-order", str(cm.exception))
+
 
 class TestCheckReportsDifferences(Base):
     def test_dropped_transition_is_a_diff(self):

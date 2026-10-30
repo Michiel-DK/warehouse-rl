@@ -9,16 +9,16 @@
  },
  "args": {
   "glob_files": [
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone0-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone1-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone2-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone3-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone4-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone5-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone6-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone7-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone8-000.jsonl.gz",
-   "/Users/michieldekoninck/code/Michiel-DK/warehouse-rl/fleet/data/s10-none/zone9-000.jsonl.gz"
+   "fleet/data/s10-none/zone0-000.jsonl.gz",
+   "fleet/data/s10-none/zone1-000.jsonl.gz",
+   "fleet/data/s10-none/zone2-000.jsonl.gz",
+   "fleet/data/s10-none/zone3-000.jsonl.gz",
+   "fleet/data/s10-none/zone4-000.jsonl.gz",
+   "fleet/data/s10-none/zone5-000.jsonl.gz",
+   "fleet/data/s10-none/zone6-000.jsonl.gz",
+   "fleet/data/s10-none/zone7-000.jsonl.gz",
+   "fleet/data/s10-none/zone8-000.jsonl.gz",
+   "fleet/data/s10-none/zone9-000.jsonl.gz"
   ],
   "heartbeats": [
    30.0,

@@ -6,7 +6,8 @@ deadband. This is not compression; gzip over the full log is the baseline the ra
 
 Built: `fleet/reduce.py` (keep rules R0-R5), `fleet/reduce_check.py` (full vs reduced, exact),
 `fleet/tests/test_fleet_reduce.py`. Results: `results/fleet/reduce_s10-none.json`, `results/fleet/reduce_moroop-sf.json`
-(both written by `reduce_check`; the tables below are `reduce_check.py --table` of those files, nothing retyped).
+(both written by `reduce_check`; the tables below are the markdown `reduce_check` prints at the end of each run, from the
+same document it writes, nothing retyped).
 
 ## Verdict against the refute line (set before the run, Part 10 section 5)
 
@@ -60,7 +61,7 @@ exactly 1.0 (test). The three references:
 
 | | s10-none | moroop-sf |
 |---|---|---|
-| glob | fleet/data/s10-none/zone*-000.jsonl.gz (main checkout; absolute paths in the JSON) | fleet/data/moroop/jsonl-sf/zone*-000.jsonl.gz |
+| glob | fleet/data/s10-none/zone*-000.jsonl.gz (main checkout; recorded relative to the checkout in the JSON) | fleet/data/moroop/jsonl-sf/zone*-000.jsonl.gz |
 | --stations (reduce.py Detector and every analysis) | omitted (null) | fleet/data/moroop/stations-sf.json |
 | --station-radius | omitted (null) | 1 |
 | --servicing-max-s | omitted (null) | 300.0 |
@@ -160,14 +161,13 @@ enough, and `neighbours` and `recovered` add no lines at H = 60.
 
 ## Tests and the injection that turns each red
 
-`fleet/tests/test_fleet_reduce.py`, 18 cases, plain unittest. Each injection was applied to the code with a throwaway script
-(not committed), the file was run, the named case(s) went red, and the code was restored. "Not mutation-run" means the case
-exists and passes but I did not run an injection against it.
+`fleet/tests/test_fleet_reduce.py`, 20 cases, plain unittest. Each injection was applied to the code with a throwaway script
+(not committed), the file was run, the named case(s) went red, and the code was restored. Every case below was mutation-run.
 
 | case | injection that turns it red | observed red |
 |---|---|---|
 | identity (R0 byte-identical, ratio_gzip 1.0, all_identical) | `all` drops the first line | test_identity_and_ratio, test_rungs_are_nested |
-| every output line equals the input line at its source index | re-encode or reorder a kept line | not mutation-run |
+| every output line equals the input line at its source index | re-encode a kept line (newline doubled); write a file's kept lines reversed | re-encode: test_every_output_line_is_the_input_line_at_its_source_index, test_identity_and_ratio, test_s15a_rows_and_label_hits_equal_by_timestamp; reversed: the first two |
 | dropped transition makes the check report a diff | `compare()` returns identical for a missing item | test_dropped_transition_is_a_diff (and 6 more) |
 | gap survives as a gap, no interval longer than H | R2 heartbeat step off | test_gap_survives_as_gap_and_no_interval_longer_than_h |
 | source gap ends kept (H = 120, because H <= 60 hides the step) | R2 gap-ends step off | test_source_gap_ends_are_kept_even_when_h_is_longer_than_the_gap_rule |
@@ -180,12 +180,32 @@ exists and passes but I did not run an injection against it.
 | determinism | gzip with the wall-clock mtime | test_determinism |
 | 'auto' rejected | accept 'auto' as a number | test_auto_servicing_bound_is_rejected |
 | rungs nested | R3 re-optimises the heartbeat | test_rungs_are_nested (and the R3 and R5 cases) |
+| '--stations auto' rejected (reduce, reduce_check, Reducer) | accept 'auto' in stations_path and the Reducer guard | test_auto_stations_are_rejected |
+| out-of-order input stops the check | drop the n_out_of_order guard in reduce_check.check | test_out_of_order_input_stops_the_check |
 
 The garbage-custom case replaces `custom` with different JSON of a different length on fixtures; it does not run on the two real
 runs. At H = 30 a greedy heartbeat from a kept run start lands on since + 30, so R2 already gives R3's line (visible in the
 s10-none H = 30 table: gap and threshold keep the same lines); the R3 case is therefore built for H = 60.
 
+## Review round 1 (PR #60) and what changed
+
+python-reviewer (4 minor, 1 nit) and the scope-adherence refuter (refuted, low confidence: unrequested CLI surface) were
+fixed on the branch; correctness, regression, test-honesty and invariants did not refute.
+- `--stations auto` is refused (reduce.py `stations_path`, reduce_check, and a `Reducer` guard): it would have resolved
+  emit_ledger.json against the process cwd. Test added.
+- `reduce_check.check` stops on out-of-order lines: the analyses read every deduplicated message, the reducer its canonical
+  view, so such a log would show diffs from the input view, not from the rule. Both real runs have 0. Test added.
+- `--table`, `--heartbeats` and `--max-gap-s` are gone from the reduce_check CLI: H is fixed at 30 and 60 and max_gap_s at
+  timebudget's default, as the brief fixes them (the python API keeps the parameters for the fixtures).
+- Result files record paths relative to the checkout, no machine paths.
+- The source-index case was mutation-run (table above).
+- Both runs were re-run from the fixed code; the rung numbers and flags are unchanged against the first build (a JSON diff of
+  old against new result file differs only in the `args` path strings, now relative to the checkout).
+
 ## Gate
 
 The PR description pastes the summary lines of `.venv/bin/python -m unittest discover -s tests` and
 `.venv/bin/python -m unittest discover -s fleet/tests -p 'test_*.py'`.
+
+**Overall verdict: `identical` on both runs at H = 30 and H = 60; ratio_gzip at first_identical_rule 1.18 (s10-none) and
+1.0001-1.0002 (MoRoOp, change-only already), below 3: not worth pitching.**

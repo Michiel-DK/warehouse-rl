@@ -1,9 +1,8 @@
 """S18A reduce_check: does a reduced log give the same answers as the full one? Runs fleet/reduce.py's rungs and compares.
 
 Usage: python fleet/reduce_check.py --glob 'DIR/zone*-000.jsonl.gz' --run NAME --out results/fleet/reduce_NAME.json
-           [--stations PATH] [--station-radius N] [--servicing-max-s S] [--moroop-raw DIR] [--heartbeats 30,60]
-           [--max-gap-s 60] [--workers N]
-       python fleet/reduce_check.py --table results/fleet/reduce_NAME.json     (markdown table of a result file)
+           [--stations PATH] [--station-radius N] [--servicing-max-s S] [--moroop-raw DIR] [--workers N]
+H is 30 and 60 s, max_gap_s is timebudget's default (fixed by the S18A brief; the python API takes others for tests).
 Workers (env layouts for the s10-none style bucket cell sets): --workers, else SCHED_WORKERS, else os.cpu_count() - 2.
 
 For the full log and for each reduced log (rule x H) the SAME existing analyses run with the SAME args (stations, radius,
@@ -29,7 +28,6 @@ import argparse
 import collections
 import glob as _glob
 import json
-import math
 import os
 import shutil
 import sys
@@ -294,6 +292,10 @@ def check(paths, run, stations=None, station_radius=0, servicing_max_s=None, max
     paths = sorted(paths)
     ctx = Context(paths, run, stations, station_radius, servicing_max_s, max_gap_s, moroop_raw, workers, layouts)
     red = Reducer(paths, stations, station_radius, servicing_max_s, max_gap_s)
+    if red.n_out_of_order:
+        # the analyses read every deduplicated message (out-of-order ts included), the reducer its canonical view without
+        # them: on such a log the comparison would report differences that come from the input view, not the rule
+        raise SystemExit(f"reduce_check: {red.n_out_of_order} out-of-order lines; the comparison assumes none")
     full, full_seq = analyse_dir(ctx, paths)
     own_tmp = workdir is None
     work = Path(tempfile.mkdtemp(prefix="reduce_check_")) if own_tmp else Path(workdir)
@@ -330,8 +332,9 @@ def check(paths, run, stations=None, station_radius=0, servicing_max_s=None, max
     s_all = red.summary("all")
     return dict(
         schema=SCHEMA, run=run,
-        args=dict(glob_files=[str(p) for p in paths], stations=stations, station_radius=station_radius if stations else None,
-                  servicing_max_s=servicing_max_s, max_gap_s=max_gap_s, moroop_raw=moroop_raw,
+        args=dict(glob_files=[_rel(p) for p in paths], stations=_rel(stations),
+                  station_radius=station_radius if stations else None,
+                  servicing_max_s=servicing_max_s, max_gap_s=max_gap_s, moroop_raw=_rel(moroop_raw),
                   heartbeats=[float(h) for h in heartbeats], timebudget_layout=ctx.layout_source,
                   stations_sha256=_sha(stations)),
         robot_hour_definition=ROBOT_HOURS_TEXT, robot_hours=s_all["robot_hours"], robots=s_all["robots"],
@@ -351,6 +354,18 @@ def _pooled_sf(label_hits):
         if k[2] == "sf" and k[3] == "counts":
             tot.update(v)
     return dict(sorted(tot.items()))
+
+
+def _rel(path):
+    """A path as recorded in a result file: relative to the checkout it lives in (the first ancestor holding both fleet/
+    and vendor/), so no machine path is committed; unchanged when it is in no checkout."""
+    if path is None:
+        return None
+    p = Path(path).resolve()
+    for root in p.parents:
+        if (root / "fleet").is_dir() and (root / "vendor").is_dir():
+            return str(p.relative_to(root))
+    return str(path)
 
 
 def _sha(path):
@@ -381,40 +396,17 @@ def table_markdown(doc):
     return "\n".join(out)
 
 
-def _heartbeats(text):
-    vals = [positive_float(t) for t in text.split(",") if t]
-    if not vals:
-        raise argparse.ArgumentTypeError("need at least one heartbeat")
-    return vals
-
-
-def positive_float(text):
-    v = float(text)
-    if not 0 < v < math.inf:
-        raise argparse.ArgumentTypeError(f"must be > 0 and finite, got {text}")
-    return v
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description="S18A: compare the analyses on a full and a reduced log")
-    ap.add_argument("--table", default=None, metavar="JSON", help="print the markdown table of a result file and exit")
-    ap.add_argument("--glob")
-    ap.add_argument("--run")
-    ap.add_argument("--out")
-    ap.add_argument("--stations", default=None)
+    ap.add_argument("--glob", required=True)
+    ap.add_argument("--run", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--stations", type=_stations, default=None)
     ap.add_argument("--station-radius", type=int, default=0)
     ap.add_argument("--servicing-max-s", type=_servicing, default=None, metavar="S")
     ap.add_argument("--moroop-raw", default=None, help="fleet/data/moroop/raw: adds the S15A rows and the label hits")
-    ap.add_argument("--heartbeats", type=_heartbeats, default=[30.0, 60.0])
-    ap.add_argument("--max-gap-s", type=positive_float, default=tb.DEFAULT_MAX_GAP_S)
     ap.add_argument("--workers", type=int, default=None, help="default: SCHED_WORKERS, else os.cpu_count() - 2")
     a = ap.parse_args(argv)
-    if a.table:
-        print(table_markdown(json.loads(Path(a.table).read_text())))
-        return 0
-    for need in ("glob", "run", "out"):
-        if getattr(a, need) is None:
-            ap.error(f"--{need} is required")
     if a.station_radius < 0:
         ap.error("--station-radius must be >= 0")
     if a.moroop_raw and not a.stations:
@@ -427,11 +419,16 @@ def main(argv=None):
     if not out_path.parent.is_dir():
         raise SystemExit(f"reduce_check: parent directory of --out does not exist: {out_path.parent}")
     workers = resolve_workers(a.workers, n_tasks=len(paths))
-    doc = check(paths, a.run, a.stations, a.station_radius, a.servicing_max_s, a.max_gap_s, a.moroop_raw, a.heartbeats,
-                workers)
+    doc = check(paths, a.run, a.stations, a.station_radius, a.servicing_max_s, tb.DEFAULT_MAX_GAP_S, a.moroop_raw,
+                (30.0, 60.0), workers)
     out_path.write_text(json.dumps(doc, sort_keys=True, indent=1, allow_nan=False) + "\n")
     print(table_markdown(doc))
     return 0
+
+
+def _stations(text):
+    from reduce import stations_path
+    return stations_path(text)
 
 
 def _servicing(text):

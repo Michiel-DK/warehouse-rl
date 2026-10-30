@@ -70,6 +70,14 @@ _GROUP_RE = re.compile(r"^(.*)-\d+\.jsonl(?:\.gz)?$")
 _NOT_IN_SIG = ("header_id", "ts", "raw_len")
 
 
+def stations_path(text):
+    """argparse type for --stations: a PATH. 'auto' (the analysers' emit-ledger layout) is refused: it would resolve
+    emit_ledger.json against the wrong directory here, and the reducer must be given the file the full-log run used."""
+    if text == "auto":
+        raise argparse.ArgumentTypeError("'auto' is not accepted, pass the stations PATH the full-log analysis used")
+    return text
+
+
 def servicing_number(text):
     """argparse type for --servicing-max-s: a finite number > 0. 'auto' (the analysers' data-driven bound) is refused: the
     reducer must be told the number the full-log run used."""
@@ -127,6 +135,8 @@ class Reducer:
         self.station_radius = station_radius
         self.servicing_max_s = servicing_max_s
         self.max_gap_s = max_gap_s
+        if stations == "auto":
+            raise ValueError("Reducer: stations must be a PATH, not 'auto'")
         self.stations = load_stations(stations, ".") if stations is not None else None
         self.lines = [read_lines(p) for p in self.paths]
         self.n_rejected = self.n_duplicate = self.n_out_of_order = 0
@@ -336,7 +346,7 @@ def main(argv=None):
                     help="H: the longest interval the reducer may create (default 60; used by gap and above)")
     ap.add_argument("--servicing-max-s", type=servicing_number, default=None, metavar="S",
                     help="the S14A station time bound the full-log analysis used, a number (never 'auto')")
-    ap.add_argument("--stations", default=None, help="stations PATH the full-log analysis used (optional)")
+    ap.add_argument("--stations", type=stations_path, default=None, help="stations PATH the full-log analysis used (optional)")
     ap.add_argument("--station-radius", type=int, default=0, help="with --stations: Manhattan radius (default 0)")
     ap.add_argument("--out", required=True, help="output directory (kept lines, same file names)")
     a = ap.parse_args(argv)
