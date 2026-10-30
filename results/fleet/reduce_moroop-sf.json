@@ -1,0 +1,546 @@
+{
+ "applicable": {
+  "label_hits": true,
+  "s15a_rules": true,
+  "stall_list": true,
+  "station_bound": true,
+  "time_budget": true,
+  "transitions": true
+ },
+ "args": {
+  "glob_files": [
+   "fleet/data/moroop/jsonl-sf/zone0-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone1-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone2-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone3-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone4-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone5-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone6-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone7-000.jsonl.gz",
+   "fleet/data/moroop/jsonl-sf/zone8-000.jsonl.gz"
+  ],
+  "heartbeats": [
+   30.0,
+   60.0
+  ],
+  "max_gap_s": 60,
+  "moroop_raw": "fleet/data/moroop/raw",
+  "servicing_max_s": 300.0,
+  "station_radius": 1,
+  "stations": "fleet/data/moroop/stations-sf.json",
+  "stations_sha256": "3755543ff6b43789303df756358a6a8143e9031623ddb1db13aeed303e0519f6",
+  "timebudget_layout": "path"
+ },
+ "full_label_sf_pooled": {
+  "episodes": 77,
+  "false_alarms": 3,
+  "ge30": 2,
+  "hits": 2,
+  "misses": 0,
+  "overruns": 2,
+  "stuck_runs": 4,
+  "timeouts": 8,
+  "timeouts_detected": 3
+ },
+ "full_sequence": {
+  "duplicates": 0,
+  "missing_messages": 9,
+  "sequence_gaps": 9
+ },
+ "groups": [
+  "zone0",
+  "zone1",
+  "zone2",
+  "zone3",
+  "zone4",
+  "zone5",
+  "zone6",
+  "zone7",
+  "zone8"
+ ],
+ "gzip_level": 9,
+ "heartbeat": {
+  "30": {
+   "first_identical_rule": "threshold",
+   "ratio_gzip_at_first_identical_rule": 1.0001369094070454,
+   "rungs": {
+    "all": {
+     "added_by_rule": {
+      "all": 132838
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1826275,
+     "bytes_kept_raw": 34370993,
+     "kept_by_rule": {
+      "all": 132838
+     },
+     "kept_lines_per_robot_hour": 1820.273526265906,
+     "line_ratio": 1.0,
+     "lines_in": 132838,
+     "lines_kept": 132838,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 9,
+      "sequence_gaps": 9
+     }
+    },
+    "change": {
+     "added_by_rule": {
+      "change": 132740
+     },
+     "all_identical": false,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1825483,
+     "bytes_kept_raw": 34345525,
+     "kept_by_rule": {
+      "change": 132740
+     },
+     "kept_lines_per_robot_hour": 1818.930636388205,
+     "line_ratio": 1.000738285369896,
+     "lines_in": 132838,
+     "lines_kept": 132740,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": {
+       "count": 4,
+       "max_abs_diff_s": null,
+       "robots": [
+        "group:zone6"
+       ]
+      },
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": {
+       "count": 1,
+       "max_abs_diff_s": 1088,
+       "robots": [
+        "moroop-amr-1"
+       ]
+      },
+      "transitions": {
+       "count": 2,
+       "max_abs_diff_s": 2841,
+       "robots": [
+        "moroop-amr-1"
+       ]
+      }
+     },
+     "ratio_gzip": 1.0004338577790097,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 107,
+      "sequence_gaps": 30
+     }
+    },
+    "gap": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 61
+     },
+     "all_identical": false,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1826017,
+     "bytes_kept_raw": 34361384,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132801
+     },
+     "kept_lines_per_robot_hour": 1819.766516822284,
+     "line_ratio": 1.0002786123598466,
+     "lines_in": 132838,
+     "lines_kept": 132801,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": {
+       "count": 1,
+       "max_abs_diff_s": 4,
+       "robots": [
+        "moroop-amr-1"
+       ]
+      }
+     },
+     "ratio_gzip": 1.0001412911270815,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 46,
+      "sequence_gaps": 43
+     }
+    },
+    "neighbours": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 61,
+      "neighbours": 0,
+      "threshold": 1
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1826025,
+     "bytes_kept_raw": 34361643,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132801,
+      "neighbours": 132802,
+      "threshold": 132802
+     },
+     "kept_lines_per_robot_hour": 1819.7802197802198,
+     "line_ratio": 1.0002710802548154,
+     "lines_in": 132838,
+     "lines_kept": 132802,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0001369094070454,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 45,
+      "sequence_gaps": 42
+     }
+    },
+    "recovered": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 61,
+      "neighbours": 0,
+      "recovered": 0,
+      "threshold": 1
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1826025,
+     "bytes_kept_raw": 34361643,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132801,
+      "neighbours": 132802,
+      "recovered": 132802,
+      "threshold": 132802
+     },
+     "kept_lines_per_robot_hour": 1819.7802197802198,
+     "line_ratio": 1.0002710802548154,
+     "lines_in": 132838,
+     "lines_kept": 132802,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0001369094070454,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 45,
+      "sequence_gaps": 42
+     }
+    },
+    "threshold": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 61,
+      "threshold": 1
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1826025,
+     "bytes_kept_raw": 34361643,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132801,
+      "threshold": 132802
+     },
+     "kept_lines_per_robot_hour": 1819.7802197802198,
+     "line_ratio": 1.0002710802548154,
+     "lines_in": 132838,
+     "lines_kept": 132802,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0001369094070454,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 45,
+      "sequence_gaps": 42
+     }
+    }
+   },
+   "verdict": "identical"
+  },
+  "60": {
+   "first_identical_rule": "threshold",
+   "ratio_gzip_at_first_identical_rule": 1.0002059259575693,
+   "rungs": {
+    "all": {
+     "added_by_rule": {
+      "all": 132838
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1826275,
+     "bytes_kept_raw": 34370993,
+     "kept_by_rule": {
+      "all": 132838
+     },
+     "kept_lines_per_robot_hour": 1820.273526265906,
+     "line_ratio": 1.0,
+     "lines_in": 132838,
+     "lines_kept": 132838,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 9,
+      "sequence_gaps": 9
+     }
+    },
+    "change": {
+     "added_by_rule": {
+      "change": 132740
+     },
+     "all_identical": false,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1825483,
+     "bytes_kept_raw": 34345525,
+     "kept_by_rule": {
+      "change": 132740
+     },
+     "kept_lines_per_robot_hour": 1818.930636388205,
+     "line_ratio": 1.000738285369896,
+     "lines_in": 132838,
+     "lines_kept": 132740,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": {
+       "count": 4,
+       "max_abs_diff_s": null,
+       "robots": [
+        "group:zone6"
+       ]
+      },
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": {
+       "count": 1,
+       "max_abs_diff_s": 1088,
+       "robots": [
+        "moroop-amr-1"
+       ]
+      },
+      "transitions": {
+       "count": 2,
+       "max_abs_diff_s": 2841,
+       "robots": [
+        "moroop-amr-1"
+       ]
+      }
+     },
+     "ratio_gzip": 1.0004338577790097,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 107,
+      "sequence_gaps": 30
+     }
+    },
+    "gap": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 45
+     },
+     "all_identical": false,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1825894,
+     "bytes_kept_raw": 34357225,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132785
+     },
+     "kept_lines_per_robot_hour": 1819.5472694953125,
+     "line_ratio": 1.0003991414692925,
+     "lines_in": 132838,
+     "lines_kept": 132785,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": {
+       "count": 1,
+       "max_abs_diff_s": 31,
+       "robots": [
+        "moroop-amr-1"
+       ]
+      }
+     },
+     "ratio_gzip": 1.000208664906068,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 62,
+      "sequence_gaps": 44
+     }
+    },
+    "neighbours": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 45,
+      "neighbours": 0,
+      "threshold": 1
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1825899,
+     "bytes_kept_raw": 34357484,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132785,
+      "neighbours": 132786,
+      "threshold": 132786
+     },
+     "kept_lines_per_robot_hour": 1819.5609724532483,
+     "line_ratio": 1.0003916075489887,
+     "lines_in": 132838,
+     "lines_kept": 132786,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0002059259575693,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 61,
+      "sequence_gaps": 44
+     }
+    },
+    "recovered": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 45,
+      "neighbours": 0,
+      "recovered": 0,
+      "threshold": 1
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1825899,
+     "bytes_kept_raw": 34357484,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132785,
+      "neighbours": 132786,
+      "recovered": 132786,
+      "threshold": 132786
+     },
+     "kept_lines_per_robot_hour": 1819.5609724532483,
+     "line_ratio": 1.0003916075489887,
+     "lines_in": 132838,
+     "lines_kept": 132786,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0002059259575693,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 61,
+      "sequence_gaps": 44
+     }
+    },
+    "threshold": {
+     "added_by_rule": {
+      "change": 132740,
+      "gap": 45,
+      "threshold": 1
+     },
+     "all_identical": true,
+     "bytes_in_gzip": 1826275,
+     "bytes_in_raw": 34370993,
+     "bytes_kept_gzip": 1825899,
+     "bytes_kept_raw": 34357484,
+     "kept_by_rule": {
+      "change": 132740,
+      "gap": 132785,
+      "threshold": 132786
+     },
+     "kept_lines_per_robot_hour": 1819.5609724532483,
+     "line_ratio": 1.0003916075489887,
+     "lines_in": 132838,
+     "lines_kept": 132786,
+     "outputs": {
+      "label_hits": "identical",
+      "s15a_rules": "identical",
+      "stall_list": "identical",
+      "station_bound": "identical",
+      "time_budget": "identical",
+      "transitions": "identical"
+     },
+     "ratio_gzip": 1.0002059259575693,
+     "sequence": {
+      "duplicates": 0,
+      "missing_messages": 61,
+      "sequence_gaps": 44
+     }
+    }
+   },
+   "verdict": "identical"
+  }
+ },
+ "lines_duplicate": 0,
+ "lines_out_of_order": 0,
+ "lines_rejected": 0,
+ "robot_hour_definition": "per (file group, robot serial): last accepted ts minus first accepted ts in the full input, summed over all robots (pickers included), in hours; the same denominator for lines in and lines kept",
+ "robot_hours": 72.97694444444444,
+ "robots": 9,
+ "run": "moroop-sf",
+ "schema": "reduce-check/1"
+}
