@@ -2,14 +2,14 @@
 
 Environment TA-RWARE (vendored under `vendor/`, never edited). Everything here is CPU only, local, deterministic per
 seed. Plan, review findings, sprint checklists and the compute profile: `docs/SCOPE.md`. Current state and the queue:
-`~/code/Michiel-DK/laptop-scheduler` (`python3 -m scheduler plan`) is the gate for anything longer than a smoke test.
+a local laptop scheduler (private, not in this tree; `python3 -m scheduler plan`) is the gate for anything longer than a smoke test.
 
 ## Bearings
 
 ```sh
 .venv/bin/python -m unittest discover -s tests          # the deterministic gate (plain unittest, no pytest)
 .venv/bin/python scripts/evaluate.py --policy cta --env tarware-small-4agvs-2pickers-globalobs-v1 --seeds 0-9 --steps 500
-# internal dev harness (roger3000-dev, private): checked out locally at harness/, not part of this tree
+# internal dev harness: private submodule at harness/, not part of this tree; clone without --recurse-submodules
 ```
 
 Then read `docs/SCOPE.md` "Review findings" before touching the env: the API facts, the class-level counters and

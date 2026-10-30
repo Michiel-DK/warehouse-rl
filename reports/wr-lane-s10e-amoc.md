@@ -1,6 +1,6 @@
 # wr-lane-s10e-amoc — S10E AMOC sweep in time_to_detect (19 Oct 2026)
 
-**Outcome: MERGED.** PR #41 was squash-merged as `85df140`, and master in `~/code/Michiel-DK/warehouse-rl` was fast-forwarded to it.
+**Outcome: MERGED.** PR #41 was squash-merged as `85df140`, and master in `<local>/warehouse-rl` was fast-forwarded to it.
 - Workflow: `single-lane-build`, tier standard, build model sonnet, run `wf_697becbe-e4c`.
 - Brief: `wr-lane-s10e-brief.md` (including its amendment). Criterion: `wr-lane-s10e-criterion-v2.txt`.
 

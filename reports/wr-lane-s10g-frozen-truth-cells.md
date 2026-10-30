@@ -1,6 +1,6 @@
 # wr-lane-s10g-frozen-truth-cells — S10G frozen windows carry the robot's cell (19 Oct 2026)
 
-**Outcome: MERGED.** PR #42 was squash-merged as `5fe4501`, and master in `~/code/Michiel-DK/warehouse-rl` was fast-forwarded to it.
+**Outcome: MERGED.** PR #42 was squash-merged as `5fe4501`, and master in `<local>/warehouse-rl` was fast-forwarded to it.
 - Workflow: `single-lane-build`, tier standard, build model sonnet, run `wf_2cbb719f-5d2`.
 - Brief: `laptop-scheduler/reports/wr-lane-s10g-brief.md` (including its amendment). Criterion: `wr-lane-s10g-criterion-v2.txt`.
 

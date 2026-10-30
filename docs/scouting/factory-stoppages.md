@@ -1,7 +1,7 @@
 # Scouting: does the fleet stall analyser transfer to factory line stoppages and machine alarm logs? (2026-10-19)
 
 Scope: discrete manufacturing lines (andon events, OEE downtime reasons, PLC alarm streams). WebFetch and WebSearch
-only, no browser, no logins. Source ranks follow `~/.claude/skills/outward-claim-discipline` (A = owner's own docs,
+only, no browser, no logins. Source ranks follow `outward-claim-discipline` (private harness rule set) (A = owner's own docs,
 dataset page or repo; B = first-party marketing; C = press; D = snippet or secondary; F = memory). Every outside
 claim below carries a URL and `verified@2026-10-19`. The search log (every query and URL with its result) is in
 `reports/wr-scout-factory-stoppages.md`, not here. Our own definitions (what a cell and a window

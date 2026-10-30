@@ -79,6 +79,8 @@ Replay of one CTA episode: open `results/replay_small.html` in a browser (made b
 
 ## Setup (macOS)
 
+The `harness/` submodule is the private dev harness. Clone without `--recurse-submodules`; nothing below needs it.
+
 Absolute simulator numbers in this README are macOS arm64 numbers; Linux gives different absolute values (A* tie-breaking) and the same paired comparisons. See [docs/PLATFORM.md](docs/PLATFORM.md).
 
 ```

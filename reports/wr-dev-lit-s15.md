@@ -1,7 +1,7 @@
 # wr-dev-lit-s15: literature check before S15A / S15B (2026-10-23)
 
 Unattended docs job, opus. Output: `docs/LITERATURE.md` Part 8 (110 lines; commit 4eecd76, then a review-fix commit), the two lane briefs rewritten in place in
-`~/code/Michiel-DK/laptop-scheduler/jobs/`. No code, no simulator run.
+`<local>/laptop-scheduler/jobs/`. No code, no simulator run.
 
 ## Verdicts
 

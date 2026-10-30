@@ -7,7 +7,7 @@ against the page's raw text on 2026-10-20: GitHub, Discourse JSON, job-board API
 comments through the arctic-shift archive API (reddit.com itself did not render), Hacker News through the Algolia API.
 Rows that failed the check, or came only from a search snippet or a summarised fetch, are not here. The search log, the
 check script and 36 more verified rows left out for length are in the scout report `reports/wr-scout-operator-problems.md`.
-Rules: `~/.claude/skills/outward-claim-discipline`. Rank C = first-hand practitioner text, D = summary, talk or survey
+Rules: `outward-claim-discipline` (private harness rule set). Rank C = first-hand practitioner text, D = summary, talk or survey
 write-up, A = official report.
 
 | source | URL | type | date of source | verified@ | statements taken |

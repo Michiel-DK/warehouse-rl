@@ -1247,7 +1247,7 @@ estimates until Sprint 1's throughput test. No GPU, no cloud, no JAX rewrite unl
 
 ### Compute profile for the shared-laptop scheduler (2026-10-10, estimates unless marked)
 
-The laptop (M1 Pro, 10 cores, 16 GB unified memory) is shared with `~/code/Michiel-DK/agent-sandbox`, whose exam
+The laptop (M1 Pro, 10 cores, 16 GB unified memory) is shared with the wilco exam suite (a sibling project), whose exam
 snapshots run local Ollama models on the GPU for hours and cannot share the machine with another model. An operator
 scheduling agent decides when and which queue runs. Facts it needs from this repo:
 
@@ -1270,7 +1270,7 @@ Scheduling rules this repo accepts: training runs are checkpointed per run and c
 runs; sweeps are embarrassingly parallel and can run at any worker count; nothing here needs an API key or
 network. Every long job must write to `results/` incrementally so a kill loses at most one seed.
 
-The gate is `~/code/Michiel-DK/laptop-scheduler` (`python3 -m scheduler plan` before any long run). Its
+The gate is a local laptop scheduler (private) (`python3 -m scheduler plan` before any long run). Its
 `queues/warehouse-rl.json` lists the S1-S4 jobs above with placeholder commands. Contract for our scripts: read the
 worker count from `SCHED_WORKERS` (default to `os.cpu_count() - 2` when unset), support `--resume`, write results
 incrementally.

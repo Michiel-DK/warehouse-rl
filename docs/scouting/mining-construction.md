@@ -2,7 +2,7 @@
 
 Scope: can the fleet stuck analyser (Sprints 5-10) be demoed on open-pit haul trucks or construction machinery with public
 data or an open simulator? Searched 2026-10-19 with WebSearch and WebFetch only. Search log and per-source notes are in
-`reports/wr-scout-mining-construction.md`. Rank key (`~/.claude/skills/outward-claim-discipline`): A = primary page read
+`reports/wr-scout-mining-construction.md`. Rank key (`outward-claim-discipline` (private harness rule set)): A = primary page read
 this session, B = vendor marketing, C = press, trade article or search snippet only (not read), D = tutorial, F = memory.
 Every claim carries its URL and `verified@2026-10-19`.
 

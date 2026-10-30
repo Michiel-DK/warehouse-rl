@@ -1,6 +1,6 @@
 # wr-lane-s10c-blind-blockage — S10C planner-blind blockage (19 Oct 2026)
 
-**Outcome: MERGED.** PR #40 squash-merged as `7bebef4`; master in `~/code/Michiel-DK/warehouse-rl` fast-forwarded to it.
+**Outcome: MERGED.** PR #40 squash-merged as `7bebef4`; master in `<local>/warehouse-rl` fast-forwarded to it.
 Workflow `single-lane-build` run `wf_fd0c1a6f-559`, tier full, build model sonnet.
 
 ## What landed

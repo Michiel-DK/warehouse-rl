@@ -74,7 +74,7 @@ within one second reused stale bytecode once and gave a false gate failure, 223/
 ## Next queue item (wr-s3e-informed-sweep): exact command
 
 ```sh
-cd ~/code/Michiel-DK/warehouse-rl && .venv/bin/python scripts/recovery_sweep.py --only e --workers "$SCHED_WORKERS"
+cd <local>/warehouse-rl && .venv/bin/python scripts/recovery_sweep.py --only e --workers "$SCHED_WORKERS"
 ```
 
 240 episodes (2 configs x 4 rates x 30 seeds, 500 steps, medium map). Writes `results/recovery/informed.json` after

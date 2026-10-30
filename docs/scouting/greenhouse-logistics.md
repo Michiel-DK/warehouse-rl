@@ -1,7 +1,7 @@
 # Scouting: does the fleet stall analyser transfer to greenhouse and vertical-farm internal logistics? (2026-10-19)
 
 Scope: pipe-rail trolleys, harvest carts, induction-wire carts and container-farm shuttles. WebFetch/WebSearch only, no
-browser, no logins. Source ranks follow `~/.claude/skills/outward-claim-discipline` (A = owner's own docs, dataset page or
+browser, no logins. Source ranks follow `outward-claim-discipline` (private harness rule set) (A = owner's own docs, dataset page or
 repo; B = first-party marketing; C = press; D = tutorials, mirrors, blogs, dataset pages without a card; F = memory or
 name only). The search log (every query and URL with its result) is in
 `reports/wr-scout-greenhouse-logistics.md`, not here. Sibling scout: [farm-robots.md](farm-robots.md).

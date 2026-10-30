@@ -2,7 +2,7 @@
 
 Scope: the academic side of what the fleet stuck analyser does (README "Sprint 5" to "Sprint 10"). The vendor side is
 [COMPETITION.md](COMPETITION.md). Five questions, one research pass each on 2026-10-18, WebSearch/WebFetch only, no
-browser. Rules: `~/.claude/skills/outward-claim-discipline` (source ranks, provenance per claim). A condensed
+browser. Rules: `outward-claim-discipline` (private harness rule set) (source ranks, provenance per claim). A condensed
 query log is in `reports/wr-dev-lit-stall-detection.md`. The queries behind each
 absence claim are listed at the end of this page.
 

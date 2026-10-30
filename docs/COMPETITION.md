@@ -8,7 +8,7 @@ Robotics, Brightpick, Vecna Robotics, Seegrid). A fourth pass on 2026-10-22 scor
 logins), at most 12 fetches per vendor. The search logs (every URL fetched, with its result, and the count per vendor)
 are in `reports/wr-dev-competition-sweep.md`, `wr-dev-competition-sweep-2.md` and
 `wr-dev-competition-sweep-3.md` (pass 3) and `wr-dev-competition-sweep-4.md` (pass 4), not here. Rules:
-`~/.claude/skills/outward-claim-discipline`.
+`outward-claim-discipline` (private harness rule set).
 
 ## How to read a cell
 

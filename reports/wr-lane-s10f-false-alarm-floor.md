@@ -1,6 +1,6 @@
 # wr-lane-s10f-false-alarm-floor — S10F false-alarm gate (19 Oct 2026)
 
-**Outcome: MERGED.** PR #44 was squash-merged as `ae299d6` on pass 2. Master in `~/code/Michiel-DK/warehouse-rl` was fast-forwarded to it; S10H, PR #43 `a83c9a4`, had landed on master in between.
+**Outcome: MERGED.** PR #44 was squash-merged as `ae299d6` on pass 2. Master in `<local>/warehouse-rl` was fast-forwarded to it; S10H, PR #43 `a83c9a4`, had landed on master in between.
 - Workflow `single-lane-build`, tier standard, build model sonnet.
 - Refuters: correctness and test-honesty. scope-adherence and invariants were added automatically.
 - Runs:

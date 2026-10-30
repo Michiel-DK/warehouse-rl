@@ -2,7 +2,7 @@
 
 Unattended docs job, opus. Outputs:
 - `docs/LITERATURE.md` Part 9 (114 lines; commit 682bdd0, then a review-fix commit), plus an inline correction note on the Part 2b §4 `errors` row.
-- The S16A and S16B lane briefs, rewritten in place in `~/code/Michiel-DK/laptop-scheduler/jobs/`. They are **not
+- The S16A and S16B lane briefs, rewritten in place in `<local>/laptop-scheduler/jobs/`. They are **not
   committed there**: this job commits only to warehouse-rl, as the S15 lit job did.
 - No code, no parquet read, no simulator run. README is not edited; the correction sentence for README (r) is in
   Part 9 §1 for the next docs pass.

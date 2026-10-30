@@ -2,7 +2,7 @@
 
 Unattended docs job, opus. Outputs:
 - `docs/LITERATURE.md` Part 10 (112 lines after the review-fix pass, under the 120 limit).
-- The S18A lane brief `~/code/Michiel-DK/laptop-scheduler/jobs/wr-lane-s18a-keep-what-matters.md`, rewritten in place.
+- The S18A lane brief `<local>/laptop-scheduler/jobs/wr-lane-s18a-keep-what-matters.md`, rewritten in place.
   Its DRAFT header is gone, so the lane's own self-fail check no longer fires. The brief is **not committed** in
   laptop-scheduler: this job commits only to warehouse-rl, as the S15 and S16 lit jobs did.
 - No code, no log read, no run. README is not edited. No ratio was measured; every number below is someone else's
