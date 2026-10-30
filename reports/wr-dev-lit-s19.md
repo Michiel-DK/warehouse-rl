@@ -27,9 +27,14 @@ The brief edit lives in the laptop-scheduler working tree (that repo's jobs/ edi
   shift 1 compares against the wrong shift.
 - **S19A dependency:** `fleet/run_on_log.py` does not exist on master (ls, 30 Oct). The brief now FAILs early if it is still
   missing.
-- **Operator question (not acted on):** the README calls the contract VDA 5050-shaped. A real VDA 2.x stream fed
-  straight to `check_log.py` MATCHES (orderId is a str), but its stuck numbers would be wrong for the reason in verdict 1.
-  The check passes and the answer is still wrong; worth one sentence in "Run it on your own log".
+- **Operator question (not acted on):** the README calls the contract VDA 5050-shaped. A raw VDA 2.x stream FAILS
+  `check_log.py` on agvPosition.x/y (float metres; `parse._is_int`, parse.py L59-60). Once a converter maps the cells but
+  passes orderId straight through, check_log MATCHES and the stuck numbers are still wrong (verdict 1). Worth one
+  sentence in "Run it on your own log".
+
+- **Spec details the MoRoOp byte test depends on** (added to Part 11 and the brief after review): headerId per
+  (zone, robot); orderId resolved at the native µs time, not the floored second; stations counted over native rows
+  before the collapse.
 
 ## Sources (all verified@2026-10-30)
 | shape | source | how read | rank |
